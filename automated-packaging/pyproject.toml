@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "moveapps-cwl-packager"
+version = "0.1.0"
+description = "Automated CWL CommandLineTool packaging for MoveApps R apps"
+requires-python = ">=3.9"
+dependencies = [
+    "requests>=2.28",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+moveapps-cwl-package = "moveapps_cwl_packager.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["moveapps_cwl_packager*"]

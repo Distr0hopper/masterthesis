@@ -1,0 +1,51 @@
+# MoveApps R SDK base image for CWL packaging.
+# Contains the full R environment from the MoveApps Template_R_Function_App.
+# Build once with build-sdk.sh; all per-app images just copy RFunction.R on top.
+
+FROM rocker/geospatial:4.5.1
+
+LABEL org.opencontainers.image.description="MoveApps R SDK base image for CWL-based workflow packaging"
+
+ARG username=moveapps
+ARG uid=1001
+ARG gid=staff
+ENV USER=$username
+ENV UID=$uid
+ENV GID=$gid
+ENV HOME=/home/$USER
+
+RUN adduser --disabled-password \
+    --gecos "Non-root user" \
+    --uid $UID \
+    --ingroup $GID \
+    --home $HOME \
+    $USER
+
+RUN install -d -o moveapps -g staff $HOME/co-pilot-r
+RUN install -d -o moveapps -g staff $HOME/.cache/R
+
+USER $USER
+WORKDIR $HOME/co-pilot-r
+
+ENV RENV_PATHS_CACHE=$HOME/.cache/R/renv
+ENV RENV_CONFIG_REPOS_OVERRIDE=https://cloud.r-project.org
+ENV RENV_CONFIG_SANDBOX_ENABLED=FALSE
+
+RUN R -e "if (!requireNamespace('renv', quietly = TRUE)) install.packages('renv')"
+
+# Restore the template R environment (fetched from Template_R_Function_App by build-sdk.sh)
+COPY --chown=moveapps:staff renv.lock .Rprofile ./
+COPY --chown=moveapps:staff renv/activate.R renv/settings.dcf ./renv/
+RUN R -e 'renv::restore(confirm = FALSE)'
+
+# SDK runtime files (identical across all apps)
+COPY --chown=moveapps:staff sdk.R start-process.sh ./
+
+# CWL entry point
+USER root
+RUN chmod -R o+rX /home/moveapps
+COPY --chown=moveapps:staff cwl-wrapper.sh /home/moveapps/co-pilot-r/cwl-wrapper.sh
+RUN chmod 755 /home/moveapps/co-pilot-r/cwl-wrapper.sh
+USER moveapps
+ENTRYPOINT []
+CMD ["/bin/bash", "/home/moveapps/co-pilot-r/cwl-wrapper.sh"]

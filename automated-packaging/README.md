@@ -10,7 +10,9 @@ Running a MoveApps R app via CWL requires three things:
 
 1. A **Docker image** with the full R environment and the app's code
 2. A **CWL descriptor** (`.cwl`) that tells cwltool how to invoke the image
-3. An **inputs file** (`inputs.yaml`) that provides the concrete parameter values for one run
+3. An **inputs file** (`inputs.yaml`) that provides the concrete parameter values for one run.
+
+One input file for testing can be found in `/input-files/` — copy this to app folder and edit path in `inputs.yaml`.
 
 This framework automates producing all three. The core idea is a two-layer Docker setup:
 
@@ -28,22 +30,22 @@ The shared wrapper image contains everything that is identical across all apps (
 
 ### Repo-level files (run once)
 
-| File | Purpose |
-|---|---|
-| `build-sdk.sh` | Builds the shared `moveapps-r-wrapper:latest` image |
-| `Dockerfile.sdk` | Defines that image |
-| `cwl-wrapper.sh` | Runtime entry point baked into the wrapper image |
-| `moveapps_cwl_packager/` | Python CLI that generates per-app artifacts |
+| File                     | Purpose                                             |
+| ------------------------ | --------------------------------------------------- |
+| `build-sdk.sh`           | Builds the shared `moveapps-r-wrapper:latest` image |
+| `Dockerfile.sdk`         | Defines that image                                  |
+| `cwl-wrapper.sh`         | Runtime entry point baked into the wrapper image    |
+| `moveapps_cwl_packager/` | Python CLI that generates per-app artifacts         |
 
 ### Generated per-app files (one folder per app)
 
-| File | Purpose |
-|---|---|
-| `Dockerfile` | Extends the wrapper image with this app's files |
-| `build.sh` | Runs `docker build` for this app |
-| `<app>.cwl` | CWL CommandLineTool descriptor |
-| `inputs.yaml` | Parameter values for one run — **edit this before running** |
-| `RFunction.R` | The app's R code, fetched from GitHub |
+| File                     | Purpose                                                                  |
+| ------------------------ | ------------------------------------------------------------------------ |
+| `Dockerfile`             | Extends the wrapper image with this app's files                          |
+| `build.sh`               | Runs `docker build` for this app                                         |
+| `<app>.cwl`              | CWL CommandLineTool descriptor                                           |
+| `inputs.yaml`            | Parameter values for one run — **edit this before running**              |
+| `RFunction.R`            | The app's R code, fetched from GitHub                                    |
 | `app-configuration.json` | App parameter config, fetched from GitHub (baked into image as fallback) |
 
 ---
@@ -55,7 +57,7 @@ The shared wrapper image contains everything that is identical across all apps (
 1. **`rocker/geospatial:4.5.1`** — Ubuntu + R + geospatial system libraries
 2. **Create `moveapps` user** — non-root user that runs the app
 3. **`renv::restore()`** — restores all R packages from `movestore/Template_R_Function_App`'s `renv.lock` (the slow step, ~minutes)
-4. **Copy SDK runtime files** — `sdk.R`, `start-process.sh`, `.env` from the template repo
+4. **Copy SDK runtime files** — `sdk.R`, `start-process.sh` from the template repo
 5. **Copy `cwl-wrapper.sh`** — the CWL entry point script
 
 Because Docker caches layers, only changing `cwl-wrapper.sh` re-executes just step 5 — the expensive `renv::restore()` stays cached.
@@ -65,7 +67,7 @@ Because Docker caches layers, only changing `cwl-wrapper.sh` re-executes just st
 This script runs inside the container each time cwltool invokes the tool. It:
 
 1. Reads `app-configuration.json` from the CWL working directory (written by the CWL's JS expression from `inputs.yaml`) — falls back to the image's baked-in copy if not found
-2. Symlinks `RFunction.R`, `start-process.sh`, and `src/` from their fixed locations inside the image into the writable working directory
+2. Symlinks `RFunction.R` and `start-process.sh` from their fixed locations inside the image into the writable working directory
 3. Patches `sdk.R` with `sed` to strip the `remotes::install_github()` call — this call is unnecessary (the package is already installed via `renv`) and fails because cwltool runs containers with `--net=none`
 4. Writes a `.env` file pointing to all input/output paths
 5. Runs `bash start-process.sh`, which sources `sdk.R`, which reads the config and calls `rFunction()`
@@ -116,6 +118,7 @@ This fetches the template R environment from `movestore/Template_R_Function_App`
 Re-run only if the template `renv.lock` or `cwl-wrapper.sh` changes.
 
 **Options:**
+
 ```bash
 bash build-sdk.sh --tag my-wrapper:v1 --push
 ```
@@ -130,13 +133,13 @@ moveapps-cwl-package <github-repo-url> [options]
 
 ### Options
 
-| Flag | Default | Description |
-|---|---|---|
-| `--output-dir PATH` | `./<repo-name>/` | Where to write generated files |
-| `--wrapper-image IMAGE` | `moveapps-r-wrapper:latest` | Base image to extend |
-| `--docker-registry REGISTRY` | `moveapps` | Registry prefix for `dockerPull` — pass `""` for local-only images |
-| `--dry-run` | — | Print generated files without writing anything |
-| `--github-token TOKEN` | `$GITHUB_TOKEN` | GitHub PAT (also read from env) |
+| Flag                         | Default                     | Description                                                        |
+| ---------------------------- | --------------------------- | ------------------------------------------------------------------ |
+| `--output-dir PATH`          | `./<repo-name>/`            | Where to write generated files                                     |
+| `--wrapper-image IMAGE`      | `moveapps-r-wrapper:latest` | Base image to extend                                               |
+| `--docker-registry REGISTRY` | `moveapps`                  | Registry prefix for `dockerPull` — pass `""` for local-only images |
+| `--dry-run`                  | —                           | Print generated files without writing anything                     |
+| `--github-token TOKEN`       | `$GITHUB_TOKEN`             | GitHub PAT (also read from env)                                    |
 
 ### Example
 
@@ -164,11 +167,11 @@ cwltool RemoveOutliers.cwl inputs.yaml
 
 ### Outputs
 
-| File | Description |
-|---|---|
-| `output.rds` | Processed move2/MoveStack object |
-| `error.log` | R error output (only present if an error occurred) |
-| `artifacts/*` | Any plot or data files written by the app |
+| File          | Description                                        |
+| ------------- | -------------------------------------------------- |
+| `output.rds`  | Processed move2/MoveStack object                   |
+| `error.log`   | R error output (only present if an error occurred) |
+| `artifacts/*` | Any plot or data files written by the app          |
 
 ---
 
@@ -185,6 +188,7 @@ export GITHUB_TOKEN=ghp_...
 ## Troubleshooting
 
 **Platform warning on Apple Silicon** — expected, the images are `linux/amd64`:
+
 ```
 WARNING: The requested image's platform (linux/amd64) does not match the detected host platform (linux/arm64/v8)
 ```

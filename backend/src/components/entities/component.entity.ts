@@ -1,0 +1,49 @@
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  OneToMany,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+import { ComponentDomain, ComponentSource } from '../enums';
+import { Parameter } from './parameter.entity';
+
+@Entity('components')
+export class Component {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column({ unique: true })
+  name: string;
+
+  @Column({ nullable: true })
+  repoUrl: string;
+
+  @Column({ nullable: true })
+  repoCommitSha: string;
+
+  @Column('text')
+  cwlContent: string;
+
+  @Column('text')
+  dockerfileContent: string;
+
+  @Column({ type: 'enum', enum: ComponentSource, default: ComponentSource.MANUAL })
+  source: ComponentSource;
+
+  @Column({ type: 'enum', enum: ComponentDomain })
+  domain: ComponentDomain;
+
+  @OneToMany(() => Parameter, (parameter) => parameter.component, {
+    cascade: true,
+    eager: true,
+  })
+  parameters: Parameter[];
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
+}

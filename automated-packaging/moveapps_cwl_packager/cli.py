@@ -92,7 +92,11 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(str(exc))
 
     app_name = _repo_name_to_image(repo_name)
-    out_dir = Path(args.output_dir) if args.output_dir else Path(repo_name)
+    out_dir = (
+        Path(args.output_dir)
+        if args.output_dir
+        else Path("generated") / repo_name
+    )
 
     print(f"Fetching repository: {owner}/{repo_name}")
 

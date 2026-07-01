@@ -18,6 +18,7 @@ import {
   ApiQuery,
   ApiResponse,
   ApiTags,
+  getSchemaPath,
 } from '@nestjs/swagger';
 
 import { ComponentDomain } from './enums';
@@ -45,7 +46,7 @@ export class ComponentsController {
   @ApiBody({
     schema: {
       allOf: [
-        { $ref: '#/components/schemas/CreateComponentDto' },
+        { $ref: getSchemaPath(CreateComponentDto) },
         {
           type: 'object',
           properties: {

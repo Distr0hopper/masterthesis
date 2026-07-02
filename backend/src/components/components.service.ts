@@ -23,6 +23,7 @@ import { Component } from './entities/component.entity';
 import { Parameter } from './entities/parameter.entity';
 import {ComponentListItemDto} from "./dto/component-list-item.dto";
 import {ComponentDetailDto} from "./dto/component-detail.dto";
+import {ComponentTransformer} from "./transformers/component.transformer";
 
 @Injectable()
 export class ComponentsService {
@@ -41,20 +42,13 @@ export class ComponentsService {
     ? await this.componentRepo.findBy( {domain} )
     : await this.componentRepo.find()
 
-    return components.map((c) => ({
-      id: c.id,
-      name: c.name,
-      repoUrl: c.repoUrl,
-      domain: c.domain,
-      source: c.source,
-      createdAt: c.createdAt,
-    }));
+    return components.map(ComponentTransformer.toListItem);
   }
 
   async findOne(id: string): Promise<ComponentDetailDto> {
     const component = await this.componentRepo.findOneBy({ id });
     if (!component) throw new NotFoundException(`Component ${id} not found`);
-    return component;
+    return ComponentTransformer.toDetail(component);
   }
 
   async packageFromUrl(dto: PackageComponentDto): Promise<Component> {

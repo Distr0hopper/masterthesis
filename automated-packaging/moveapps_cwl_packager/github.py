@@ -18,8 +18,8 @@ class RepoFile:
 @dataclass
 class RepoContents:
     appspec: dict
-    rfunction: RepoFile
     app_config: RepoFile
+    default_branch: str
 
 
 class GitHubClient:
@@ -44,6 +44,10 @@ class GitHubClient:
     def fetch_repo(self, owner: str, repo: str) -> RepoContents:
         import json
 
+        repo_meta = self._session.get(f"{_API_BASE}/{owner}/{repo}", timeout=30)
+        repo_meta.raise_for_status()
+        default_branch = repo_meta.json().get("default_branch", "main")
+
         appspec_file = self._fetch_file(owner, repo, "appspec.json")
         appspec = json.loads(appspec_file.content)
 
@@ -53,11 +57,10 @@ class GitHubClient:
                 "Is this a valid MoveApps R app repository?"
             )
 
-        rfunction = self._fetch_file(owner, repo, "RFunction.R")
         app_config = self._fetch_file(owner, repo, "app-configuration.json")
 
         return RepoContents(
             appspec=appspec,
-            rfunction=rfunction,
             app_config=app_config,
+            default_branch=default_branch,
         )

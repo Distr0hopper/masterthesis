@@ -4,18 +4,16 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sys
 from pathlib import Path
 
 from .generators import (
-    generate_build_sh,
     generate_cwl,
-    generate_dockerfile,
+    generate_dockerfile_content,
     generate_inputs_yaml,
 )
-from .github import GitHubClient, RepoContents
+from .github import GitHubClient
 
 _DEFAULT_WRAPPER_IMAGE = "moveapps-r-wrapper:latest"
 
@@ -56,21 +54,14 @@ def main(argv: list[str] | None = None) -> int:
         "--output-dir",
         metavar="PATH",
         default=None,
-        help="Directory for generated artifacts (default: ./<repo-name>/)",
+        help="Directory for generated artifacts (default: ./generated/<repo-name>/)",
     )
     parser.add_argument(
         "--wrapper-image",
         metavar="IMAGE",
         default=_DEFAULT_WRAPPER_IMAGE,
-        help=f"Pre-built CWL wrapper image to extend (default: {_DEFAULT_WRAPPER_IMAGE}). "
+        help=f"Pre-built SDK base image to extend (default: {_DEFAULT_WRAPPER_IMAGE}). "
              "Build it once with build-sdk.sh.",
-    )
-    parser.add_argument(
-        "--docker-registry",
-        metavar="REGISTRY",
-        default="moveapps",
-        help="Docker registry prefix for the CWL dockerPull image name (default: moveapps). "
-             "Pass empty string for local-only images.",
     )
     parser.add_argument(
         "--dry-run",
@@ -109,19 +100,17 @@ def main(argv: list[str] | None = None) -> int:
 
     appspec_settings = contents.appspec.get("settings", [])
     r_packages = [d["name"] for d in contents.appspec.get("dependencies", {}).get("R", [])]
+    raw_base_url = f"https://raw.githubusercontent.com/{owner}/{repo_name}/{contents.default_branch}"
 
     # Generate artifacts
-    dockerfile = generate_dockerfile(args.wrapper_image, r_packages or None)
-    build_sh = generate_build_sh(app_name, args.docker_registry)
-    cwl_text = generate_cwl(app_name, appspec_settings, args.docker_registry)
+    dockerfile_content = generate_dockerfile_content(args.wrapper_image, raw_base_url, r_packages or None)
+    cwl_text = generate_cwl(app_name, appspec_settings, dockerfile_content)
     app_config_dict = json.loads(contents.app_config.content)
     inputs_yaml = generate_inputs_yaml(appspec_settings, app_config_dict)
 
     # ── Dry-run ───────────────────────────────────────────────────────────────
     if args.dry_run:
         print("\n[DRY RUN — no files written]\n")
-        _print_section(f"Dockerfile  →  {out_dir}/Dockerfile", dockerfile)
-        _print_section(f"build.sh  →  {out_dir}/build.sh", build_sh)
         _print_section(f"{repo_name}.cwl  →  {out_dir}/{repo_name}.cwl", cwl_text)
         _print_section(f"inputs.yaml  →  {out_dir}/inputs.yaml", inputs_yaml)
         _print_summary(repo_name, app_name, appspec_settings, args.wrapper_image, out_dir, dry=True)
@@ -130,14 +119,8 @@ def main(argv: list[str] | None = None) -> int:
     # ── Write files ──────────────────────────────────────────────────────────
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    _write(out_dir / "RFunction.R", contents.rfunction.content)
-    _write(out_dir / "app-configuration.json", contents.app_config.content)
-    _write(out_dir / "Dockerfile", dockerfile)
     _write(out_dir / f"{repo_name}.cwl", cwl_text)
     _write(out_dir / "inputs.yaml", inputs_yaml)
-    _write(out_dir / "build.sh", build_sh)
-
-    os.chmod(out_dir / "build.sh", 0o755)
 
     _print_summary(repo_name, app_name, appspec_settings, args.wrapper_image, out_dir, dry=False)
     return 0
@@ -167,8 +150,7 @@ def _print_summary(
     print(f"  Wrapper image    : {wrapper_image}")
 
     print(f"\n  {action}:")
-    for f in ["RFunction.R", "app-configuration.json", "Dockerfile",
-              f"{repo_name}.cwl", "inputs.yaml", "build.sh"]:
+    for f in [f"{repo_name}.cwl", "inputs.yaml"]:
         print(f"    {out_dir}/{f}")
 
     print(f"\n  Detected parameters ({len(settings)}):")
@@ -181,5 +163,5 @@ def _print_summary(
         print("    (none)")
 
     if not dry:
-        print(f"\n  To build:  cd {out_dir} && bash build.sh")
+        print(f"\n  To run:  cwltool {out_dir}/{repo_name}.cwl {out_dir}/inputs.yaml")
     print()

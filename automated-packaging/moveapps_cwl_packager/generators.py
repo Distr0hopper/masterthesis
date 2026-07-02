@@ -58,12 +58,13 @@ def _make_dumper() -> type[yaml.Dumper]:
 
 
 # ---------------------------------------------------------------------------
-# Dockerfile  (single per-app image extending the shared SDK base)
+# Dockerfile-Content  (single per-app image extending the shared SDK base)
+# Content goes into the generated .cwl file under DockerRequirement: dockerFile
 # ---------------------------------------------------------------------------
 
 
-def generate_dockerfile(wrapper_image: str, r_packages: list[str] | None = None) -> str:
-    lines = [f"FROM {wrapper_image}", ""]
+def generate_dockerfile_content(wrapper_image: str, raw_base_url: str, r_packages: list[str] | None = None) -> str:
+    lines = [f"FROM --platform=linux/amd64 {wrapper_image}", ""]
     if r_packages:
         pkg_vec = ", ".join(f'"{p}"' for p in r_packages)
         install_cmd = (
@@ -73,29 +74,12 @@ def generate_dockerfile(wrapper_image: str, r_packages: list[str] | None = None)
         )
         lines += [install_cmd, ""]
     lines += [
-        "COPY --chown=moveapps:staff RFunction.R /home/moveapps/co-pilot-r/RFunction.R",
-        "COPY --chown=moveapps:staff app-configuration.json"
-        " /home/moveapps/co-pilot-r/app-configuration.json",
+        f"ADD --chown=moveapps:staff {raw_base_url}/RFunction.R /home/moveapps/co-pilot-r/RFunction.R",
+        f"ADD --chown=moveapps:staff {raw_base_url}/app-configuration.json /home/moveapps/co-pilot-r/app-configuration.json",
+        "RUN chmod o+r /home/moveapps/co-pilot-r/RFunction.R /home/moveapps/co-pilot-r/app-configuration.json",
         "",
     ]
     return "\n".join(lines)
-
-
-def generate_build_sh(app_name: str, registry: str) -> str:
-    image = f"{registry}/{app_name}:latest" if registry else f"{app_name}:latest"
-    return f"""\
-    #!/bin/bash
-    # Build the {app_name} app image on top of the shared wrapper image.
-    # Requires moveapps-r-wrapper:latest — run build-sdk.sh first if not present.
-    set -e
-
-    docker build --platform linux/amd64 -t {image} .
-
-    echo ""
-    echo "Done. To test locally with cwltool:"
-    echo "  cwltool {app_name}.cwl inputs.yaml"
-    echo "You need to edit the input file in inputs.yaml"
-    """
 
 
 # ---------------------------------------------------------------------------
@@ -118,11 +102,9 @@ def _build_js_entry(settings: list[dict]) -> _LiteralStr:
 def generate_cwl(
     app_name: str,
     settings: list[dict],
-    registry: str,
+    dockerfile_content: str,
 ) -> str:
     """Return a CWL v1.2 CommandLineTool document as a YAML string."""
-
-    docker_image = f"{registry}/{app_name}:latest" if registry else f"{app_name}:latest"
 
     # Build inputs dict — input_rds first, then app parameters
     inputs: dict[str, Any] = {
@@ -154,7 +136,8 @@ def generate_cwl(
         "requirements": {
             "InlineJavascriptRequirement": {},
             "DockerRequirement": {
-                "dockerPull": docker_image,
+                "dockerFile": dockerfile_content,
+                "dockerImageId": app_name,
             },
             "InitialWorkDirRequirement": {
                 "listing": [

@@ -51,7 +51,7 @@ export class ComponentsService {
     return ComponentTransformer.toDetail(component);
   }
 
-  async packageFromUrl(dto: PackageComponentDto): Promise<Component> {
+  async packageFromUrl(dto: PackageComponentDto): Promise<ComponentDetailDto> {
     const existing = await this.componentRepo.findOne({ where: { repoUrl: dto.repoUrl } });
     if (existing) {
       throw new ConflictException(`Component with repoUrl '${dto.repoUrl}' already exists`);
@@ -100,7 +100,8 @@ export class ComponentsService {
         parameters: parameters as Parameter[],
       });
 
-      return this.componentRepo.save(component);
+      const savedComponent = await this.componentRepo.save(component);
+      return ComponentTransformer.toDetail(savedComponent);
     } catch (err) {
       if (
         err instanceof ConflictException ||
@@ -115,7 +116,7 @@ export class ComponentsService {
     }
   }
 
-  async createManual(file: Express.Multer.File, dto: CreateComponentDto): Promise<Component> {
+  async createManual(file: Express.Multer.File, dto: CreateComponentDto): Promise<ComponentDetailDto> {
     const existing = await this.componentRepo.findOne({ where: { name: dto.name } });
     if (existing) {
       throw new ConflictException(`Component with name '${dto.name}' already exists`);
@@ -143,7 +144,8 @@ export class ComponentsService {
       parameters: parameters as Parameter[],
     });
 
-    return this.componentRepo.save(component);
+    const savedComponent = await this.componentRepo.save(component);
+    return ComponentTransformer.toDetail(savedComponent);
   }
 
   // ── Private helpers ─────────────────────────────────────────────────────────

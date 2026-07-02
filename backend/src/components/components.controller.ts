@@ -2,7 +2,7 @@ import {
   Body,
   Controller,
   Get,
-  MaxFileSizeValidator,
+  MaxFileSizeValidator, Param,
   ParseFilePipe,
   Post,
   Query,
@@ -14,7 +14,7 @@ import {
   ApiBody,
   ApiConsumes,
   ApiExtraModels,
-  ApiOperation,
+  ApiOperation, ApiParam,
   ApiQuery,
   ApiResponse,
   ApiTags,
@@ -26,6 +26,8 @@ import { ComponentsService } from './components.service';
 import { CreateComponentDto } from './dto/create-component.dto';
 import { PackageComponentDto } from './dto/package-component.dto';
 import {ComponentListItemDto} from "./dto/component-list-item.dto";
+import {Component} from "./entities/component.entity";
+import {ComponentDetailDto} from "./dto/component-detail.dto";
 
 @ApiTags('components')
 @ApiExtraModels(CreateComponentDto)
@@ -39,6 +41,15 @@ export class ComponentsController {
   @ApiResponse({ status: 200, type: [ComponentListItemDto]})
   async findAll(@Query('domain') domain?: ComponentDomain) {
     return this.componentsService.findAll(domain);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Return component with ID' })
+  @ApiParam({ name: 'id', required: true, description: 'Component ID' })
+  @ApiResponse({ status: 200, description: 'Component found', type: ComponentDetailDto })
+  @ApiResponse({ status: 404, description: 'Component not found' })
+  async findOne(@Param('id') id: string) {
+    return this.componentsService.findOne(id);
   }
 
   @Post()

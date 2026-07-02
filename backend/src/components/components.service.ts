@@ -8,7 +8,7 @@ import {
   ConflictException,
   Injectable,
   InternalServerErrorException,
-  Logger,
+  Logger, NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -22,6 +22,7 @@ import { PackageComponentDto } from './dto/package-component.dto';
 import { Component } from './entities/component.entity';
 import { Parameter } from './entities/parameter.entity';
 import {ComponentListItemDto} from "./dto/component-list-item.dto";
+import {ComponentDetailDto} from "./dto/component-detail.dto";
 
 @Injectable()
 export class ComponentsService {
@@ -48,6 +49,12 @@ export class ComponentsService {
       source: c.source,
       createdAt: c.createdAt,
     }));
+  }
+
+  async findOne(id: string): Promise<ComponentDetailDto> {
+    const component = await this.componentRepo.findOneBy({ id });
+    if (!component) throw new NotFoundException(`Component ${id} not found`);
+    return component;
   }
 
   async packageFromUrl(dto: PackageComponentDto): Promise<Component> {

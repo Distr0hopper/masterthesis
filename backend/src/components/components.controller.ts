@@ -25,6 +25,7 @@ import { ComponentDomain } from './enums';
 import { ComponentsService } from './components.service';
 import { CreateComponentDto } from './dto/create-component.dto';
 import { PackageComponentDto } from './dto/package-component.dto';
+import {ComponentListItemDto} from "./dto/component-list-item.dto";
 
 @ApiTags('components')
 @ApiExtraModels(CreateComponentDto)
@@ -35,6 +36,7 @@ export class ComponentsController {
   @Get()
   @ApiOperation({ summary: 'List all components' })
   @ApiQuery({ name: 'domain', enum: ComponentDomain, required: false })
+  @ApiResponse({ status: 200, type: [ComponentListItemDto]})
   async findAll(@Query('domain') domain?: ComponentDomain) {
     return this.componentsService.findAll(domain);
   }

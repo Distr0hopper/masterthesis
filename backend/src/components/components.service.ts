@@ -21,6 +21,7 @@ import { CreateComponentDto } from './dto/create-component.dto';
 import { PackageComponentDto } from './dto/package-component.dto';
 import { Component } from './entities/component.entity';
 import { Parameter } from './entities/parameter.entity';
+import {ComponentListItemDto} from "./dto/component-list-item.dto";
 
 @Injectable()
 export class ComponentsService {
@@ -34,11 +35,19 @@ export class ComponentsService {
     private readonly configService: ConfigService,
   ) {}
 
-  async findAll(domain?: ComponentDomain): Promise<Component[]> {
-    if (domain) {
-      return this.componentRepo.findBy({ domain });
-    }
-    return this.componentRepo.find();
+  async findAll(domain?: ComponentDomain): Promise<ComponentListItemDto[]> {
+    const components: ComponentListItemDto[] = domain
+    ? await this.componentRepo.findBy( {domain} )
+    : await this.componentRepo.find()
+
+    return components.map((c) => ({
+      id: c.id,
+      name: c.name,
+      repoUrl: c.repoUrl,
+      domain: c.domain,
+      source: c.source,
+      createdAt: c.createdAt,
+    }));
   }
 
   async packageFromUrl(dto: PackageComponentDto): Promise<Component> {

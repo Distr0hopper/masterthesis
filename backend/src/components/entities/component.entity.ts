@@ -26,9 +26,6 @@ export class Component {
   @Column('text')
   cwlContent: string;
 
-  @Column('text')
-  dockerfileContent: string;
-
   @Column({ type: 'enum', enum: ComponentSource, default: ComponentSource.MANUAL })
   source: ComponentSource;
 

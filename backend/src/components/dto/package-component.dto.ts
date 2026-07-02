@@ -3,7 +3,7 @@ import { IsEnum, IsUrl } from 'class-validator';
 import { ComponentDomain } from '../enums';
 
 export class PackageComponentDto {
-  @ApiProperty({ example: 'https://github.com/movestore/Remove_Outliers' })
+  @ApiProperty({ example: 'https://github.com/movestore/RemoveOutliers' })
   @IsUrl()
   repoUrl: string;
 

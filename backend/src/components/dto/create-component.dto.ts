@@ -7,11 +7,6 @@ export class CreateComponentDto {
   @IsString()
   name: string;
 
-  @ApiPropertyOptional()
-  @IsString()
-  @IsOptional()
-  dockerfileContent?: string;
-
   @ApiProperty({ enum: ComponentDomain })
   @IsEnum(ComponentDomain)
   domain: ComponentDomain;

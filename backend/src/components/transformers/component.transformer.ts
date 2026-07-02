@@ -20,7 +20,6 @@ export class ComponentTransformer {
             name: component.name,
             repoUrl: component.repoUrl,
             cwlContent: component.cwlContent,
-            dockerfileContent: component.dockerfileContent,
             domain: component.domain,
             source: component.source,
             parameters: component.parameters,

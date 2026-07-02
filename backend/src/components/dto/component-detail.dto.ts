@@ -15,9 +15,6 @@ export class ComponentDetailDto {
     @ApiProperty()
     cwlContent: string;
 
-    @ApiProperty()
-    dockerfileContent: string;
-
     @ApiProperty({ enum: ComponentDomain })
     domain: ComponentDomain;
 

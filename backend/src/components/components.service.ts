@@ -65,15 +65,10 @@ export class ComponentsService {
       await this.runPackagingCli(dto.repoUrl, tmpDir);
 
       const cwlPath = path.join(tmpDir, `${repoName}.cwl`);
-      const dockerfilePath = path.join(tmpDir, 'Dockerfile');
 
       let cwlContent: string;
-      let dockerfileContent: string;
       try {
-        [cwlContent, dockerfileContent] = await Promise.all([
-          fs.readFile(cwlPath, 'utf-8'),
-          fs.readFile(dockerfilePath, 'utf-8'),
-        ]);
+        cwlContent = await fs.readFile(cwlPath, 'utf-8');
       } catch {
         throw new InternalServerErrorException(
           'Packaging CLI exited successfully but expected output files are missing',
@@ -94,7 +89,6 @@ export class ComponentsService {
         repoUrl: dto.repoUrl,
         repoCommitSha: null,
         cwlContent,
-        dockerfileContent,
         source: ComponentSource.MOVEAPPS,
         domain: dto.domain,
         parameters: parameters as Parameter[],
@@ -138,7 +132,6 @@ export class ComponentsService {
       repoUrl: null,
       repoCommitSha: null,
       cwlContent,
-      dockerfileContent: dto.dockerfileContent ?? '',
       source: ComponentSource.MANUAL,
       domain: dto.domain,
       parameters: parameters as Parameter[],

@@ -22,6 +22,7 @@ class RepoContents:
     app_config: RepoFile
     default_branch: str
     description: str
+    commit_sha: str
 
 
 def extract_readme_description(readme_bytes: bytes) -> str:
@@ -77,9 +78,16 @@ class GitHubClient:
         except Exception:
             description = ""
 
+        branch_resp = self._session.get(
+            f"{_API_BASE}/{owner}/{repo}/branches/{default_branch}", timeout=30
+        )
+        branch_resp.raise_for_status()
+        commit_sha = branch_resp.json()["commit"]["sha"]
+
         return RepoContents(
             appspec=appspec,
             app_config=app_config,
             default_branch=default_branch,
             description=description,
+            commit_sha=commit_sha,
         )

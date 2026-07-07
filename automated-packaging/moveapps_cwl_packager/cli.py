@@ -121,6 +121,7 @@ def main(argv: list[str] | None = None) -> int:
 
     _write(out_dir / f"{repo_name}.cwl", cwl_text)
     _write(out_dir / "inputs.yaml", inputs_yaml)
+    _write(out_dir / "metadata.json", json.dumps({"commitSha": contents.commit_sha}))
 
     _print_summary(repo_name, app_name, appspec_settings, args.wrapper_image, out_dir, dry=False)
     return 0

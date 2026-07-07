@@ -143,6 +143,14 @@ export class ComponentsService {
     return ComponentTransformer.toDetail(savedComponent);
   }
 
+  async updateDescription(id: string, description: string | null): Promise<ComponentDetailDto> {
+    const component = await this.componentRepo.findOneBy({ id });
+    if (!component) throw new NotFoundException(`Component ${id} not found`);
+    component.description = description;
+    const saved = await this.componentRepo.save(component);
+    return ComponentTransformer.toDetail(saved);
+  }
+
   async remove(id: string): Promise<void> {
     const component = await this.componentRepo.findOneBy({ id });
     if (!component) {

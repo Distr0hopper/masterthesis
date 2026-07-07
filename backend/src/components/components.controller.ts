@@ -4,6 +4,7 @@ import {
   Get,
   MaxFileSizeValidator, Param,
   ParseFilePipe,
+  Patch,
   Post,
   Query,
   UploadedFile,
@@ -25,8 +26,8 @@ import { ComponentDomain } from './enums';
 import { ComponentsService } from './components.service';
 import { CreateComponentDto } from './dto/create-component.dto';
 import { PackageComponentDto } from './dto/package-component.dto';
+import { UpdateComponentDto } from './dto/update-component.dto';
 import {ComponentListItemDto} from "./dto/component-list-item.dto";
-import {Component} from "./entities/component.entity";
 import {ComponentDetailDto} from "./dto/component-detail.dto";
 
 @ApiTags('components')
@@ -91,6 +92,15 @@ export class ComponentsController {
   @ApiResponse({ status: 409, description: 'Component with this repoUrl already exists' })
   async package(@Body() dto: PackageComponentDto) {
     return this.componentsService.packageFromUrl(dto);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update the description of a component' })
+  @ApiParam({ name: 'id', required: true, description: 'Component ID' })
+  @ApiResponse({ status: 200, description: 'Description updated', type: ComponentDetailDto })
+  @ApiResponse({ status: 404, description: 'Component not found' })
+  async updateDescription(@Param('id') id: string, @Body() dto: UpdateComponentDto) {
+    return this.componentsService.updateDescription(id, dto.description);
   }
 
   @Delete(':id')

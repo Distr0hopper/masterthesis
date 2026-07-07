@@ -1,24 +1,35 @@
-import {ComponentDomain, ComponentSource} from "../enums";
-import {ApiProperty} from "@nestjs/swagger";
-import {IsDate, IsEnum, IsString} from "class-validator";
+import { ComponentDomain, ComponentSource } from "../enums";
+import { ApiProperty } from "@nestjs/swagger";
+import { IsDate, IsEnum, IsNumber, IsString, IsUUID } from "class-validator";
 
-export class ComponentListItemDto{
+export class ComponentListItemDto {
     @ApiProperty()
     id: string;
 
-    @ApiProperty({example: 'RemoveOutliers' })
+    @ApiProperty({ example: 'RemoveOutliers' })
     @IsString()
     name: string;
 
-    @ApiProperty({example: 'https://github.com/movestore/RemoveOutliers', required: false})
+    @ApiProperty({ example: 'https://github.com/movestore/RemoveOutliers', required: false })
     @IsString()
     repoUrl: string;
 
-    @ApiProperty({ enum: ComponentDomain, required: false})
+    @ApiProperty({ nullable: true })
+    repoCommitSha: string | null;
+
+    @ApiProperty()
+    @IsUUID()
+    lineageId: string;
+
+    @ApiProperty()
+    @IsNumber()
+    version: number;
+
+    @ApiProperty({ enum: ComponentDomain, required: false })
     @IsEnum(ComponentDomain)
     domain: ComponentDomain;
 
-    @ApiProperty({ enum: ComponentSource})
+    @ApiProperty({ enum: ComponentSource })
     @IsEnum(ComponentSource)
     source: ComponentSource;
 

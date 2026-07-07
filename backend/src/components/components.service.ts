@@ -8,7 +8,8 @@ import {
   ConflictException,
   Injectable,
   InternalServerErrorException,
-  Logger, NotFoundException,
+  Logger,
+  NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -20,10 +21,10 @@ import { CreateComponentDto } from './dto/create-component.dto';
 import { PackageComponentDto } from './dto/package-component.dto';
 import { Component } from './entities/component.entity';
 import { Parameter } from './entities/parameter.entity';
-import {ComponentListItemDto} from "./dto/component-list-item.dto";
-import {ComponentDetailDto} from "./dto/component-detail.dto";
-import {ComponentTransformer} from "./transformers/component.transformer";
-import {CwlParser} from "./cwl/cwl-parser";
+import { ComponentListItemDto } from './dto/component-list-item.dto';
+import { ComponentDetailDto } from './dto/component-detail.dto';
+import { ComponentTransformer } from './transformers/component.transformer';
+import { CwlParser } from './cwl/cwl-parser';
 
 @Injectable()
 export class ComponentsService {
@@ -38,10 +39,9 @@ export class ComponentsService {
   ) {}
 
   async findAll(domain?: ComponentDomain): Promise<ComponentListItemDto[]> {
-    const components: ComponentListItemDto[] = domain
-    ? await this.componentRepo.findBy( {domain} )
-    : await this.componentRepo.find()
-
+    const components = domain
+      ? await this.componentRepo.findBy({ domain })
+      : await this.componentRepo.find();
     return components.map(ComponentTransformer.toListItem);
   }
 
@@ -51,12 +51,17 @@ export class ComponentsService {
     return ComponentTransformer.toDetail(component);
   }
 
-  async packageFromUrl(dto: PackageComponentDto): Promise<ComponentDetailDto> {
-    const existing = await this.componentRepo.findOne({ where: { repoUrl: dto.repoUrl } });
-    if (existing) {
-      throw new ConflictException(`Component with repoUrl '${dto.repoUrl}' already exists`);
-    }
+  async findVersions(id: string): Promise<ComponentListItemDto[]> {
+    const component = await this.componentRepo.findOneBy({ id });
+    if (!component) throw new NotFoundException(`Component ${id} not found`);
+    const versions = await this.componentRepo.find({
+      where: { lineageId: component.lineageId },
+      order: { version: 'ASC' },
+    });
+    return versions.map(ComponentTransformer.toListItem);
+  }
 
+  async packageFromUrl(dto: PackageComponentDto): Promise<ComponentDetailDto> {
     const repoName = dto.repoUrl.split('/').at(-1)!;
     const tmpDir = path.join(os.tmpdir(), `moveapps-${uuid()}`);
     await fs.mkdir(tmpDir, { recursive: true });
@@ -65,29 +70,44 @@ export class ComponentsService {
       await this.runPackagingCli(dto.repoUrl, tmpDir);
 
       const cwlPath = path.join(tmpDir, `${repoName}.cwl`);
+      const metadataPath = path.join(tmpDir, 'metadata.json');
 
       let cwlContent: string;
+      let commitSha: string | null = null;
       try {
         cwlContent = await fs.readFile(cwlPath, 'utf-8');
+        const metadata = JSON.parse(await fs.readFile(metadataPath, 'utf-8'));
+        commitSha = metadata.commitSha ?? null;
       } catch {
         throw new InternalServerErrorException(
           'Packaging CLI exited successfully but expected output files are missing',
         );
       }
 
-      let parameters: Partial<Parameter>[];
-      try {
-        parameters = CwlParser.extractParameters(cwlContent);
-      } catch (err: any) {
-        throw new InternalServerErrorException(`CLI-generated CWL could not be parsed: ${err.message}`);
+      // Check if this repoUrl already exists in any lineage
+      const existingInLineage = await this.componentRepo.findOne({ where: { repoUrl: dto.repoUrl } });
+
+      if (existingInLineage) {
+        // Same commitSha -> already packaged, nothing to do
+        if (commitSha && existingInLineage.repoCommitSha === commitSha) {
+          throw new ConflictException(
+            `Component '${repoName}' at commit ${commitSha} is already packaged`,
+          );
+        }
+        // Different SHA -> create a new version in the same lineage
+        return this.createNextVersion(existingInLineage, cwlContent, commitSha);
       }
 
-      this.logger.log(`Packaging complete: ${repoName} (${parameters.length} parameters)`);
-
+      // New component: v1
+      const parameters = this.parseParameters(cwlContent, 'CLI-generated');
+      const id = uuid();
       const component = this.componentRepo.create({
+        id,
         name: repoName,
         repoUrl: dto.repoUrl,
-        repoCommitSha: null,
+        repoCommitSha: commitSha,
+        lineageId: id,
+        version: 1,
         cwlContent,
         description: CwlParser.extractDescription(cwlContent),
         source: ComponentSource.MOVEAPPS,
@@ -95,8 +115,59 @@ export class ComponentsService {
         parameters: parameters as Parameter[],
       });
 
-      const savedComponent = await this.componentRepo.save(component);
-      return ComponentTransformer.toDetail(savedComponent);
+      this.logger.log(`Packaging complete: ${repoName} v1`);
+      const saved = await this.componentRepo.save(component);
+      return ComponentTransformer.toDetail(saved);
+    } catch (err) {
+      if (
+        err instanceof ConflictException ||
+        err instanceof InternalServerErrorException ||
+        err instanceof BadRequestException
+      ) {
+        throw err;
+      }
+      throw new BadRequestException((err as Error).message);
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+
+  async addPackagedVersion(parentId: string): Promise<ComponentDetailDto> {
+    const parent = await this.componentRepo.findOneBy({ id: parentId });
+    if (!parent) throw new NotFoundException(`Component ${parentId} not found`);
+    if (!parent.repoUrl) {
+      throw new BadRequestException('Cannot repackage a manually uploaded component');
+    }
+
+    const repoName = parent.repoUrl.split('/').at(-1)!;
+    const tmpDir = path.join(os.tmpdir(), `moveapps-${uuid()}`);
+    await fs.mkdir(tmpDir, { recursive: true });
+
+    try {
+      await this.runPackagingCli(parent.repoUrl, tmpDir);
+
+      const cwlPath = path.join(tmpDir, `${repoName}.cwl`);
+      const metadataPath = path.join(tmpDir, 'metadata.json');
+
+      let cwlContent: string;
+      let commitSha: string | null = null;
+      try {
+        cwlContent = await fs.readFile(cwlPath, 'utf-8');
+        const metadata = JSON.parse(await fs.readFile(metadataPath, 'utf-8'));
+        commitSha = metadata.commitSha ?? null;
+      } catch {
+        throw new InternalServerErrorException(
+          'Packaging CLI exited successfully but expected output files are missing',
+        );
+      }
+
+      if (commitSha && parent.repoCommitSha === commitSha) {
+        throw new ConflictException(
+          `Component '${repoName}' at commit ${commitSha} is already packaged`,
+        );
+      }
+
+      return this.createNextVersion(parent, cwlContent, commitSha);
     } catch (err) {
       if (
         err instanceof ConflictException ||
@@ -112,26 +183,19 @@ export class ComponentsService {
   }
 
   async createManual(file: Express.Multer.File, dto: CreateComponentDto): Promise<ComponentDetailDto> {
-    const existing = await this.componentRepo.findOne({ where: { name: dto.name } });
-    if (existing) {
-      throw new ConflictException(`Component with name '${dto.name}' already exists`);
-    }
-
     const cwlContent = file.buffer.toString('utf-8');
+    const parameters = this.parseParameters(cwlContent, 'Uploaded');
 
-    let parameters: Partial<Parameter>[];
-    try {
-      parameters = CwlParser.extractParameters(cwlContent);
-    } catch (err: any) {
-      throw new BadRequestException(`Invalid CWL file: ${err.message}`);
-    }
+    this.logger.log(`Manual upload: ${dto.name} v1`);
 
-    this.logger.log(`Manual upload: ${dto.name} (${parameters.length} parameters)`);
-
+    const id = uuid();
     const component = this.componentRepo.create({
+      id,
       name: dto.name,
       repoUrl: null,
       repoCommitSha: null,
+      lineageId: id,
+      version: 1,
       cwlContent,
       description: CwlParser.extractDescription(cwlContent),
       source: ComponentSource.MANUAL,
@@ -139,8 +203,16 @@ export class ComponentsService {
       parameters: parameters as Parameter[],
     });
 
-    const savedComponent = await this.componentRepo.save(component);
-    return ComponentTransformer.toDetail(savedComponent);
+    const saved = await this.componentRepo.save(component);
+    return ComponentTransformer.toDetail(saved);
+  }
+
+  async addManualVersion(parentId: string, file: Express.Multer.File): Promise<ComponentDetailDto> {
+    const parent = await this.componentRepo.findOneBy({ id: parentId });
+    if (!parent) throw new NotFoundException(`Component ${parentId} not found`);
+
+    const cwlContent = file.buffer.toString('utf-8');
+    return this.createNextVersion(parent, cwlContent, null);
   }
 
   async updateDescription(id: string, description: string | null): Promise<ComponentDetailDto> {
@@ -153,14 +225,50 @@ export class ComponentsService {
 
   async remove(id: string): Promise<void> {
     const component = await this.componentRepo.findOneBy({ id });
-    if (!component) {
-      throw new NotFoundException(`Component ${id} not found`);
-    }
-
+    if (!component) throw new NotFoundException(`Component ${id} not found`);
     await this.componentRepo.delete(id);
   }
 
-  // ── Private helpers ─────────────────────────────────────────────────────────
+  // ── Private helpers ──────────────────────────────────────────────────────────
+
+  private async createNextVersion(
+    parent: Component,
+    cwlContent: string,
+    commitSha: string | null,
+  ): Promise<ComponentDetailDto> {
+    const latest = await this.componentRepo.findOne({
+      where: { lineageId: parent.lineageId },
+      order: { version: 'DESC' },
+    });
+    const nextVersion = (latest?.version ?? 0) + 1;
+
+    const parameters = this.parseParameters(cwlContent, `v${nextVersion}`);
+
+    const component = this.componentRepo.create({
+      name: parent.name,
+      repoUrl: parent.repoUrl,
+      repoCommitSha: commitSha,
+      lineageId: parent.lineageId,
+      version: nextVersion,
+      cwlContent,
+      description: CwlParser.extractDescription(cwlContent),
+      source: parent.source,
+      domain: parent.domain,
+      parameters: parameters as Parameter[],
+    });
+
+    this.logger.log(`New version: ${parent.name} v${nextVersion}`);
+    const saved = await this.componentRepo.save(component);
+    return ComponentTransformer.toDetail(saved);
+  }
+
+  private parseParameters(cwlContent: string, context: string): Partial<Parameter>[] {
+    try {
+      return CwlParser.extractParameters(cwlContent);
+    } catch (err: any) {
+      throw new BadRequestException(`${context} CWL could not be parsed: ${err.message}`);
+    }
+  }
 
   private async runPackagingCli(repoUrl: string, outputDir: string): Promise<void> {
     return new Promise((resolve, reject) => {

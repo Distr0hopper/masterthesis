@@ -1,6 +1,6 @@
-import {Component} from "../entities/component.entity";
-import {ComponentListItemDto} from "../dto/component-list-item.dto";
-import {ComponentDetailDto} from "../dto/component-detail.dto";
+import { Component } from "../entities/component.entity";
+import { ComponentListItemDto } from "../dto/component-list-item.dto";
+import { ComponentDetailDto } from "../dto/component-detail.dto";
 
 export class ComponentTransformer {
     static toListItem(component: Component): ComponentListItemDto {
@@ -8,6 +8,9 @@ export class ComponentTransformer {
             id: component.id,
             name: component.name,
             repoUrl: component.repoUrl,
+            repoCommitSha: component.repoCommitSha ?? null,
+            lineageId: component.lineageId,
+            version: component.version,
             domain: component.domain,
             source: component.source,
             createdAt: component.createdAt,
@@ -17,9 +20,12 @@ export class ComponentTransformer {
     static toDetail(component: Component): ComponentDetailDto {
         return {
             id: component.id,
-            description: component.description,
             name: component.name,
+            description: component.description,
             repoUrl: component.repoUrl,
+            repoCommitSha: component.repoCommitSha ?? null,
+            lineageId: component.lineageId,
+            version: component.version,
             cwlContent: component.cwlContent,
             domain: component.domain,
             source: component.source,

@@ -1,6 +1,6 @@
-import {ApiProperty} from "@nestjs/swagger";
-import {ComponentDomain, ComponentSource} from "../enums";
-import {Parameter} from "../entities/parameter.entity";
+import { ApiProperty } from "@nestjs/swagger";
+import { ComponentDomain, ComponentSource } from "../enums";
+import { Parameter } from "../entities/parameter.entity";
 
 export class ComponentDetailDto {
     @ApiProperty()
@@ -14,6 +14,15 @@ export class ComponentDetailDto {
 
     @ApiProperty({ nullable: true })
     repoUrl: string;
+
+    @ApiProperty({ nullable: true })
+    repoCommitSha: string | null;
+
+    @ApiProperty()
+    lineageId: string;
+
+    @ApiProperty()
+    version: number;
 
     @ApiProperty()
     cwlContent: string;

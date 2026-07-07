@@ -2,6 +2,7 @@
 
 import base64
 import os
+import re
 from dataclasses import dataclass
 
 import requests
@@ -20,6 +21,17 @@ class RepoContents:
     appspec: dict
     app_config: RepoFile
     default_branch: str
+    description: str
+
+
+def extract_readme_description(readme_bytes: bytes) -> str:
+    text = readme_bytes.decode("utf-8", errors="replace")
+    m = re.search(
+        r"^##\s+Description\s*\n(.*?)(?=\n##|\Z)",
+        text,
+        re.DOTALL | re.IGNORECASE | re.MULTILINE,
+    )
+    return m.group(1).strip() if m else ""
 
 
 class GitHubClient:
@@ -59,8 +71,15 @@ class GitHubClient:
 
         app_config = self._fetch_file(owner, repo, "app-configuration.json")
 
+        try:
+            readme = self._fetch_file(owner, repo, "README.md")
+            description = extract_readme_description(readme.content)
+        except Exception:
+            description = ""
+
         return RepoContents(
             appspec=appspec,
             app_config=app_config,
             default_branch=default_branch,
+            description=description,
         )

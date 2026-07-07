@@ -104,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # Generate artifacts
     dockerfile_content = generate_dockerfile_content(args.wrapper_image, raw_base_url, r_packages or None)
-    cwl_text = generate_cwl(app_name, appspec_settings, dockerfile_content)
+    cwl_text = generate_cwl(app_name, appspec_settings, dockerfile_content, description=contents.description)
     app_config_dict = json.loads(contents.app_config.content)
     inputs_yaml = generate_inputs_yaml(appspec_settings, app_config_dict)
 

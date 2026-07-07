@@ -12,11 +12,10 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import * as yaml from 'js-yaml';
 import { Repository } from 'typeorm';
 import { v4 as uuid } from 'uuid';
 
-import { ComponentDomain, ComponentSource, ParameterDirection } from './enums';
+import { ComponentDomain, ComponentSource } from './enums';
 import { CreateComponentDto } from './dto/create-component.dto';
 import { PackageComponentDto } from './dto/package-component.dto';
 import { Component } from './entities/component.entity';
@@ -24,6 +23,7 @@ import { Parameter } from './entities/parameter.entity';
 import {ComponentListItemDto} from "./dto/component-list-item.dto";
 import {ComponentDetailDto} from "./dto/component-detail.dto";
 import {ComponentTransformer} from "./transformers/component.transformer";
+import {CwlParser} from "./cwl/cwl-parser";
 
 @Injectable()
 export class ComponentsService {
@@ -77,7 +77,7 @@ export class ComponentsService {
 
       let parameters: Partial<Parameter>[];
       try {
-        parameters = this.extractParameters(cwlContent);
+        parameters = CwlParser.extractParameters(cwlContent);
       } catch (err: any) {
         throw new InternalServerErrorException(`CLI-generated CWL could not be parsed: ${err.message}`);
       }
@@ -89,7 +89,7 @@ export class ComponentsService {
         repoUrl: dto.repoUrl,
         repoCommitSha: null,
         cwlContent,
-        description: this.extractDescription(cwlContent),
+        description: CwlParser.extractDescription(cwlContent),
         source: ComponentSource.MOVEAPPS,
         domain: dto.domain,
         parameters: parameters as Parameter[],
@@ -121,7 +121,7 @@ export class ComponentsService {
 
     let parameters: Partial<Parameter>[];
     try {
-      parameters = this.extractParameters(cwlContent);
+      parameters = CwlParser.extractParameters(cwlContent);
     } catch (err: any) {
       throw new BadRequestException(`Invalid CWL file: ${err.message}`);
     }
@@ -133,7 +133,7 @@ export class ComponentsService {
       repoUrl: null,
       repoCommitSha: null,
       cwlContent,
-      description: this.extractDescription(cwlContent),
+      description: CwlParser.extractDescription(cwlContent),
       source: ComponentSource.MANUAL,
       domain: dto.domain,
       parameters: parameters as Parameter[],
@@ -181,35 +181,5 @@ export class ComponentsService {
         reject(new InternalServerErrorException(`Failed to start packaging CLI: ${err.message}`));
       });
     });
-  }
-
-  private extractDescription(cwlContent: string): string | null {
-    try {
-      const doc: any = yaml.load(cwlContent);
-      return doc?.doc ?? null;
-    } catch {
-      return null;
-    }
-  }
-
-  private extractParameters(cwlContent: string): Partial<Parameter>[] {
-    let doc: any;
-    try {
-      doc = yaml.load(cwlContent);
-    } catch (err: any) {
-      throw new Error(`YAML parse error: ${err.message}`);
-    }
-
-    const inputs: Record<string, any> = doc?.inputs ?? {};
-
-    return Object.entries(inputs)
-      .filter(([name]) => name !== 'input_rds')
-      .map(([name, def]) => ({
-        name,
-        cwlType: String(def?.type ?? 'string').replace(/\?$/, ''),
-        defaultValue: def?.default !== undefined ? String(def.default) : null,
-        description: def?.doc ?? null,
-        direction: ParameterDirection.INPUT,
-      }));
   }
 }

@@ -17,6 +17,7 @@ export class ComponentTransformer {
     static toDetail(component: Component): ComponentDetailDto {
         return {
             id: component.id,
+            description: component.description,
             name: component.name,
             repoUrl: component.repoUrl,
             cwlContent: component.cwlContent,

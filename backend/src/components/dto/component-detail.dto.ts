@@ -10,6 +10,9 @@ export class ComponentDetailDto {
     name: string;
 
     @ApiProperty({ nullable: true })
+    description: string;
+
+    @ApiProperty({ nullable: true })
     repoUrl: string;
 
     @ApiProperty()

@@ -18,6 +18,9 @@ export class Component {
   name: string;
 
   @Column({ nullable: true })
+  description: string;
+
+  @Column({ nullable: true })
   repoUrl: string;
 
   @Column({ nullable: true })

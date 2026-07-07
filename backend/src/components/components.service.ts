@@ -141,6 +141,15 @@ export class ComponentsService {
     return ComponentTransformer.toDetail(savedComponent);
   }
 
+  async remove(id: string): Promise<void> {
+    const component = await this.componentRepo.findOneBy({ id });
+    if (!component) {
+      throw new NotFoundException(`Component ${id} not found`);
+    }
+
+    await this.componentRepo.delete(id);
+  }
+
   // ── Private helpers ─────────────────────────────────────────────────────────
 
   private async runPackagingCli(repoUrl: string, outputDir: string): Promise<void> {

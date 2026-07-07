@@ -1,6 +1,6 @@
 import {
   Body,
-  Controller,
+  Controller, Delete,
   Get,
   MaxFileSizeValidator, Param,
   ParseFilePipe,
@@ -92,4 +92,13 @@ export class ComponentsController {
   async package(@Body() dto: PackageComponentDto) {
     return this.componentsService.packageFromUrl(dto);
   }
+
+  @Delete(':id')
+    @ApiOperation({ summary: 'Delete a component by ID' })
+    @ApiParam({ name: 'id', required: true, description: 'Component ID' })
+    @ApiResponse({ status: 200, description: 'Component successfully deleted' })
+    @ApiResponse({ status: 404, description: 'Component not found' })
+    async remove(@Param('id') id: string): Promise<void> {
+        return this.componentsService.remove(id);
+    }
 }

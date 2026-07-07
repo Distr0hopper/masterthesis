@@ -89,6 +89,7 @@ export class ComponentsService {
         repoUrl: dto.repoUrl,
         repoCommitSha: null,
         cwlContent,
+        description: this.extractDescription(cwlContent),
         source: ComponentSource.MOVEAPPS,
         domain: dto.domain,
         parameters: parameters as Parameter[],
@@ -132,6 +133,7 @@ export class ComponentsService {
       repoUrl: null,
       repoCommitSha: null,
       cwlContent,
+      description: this.extractDescription(cwlContent),
       source: ComponentSource.MANUAL,
       domain: dto.domain,
       parameters: parameters as Parameter[],
@@ -179,6 +181,15 @@ export class ComponentsService {
         reject(new InternalServerErrorException(`Failed to start packaging CLI: ${err.message}`));
       });
     });
+  }
+
+  private extractDescription(cwlContent: string): string | null {
+    try {
+      const doc: any = yaml.load(cwlContent);
+      return doc?.doc ?? null;
+    } catch {
+      return null;
+    }
   }
 
   private extractParameters(cwlContent: string): Partial<Parameter>[] {

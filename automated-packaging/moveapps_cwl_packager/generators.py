@@ -103,7 +103,6 @@ def generate_cwl(
     app_name: str,
     settings: list[dict],
     dockerfile_content: str,
-    description: str = "",
 ) -> str:
     """Return a CWL v1.2 CommandLineTool document as a YAML string."""
 
@@ -134,7 +133,6 @@ def generate_cwl(
     doc: dict[str, Any] = {
         "cwlVersion": "v1.2",
         "class": "CommandLineTool",
-        "doc": description or None,
         "requirements": {
             "InlineJavascriptRequirement": {},
             "DockerRequirement": {

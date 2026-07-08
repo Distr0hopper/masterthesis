@@ -1,0 +1,629 @@
+{
+    "openapi": "3.0.0",
+    "paths": {
+        "/health": {
+            "get": {
+                "operationId": "HealthController_check",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": ""
+                    }
+                },
+                "tags": [
+                    "Health"
+                ]
+            }
+        },
+        "/components": {
+            "get": {
+                "operationId": "ComponentsController_findAll",
+                "parameters": [
+                    {
+                        "name": "domain",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "enum": [
+                                "moveapps",
+                                "earth_observation"
+                            ],
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/ComponentListItemDto"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "summary": "List all components",
+                "tags": [
+                    "components"
+                ]
+            },
+            "post": {
+                "operationId": "ComponentsController_create",
+                "parameters": [],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "allOf": [
+                                    {
+                                        "$ref": "#/components/schemas/CreateComponentDto"
+                                    },
+                                    {
+                                        "type": "object",
+                                        "properties": {
+                                            "cwlFile": {
+                                                "type": "string",
+                                                "format": "binary"
+                                            },
+                                            "name": {
+                                                "type": "string"
+                                            },
+                                            "domain": {
+                                                "type": "string",
+                                                "enum": [
+                                                    "moveapps",
+                                                    "earth_observation"
+                                                ]
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ComponentDetailDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "summary": "Manually upload a CWL file as a new component (v1)",
+                "tags": [
+                    "components"
+                ]
+            }
+        },
+        "/components/{id}": {
+            "get": {
+                "operationId": "ComponentsController_findOne",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "required": true,
+                        "in": "path",
+                        "description": "Component ID",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ComponentDetailDto"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Component not found"
+                    }
+                },
+                "summary": "Return component with ID",
+                "tags": [
+                    "components"
+                ]
+            },
+            "patch": {
+                "operationId": "ComponentsController_updateDescription",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "required": true,
+                        "in": "path",
+                        "description": "Component ID",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateComponentDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ComponentDetailDto"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Component not found"
+                    }
+                },
+                "summary": "Update the description of a component",
+                "tags": [
+                    "components"
+                ]
+            },
+            "delete": {
+                "operationId": "ComponentsController_remove",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "required": true,
+                        "in": "path",
+                        "description": "Component ID",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Component successfully deleted"
+                    },
+                    "404": {
+                        "description": "Component not found"
+                    }
+                },
+                "summary": "Delete a component by ID",
+                "tags": [
+                    "components"
+                ]
+            }
+        },
+        "/components/{id}/download": {
+            "get": {
+                "operationId": "ComponentsController_download",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "required": true,
+                        "in": "path",
+                        "description": "Component ID",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "CWL file download"
+                    },
+                    "404": {
+                        "description": "Component not found"
+                    }
+                },
+                "summary": "Download component as a .cwl file",
+                "tags": [
+                    "components"
+                ]
+            }
+        },
+        "/components/{id}/versions": {
+            "get": {
+                "operationId": "ComponentsController_findVersions",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "required": true,
+                        "in": "path",
+                        "description": "Any component ID within the lineage",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/ComponentListItemDto"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Component not found"
+                    }
+                },
+                "summary": "List all versions of a component lineage",
+                "tags": [
+                    "components"
+                ]
+            },
+            "post": {
+                "operationId": "ComponentsController_addManualVersion",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "required": true,
+                        "in": "path",
+                        "description": "Parent component ID",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "cwlFile": {
+                                        "type": "string",
+                                        "format": "binary"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ComponentDetailDto"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Component not found"
+                    }
+                },
+                "summary": "Upload a new version of an existing component",
+                "tags": [
+                    "components"
+                ]
+            }
+        },
+        "/components/package": {
+            "post": {
+                "operationId": "ComponentsController_package",
+                "parameters": [],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PackageComponentDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ComponentDetailDto"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid URL or packaging failed"
+                    },
+                    "409": {
+                        "description": "This exact commit is already packaged"
+                    }
+                },
+                "summary": "Package a MoveApps app from a GitHub URL (creates v1 or new version if URL exists with a different commit)",
+                "tags": [
+                    "components"
+                ]
+            }
+        },
+        "/components/{id}/versions/package": {
+            "post": {
+                "operationId": "ComponentsController_addPackagedVersion",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "required": true,
+                        "in": "path",
+                        "description": "Any component ID within the lineage",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ComponentDetailDto"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Component has no repoUrl or packaging failed"
+                    },
+                    "409": {
+                        "description": "This exact commit is already packaged"
+                    }
+                },
+                "summary": "Repackage a MoveApps component from its repo URL to create a new version",
+                "tags": [
+                    "components"
+                ]
+            }
+        }
+    },
+    "info": {
+        "title": "Component Repository API",
+        "description": "REST API for managing CWL-based workflow components",
+        "version": "1.0",
+        "contact": {}
+    },
+    "tags": [],
+    "servers": [],
+    "components": {
+        "schemas": {
+            "CreateComponentDto": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "example": "My EO Component"
+                    },
+                    "domain": {
+                        "type": "string",
+                        "enum": [
+                            "moveapps",
+                            "earth_observation"
+                        ]
+                    }
+                },
+                "required": [
+                    "name",
+                    "domain"
+                ]
+            },
+            "ComponentListItemDto": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "RemoveOutliers"
+                    },
+                    "repoUrl": {
+                        "type": "string",
+                        "example": "https://github.com/movestore/RemoveOutliers"
+                    },
+                    "repoCommitSha": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "lineageId": {
+                        "type": "string"
+                    },
+                    "version": {
+                        "type": "number"
+                    },
+                    "domain": {
+                        "type": "string",
+                        "enum": [
+                            "moveapps",
+                            "earth_observation"
+                        ]
+                    },
+                    "source": {
+                        "type": "string",
+                        "enum": [
+                            "moveapps",
+                            "manual"
+                        ]
+                    },
+                    "createdAt": {
+                        "format": "date-time",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "id",
+                    "name",
+                    "repoCommitSha",
+                    "lineageId",
+                    "version",
+                    "source",
+                    "createdAt"
+                ]
+            },
+            "ParameterDto": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "maxspeed"
+                    },
+                    "cwlType": {
+                        "type": "string",
+                        "example": "double"
+                    },
+                    "defaultValue": {
+                        "type": "string",
+                        "nullable": true,
+                        "example": "20.0"
+                    },
+                    "description": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "direction": {
+                        "type": "string",
+                        "enum": [
+                            "input",
+                            "output"
+                        ]
+                    }
+                },
+                "required": [
+                    "id",
+                    "name",
+                    "cwlType",
+                    "defaultValue",
+                    "description",
+                    "direction"
+                ]
+            },
+            "ComponentDetailDto": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "repoUrl": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "repoCommitSha": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "lineageId": {
+                        "type": "string"
+                    },
+                    "version": {
+                        "type": "number"
+                    },
+                    "cwlContent": {
+                        "type": "string"
+                    },
+                    "domain": {
+                        "type": "string",
+                        "enum": [
+                            "moveapps",
+                            "earth_observation"
+                        ]
+                    },
+                    "source": {
+                        "type": "string",
+                        "enum": [
+                            "moveapps",
+                            "manual"
+                        ]
+                    },
+                    "parameters": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ParameterDto"
+                        }
+                    },
+                    "createdAt": {
+                        "format": "date-time",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "id",
+                    "name",
+                    "description",
+                    "repoUrl",
+                    "repoCommitSha",
+                    "lineageId",
+                    "version",
+                    "cwlContent",
+                    "domain",
+                    "source",
+                    "parameters",
+                    "createdAt"
+                ]
+            },
+            "PackageComponentDto": {
+                "type": "object",
+                "properties": {
+                    "repoUrl": {
+                        "type": "string",
+                        "example": "https://github.com/movestore/RemoveOutliers"
+                    },
+                    "domain": {
+                        "type": "string",
+                        "enum": [
+                            "moveapps",
+                            "earth_observation"
+                        ]
+                    }
+                },
+                "required": [
+                    "repoUrl",
+                    "domain"
+                ]
+            },
+            "UpdateComponentDto": {
+                "type": "object",
+                "properties": {
+                    "description": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                }
+            }
+        }
+    }
+}

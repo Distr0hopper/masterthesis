@@ -1,6 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { ComponentDomain, ComponentSource } from "../enums";
-import { Parameter } from "../entities/parameter.entity";
+import { ParameterDto } from "./parameter.dto";
 
 export class ComponentDetailDto {
     @ApiProperty()
@@ -33,8 +33,8 @@ export class ComponentDetailDto {
     @ApiProperty({ enum: ComponentSource })
     source: ComponentSource;
 
-    @ApiProperty({ type: () => [Parameter] })
-    parameters: Parameter[];
+    @ApiProperty({ type: () => [ParameterDto] })
+    parameters: ParameterDto[];
 
     @ApiProperty()
     createdAt: Date;

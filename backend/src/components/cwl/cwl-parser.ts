@@ -1,8 +1,18 @@
-import {Parameter} from "../entities/parameter.entity";
-import {ParameterDirection} from "../enums";
+import { Parameter } from "../entities/parameter.entity";
+import { ParameterDirection } from "../enums";
 import * as yaml from 'js-yaml';
 
 export class CwlParser {
+    static injectDescription(cwlContent: string, description: string | null): string {
+        const doc: any = yaml.load(cwlContent);
+        if (description) {
+            doc.doc = description;
+        } else {
+            delete doc.doc;
+        }
+        return yaml.dump(doc, { lineWidth: -1, noRefs: true });
+    }
+
     static extractDescription(cwlContent: string): string | null {
         try {
             const doc: any = yaml.load(cwlContent);

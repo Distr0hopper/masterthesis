@@ -74,10 +74,12 @@ export class ComponentsService {
 
       let cwlContent: string;
       let commitSha: string | null = null;
+      let metadataDescription: string | null = null;
       try {
         cwlContent = await fs.readFile(cwlPath, 'utf-8');
         const metadata = JSON.parse(await fs.readFile(metadataPath, 'utf-8'));
         commitSha = metadata.commitSha ?? null;
+        metadataDescription = metadata.description ?? null;
       } catch {
         throw new InternalServerErrorException(
           'Packaging CLI exited successfully but expected output files are missing',
@@ -95,7 +97,7 @@ export class ComponentsService {
           );
         }
         // Different SHA -> create a new version in the same lineage
-        return this.createNextVersion(existingInLineage, cwlContent, commitSha);
+        return this.createNextVersion(existingInLineage, cwlContent, commitSha, metadataDescription);
       }
 
       // New component: v1
@@ -109,7 +111,7 @@ export class ComponentsService {
         lineageId: id,
         version: 1,
         cwlContent,
-        description: CwlParser.extractDescription(cwlContent),
+        description: metadataDescription,
         source: ComponentSource.MOVEAPPS,
         domain: dto.domain,
         parameters: parameters as Parameter[],
@@ -151,10 +153,12 @@ export class ComponentsService {
 
       let cwlContent: string;
       let commitSha: string | null = null;
+      let metadataDescription: string | null = null;
       try {
         cwlContent = await fs.readFile(cwlPath, 'utf-8');
         const metadata = JSON.parse(await fs.readFile(metadataPath, 'utf-8'));
         commitSha = metadata.commitSha ?? null;
+        metadataDescription = metadata.description ?? null;
       } catch {
         throw new InternalServerErrorException(
           'Packaging CLI exited successfully but expected output files are missing',
@@ -167,7 +171,7 @@ export class ComponentsService {
         );
       }
 
-      return this.createNextVersion(parent, cwlContent, commitSha);
+      return this.createNextVersion(parent, cwlContent, commitSha, metadataDescription);
     } catch (err) {
       if (
         err instanceof ConflictException ||
@@ -235,6 +239,7 @@ export class ComponentsService {
     parent: Component,
     cwlContent: string,
     commitSha: string | null,
+    description: string | null = null,
   ): Promise<ComponentDetailDto> {
     const latest = await this.componentRepo.findOne({
       where: { lineageId: parent.lineageId },
@@ -251,7 +256,7 @@ export class ComponentsService {
       lineageId: parent.lineageId,
       version: nextVersion,
       cwlContent,
-      description: CwlParser.extractDescription(cwlContent),
+      description: description ?? CwlParser.extractDescription(cwlContent),
       source: parent.source,
       domain: parent.domain,
       parameters: parameters as Parameter[],

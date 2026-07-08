@@ -9,10 +9,12 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Response } from 'express';
 import {
   ApiBody,
   ApiConsumes,
@@ -54,6 +56,18 @@ export class ComponentsController {
   @ApiResponse({ status: 404, description: 'Component not found' })
   async findOne(@Param('id') id: string) {
     return this.componentsService.findOne(id);
+  }
+
+  @Get(':id/download')
+  @ApiOperation({ summary: 'Download component as a .cwl file' })
+  @ApiParam({ name: 'id', required: true, description: 'Component ID' })
+  @ApiResponse({ status: 200, description: 'CWL file download' })
+  @ApiResponse({ status: 404, description: 'Component not found' })
+  async download(@Param('id') id: string, @Res() res: Response) {
+    const { filename, content } = await this.componentsService.getCwlDownload(id);
+    res.setHeader('Content-Type', 'application/yaml');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(content);
   }
 
   @Get(':id/versions')

@@ -219,6 +219,15 @@ export class ComponentsService {
     return this.createNextVersion(parent, cwlContent, null);
   }
 
+  async getCwlDownload(id: string): Promise<{ filename: string; content: string }> {
+    const component = await this.componentRepo.findOneBy({ id });
+    if (!component) throw new NotFoundException(`Component ${id} not found`);
+    return {
+      filename: `${component.name}-v${component.version}.cwl`,
+      content: CwlParser.injectDescription(component.cwlContent, component.description),
+    };
+  }
+
   async updateDescription(id: string, description: string | null): Promise<ComponentDetailDto> {
     const component = await this.componentRepo.findOneBy({ id });
     if (!component) throw new NotFoundException(`Component ${id} not found`);

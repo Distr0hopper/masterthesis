@@ -62,7 +62,6 @@ export class CwlParser {
         const inputs: Record<string, any> = doc?.inputs ?? {};
 
         return Object.entries(inputs)
-            .filter(([name]) => name !== 'input_rds')
             .map(([name, def]) => ({
                 name,
                 cwlType: String(def?.type ?? 'string').replace(/\?$/, ''),

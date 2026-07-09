@@ -1,5 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { ComponentDomain, ComponentSource } from "../enums";
+import { ComponentDomain, ComponentSource, VALID_DOMAINS } from "../enums";
 import { ParameterDto } from "./parameter.dto";
 
 export class ComponentDetailDto {
@@ -27,7 +27,7 @@ export class ComponentDetailDto {
     @ApiProperty()
     cwlContent: string;
 
-    @ApiProperty({ enum: ComponentDomain })
+    @ApiProperty({ enum: VALID_DOMAINS })
     domain: ComponentDomain;
 
     @ApiProperty({ enum: ComponentSource })

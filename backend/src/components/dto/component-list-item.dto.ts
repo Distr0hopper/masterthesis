@@ -1,4 +1,4 @@
-import { ComponentDomain, ComponentSource } from "../enums";
+import { ComponentDomain, ComponentSource, VALID_DOMAINS } from "../enums";
 import { ApiProperty } from "@nestjs/swagger";
 import { IsDate, IsEnum, IsNumber, IsString, IsUUID } from "class-validator";
 
@@ -25,8 +25,7 @@ export class ComponentListItemDto {
     @IsNumber()
     version: number;
 
-    @ApiProperty({ enum: ComponentDomain, required: false })
-    @IsEnum(ComponentDomain)
+    @ApiProperty({ enum: VALID_DOMAINS, required: false })
     domain: ComponentDomain;
 
     @ApiProperty({ enum: ComponentSource })

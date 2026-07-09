@@ -27,7 +27,7 @@ import {
   getSchemaPath,
 } from '@nestjs/swagger';
 
-import { ComponentDomain } from './enums';
+import { ComponentDomain, VALID_DOMAINS } from './enums';
 import { ComponentsService } from './components.service';
 import { CreateComponentDto } from './dto/create-component.dto';
 import { PackageComponentDto } from './dto/package-component.dto';
@@ -43,7 +43,7 @@ export class ComponentsController {
 
   @Get()
   @ApiOperation({ summary: 'List all components' })
-  @ApiQuery({ name: 'domain', enum: ComponentDomain, required: false })
+  @ApiQuery({ name: 'domain', enum: VALID_DOMAINS, required: false })
   @ApiResponse({ status: 200, type: [ComponentListItemDto] })
   async findAll(@Query('domain') domain?: ComponentDomain) {
     return this.componentsService.findAll(domain);
@@ -104,7 +104,7 @@ export class ComponentsController {
           properties: {
             cwlFile: { type: 'string', format: 'binary' },
             name: { type: 'string' },
-            domain: { type: 'string', enum: Object.values(ComponentDomain) },
+            domain: { type: 'string', enum: VALID_DOMAINS },
           },
         },
       ],

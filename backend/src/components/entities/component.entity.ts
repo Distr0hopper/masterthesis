@@ -40,7 +40,7 @@ export class Component {
   @Column({ type: 'enum', enum: ComponentSource, default: ComponentSource.MANUAL })
   source: ComponentSource;
 
-  @Column({ type: 'enum', enum: ComponentDomain })
+  @Column({ type: 'varchar' })
   domain: ComponentDomain;
 
   @OneToMany(() => Parameter, (parameter) => parameter.component, {

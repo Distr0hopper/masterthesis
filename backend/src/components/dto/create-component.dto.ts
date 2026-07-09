@@ -1,13 +1,13 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString } from 'class-validator';
-import { ComponentDomain } from '../enums';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsIn, IsString } from 'class-validator';
+import { VALID_DOMAINS } from '../enums';
 
 export class CreateComponentDto {
   @ApiProperty({ example: 'My EO Component' })
   @IsString()
   name: string;
 
-  @ApiProperty({ enum: ComponentDomain })
-  @IsEnum(ComponentDomain)
-  domain: ComponentDomain;
+  @ApiProperty({ enum: VALID_DOMAINS })
+  @IsIn(VALID_DOMAINS)
+  domain: string;
 }

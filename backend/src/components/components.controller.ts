@@ -70,6 +70,18 @@ export class ComponentsController {
     res.send(content);
   }
 
+  @Get(':id/bundle')
+  @ApiOperation({ summary: 'Download component bundle (.cwl + inputs.yaml) as a ZIP' })
+  @ApiParam({ name: 'id', required: true, description: 'Component ID' })
+  @ApiResponse({ status: 200, description: 'ZIP archive containing the CWL file and a pre-filled inputs template' })
+  @ApiResponse({ status: 404, description: 'Component not found' })
+  async bundle(@Param('id') id: string, @Res() res: Response) {
+    const { filename, buffer } = await this.componentsService.getBundle(id);
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  }
+
   @Get(':id/versions')
   @ApiOperation({ summary: 'List all versions of a component lineage' })
   @ApiParam({ name: 'id', required: true, description: 'Any component ID within the lineage' })

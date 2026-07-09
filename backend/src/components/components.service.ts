@@ -2,6 +2,7 @@ import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 import { spawn } from 'child_process';
+import * as JSZip from 'jszip';
 
 import {
   BadRequestException,
@@ -226,6 +227,22 @@ export class ComponentsService {
       filename: `${component.name}-v${component.version}.cwl`,
       content: CwlParser.injectDescription(component.cwlContent, component.description),
     };
+  }
+
+  async getBundle(id: string): Promise<{ filename: string; buffer: Buffer }> {
+    const component = await this.componentRepo.findOneBy({ id });
+    if (!component) throw new NotFoundException(`Component ${id} not found`);
+
+    const baseName = `${component.name}-v${component.version}`;
+    const cwlContent = CwlParser.injectDescription(component.cwlContent, component.description);
+    const inputsYaml = CwlParser.generateInputsYaml(component.parameters, component.name, component.version);
+
+    const zip = new JSZip();
+    zip.file(`${baseName}.cwl`, cwlContent);
+    zip.file('inputs.yaml', inputsYaml);
+
+    const buffer = await zip.generateAsync({ type: 'nodebuffer' });
+    return { filename: `${baseName}.zip`, buffer };
   }
 
   async updateDescription(id: string, description: string | null): Promise<ComponentDetailDto> {

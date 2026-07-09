@@ -4,32 +4,32 @@ import {ParameterDto} from "../dto/parameter.dto";
 
 export class CwlParser {
     static generateInputsYaml(parameters: Partial<ParameterDto>[], name: string, version: number): string {
-        const inputs: Record<string, any> = {};
+        const lines: string[] = [
+            `# CWL inputs for ${name} v${version}`,
+            `# Usage: cwltool ${name}-v${version}.cwl inputs.yaml`,
+        ];
         for (const p of parameters) {
             if (!p.name) continue;
             const type = (p.cwlType ?? 'string').toLowerCase();
-            inputs[p.name] = p.defaultValue !== null && p.defaultValue !== undefined
-                ? this.coerceDefault(type, p.defaultValue)
-                : this.placeholderForType(type);
+            lines.push(...this.formatInput(p.name, type, p.defaultValue ?? null));
         }
-        const header = `# CWL inputs for ${name} v${version}\n# Usage: cwltool ${name}-v${version}.cwl inputs.yaml\n`;
-        return header + yaml.dump(inputs, { lineWidth: -1, noRefs: true });
+        return lines.join('\n') + '\n';
     }
 
-    private static coerceDefault(type: string, value: string): any {
-        if (type === 'double' || type === 'float') return parseFloat(value);
-        if (type === 'int' || type === 'long') return parseInt(value, 10);
-        if (type === 'boolean') return value === 'true';
-        return value;
-    }
-
-    private static placeholderForType(type: string): any {
-        if (type === 'file') return { class: 'File', path: '/path/to/input' };
-        if (type === 'directory') return { class: 'Directory', location: '/path/to/dir' };
-        if (type === 'double' || type === 'float') return 0.0;
-        if (type === 'int' || type === 'long') return 0;
-        if (type === 'boolean') return false;
-        return '';
+    private static formatInput(name: string, type: string, defaultValue: string | null): string[] {
+        if (type === 'file') return [`${name}:`, `  class: File`, `  path: /path/to/input`];
+        if (type === 'directory') return [`${name}:`, `  class: Directory`, `  location: /path/to/dir`];
+        if (type === 'double' || type === 'float') {
+            const num = defaultValue !== null ? parseFloat(defaultValue) : 0;
+            return [`${name}: ${Number.isInteger(num) ? num.toFixed(1) : num}`];
+        }
+        if (type === 'int' || type === 'long') {
+            return [`${name}: ${defaultValue !== null ? parseInt(defaultValue, 10) : 0}`];
+        }
+        if (type === 'boolean') {
+            return [`${name}: ${defaultValue !== null ? defaultValue === 'true' : false}`];
+        }
+        return [`${name}: ${yaml.dump(defaultValue ?? '').trim()}`];
     }
 
     static injectDescription(cwlContent: string, description: string | null): string {

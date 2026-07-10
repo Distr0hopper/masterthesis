@@ -22,6 +22,7 @@ import { CreateComponentDto } from './dto/create-component.dto';
 import { PackageComponentDto } from './dto/package-component.dto';
 import { Component } from './entities/component.entity';
 import { Parameter } from './entities/parameter.entity';
+import { User } from '../users/entities/user.entity';
 import { ComponentListItemDto } from './dto/component-list-item.dto';
 import { ComponentDetailDto } from './dto/component-detail.dto';
 import { ComponentTransformer } from './transformers/component.transformer';
@@ -47,7 +48,7 @@ export class ComponentsService {
   }
 
   async findOne(id: string): Promise<ComponentDetailDto> {
-    const component = await this.componentRepo.findOneBy({ id });
+    const component = await this.componentRepo.findOne({ where: { id }, relations: ['author'] });
     if (!component) throw new NotFoundException(`Component ${id} not found`);
     return ComponentTransformer.toDetail(component);
   }
@@ -62,7 +63,7 @@ export class ComponentsService {
     return versions.map(ComponentTransformer.toListItem);
   }
 
-  async packageFromUrl(dto: PackageComponentDto): Promise<ComponentDetailDto> {
+  async packageFromUrl(dto: PackageComponentDto, userId?: string): Promise<ComponentDetailDto> {
     const repoName = dto.repoUrl.split('/').at(-1)!;
     const tmpDir = path.join(os.tmpdir(), `moveapps-${uuid()}`);
     await fs.mkdir(tmpDir, { recursive: true });
@@ -105,7 +106,8 @@ export class ComponentsService {
       const parameters = this.parseParameters(cwlContent, 'CLI-generated');
       const component = this.componentRepo.create({
         name: repoName,
-        author: 'MoveApps',
+        authorName: 'MoveApps',
+        author: userId ? ({ id: userId } as User) : null,
         repoUrl: dto.repoUrl,
         repoCommitSha: commitSha,
         version: 1,
@@ -118,7 +120,7 @@ export class ComponentsService {
 
       this.logger.log(`Packaging complete: ${repoName} v1`);
       const saved = await this.componentRepo.save(component);
-      return ComponentTransformer.toDetail(saved);
+      return ComponentTransformer.toDetail(await this.reloadWithAuthor(saved.id));
     } catch (err) {
       if (
         err instanceof ConflictException ||
@@ -190,7 +192,11 @@ export class ComponentsService {
     }
   }
 
-  async createManual(file: Express.Multer.File, dto: CreateComponentDto): Promise<ComponentDetailDto> {
+  async createManual(
+    file: Express.Multer.File,
+    dto: CreateComponentDto,
+    userId?: string,
+  ): Promise<ComponentDetailDto> {
     const cwlContent = file.buffer.toString('utf-8');
     const parameters = this.parseParameters(cwlContent, 'Uploaded');
 
@@ -198,7 +204,8 @@ export class ComponentsService {
 
     const component = this.componentRepo.create({
       name: dto.name,
-      author: dto.author ?? null,
+      authorName: dto.authorName ?? null,
+      author: userId ? ({ id: userId } as User) : null,
       repoUrl: dto.repoUrl ?? null,
       repoCommitSha: dto.repoCommitSha ?? null,
       version: 1,
@@ -210,7 +217,7 @@ export class ComponentsService {
     });
 
     const saved = await this.componentRepo.save(component);
-    return ComponentTransformer.toDetail(saved);
+    return ComponentTransformer.toDetail(await this.reloadWithAuthor(saved.id));
   }
 
   async addManualVersion(
@@ -267,6 +274,10 @@ export class ComponentsService {
 
   // ── Private helpers ──────────────────────────────────────────────────────────
 
+  private async reloadWithAuthor(id: string): Promise<Component> {
+    return this.componentRepo.findOneOrFail({ where: { id }, relations: ['author'] });
+  }
+
   private async createNextVersion(
     parent: Component,
     cwlContent: string,
@@ -283,7 +294,7 @@ export class ComponentsService {
 
     const component = this.componentRepo.create({
       name: parent.name,
-      author: parent.author,
+      authorName: parent.authorName,
       repoUrl: parent.repoUrl,
       repoCommitSha: commitSha,
       version: nextVersion,

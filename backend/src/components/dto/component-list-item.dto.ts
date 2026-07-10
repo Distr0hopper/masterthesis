@@ -11,7 +11,7 @@ export class ComponentListItemDto {
     name: string;
 
     @ApiProperty({ nullable: true })
-    author: string | null;
+    authorName: string | null;
 
     @ApiProperty({ example: 'https://github.com/movestore/RemoveOutliers', required: false })
     @IsString()

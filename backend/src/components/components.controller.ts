@@ -9,13 +9,16 @@ import {
   Patch,
   Post,
   Query,
+  Request,
   Res,
   UploadedFile,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import {
+  ApiBearerAuth,
   ApiBody,
   ApiConsumes,
   ApiExtraModels,
@@ -35,6 +38,7 @@ import { AddVersionDto } from './dto/add-version.dto';
 import { UpdateComponentDto } from './dto/update-component.dto';
 import { ComponentListItemDto } from './dto/component-list-item.dto';
 import { ComponentDetailDto } from './dto/component-detail.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('components')
 @ApiExtraModels(CreateComponentDto, AddVersionDto)
@@ -93,6 +97,8 @@ export class ComponentsController {
   }
 
   @Post()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @UseInterceptors(FileInterceptor('cwlFile'))
   @ApiOperation({ summary: 'Manually upload a CWL file as a new component (v1)' })
   @ApiConsumes('multipart/form-data')
@@ -113,6 +119,7 @@ export class ComponentsController {
   })
   @ApiResponse({ status: 201, type: ComponentDetailDto })
   async create(
+    @Request() req,
     @UploadedFile(
       new ParseFilePipe({
         validators: [new MaxFileSizeValidator({ maxSize: 1024 * 1024 })],
@@ -121,7 +128,7 @@ export class ComponentsController {
     file: Express.Multer.File,
     @Body() dto: CreateComponentDto,
   ) {
-    return this.componentsService.createManual(file, dto);
+    return this.componentsService.createManual(file, dto, req.user.id);
   }
 
   @Post(':id/versions')

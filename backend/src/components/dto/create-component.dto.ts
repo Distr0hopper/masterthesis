@@ -14,7 +14,7 @@ export class CreateComponentDto {
   @ApiProperty({ required: false, example: 'Julius Arzberger' })
   @IsOptional()
   @IsString()
-  author?: string;
+  authorName?: string;
 
   @ApiProperty({ required: false, example: 'https://github.com/movestore/RemoveOutliers' })
   @IsOptional()

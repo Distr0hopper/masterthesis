@@ -11,6 +11,7 @@ async function bootstrap() {
     .setTitle('Component Repository API')
     .setDescription('REST API for managing CWL-based workflow components')
     .setVersion('1.0')
+    .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);

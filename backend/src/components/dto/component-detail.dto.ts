@@ -2,6 +2,14 @@ import { ApiProperty } from "@nestjs/swagger";
 import { ComponentDomain, ComponentSource, VALID_DOMAINS } from "../enums";
 import { ParameterDto } from "./parameter.dto";
 
+export class ComponentAuthorDto {
+    @ApiProperty()
+    id: string;
+
+    @ApiProperty()
+    email: string;
+}
+
 export class ComponentDetailDto {
     @ApiProperty()
     id: string;
@@ -10,7 +18,10 @@ export class ComponentDetailDto {
     name: string;
 
     @ApiProperty({ nullable: true })
-    author: string | null;
+    authorName: string | null;
+
+    @ApiProperty({ type: () => ComponentAuthorDto, nullable: true })
+    author: ComponentAuthorDto | null;
 
     @ApiProperty({ nullable: true })
     description: string | null;

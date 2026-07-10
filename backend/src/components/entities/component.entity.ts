@@ -11,13 +11,16 @@ import { ComponentDomain, ComponentSource } from '../enums';
 import { Parameter } from './parameter.entity';
 
 @Entity('components')
-@Unique(['lineageId', 'version'])
+@Unique(['name', 'version'])
 export class Component {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column()
   name: string;
+
+  @Column({ nullable: true })
+  author: string;
 
   @Column({ nullable: true })
   description: string;
@@ -28,8 +31,8 @@ export class Component {
   @Column({ nullable: true })
   repoCommitSha: string;
 
-  @Column({ type: 'uuid' })
-  lineageId: string;
+  @Column({ nullable: true })
+  doi: string;
 
   @Column({ type: 'int', default: 1 })
   version: number;
@@ -37,7 +40,7 @@ export class Component {
   @Column('text')
   cwlContent: string;
 
-  @Column({ type: 'enum', enum: ComponentSource, default: ComponentSource.MANUAL })
+  @Column({ type: 'enum', enum: ComponentSource, default: ComponentSource.MANUAL_UPLOAD })
   source: ComponentSource;
 
   @Column({ type: 'varchar' })

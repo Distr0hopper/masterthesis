@@ -10,16 +10,19 @@ export class ComponentDetailDto {
     name: string;
 
     @ApiProperty({ nullable: true })
-    description: string;
+    author: string | null;
 
     @ApiProperty({ nullable: true })
-    repoUrl: string;
+    description: string | null;
+
+    @ApiProperty({ nullable: true })
+    repoUrl: string | null;
 
     @ApiProperty({ nullable: true })
     repoCommitSha: string | null;
 
-    @ApiProperty()
-    lineageId: string;
+    @ApiProperty({ nullable: true })
+    doi: string | null;
 
     @ApiProperty()
     version: number;

@@ -1,4 +1,4 @@
 export enum ComponentSource {
-  MOVEAPPS = 'moveapps',
-  MANUAL = 'manual',
+  AUTOMATED_PACKAGING = 'automated_packaging',
+  MANUAL_UPLOAD = 'manual_upload',
 }

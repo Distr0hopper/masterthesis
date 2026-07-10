@@ -56,7 +56,7 @@ export class ComponentsService {
     const component = await this.componentRepo.findOneBy({ id });
     if (!component) throw new NotFoundException(`Component ${id} not found`);
     const versions = await this.componentRepo.find({
-      where: { lineageId: component.lineageId },
+      where: { name: component.name },
       order: { version: 'ASC' },
     });
     return versions.map(ComponentTransformer.toListItem);
@@ -103,17 +103,15 @@ export class ComponentsService {
 
       // New component: v1
       const parameters = this.parseParameters(cwlContent, 'CLI-generated');
-      const id = uuid();
       const component = this.componentRepo.create({
-        id,
         name: repoName,
+        author: 'MoveApps',
         repoUrl: dto.repoUrl,
         repoCommitSha: commitSha,
-        lineageId: id,
         version: 1,
         cwlContent,
         description: metadataDescription,
-        source: ComponentSource.MOVEAPPS,
+        source: ComponentSource.AUTOMATED_PACKAGING,
         domain: dto.domain,
         parameters: parameters as Parameter[],
       });
@@ -193,17 +191,15 @@ export class ComponentsService {
 
     this.logger.log(`Manual upload: ${dto.name} v1`);
 
-    const id = uuid();
     const component = this.componentRepo.create({
-      id,
       name: dto.name,
-      repoUrl: null,
-      repoCommitSha: null,
-      lineageId: id,
+      author: dto.author ?? null,
+      repoUrl: dto.repoUrl ?? null,
+      repoCommitSha: dto.repoCommitSha ?? null,
       version: 1,
       cwlContent,
       description: CwlParser.extractDescription(cwlContent),
-      source: ComponentSource.MANUAL,
+      source: ComponentSource.MANUAL_UPLOAD,
       domain: dto.domain,
       parameters: parameters as Parameter[],
     });
@@ -268,7 +264,7 @@ export class ComponentsService {
     description: string | null = null,
   ): Promise<ComponentDetailDto> {
     const latest = await this.componentRepo.findOne({
-      where: { lineageId: parent.lineageId },
+      where: { name: parent.name },
       order: { version: 'DESC' },
     });
     const nextVersion = (latest?.version ?? 0) + 1;
@@ -277,9 +273,9 @@ export class ComponentsService {
 
     const component = this.componentRepo.create({
       name: parent.name,
+      author: parent.author,
       repoUrl: parent.repoUrl,
       repoCommitSha: commitSha,
-      lineageId: parent.lineageId,
       version: nextVersion,
       cwlContent,
       description: description ?? CwlParser.extractDescription(cwlContent),

@@ -1,6 +1,6 @@
 import { ComponentDomain, ComponentSource, VALID_DOMAINS } from "../enums";
 import { ApiProperty } from "@nestjs/swagger";
-import { IsDate, IsEnum, IsNumber, IsString, IsUUID } from "class-validator";
+import { IsDate, IsEnum, IsNumber, IsString } from "class-validator";
 
 export class ComponentListItemDto {
     @ApiProperty()
@@ -10,16 +10,15 @@ export class ComponentListItemDto {
     @IsString()
     name: string;
 
+    @ApiProperty({ nullable: true })
+    author: string | null;
+
     @ApiProperty({ example: 'https://github.com/movestore/RemoveOutliers', required: false })
     @IsString()
     repoUrl: string;
 
     @ApiProperty({ nullable: true })
     repoCommitSha: string | null;
-
-    @ApiProperty()
-    @IsUUID()
-    lineageId: string;
 
     @ApiProperty()
     @IsNumber()

@@ -10,9 +10,9 @@ export class ComponentTransformer {
         return {
             id: component.id,
             name: component.name,
+            author: component.author ?? null,
             repoUrl: component.repoUrl,
             repoCommitSha: component.repoCommitSha ?? null,
-            lineageId: component.lineageId,
             version: component.version,
             domain: component.domain,
             source: component.source,
@@ -35,10 +35,11 @@ export class ComponentTransformer {
         return {
             id: component.id,
             name: component.name,
+            author: component.author ?? null,
             description: component.description,
             repoUrl: component.repoUrl,
             repoCommitSha: component.repoCommitSha ?? null,
-            lineageId: component.lineageId,
+            doi: component.doi ?? null,
             version: component.version,
             cwlContent: CwlParser.injectDescription(component.cwlContent, component.description),
             domain: component.domain,

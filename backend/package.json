@@ -9,7 +9,8 @@
     "start:prod": "node dist/main",
     "migration:generate": "typeorm-ts-node-commonjs migration:generate src/migrations/migration -d src/data-source.ts",
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/data-source.ts",
-    "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/data-source.ts"
+    "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/data-source.ts",
+    "openapi:generate": "ts-node -r tsconfig-paths/register src/generate-openapi.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",

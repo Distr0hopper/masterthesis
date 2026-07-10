@@ -208,12 +208,17 @@ export class ComponentsService {
     return ComponentTransformer.toDetail(saved);
   }
 
-  async addManualVersion(parentId: string, file: Express.Multer.File): Promise<ComponentDetailDto> {
+  async addManualVersion(
+    parentId: string,
+    file: Express.Multer.File,
+    repoCommitSha: string | null,
+    description: string | null,
+  ): Promise<ComponentDetailDto> {
     const parent = await this.componentRepo.findOneBy({ id: parentId });
     if (!parent) throw new NotFoundException(`Component ${parentId} not found`);
 
     const cwlContent = file.buffer.toString('utf-8');
-    return this.createNextVersion(parent, cwlContent, null);
+    return this.createNextVersion(parent, cwlContent, repoCommitSha, description ?? undefined);
   }
 
   async getCwlDownload(id: string): Promise<{ filename: string; content: string }> {

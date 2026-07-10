@@ -31,12 +31,13 @@ import { ComponentDomain, VALID_DOMAINS } from './enums';
 import { ComponentsService } from './components.service';
 import { CreateComponentDto } from './dto/create-component.dto';
 import { PackageComponentDto } from './dto/package-component.dto';
+import { AddVersionDto } from './dto/add-version.dto';
 import { UpdateComponentDto } from './dto/update-component.dto';
 import { ComponentListItemDto } from './dto/component-list-item.dto';
 import { ComponentDetailDto } from './dto/component-detail.dto';
 
 @ApiTags('components')
-@ApiExtraModels(CreateComponentDto)
+@ApiExtraModels(CreateComponentDto, AddVersionDto)
 @Controller('components')
 export class ComponentsController {
   constructor(private readonly componentsService: ComponentsService) {}
@@ -130,8 +131,13 @@ export class ComponentsController {
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
-      type: 'object',
-      properties: { cwlFile: { type: 'string', format: 'binary' } },
+      allOf: [
+        { $ref: getSchemaPath(AddVersionDto) },
+        {
+          type: 'object',
+          properties: { cwlFile: { type: 'string', format: 'binary' } },
+        },
+      ],
     },
   })
   @ApiResponse({ status: 201, type: ComponentDetailDto })
@@ -144,8 +150,9 @@ export class ComponentsController {
       }),
     )
     file: Express.Multer.File,
+    @Body() dto: AddVersionDto,
   ) {
-    return this.componentsService.addManualVersion(id, file);
+    return this.componentsService.addManualVersion(id, file, dto.repoCommitSha ?? null, dto.description ?? null);
   }
 
   @Post('package')

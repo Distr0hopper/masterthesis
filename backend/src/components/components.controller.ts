@@ -166,7 +166,7 @@ export class ComponentsController {
 
   @Post(':id/versions/package')
   @ApiOperation({ summary: 'Repackage a MoveApps component from its repo URL to create a new version' })
-  @ApiParam({ name: 'id', required: true, description: 'Any component ID within the lineage' })
+  @ApiParam({ name: 'id', required: true, description: 'ID of any version of the component' })
   @ApiResponse({ status: 201, type: ComponentDetailDto })
   @ApiResponse({ status: 400, description: 'Component has no repoUrl or packaging failed' })
   @ApiResponse({ status: 409, description: 'This exact commit is already packaged' })

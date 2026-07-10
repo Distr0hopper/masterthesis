@@ -140,6 +140,11 @@ export class ComponentsService {
       throw new BadRequestException('Cannot repackage a manually uploaded component');
     }
 
+    const latest = await this.componentRepo.findOne({
+      where: { name: parent.name },
+      order: { version: 'DESC' },
+    });
+
     const repoName = parent.repoUrl.split('/').at(-1)!;
     const tmpDir = path.join(os.tmpdir(), `moveapps-${uuid()}`);
     await fs.mkdir(tmpDir, { recursive: true });
@@ -164,7 +169,7 @@ export class ComponentsService {
         );
       }
 
-      if (commitSha && parent.repoCommitSha === commitSha) {
+      if (commitSha && latest?.repoCommitSha === commitSha) {
         throw new ConflictException(
           `Component '${repoName}' at commit ${commitSha} is already packaged`,
         );

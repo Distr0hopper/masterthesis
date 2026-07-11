@@ -184,12 +184,12 @@ export class ComponentsController {
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Update the description of a component' })
+  @ApiOperation({ summary: 'Update the description and/or domain of a component' })
   @ApiParam({ name: 'id', required: true, description: 'Component ID' })
   @ApiResponse({ status: 200, type: ComponentDetailDto })
   @ApiResponse({ status: 404, description: 'Component not found' })
-  async updateDescription(@Param('id') id: string, @Body() dto: UpdateComponentDto) {
-    return this.componentsService.updateDescription(id, dto.description);
+  async update(@Param('id') id: string, @Body() dto: UpdateComponentDto) {
+    return this.componentsService.updateComponent(id, dto);
   }
 
   @Delete(':id')

@@ -19,6 +19,7 @@ import { v4 as uuid } from 'uuid';
 
 import { ComponentDomain, ComponentSource } from './enums';
 import { CreateComponentDto } from './dto/create-component.dto';
+import { UpdateComponentDto } from './dto/update-component.dto';
 import { PackageComponentDto } from './dto/package-component.dto';
 import { Component } from './entities/component.entity';
 import { Parameter } from './entities/parameter.entity';
@@ -258,10 +259,11 @@ export class ComponentsService {
     return { filename: `${baseName}.zip`, buffer };
   }
 
-  async updateDescription(id: string, description: string | null): Promise<ComponentDetailDto> {
-    const component = await this.componentRepo.findOneBy({ id });
+  async updateComponent(id: string, dto: UpdateComponentDto): Promise<ComponentDetailDto> {
+    const component = await this.componentRepo.findOne({ where: { id }, relations: ['createdBy'] });
     if (!component) throw new NotFoundException(`Component ${id} not found`);
-    component.description = description;
+    if (dto.description !== undefined) component.description = dto.description;
+    if (dto.domain !== undefined) component.domain = dto.domain as ComponentDomain;
     const saved = await this.componentRepo.save(component);
     return ComponentTransformer.toDetail(saved);
   }

@@ -100,6 +100,11 @@
             }
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "summary": "Manually upload a CWL file as a new component (v1)",
         "tags": [
           "components"
@@ -392,6 +397,11 @@
             "description": "This exact commit is already packaged"
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "summary": "Package a MoveApps app from a GitHub URL (creates v1 or new version if URL exists with a different commit)",
         "tags": [
           "components"
@@ -460,6 +470,106 @@
           "domains"
         ]
       }
+    },
+    "/auth/register": {
+      "post": {
+        "operationId": "AuthController_register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponseDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Email already registered"
+          }
+        },
+        "summary": "Register a new user",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "operationId": "AuthController_login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials"
+          }
+        },
+        "summary": "Login and receive JWT",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "operationId": "AuthController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or expired token"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get current user profile",
+        "tags": [
+          "auth"
+        ]
+      }
     }
   },
   "info": {
@@ -486,7 +596,7 @@
               "earth_observation"
             ]
           },
-          "author": {
+          "authorName": {
             "type": "string",
             "example": "Julius Arzberger"
           },
@@ -526,7 +636,7 @@
             "type": "string",
             "example": "RemoveOutliers"
           },
-          "author": {
+          "authorName": {
             "type": "string",
             "nullable": true
           },
@@ -563,11 +673,26 @@
         "required": [
           "id",
           "name",
-          "author",
+          "authorName",
           "repoCommitSha",
           "version",
           "source",
           "createdAt"
+        ]
+      },
+      "ComponentCreatorDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email"
         ]
       },
       "ParameterDto": {
@@ -619,9 +744,18 @@
           "name": {
             "type": "string"
           },
-          "author": {
+          "authorName": {
             "type": "string",
             "nullable": true
+          },
+          "createdBy": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ComponentCreatorDto"
+              }
+            ]
           },
           "description": {
             "type": "string",
@@ -673,7 +807,8 @@
         "required": [
           "id",
           "name",
-          "author",
+          "authorName",
+          "createdBy",
           "description",
           "repoUrl",
           "repoCommitSha",
@@ -714,6 +849,74 @@
             "nullable": true
           }
         }
+      },
+      "RegisterDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "user@example.com"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "UserResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "createdAt"
+        ]
+      },
+      "LoginDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "AuthResponseDto": {
+        "type": "object",
+        "properties": {
+          "access_token": {
+            "type": "string"
+          },
+          "expires_in": {
+            "type": "number",
+            "example": 86400
+          }
+        },
+        "required": [
+          "access_token",
+          "expires_in"
+        ]
       }
     }
   }

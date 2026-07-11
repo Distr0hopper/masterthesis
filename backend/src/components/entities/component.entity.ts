@@ -2,6 +2,8 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  JoinColumn,
+  ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
   Unique,
@@ -9,6 +11,7 @@ import {
 } from 'typeorm';
 import { ComponentDomain, ComponentSource } from '../enums';
 import { Parameter } from './parameter.entity';
+import { User } from '../../users/entities/user.entity';
 
 @Entity('components')
 @Unique(['name', 'version'])
@@ -20,7 +23,11 @@ export class Component {
   name: string;
 
   @Column({ nullable: true })
-  author: string;
+  authorName: string;
+
+  @ManyToOne(() => User, (user) => user.components, { nullable: true, eager: false })
+  @JoinColumn({ name: 'created_by_id' })
+  createdBy: User | null;
 
   @Column({ nullable: true })
   description: string;

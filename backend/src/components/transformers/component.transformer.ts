@@ -10,7 +10,7 @@ export class ComponentTransformer {
         return {
             id: component.id,
             name: component.name,
-            author: component.author ?? null,
+            authorName: component.authorName ?? null,
             repoUrl: component.repoUrl,
             repoCommitSha: component.repoCommitSha ?? null,
             version: component.version,
@@ -35,7 +35,8 @@ export class ComponentTransformer {
         return {
             id: component.id,
             name: component.name,
-            author: component.author ?? null,
+            authorName: component.authorName ?? null,
+            createdBy: component.createdBy ? { id: component.createdBy.id, email: component.createdBy.email } : null,
             description: component.description,
             repoUrl: component.repoUrl,
             repoCommitSha: component.repoCommitSha ?? null,

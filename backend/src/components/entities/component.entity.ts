@@ -26,8 +26,8 @@ export class Component {
   authorName: string;
 
   @ManyToOne(() => User, (user) => user.components, { nullable: true, eager: false })
-  @JoinColumn({ name: 'author_id' })
-  author: User | null;
+  @JoinColumn({ name: 'created_by_id' })
+  createdBy: User | null;
 
   @Column({ nullable: true })
   description: string;

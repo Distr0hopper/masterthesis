@@ -48,7 +48,7 @@ export class ComponentsService {
   }
 
   async findOne(id: string): Promise<ComponentDetailDto> {
-    const component = await this.componentRepo.findOne({ where: { id }, relations: ['author'] });
+    const component = await this.componentRepo.findOne({ where: { id }, relations: ['createdBy'] });
     if (!component) throw new NotFoundException(`Component ${id} not found`);
     return ComponentTransformer.toDetail(component);
   }
@@ -107,7 +107,7 @@ export class ComponentsService {
       const component = this.componentRepo.create({
         name: repoName,
         authorName: 'MoveApps',
-        author: userId ? ({ id: userId } as User) : null,
+        createdBy: userId ? ({ id: userId } as User) : null,
         repoUrl: dto.repoUrl,
         repoCommitSha: commitSha,
         version: 1,
@@ -120,7 +120,7 @@ export class ComponentsService {
 
       this.logger.log(`Packaging complete: ${repoName} v1`);
       const saved = await this.componentRepo.save(component);
-      return ComponentTransformer.toDetail(await this.reloadWithAuthor(saved.id));
+      return ComponentTransformer.toDetail(await this.reloadWithCreator(saved.id));
     } catch (err) {
       if (
         err instanceof ConflictException ||
@@ -205,7 +205,7 @@ export class ComponentsService {
     const component = this.componentRepo.create({
       name: dto.name,
       authorName: dto.authorName ?? null,
-      author: userId ? ({ id: userId } as User) : null,
+      createdBy: userId ? ({ id: userId } as User) : null,
       repoUrl: dto.repoUrl ?? null,
       repoCommitSha: dto.repoCommitSha ?? null,
       version: 1,
@@ -217,7 +217,7 @@ export class ComponentsService {
     });
 
     const saved = await this.componentRepo.save(component);
-    return ComponentTransformer.toDetail(await this.reloadWithAuthor(saved.id));
+    return ComponentTransformer.toDetail(await this.reloadWithCreator(saved.id));
   }
 
   async addManualVersion(
@@ -274,8 +274,8 @@ export class ComponentsService {
 
   // ── Private helpers ──────────────────────────────────────────────────────────
 
-  private async reloadWithAuthor(id: string): Promise<Component> {
-    return this.componentRepo.findOneOrFail({ where: { id }, relations: ['author'] });
+  private async reloadWithCreator(id: string): Promise<Component> {
+    return this.componentRepo.findOneOrFail({ where: { id }, relations: ['createdBy'] });
   }
 
   private async createNextVersion(

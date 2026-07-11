@@ -36,7 +36,7 @@ export class ComponentTransformer {
             id: component.id,
             name: component.name,
             authorName: component.authorName ?? null,
-            author: component.author ? { id: component.author.id, email: component.author.email } : null,
+            createdBy: component.createdBy ? { id: component.createdBy.id, email: component.createdBy.email } : null,
             description: component.description,
             repoUrl: component.repoUrl,
             repoCommitSha: component.repoCommitSha ?? null,

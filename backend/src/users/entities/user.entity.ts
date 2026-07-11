@@ -15,6 +15,6 @@ export class User {
   @CreateDateColumn()
   createdAt: Date;
 
-  @OneToMany(() => Component, (component) => component.author)
+  @OneToMany(() => Component, (component) => component.createdBy)
   components: Component[];
 }

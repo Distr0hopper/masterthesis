@@ -397,6 +397,11 @@
             "description": "This exact commit is already packaged"
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "summary": "Package a MoveApps app from a GitHub URL (creates v1 or new version if URL exists with a different commit)",
         "tags": [
           "components"
@@ -675,7 +680,7 @@
           "createdAt"
         ]
       },
-      "ComponentAuthorDto": {
+      "ComponentCreatorDto": {
         "type": "object",
         "properties": {
           "id": {
@@ -743,12 +748,12 @@
             "type": "string",
             "nullable": true
           },
-          "author": {
+          "createdBy": {
             "nullable": true,
             "type": "object",
             "allOf": [
               {
-                "$ref": "#/components/schemas/ComponentAuthorDto"
+                "$ref": "#/components/schemas/ComponentCreatorDto"
               }
             ]
           },
@@ -803,7 +808,7 @@
           "id",
           "name",
           "authorName",
-          "author",
+          "createdBy",
           "description",
           "repoUrl",
           "repoCommitSha",

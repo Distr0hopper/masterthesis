@@ -5,6 +5,7 @@ import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
 import { User } from '../users/entities/user.entity';
 import { UserResponseDto } from '../users/dto/user-response.dto';
+import { UserTransformer } from '../users/transformers/user.transformer';
 import { RegisterDto } from './dto/register.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 
@@ -30,7 +31,7 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(dto.password, 10);
     const user = await this.usersService.createUser(dto.email, passwordHash);
 
-    return { id: user.id, email: user.email, createdAt: user.createdAt };
+    return UserTransformer.toResponse(user);
   }
 
   async login(user: User): Promise<AuthResponseDto> {

@@ -5,6 +5,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { UserResponseDto } from '../users/dto/user-response.dto';
+import { UserTransformer } from '../users/transformers/user.transformer';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
@@ -38,6 +39,6 @@ export class AuthController {
   @ApiResponse({ status: 200, type: UserResponseDto })
   @ApiResponse({ status: 401, description: 'Invalid or expired token' })
   async me(@Request() req): Promise<UserResponseDto> {
-    return req.user;
+    return UserTransformer.toResponse(req.user);
   }
 }

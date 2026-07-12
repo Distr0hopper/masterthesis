@@ -132,6 +132,8 @@ export class ComponentsController {
   }
 
   @Post(':id/versions')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @UseInterceptors(FileInterceptor('cwlFile'))
   @ApiOperation({ summary: 'Upload a new version of an existing component' })
   @ApiParam({ name: 'id', required: true, description: 'Parent component ID' })
@@ -148,8 +150,10 @@ export class ComponentsController {
     },
   })
   @ApiResponse({ status: 201, type: ComponentDetailDto })
+  @ApiResponse({ status: 403, description: 'Not the creator of this component' })
   @ApiResponse({ status: 404, description: 'Component not found' })
   async addManualVersion(
+    @Request() req,
     @Param('id') id: string,
     @UploadedFile(
       new ParseFilePipe({
@@ -159,7 +163,7 @@ export class ComponentsController {
     file: Express.Multer.File,
     @Body() dto: AddVersionDto,
   ) {
-    return this.componentsService.addManualVersion(id, file, dto.repoCommitSha ?? null, dto.description ?? null);
+    return this.componentsService.addManualVersion(id, file, dto.repoCommitSha ?? null, dto.description ?? null, req.user.id);
   }
 
   @Post('package')
@@ -174,30 +178,39 @@ export class ComponentsController {
   }
 
   @Post(':id/versions/package')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Repackage a MoveApps component from its repo URL to create a new version' })
   @ApiParam({ name: 'id', required: true, description: 'ID of any version of the component' })
   @ApiResponse({ status: 201, type: ComponentDetailDto })
   @ApiResponse({ status: 400, description: 'Component has no repoUrl or packaging failed' })
+  @ApiResponse({ status: 403, description: 'Not the creator of this component' })
   @ApiResponse({ status: 409, description: 'This exact commit is already packaged' })
-  async addPackagedVersion(@Param('id') id: string) {
-    return this.componentsService.addPackagedVersion(id);
+  async addPackagedVersion(@Request() req, @Param('id') id: string) {
+    return this.componentsService.addPackagedVersion(id, req.user.id);
   }
 
   @Patch(':id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Update the description and/or domain of a component' })
   @ApiParam({ name: 'id', required: true, description: 'Component ID' })
   @ApiResponse({ status: 200, type: ComponentDetailDto })
+  @ApiResponse({ status: 403, description: 'Not the creator of this component' })
   @ApiResponse({ status: 404, description: 'Component not found' })
-  async update(@Param('id') id: string, @Body() dto: UpdateComponentDto) {
-    return this.componentsService.updateComponent(id, dto);
+  async update(@Request() req, @Param('id') id: string, @Body() dto: UpdateComponentDto) {
+    return this.componentsService.updateComponent(id, dto, req.user.id);
   }
 
   @Delete(':id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Delete a component by ID' })
   @ApiParam({ name: 'id', required: true, description: 'Component ID' })
   @ApiResponse({ status: 200, description: 'Component successfully deleted' })
+  @ApiResponse({ status: 403, description: 'Not the creator of this component' })
   @ApiResponse({ status: 404, description: 'Component not found' })
-  async remove(@Param('id') id: string): Promise<void> {
-    return this.componentsService.remove(id);
+  async remove(@Request() req, @Param('id') id: string): Promise<void> {
+    return this.componentsService.remove(id, req.user.id);
   }
 }

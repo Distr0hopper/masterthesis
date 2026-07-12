@@ -7,6 +7,7 @@ import * as JSZip from 'jszip';
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -138,9 +139,10 @@ export class ComponentsService {
     }
   }
 
-  async addPackagedVersion(parentId: string): Promise<ComponentDetailDto> {
-    const parent = await this.componentRepo.findOneBy({ id: parentId });
+  async addPackagedVersion(parentId: string, userId: string): Promise<ComponentDetailDto> {
+    const parent = await this.componentRepo.findOne({ where: { id: parentId }, relations: ['createdBy'] });
     if (!parent) throw new NotFoundException(`Component ${parentId} not found`);
+    this.ensureCreator(parent, userId);
     if (!parent.repoUrl) {
       throw new BadRequestException('Cannot repackage a manually uploaded component');
     }
@@ -228,9 +230,11 @@ export class ComponentsService {
     file: Express.Multer.File,
     repoCommitSha: string | null,
     description: string | null,
+    userId: string,
   ): Promise<ComponentDetailDto> {
-    const parent = await this.componentRepo.findOneBy({ id: parentId });
+    const parent = await this.componentRepo.findOne({ where: { id: parentId }, relations: ['createdBy'] });
     if (!parent) throw new NotFoundException(`Component ${parentId} not found`);
+    this.ensureCreator(parent, userId);
 
     const cwlContent = file.buffer.toString('utf-8');
     return this.createNextVersion(parent, cwlContent, repoCommitSha, description ?? undefined);
@@ -261,22 +265,30 @@ export class ComponentsService {
     return { filename: `${baseName}.zip`, buffer };
   }
 
-  async updateComponent(id: string, dto: UpdateComponentDto): Promise<ComponentDetailDto> {
+  async updateComponent(id: string, dto: UpdateComponentDto, userId: string): Promise<ComponentDetailDto> {
     const component = await this.componentRepo.findOne({ where: { id }, relations: ['createdBy'] });
     if (!component) throw new NotFoundException(`Component ${id} not found`);
+    this.ensureCreator(component, userId);
     if (dto.description !== undefined) component.description = dto.description;
     if (dto.domain !== undefined) component.domain = dto.domain as ComponentDomain;
     const saved = await this.componentRepo.save(component);
     return ComponentTransformer.toDetail(saved);
   }
 
-  async remove(id: string): Promise<void> {
-    const component = await this.componentRepo.findOneBy({ id });
+  async remove(id: string, userId: string): Promise<void> {
+    const component = await this.componentRepo.findOne({ where: { id }, relations: ['createdBy'] });
     if (!component) throw new NotFoundException(`Component ${id} not found`);
+    this.ensureCreator(component, userId);
     await this.componentRepo.delete(id);
   }
 
   // ── Private helpers ──────────────────────────────────────────────────────────
+
+  private ensureCreator(component: Component, userId: string): void {
+    if (component.createdBy?.id !== userId) {
+      throw new ForbiddenException('Only the creator of this component may perform this action');
+    }
+  }
 
   private async reloadWithCreator(id: string): Promise<Component> {
     return this.componentRepo.findOneOrFail({ where: { id }, relations: ['createdBy'] });

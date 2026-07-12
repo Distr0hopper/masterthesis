@@ -146,7 +146,7 @@
         ]
       },
       "patch": {
-        "operationId": "ComponentsController_updateDescription",
+        "operationId": "ComponentsController_update",
         "parameters": [
           {
             "name": "id",
@@ -179,11 +179,19 @@
               }
             }
           },
+          "403": {
+            "description": "Not the creator of this component"
+          },
           "404": {
             "description": "Component not found"
           }
         },
-        "summary": "Update the description of a component",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update the description and/or domain of a component",
         "tags": [
           "components"
         ]
@@ -205,10 +213,18 @@
           "200": {
             "description": "Component successfully deleted"
           },
+          "403": {
+            "description": "Not the creator of this component"
+          },
           "404": {
             "description": "Component not found"
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "summary": "Delete a component by ID",
         "tags": [
           "components"
@@ -355,10 +371,18 @@
               }
             }
           },
+          "403": {
+            "description": "Not the creator of this component"
+          },
           "404": {
             "description": "Component not found"
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "summary": "Upload a new version of an existing component",
         "tags": [
           "components"
@@ -436,10 +460,18 @@
           "400": {
             "description": "Component has no repoUrl or packaging failed"
           },
+          "403": {
+            "description": "Not the creator of this component"
+          },
           "409": {
             "description": "This exact commit is already packaged"
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "summary": "Repackage a MoveApps component from its repo URL to create a new version",
         "tags": [
           "components"
@@ -607,6 +639,10 @@
           "repoCommitSha": {
             "type": "string",
             "example": "abc1234"
+          },
+          "description": {
+            "type": "string",
+            "description": "Overrides the description extracted from the CWL file"
           }
         },
         "required": [
@@ -834,6 +870,10 @@
               "animal_behavior",
               "earth_observation"
             ]
+          },
+          "description": {
+            "type": "string",
+            "description": "Overrides the description extracted from metadata.json"
           }
         },
         "required": [
@@ -847,6 +887,13 @@
           "description": {
             "type": "string",
             "nullable": true
+          },
+          "domain": {
+            "type": "string",
+            "enum": [
+              "animal_behavior",
+              "earth_observation"
+            ]
           }
         }
       },

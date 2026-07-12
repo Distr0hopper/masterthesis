@@ -3,7 +3,7 @@ import { IsIn, IsOptional, IsString } from 'class-validator';
 import { VALID_DOMAINS } from '../enums';
 
 export class UpdateComponentDto {
-  @ApiProperty({ nullable: true, required: false })
+  @ApiProperty({ nullable: true, required: false, example: null })
   @IsOptional()
   @IsString()
   description?: string | null;

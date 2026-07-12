@@ -11,8 +11,13 @@ export class PackageComponentDto {
   @IsIn(VALID_DOMAINS)
   domain: string;
 
-  @ApiProperty({ required: false, description: 'Overrides the description extracted from metadata.json' })
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    example: null,
+    description: 'Overrides the description extracted from metadata.json. Omit or set to null to use the extracted value.',
+  })
   @IsOptional()
   @IsString()
-  description?: string;
+  description?: string | null;
 }

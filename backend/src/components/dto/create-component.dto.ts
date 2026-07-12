@@ -26,8 +26,13 @@ export class CreateComponentDto {
   @IsString()
   repoCommitSha?: string;
 
-  @ApiProperty({ required: false, description: 'Overrides the description extracted from the CWL file' })
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    example: null,
+    description: 'Overrides the description extracted from the CWL file. Omit or set to null to use the extracted value.',
+  })
   @IsOptional()
   @IsString()
-  description?: string;
+  description?: string | null;
 }

@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsIn, IsUrl } from 'class-validator';
+import { IsIn, IsOptional, IsString, IsUrl } from 'class-validator';
 import { VALID_DOMAINS } from '../enums';
 
 export class PackageComponentDto {
@@ -10,4 +10,9 @@ export class PackageComponentDto {
   @ApiProperty({ enum: VALID_DOMAINS })
   @IsIn(VALID_DOMAINS)
   domain: string;
+
+  @ApiProperty({ required: false, description: 'Overrides the description extracted from metadata.json' })
+  @IsOptional()
+  @IsString()
+  description?: string;
 }

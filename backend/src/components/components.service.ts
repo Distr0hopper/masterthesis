@@ -89,6 +89,8 @@ export class ComponentsService {
         );
       }
 
+      const description = dto.description ?? metadataDescription;
+
       // Check if this repoUrl already exists in any lineage
       const existingInLineage = await this.componentRepo.findOne({ where: { repoUrl: dto.repoUrl } });
 
@@ -100,7 +102,7 @@ export class ComponentsService {
           );
         }
         // Different SHA -> create a new version in the same lineage
-        return this.createNextVersion(existingInLineage, cwlContent, commitSha, metadataDescription);
+        return this.createNextVersion(existingInLineage, cwlContent, commitSha, description);
       }
 
       // New component: v1
@@ -113,7 +115,7 @@ export class ComponentsService {
         repoCommitSha: commitSha,
         version: 1,
         cwlContent,
-        description: metadataDescription,
+        description,
         source: ComponentSource.AUTOMATED_PACKAGING,
         domain: dto.domain,
         parameters: parameters as Parameter[],
@@ -211,7 +213,7 @@ export class ComponentsService {
       repoCommitSha: dto.repoCommitSha ?? null,
       version: 1,
       cwlContent,
-      description: CwlParser.extractDescription(cwlContent),
+      description: dto.description ?? CwlParser.extractDescription(cwlContent),
       source: ComponentSource.MANUAL_UPLOAD,
       domain: dto.domain,
       parameters: parameters as Parameter[],

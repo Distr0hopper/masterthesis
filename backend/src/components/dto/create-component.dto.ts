@@ -1,6 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsIn, IsOptional, IsString, IsUrl } from 'class-validator';
 import { VALID_DOMAINS } from '../enums';
+
+const emptyToUndefined = ({ value }: { value: unknown }) => (value === '' ? undefined : value);
 
 export class CreateComponentDto {
   @ApiProperty({ example: 'My EO Component' })
@@ -17,6 +20,7 @@ export class CreateComponentDto {
   authorName?: string;
 
   @ApiProperty({ required: false, example: 'https://github.com/movestore/RemoveOutliers' })
+  @Transform(emptyToUndefined)
   @IsOptional()
   @IsUrl()
   repoUrl?: string;

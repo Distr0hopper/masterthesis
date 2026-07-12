@@ -211,7 +211,7 @@ export class ComponentsService {
       name: dto.name,
       authorName: dto.authorName ?? null,
       createdBy: userId ? ({ id: userId } as User) : null,
-      repoUrl: dto.repoUrl ?? null,
+      repoUrl: dto.repoUrl || null,
       repoCommitSha: dto.repoCommitSha ?? null,
       version: 1,
       cwlContent,

@@ -172,6 +172,7 @@ export class ComponentsController {
   @ApiOperation({ summary: 'Package a MoveApps app from a GitHub URL (creates v1 or new version if URL exists with a different commit)' })
   @ApiResponse({ status: 201, type: ComponentDetailDto })
   @ApiResponse({ status: 400, description: 'Invalid URL or packaging failed' })
+  @ApiResponse({ status: 403, description: 'Not the creator of this lineage (only applies when repoUrl already exists)' })
   @ApiResponse({ status: 409, description: 'This exact commit is already packaged' })
   async package(@Request() req, @Body() dto: PackageComponentDto) {
     return this.componentsService.packageFromUrl(dto, req.user.id);

@@ -417,6 +417,9 @@
           "400": {
             "description": "Invalid URL or packaging failed"
           },
+          "403": {
+            "description": "Not the creator of this lineage (only applies when repoUrl already exists)"
+          },
           "409": {
             "description": "This exact commit is already packaged"
           }

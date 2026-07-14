@@ -99,6 +99,7 @@ export class ComponentsService {
       });
 
       if (existingInLineage) {
+        this.ensureCreator(existingInLineage, userId);
         // Same commitSha -> already packaged, nothing to do
         if (commitSha && existingInLineage.repoCommitSha === commitSha) {
           throw new ConflictException(
@@ -131,6 +132,7 @@ export class ComponentsService {
     } catch (err) {
       if (
         err instanceof ConflictException ||
+        err instanceof ForbiddenException ||
         err instanceof InternalServerErrorException ||
         err instanceof BadRequestException
       ) {
@@ -287,8 +289,8 @@ export class ComponentsService {
 
   // ── Private helpers ──────────────────────────────────────────────────────────
 
-  private ensureCreator(component: Component, userId: string): void {
-    if (component.createdBy?.id !== userId) {
+  private ensureCreator(component: Component, userId?: string): void {
+    if (!userId || component.createdBy?.id !== userId) {
       throw new ForbiddenException('Only the creator of this component may perform this action');
     }
   }

@@ -642,7 +642,9 @@
           },
           "description": {
             "type": "string",
-            "description": "Overrides the description extracted from the CWL file"
+            "nullable": true,
+            "example": null,
+            "description": "Overrides the description extracted from the CWL file. Omit or set to null to use the extracted value."
           }
         },
         "required": [
@@ -873,7 +875,9 @@
           },
           "description": {
             "type": "string",
-            "description": "Overrides the description extracted from metadata.json"
+            "nullable": true,
+            "example": null,
+            "description": "Overrides the description extracted from metadata.json. Omit or set to null to use the extracted value."
           }
         },
         "required": [
@@ -886,7 +890,8 @@
         "properties": {
           "description": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "example": null
           },
           "domain": {
             "type": "string",

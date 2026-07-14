@@ -93,7 +93,10 @@ export class ComponentsService {
       const description = dto.description ?? metadataDescription;
 
       // Check if this repoUrl already exists in any lineage
-      const existingInLineage = await this.componentRepo.findOne({ where: { repoUrl: dto.repoUrl } });
+      const existingInLineage = await this.componentRepo.findOne({
+        where: { repoUrl: dto.repoUrl },
+        relations: ['createdBy'],
+      });
 
       if (existingInLineage) {
         // Same commitSha -> already packaged, nothing to do
@@ -311,6 +314,7 @@ export class ComponentsService {
     const component = this.componentRepo.create({
       name: parent.name,
       authorName: parent.authorName,
+      createdBy: parent.createdBy,
       repoUrl: parent.repoUrl,
       repoCommitSha: commitSha,
       version: nextVersion,
@@ -323,7 +327,7 @@ export class ComponentsService {
 
     this.logger.log(`New version: ${parent.name} v${nextVersion}`);
     const saved = await this.componentRepo.save(component);
-    return ComponentTransformer.toDetail(saved);
+    return ComponentTransformer.toDetail(await this.reloadWithCreator(saved.id));
   }
 
   private parseParameters(cwlContent: string, context: string): Partial<Parameter>[] {

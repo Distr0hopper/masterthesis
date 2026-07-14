@@ -8,6 +8,12 @@ export class ComponentCreatorDto {
 
     @ApiProperty()
     email: string;
+
+    @ApiProperty({ nullable: true })
+    firstName: string | null;
+
+    @ApiProperty({ nullable: true })
+    lastName: string | null;
 }
 
 export class ComponentDetailDto {

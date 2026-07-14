@@ -729,11 +729,21 @@
           },
           "email": {
             "type": "string"
+          },
+          "firstName": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastName": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
           "id",
-          "email"
+          "email",
+          "firstName",
+          "lastName"
         ]
       },
       "ParameterDto": {

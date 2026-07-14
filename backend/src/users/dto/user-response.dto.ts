@@ -7,6 +7,12 @@ export class UserResponseDto {
   @ApiProperty()
   email: string;
 
+  @ApiProperty({ nullable: true })
+  firstName: string | null;
+
+  @ApiProperty({ nullable: true })
+  lastName: string | null;
+
   @ApiProperty()
   createdAt: Date;
 }

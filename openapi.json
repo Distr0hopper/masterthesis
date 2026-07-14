@@ -912,6 +912,14 @@
             "type": "string",
             "example": "user@example.com"
           },
+          "firstName": {
+            "type": "string",
+            "example": "Jane"
+          },
+          "lastName": {
+            "type": "string",
+            "example": "Doe"
+          },
           "password": {
             "type": "string",
             "minLength": 8
@@ -919,6 +927,8 @@
         },
         "required": [
           "email",
+          "firstName",
+          "lastName",
           "password"
         ]
       },
@@ -931,6 +941,14 @@
           "email": {
             "type": "string"
           },
+          "firstName": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastName": {
+            "type": "string",
+            "nullable": true
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -939,6 +957,8 @@
         "required": [
           "id",
           "email",
+          "firstName",
+          "lastName",
           "createdAt"
         ]
       },

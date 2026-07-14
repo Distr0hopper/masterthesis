@@ -18,8 +18,8 @@ export class UsersService {
     return this.userRepo.findOneBy({ id });
   }
 
-  async createUser(email: string, passwordHash: string): Promise<User> {
-    const user = this.userRepo.create({ email, passwordHash });
+  async createUser(email: string, passwordHash: string, firstName: string, lastName: string): Promise<User> {
+    const user = this.userRepo.create({ email, passwordHash, firstName, lastName });
     return this.userRepo.save(user);
   }
 }

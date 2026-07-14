@@ -29,7 +29,7 @@ export class AuthService {
     if (existing) throw new ConflictException('Email already registered');
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
-    const user = await this.usersService.createUser(dto.email, passwordHash);
+    const user = await this.usersService.createUser(dto.email, passwordHash, dto.firstName, dto.lastName);
 
     return UserTransformer.toResponse(user);
   }

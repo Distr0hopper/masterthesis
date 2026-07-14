@@ -79,11 +79,13 @@ export class ComponentsService {
       let cwlContent: string;
       let commitSha: string | null = null;
       let metadataDescription: string | null = null;
+      let metadataAuthor: string | null = null;
       try {
         cwlContent = await fs.readFile(cwlPath, 'utf-8');
         const metadata = JSON.parse(await fs.readFile(metadataPath, 'utf-8'));
         commitSha = metadata.commitSha ?? null;
         metadataDescription = metadata.description ?? null;
+        metadataAuthor = metadata.author ?? null;
       } catch {
         throw new InternalServerErrorException(
           'Packaging CLI exited successfully but expected output files are missing',
@@ -114,7 +116,7 @@ export class ComponentsService {
       const parameters = this.parseParameters(cwlContent, 'CLI-generated');
       const component = this.componentRepo.create({
         name: repoName,
-        authorName: 'MoveApps',
+        authorName: metadataAuthor,
         createdBy: userId ? ({ id: userId } as User) : null,
         repoUrl: dto.repoUrl,
         repoCommitSha: commitSha,

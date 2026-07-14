@@ -22,6 +22,7 @@ class RepoContents:
     app_config: RepoFile
     default_branch: str
     description: str
+    author: str
     commit_sha: str
 
 
@@ -78,6 +79,13 @@ class GitHubClient:
         except Exception:
             description = ""
 
+        try:
+            owner_resp = self._session.get(f"https://api.github.com/users/{owner}", timeout=30)
+            owner_resp.raise_for_status()
+            author = owner_resp.json().get("name") or owner
+        except Exception:
+            author = owner
+
         branch_resp = self._session.get(
             f"{_API_BASE}/{owner}/{repo}/branches/{default_branch}", timeout=30
         )
@@ -89,5 +97,6 @@ class GitHubClient:
             app_config=app_config,
             default_branch=default_branch,
             description=description,
+            author=author,
             commit_sha=commit_sha,
         )

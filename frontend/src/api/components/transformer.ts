@@ -30,6 +30,7 @@ export interface ComponentDisplayModel {
   repoUrl: string | null;
   version: number;
   domain: string;
+  domainDisplay: string;
   source: ComponentSource;
   sourceDisplay: string;
   createdAt: Date;
@@ -59,6 +60,13 @@ function getAuthorDisplay(dto: ComponentListItemDto | ComponentDetailDto): strin
     return firstName && lastName ? `${firstName} ${lastName}` : email;
   }
   return dto.authorName ?? 'Unknown';
+}
+
+export function getDomainLabel(domain: string): string {
+  return domain
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
 }
 
 export const componentTransformer = {
@@ -109,6 +117,7 @@ export const componentTransformer = {
       repoUrl: dto.repoUrl,
       version: dto.version,
       domain: dto.domain,
+      domainDisplay: getDomainLabel(dto.domain),
       source: dto.source,
       sourceDisplay: SOURCE_LABELS[dto.source],
       createdAt: new Date(dto.createdAt),

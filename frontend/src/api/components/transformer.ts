@@ -1,4 +1,5 @@
 import type {
+  ComponentCreatorDto,
   ComponentDetailDto,
   ComponentListItemDto,
   CreateComponentDto,
@@ -54,12 +55,12 @@ export interface ComponentDetailDisplayModel extends ComponentDisplayModel {
   parameters: ParameterDisplayModel[];
 }
 
-function getAuthorDisplay(dto: ComponentListItemDto | ComponentDetailDto): string {
-  if ('createdBy' in dto && dto.createdBy) {
-    const { firstName, lastName, email } = dto.createdBy;
+function getAuthorDisplay(authorName: string | null, createdBy?: ComponentCreatorDto | null): string {
+  if (createdBy) {
+    const { firstName, lastName, email } = createdBy;
     return firstName && lastName ? `${firstName} ${lastName}` : email;
   }
-  return dto.authorName ?? 'Unknown';
+  return authorName ?? 'Unknown';
 }
 
 export function getDomainLabel(domain: string): string {
@@ -113,7 +114,7 @@ export const componentTransformer = {
     return {
       id: dto.id,
       name: dto.name,
-      authorDisplay: getAuthorDisplay(dto),
+      authorDisplay: getAuthorDisplay(dto.authorName),
       repoUrl: dto.repoUrl,
       version: dto.version,
       domain: dto.domain,
@@ -131,6 +132,7 @@ export const componentTransformer = {
   toDetailDisplayModel(dto: ComponentDetailDto): ComponentDetailDisplayModel {
     return {
       ...this.toDisplayModel(dto),
+      authorDisplay: getAuthorDisplay(dto.authorName, dto.createdBy),
       description: dto.description,
       repoCommitSha: dto.repoCommitSha,
       doi: dto.doi,

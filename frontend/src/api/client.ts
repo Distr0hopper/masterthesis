@@ -1,13 +1,13 @@
-import axios from 'axios';
+import axios, { type AxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/store/auth.store';
 
-export const apiClient = axios.create({
+const axiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Attaches JWT token to request
-apiClient.interceptors.request.use((config) => {
+// Interceptor before request is send out - Attach JWT to request
+axiosInstance.interceptors.request.use((config) => {
   const token = useAuthStore.getState().token;
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -15,8 +15,8 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
-// Redirect to /login if 401 - Unauthenticated
-apiClient.interceptors.response.use(
+// Intercepting 401 - redirects to /login if not authenticated
+axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
@@ -26,3 +26,16 @@ apiClient.interceptors.response.use(
     return Promise.reject(error);
   },
 );
+
+// Thin wrapper that unwraps `res.data` once here, so service.ts callers get Promise<T> directly.
+export const apiClient = {
+  baseURL: axiosInstance.defaults.baseURL,
+  get: <T>(url: string, config?: AxiosRequestConfig) =>
+    axiosInstance.get<T>(url, config).then((res) => res.data),
+  post: <T>(url: string, data?: unknown, config?: AxiosRequestConfig) =>
+    axiosInstance.post<T>(url, data, config).then((res) => res.data),
+  patch: <T>(url: string, data?: unknown, config?: AxiosRequestConfig) =>
+    axiosInstance.patch<T>(url, data, config).then((res) => res.data),
+  delete: <T>(url: string, config?: AxiosRequestConfig) =>
+    axiosInstance.delete<T>(url, config).then((res) => res.data),
+};

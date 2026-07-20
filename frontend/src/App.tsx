@@ -8,6 +8,8 @@ import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
 import HomePage from "@/pages/HomePage.tsx";
 import AboutPage from "@/pages/AboutPage.tsx";
+import WorkflowBuilderPage from "@/pages/WorkflowBuilderPage.tsx";
+import ProfilePage from "@/pages/ProfilePage.tsx";
 
 const queryClient = new QueryClient();
 
@@ -16,11 +18,13 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <Router>
         <Header />
-        <main className="container mx-auto max-w-6xl px-4 py-8">
+        <main className="container mx-auto mt-14 max-w-6xl px-4 py-8">
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/browse" element={<ComponentsPage />} />
             <Route path="/about" element={<AboutPage />} />
+            <Route path="/builder" element={<WorkflowBuilderPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
             <Route path="/components/:id" element={<ComponentDetailPage />} />
             <Route path="/upload" element={<UploadPage />} />
             <Route path="/login" element={<LoginPage />} />

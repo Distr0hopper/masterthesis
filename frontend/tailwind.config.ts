@@ -1,4 +1,5 @@
 import type { Config } from 'tailwindcss';
+import tailwindcssAnimate from 'tailwindcss-animate';
 
 export default {
   darkMode: ['class'],
@@ -6,11 +7,47 @@ export default {
   theme: {
     extend: {
       colors: {
-        // JMU Brand Colors — überschreiben ShadCN primary
         'jmu-blue': {
-          600: '#00498f',
-          800: '#093d79',
+          50: 'var(--jmu-blue-50)',
+          100: 'var(--jmu-blue-100)',
+          200: 'var(--jmu-blue-200)',
+          300: 'var(--jmu-blue-300)',
+          400: 'var(--jmu-blue-400)',
+          500: 'var(--jmu-blue-500)',
+          600: 'var(--jmu-blue-600)',
+          700: 'var(--jmu-blue-700)',
+          800: 'var(--jmu-blue-800)',
+          900: 'var(--jmu-blue-900)',
         },
+        slate: {
+          50: 'var(--slate-50)',
+          100: 'var(--slate-100)',
+          200: 'var(--slate-200)',
+          300: 'var(--slate-300)',
+          400: 'var(--slate-400)',
+          500: 'var(--slate-500)',
+          600: 'var(--slate-600)',
+          700: 'var(--slate-700)',
+          800: 'var(--slate-800)',
+          900: 'var(--slate-900)',
+        },
+        success: {
+          DEFAULT: 'var(--success-bg)',
+          border: 'var(--success-border)',
+          foreground: 'var(--success-foreground)',
+        },
+        warning: {
+          DEFAULT: 'var(--warning-bg)',
+          border: 'var(--warning-border)',
+          foreground: 'var(--warning-foreground)',
+        },
+        error: {
+          DEFAULT: 'var(--error-bg)',
+          border: 'var(--error-border)',
+          foreground: 'var(--error-foreground)',
+        },
+        scrim: 'var(--scrim)',
+        'bg-page': 'var(--bg-page)',
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',
         card: {
@@ -41,7 +78,10 @@ export default {
           DEFAULT: 'hsl(var(--destructive))',
           foreground: 'hsl(var(--destructive-foreground))',
         },
-        border: 'hsl(var(--border))',
+        border: {
+          DEFAULT: 'hsl(var(--border))',
+          strong: 'var(--border-strong)',
+        },
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
         chart: {
@@ -53,9 +93,17 @@ export default {
         },
       },
       borderRadius: {
-        lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)',
+        sm: 'var(--radius-sm)',
+        md: 'var(--radius-md)',
+        lg: 'var(--radius-lg)',
+      },
+      boxShadow: {
+        sm: 'var(--shadow-sm)',
+        md: 'var(--shadow-md)',
+        lg: 'var(--shadow-lg)',
+      },
+      transitionDuration: {
+        fast: 'var(--transition-fast)',
       },
       fontFamily: {
         sans: ['IBM Plex Sans', 'Inter', 'sans-serif'],
@@ -63,5 +111,5 @@ export default {
       },
     },
   },
-  plugins: [require('tailwindcss-animate')],
+  plugins: [tailwindcssAnimate],
 } satisfies Config;

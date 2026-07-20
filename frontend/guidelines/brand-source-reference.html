@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>JMU Component Repository — Design System Reference</title>
+<style>
+  body { font-family: 'IBM Plex Sans', Arial, sans-serif; max-width: 960px; margin: 40px auto; padding: 0 20px; color: #1e293b; }
+  h1 { font-size: 22px; }
+  h2 { font-size: 16px; margin-top: 40px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; }
+  p.note { color: #64748b; font-size: 14px; }
+  .ramp { display: flex; gap: 4px; margin: 12px 0; }
+  .swatch { flex: 1; min-width: 64px; border-radius: 6px; overflow: hidden; border: 1px solid #e2e8f0; }
+  .swatch .fill { height: 56px; }
+  .swatch .label { font-size: 11px; padding: 4px 6px; font-family: 'IBM Plex Mono', monospace; background: #fff; }
+  .not-used { opacity: 0.6; }
+  .not-used .fill { position: relative; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 13px; }
+  td, th { border: 1px solid #e2e8f0; padding: 6px 10px; text-align: left; }
+</style>
+</head>
+<body>
+
+<h1>JMU Component Repository — Design System Reference</h1>
+<p class="note">
+  Source: colors sampled directly from uni-wuerzburg.de (header, footer, link color).
+  This file documents the tokens implemented in <code>frontend/src/index.css</code> and
+  <code>frontend/tailwind.config.ts</code> — it is not built or shipped with the app.
+</p>
+
+<h2>Primary — JMU Blue</h2>
+<p class="note">Sampled anchors: 600 (#00498f) is the header/footer/link fill. 800 (#093d79) is the sampled hover/heading-link blue.</p>
+<div class="ramp">
+  <div class="swatch"><div class="fill" style="background:#eff6ff"></div><div class="label">50</div></div>
+  <div class="swatch"><div class="fill" style="background:#dbeafe"></div><div class="label">100</div></div>
+  <div class="swatch"><div class="fill" style="background:#bfdbfe"></div><div class="label">200</div></div>
+  <div class="swatch"><div class="fill" style="background:#8ec0fa"></div><div class="label">300</div></div>
+  <div class="swatch"><div class="fill" style="background:#5498e8"></div><div class="label">400</div></div>
+  <div class="swatch"><div class="fill" style="background:#1f70c4;color:#fff"></div><div class="label">500</div></div>
+  <div class="swatch"><div class="fill" style="background:#00498f"></div><div class="label">600 — primary</div></div>
+  <div class="swatch"><div class="fill" style="background:#06407e"></div><div class="label">700</div></div>
+  <div class="swatch"><div class="fill" style="background:#093d79"></div><div class="label">800 — hover/heading</div></div>
+  <div class="swatch"><div class="fill" style="background:#072c56"></div><div class="label">900</div></div>
+</div>
+
+<h2>Neutrals — Slate</h2>
+<div class="ramp">
+  <div class="swatch"><div class="fill" style="background:#f8fafc"></div><div class="label">50</div></div>
+  <div class="swatch"><div class="fill" style="background:#f1f5f9"></div><div class="label">100</div></div>
+  <div class="swatch"><div class="fill" style="background:#e2e8f0"></div><div class="label">200 — border</div></div>
+  <div class="swatch"><div class="fill" style="background:#cbd5e1"></div><div class="label">300 — border-strong</div></div>
+  <div class="swatch"><div class="fill" style="background:#94a3b8"></div><div class="label">400</div></div>
+  <div class="swatch"><div class="fill" style="background:#64748b"></div><div class="label">500 — muted text</div></div>
+  <div class="swatch"><div class="fill" style="background:#475569;color:#fff"></div><div class="label">600</div></div>
+  <div class="swatch"><div class="fill" style="background:#334155;color:#fff"></div><div class="label">700</div></div>
+  <div class="swatch"><div class="fill" style="background:#1e293b;color:#fff"></div><div class="label">800</div></div>
+  <div class="swatch"><div class="fill" style="background:#0f172a;color:#fff"></div><div class="label">900</div></div>
+</div>
+
+<h2>Semantic status (desaturated, calm)</h2>
+<div class="ramp">
+  <div class="swatch"><div class="fill" style="background:#eaf2ee"></div><div class="label">success bg</div></div>
+  <div class="swatch"><div class="fill" style="background:#386247;color:#fff"></div><div class="label">success fg</div></div>
+  <div class="swatch"><div class="fill" style="background:#f7f0e2"></div><div class="label">warning bg</div></div>
+  <div class="swatch"><div class="fill" style="background:#7a5a1f;color:#fff"></div><div class="label">warning fg</div></div>
+  <div class="swatch"><div class="fill" style="background:#f6ecec"></div><div class="label">error bg</div></div>
+  <div class="swatch"><div class="fill" style="background:#7d3a3a;color:#fff"></div><div class="label">error fg</div></div>
+</div>
+
+<h2>Excluded — campaign colors (reference only, not UI colors)</h2>
+<p class="note">
+  Sampled from uni-wuerzburg.de's hero gradient and "Exzellenz" campaign banner. These are
+  campaign-specific decoration, not core brand color — blue carries almost all brand weight
+  per the brief. Kept here only so nobody accidentally reaches for them later.
+</p>
+<div class="ramp not-used">
+  <div class="swatch"><div class="fill" style="background:linear-gradient(135deg,#e8734a,#f2a154)"></div><div class="label">hero coral/orange gradient</div></div>
+  <div class="swatch"><div class="fill" style="background:linear-gradient(135deg,#2f8f6e,#3fae9c)"></div><div class="label">"Exzellenz" green/teal</div></div>
+</div>
+
+<h2>Spacing, radii, shadows, motion</h2>
+<table>
+  <tr><th>Token</th><th>Value</th><th>Usage</th></tr>
+  <tr><td>--space-1 … --space-20</td><td>4px … 80px (4px base unit)</td><td>padding, flex/grid gaps — same scale as Tailwind's default spacing</td></tr>
+  <tr><td>--radius-sm</td><td>4px</td><td>inputs, tags</td></tr>
+  <tr><td>--radius-md</td><td>6px</td><td>buttons</td></tr>
+  <tr><td>--radius-lg</td><td>10px</td><td>cards, dialogs</td></tr>
+  <tr><td>--shadow-sm / md / lg</td><td>rgba(19,28,43, .06/.10/.14)</td><td>3-step elevation, cool-toned not pure black</td></tr>
+  <tr><td>--scrim</td><td>rgba(19,28,43,0.45)</td><td>modal overlay only</td></tr>
+  <tr><td>--transition-fast / --transition-base</td><td>120ms / 150ms ease</td><td>hover/focus only — no entrance animation</td></tr>
+</table>
+
+</body>
+</html>

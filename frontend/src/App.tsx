@@ -6,6 +6,8 @@ import ComponentDetailPage from '@/pages/ComponentDetailPage';
 import UploadPage from '@/pages/UploadPage';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
+import HomePage from "@/pages/HomePage.tsx";
+import AboutPage from "@/pages/AboutPage.tsx";
 
 const queryClient = new QueryClient();
 
@@ -16,7 +18,9 @@ export default function App() {
         <Header />
         <main className="container mx-auto max-w-6xl px-4 py-8">
           <Routes>
-            <Route path="/" element={<ComponentsPage />} />
+            <Route path="/" element={<HomePage />} />
+            <Route path="/browse" element={<ComponentsPage />} />
+            <Route path="/about" element={<AboutPage />} />
             <Route path="/components/:id" element={<ComponentDetailPage />} />
             <Route path="/upload" element={<UploadPage />} />
             <Route path="/login" element={<LoginPage />} />

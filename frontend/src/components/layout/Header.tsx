@@ -21,9 +21,17 @@ export default function Header() {
         </Link>
 
         <nav>
-          <Link to="/" className="text-sm font-medium hover:underline">
-            Browse
-          </Link>
+          <div className="flex items-center gap-6">
+            <Link to="/" className="text-sm font-medium hover:underline">
+              Home
+            </Link>
+            <Link to="/browse" className="text-sm font-medium hover:underline">
+              Browse
+            </Link>
+            <Link to="/about" className="text-sm font-medium hover:underline">
+              About
+            </Link>
+          </div>
         </nav>
 
         <div className="flex items-center gap-3">
@@ -42,7 +50,10 @@ export default function Header() {
               <Link to="/login" className="text-sm font-medium hover:underline">
                 Login
               </Link>
-              <Link to="/register" className="text-sm font-medium hover:underline">
+              <Link
+                to="/register"
+                className="rounded-md bg-white px-3 py-1.5 text-sm font-medium text-jmu-blue-600 transition-colors hover:bg-jmu-blue-50"
+              >
                 Register
               </Link>
             </>

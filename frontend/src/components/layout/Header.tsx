@@ -16,7 +16,8 @@ export default function Header() {
   return (
     <header className="bg-jmu-blue-600 text-white">
       <div className="container mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
-        <Link to="/" className="text-lg font-semibold">
+        <Link to="/" className="flex items-center gap-3 text-lg font-semibold">
+          <img src="/icons/Icon-S.svg" />
           JMU Component Repository
         </Link>
 

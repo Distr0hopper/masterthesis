@@ -8,6 +8,7 @@ export class UserTransformer {
             email: user.email,
             firstName: user.firstName,
             lastName: user.lastName,
+            affiliation: user.affiliation,
             createdAt: user.createdAt,
         };
     }

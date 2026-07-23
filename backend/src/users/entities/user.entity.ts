@@ -15,6 +15,9 @@ export class User {
   @Column({ nullable: true })
   lastName: string | null;
 
+  @Column({ nullable: true })
+  affiliation: string | null;
+
   @Column()
   passwordHash: string;
 

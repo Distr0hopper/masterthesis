@@ -20,5 +20,6 @@ export interface UserResponseDto {
   email: string;
   firstName: string | null;
   lastName: string | null;
+  affiliation: string | null;
   createdAt: string;
 }

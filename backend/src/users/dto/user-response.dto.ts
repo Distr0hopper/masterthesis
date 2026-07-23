@@ -13,6 +13,9 @@ export class UserResponseDto {
   @ApiProperty({ nullable: true })
   lastName: string | null;
 
+  @ApiProperty({ nullable: true })
+  affiliation: string | null;
+
   @ApiProperty()
   createdAt: Date;
 }

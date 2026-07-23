@@ -10,6 +10,7 @@ import HomePage from "@/pages/HomePage.tsx";
 import AboutPage from "@/pages/AboutPage.tsx";
 import WorkflowBuilderPage from "@/pages/WorkflowBuilderPage.tsx";
 import ProfilePage from "@/pages/ProfilePage.tsx";
+import ProtectedRoute from "@/pages/ProtectedRoutes.tsx";
 
 const queryClient = new QueryClient();
 
@@ -26,7 +27,7 @@ export default function App() {
             <Route path="/builder" element={<WorkflowBuilderPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/components/:id" element={<ComponentDetailPage />} />
-            <Route path="/upload" element={<UploadPage />} />
+            <Route path="/upload" element={<ProtectedRoute> <UploadPage /> </ProtectedRoute>} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
           </Routes>

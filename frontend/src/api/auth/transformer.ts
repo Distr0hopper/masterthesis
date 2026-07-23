@@ -14,7 +14,7 @@ export const authTransformer = {
   },
 
   getInitialRegisterFormValues(): RegisterFormData {
-    return { email: '', firstName: '', lastName: '', password: '' };
+    return { email: '', firstName: '', lastName: '', password: '', confirmPassword: '' };
   },
 
   formToLoginDto(form: LoginFormData): LoginDto {

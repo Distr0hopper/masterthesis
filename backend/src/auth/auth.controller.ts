@@ -27,7 +27,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Login and receive JWT' })
   @ApiBody({ type: LoginDto })
   @ApiResponse({ status: 200, type: AuthResponseDto })
-  @ApiResponse({ status: 401, description: 'Invalid credentials' })
+  @ApiResponse({ status: 401, description: 'Invalid email or password' })
   async login(@Request() req): Promise<AuthResponseDto> {
     return this.authService.login(req.user);
   }

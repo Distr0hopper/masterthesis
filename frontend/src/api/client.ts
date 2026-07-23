@@ -19,7 +19,10 @@ axiosInstance.interceptors.request.use((config) => {
 axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    // only force a redirect on session expiry (we had a token and it got rejected) —
+    // a 401 from the login call itself just means wrong credentials and should be
+    // handled by the caller, not treated as "you were logged out"
+    if (error.response?.status === 401 && useAuthStore.getState().token) {
       useAuthStore.getState().logout();
       window.location.href = '/login';
     }

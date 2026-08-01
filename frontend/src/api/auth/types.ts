@@ -11,8 +11,8 @@ export interface LoginDto {
 }
 
 export interface AuthResponseDto {
-  access_token: string;
-  expires_in: number;
+  accessToken: string;
+  expiresIn: number;
 }
 
 export interface UserResponseDto {

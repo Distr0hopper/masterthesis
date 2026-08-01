@@ -33,9 +33,9 @@ export const useLogin = () => {
     mutationFn: async (data: LoginDto) => {
       const auth = await authService.login(data);
       // token must be in the store before /auth/me so the request interceptor attaches it
-      setToken(auth.access_token);
+      setToken(auth.accessToken);
       const user = await authService.me();
-      setAuth(auth.access_token, user);
+      setAuth(auth.accessToken, user);
       return user;
     },
     onSuccess: () => {

@@ -39,8 +39,8 @@ export class AuthService {
     const expiresIn = parseInt(this.configService.get<string>('JWT_EXPIRES_IN') ?? '86400', 10);
 
     return {
-      access_token: await this.jwtService.signAsync(payload),
-      expires_in: expiresIn,
+      accessToken: await this.jwtService.signAsync(payload),
+      expiresIn: expiresIn,
     };
   }
 }

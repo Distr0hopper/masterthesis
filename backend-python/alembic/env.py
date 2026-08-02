@@ -17,7 +17,10 @@ config = context.config
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False: migrations now also run inside the live app
+    # process on startup, not just as a one-off CLI command - the default would
+    # silently kill every other logger (including uvicorn's) for the rest of the process.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 config.set_main_option("sqlalchemy.url", get_settings().database_url)
 

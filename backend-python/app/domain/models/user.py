@@ -1,8 +1,12 @@
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Column, DateTime, func
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field, Relationship, SQLModel
+
+if TYPE_CHECKING:
+    from app.domain.models.component import Component
 
 
 class User(SQLModel, table=True):
@@ -17,3 +21,6 @@ class User(SQLModel, table=True):
     created_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     )
+
+    # lazy="selectin": see the matching note on Component - required for AsyncSession safety
+    components: list["Component"] = Relationship(back_populates="created_by", sa_relationship_kwargs={"lazy": "selectin"})

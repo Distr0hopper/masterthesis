@@ -8,6 +8,8 @@ from sqlmodel import SQLModel
 
 from alembic import context
 from app.config import get_settings
+from app.domain.models.component import Component  # noqa: F401 - registers the table with SQLModel.metadata
+from app.domain.models.parameter import Parameter  # noqa: F401 - registers the table with SQLModel.metadata
 from app.domain.models.user import User  # noqa: F401 - registers the table with SQLModel.metadata
 
 # this is the Alembic Config object, which provides

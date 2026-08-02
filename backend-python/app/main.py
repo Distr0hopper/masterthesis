@@ -1,16 +1,28 @@
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.exception.handlers import register_exception_handlers
 from app.api.util.endpoints import api_router
 from app.config import get_settings
+from app.infrastructure.db.migrations import run_migrations
 
 settings = get_settings()
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
+    await run_migrations()
+    yield
+
 
 app = FastAPI(
     title="Component Repository API",
     description="REST API for managing CWL-based workflow components",
     version="1.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(

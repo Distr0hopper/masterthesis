@@ -18,12 +18,19 @@ class Settings(BaseSettings):
     cors_origin: str = "http://localhost:5173"
     port: int = 8000
 
+    environment: str = "local"
+    auto_migrate: bool = True
+
     @property
     def database_url(self) -> str:
         return (
             f"postgresql+asyncpg://{self.database_user}:{self.database_password}"
             f"@{self.database_host}:{self.database_port}/{self.database_name}"
         )
+
+    @property
+    def is_prod(self) -> bool:
+        return self.environment == "production"
 
 
 @lru_cache

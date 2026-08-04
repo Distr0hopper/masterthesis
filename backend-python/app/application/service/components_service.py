@@ -94,8 +94,21 @@ class ComponentsService:
 
         return await self._save_and_reload(component)
 
+    async def update_component(self, component: Component, user_id: uuid.UUID) -> Component:
+        if component.created_by_id != user_id:
+            raise NotComponentCreatorError()
+
+        return await self._save_and_reload(component)
+
+    async def remove(self, component_id: uuid.UUID, user_id: uuid.UUID) -> None:
+        component = await self.get_component(component_id)
+        if component.created_by_id != user_id:
+            raise NotComponentCreatorError()
+
+        await self.components_repository.delete(component)
+
     async def _save_and_reload(self, component: Component) -> Component:
-        saved = await self.components_repository.create(component)
+        saved = await self.components_repository.save(component)
         # re-fetch: created_by is only guaranteed to be safely (selectin) loaded
         # via a fresh query, not by touching the just-inserted in-memory object
         reloaded = await self.components_repository.find_by_id(saved.id)

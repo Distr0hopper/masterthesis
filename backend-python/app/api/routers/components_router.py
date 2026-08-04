@@ -4,7 +4,13 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, status
 from fastapi.responses import Response
 
-from app.api.dto.component import AddVersionRequestDto, ComponentDetailDto, ComponentListItemDto, CreateComponentRequestDto
+from app.api.dto.component import (
+    AddVersionRequestDto,
+    ComponentDetailDto,
+    ComponentListItemDto,
+    CreateComponentRequestDto,
+    UpdateComponentRequestDto,
+)
 from app.api.transformer.component_transformer import ComponentTransformer
 from app.application.service.auth_service import AuthService
 from app.application.service.components_service import ComponentsService
@@ -97,6 +103,28 @@ async def download(
         media_type="application/yaml",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.patch("/{component_id}", response_model=ComponentDetailDto)
+async def update(
+    component_id: uuid.UUID,
+    dto: UpdateComponentRequestDto,
+    current_user: Annotated[User, Depends(AuthService.get_current_user)],
+    components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
+) -> ComponentDetailDto:
+    current = await components_service.get_component(component_id)
+    updated = ComponentTransformer.apply_update_dto(current, dto)
+    saved = await components_service.update_component(updated, current_user.id)
+    return ComponentTransformer.to_detail(saved)
+
+
+@router.delete("/{component_id}")
+async def remove(
+    component_id: uuid.UUID,
+    current_user: Annotated[User, Depends(AuthService.get_current_user)],
+    components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
+) -> None:
+    await components_service.remove(component_id, current_user.id)
 
 
 @router.get("/{component_id}/bundle")

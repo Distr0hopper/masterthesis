@@ -1,6 +1,13 @@
 import uuid
 
-from app.api.dto.component import ComponentCreatorDto, ComponentDetailDto, ComponentListItemDto, CreateComponentRequestDto, ParameterDto
+from app.api.dto.component import (
+    ComponentCreatorDto,
+    ComponentDetailDto,
+    ComponentListItemDto,
+    CreateComponentRequestDto,
+    ParameterDto,
+    UpdateComponentRequestDto,
+)
 from app.domain.models.component import Component, ComponentSource
 from app.domain.models.parameter import Parameter
 from app.infrastructure.cwl.cwl_parser import inject_description
@@ -21,6 +28,17 @@ class ComponentTransformer:
             cwl_content=cwl_content,
             source=ComponentSource.MANUAL_UPLOAD,
         )
+
+    @staticmethod
+    def apply_update_dto(component: Component, dto: UpdateComponentRequestDto) -> Component:
+        # domain omitted -> None -> "no change" (Component.domain can never be cleared to
+        # null, so None is unambiguous here); description needs presence-tracking since an
+        # explicit null must clear it, distinct from the field being omitted entirely
+        if dto.domain is not None:
+            component.domain = dto.domain
+        if "description" in dto.model_fields_set:
+            component.description = dto.description
+        return component
 
     @staticmethod
     def to_list_item(component: Component) -> ComponentListItemDto:

@@ -32,8 +32,12 @@ class ComponentsRepository:
         result = await self.db.exec(query)
         return list(result.all())
 
-    async def create(self, component: Component) -> Component:
+    async def save(self, component: Component) -> Component:
         self.db.add(component)
         await self.db.commit()
         await self.db.refresh(component)
         return component
+
+    async def delete(self, component: Component) -> None:
+        await self.db.delete(component)
+        await self.db.commit()

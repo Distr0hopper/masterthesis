@@ -105,3 +105,17 @@ class AddVersionRequestDto(CamelModel):
     @classmethod
     def empty_repo_commit_sha_to_none(cls, value: str | None) -> str | None:
         return None if value == "" else value
+
+
+class UpdateComponentRequestDto(CamelModel):
+    # domain omitted -> None -> "no change" (Component.domain can never be cleared to null,
+    # so None is unambiguous here - unlike description below, no presence-tracking needed)
+    domain: str | None = Field(default=None, json_schema_extra={"enum": VALID_DOMAINS})
+    description: str | None = None
+
+    @field_validator("domain")
+    @classmethod
+    def validate_domain(cls, value: str | None) -> str | None:
+        if value is not None and value not in VALID_DOMAINS:
+            raise ValueError(f"domain must be one of {VALID_DOMAINS}")
+        return value

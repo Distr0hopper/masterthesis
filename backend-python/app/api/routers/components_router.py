@@ -4,8 +4,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, status
 from fastapi.responses import Response
 
-from app.api.dto.component import ComponentDetailDto, ComponentListItemDto, CreateComponentRequestDto
-from app.api.transformer.component_transformer import to_detail, to_list_item
+from app.api.dto.component import AddVersionRequestDto, ComponentDetailDto, ComponentListItemDto, CreateComponentRequestDto
+from app.api.transformer.component_transformer import ComponentTransformer
 from app.application.service.auth_service import AuthService
 from app.application.service.components_service import ComponentsService
 from app.domain.models.component_domain import VALID_DOMAINS
@@ -23,7 +23,7 @@ async def list_components(
     domain: Annotated[str | None, Query(json_schema_extra={"enum": VALID_DOMAINS})] = None,
 ) -> list[ComponentListItemDto]:
     components = await components_service.list_components(domain)
-    return [to_list_item(c) for c in components]
+    return [ComponentTransformer.to_list_item(c) for c in components]
 
 
 @router.post("", response_model=ComponentDetailDto, status_code=status.HTTP_201_CREATED)
@@ -39,17 +39,33 @@ async def create(
             f"Validation failed (expected size to be less than {MAX_CWL_FILE_SIZE} bytes)",
         )
 
-    component = await components_service.create_manual(
-        name=dto.name,
-        domain=dto.domain,
+    component = ComponentTransformer.from_create_dto(dto, content.decode("utf-8"), current_user.id)
+    created = await components_service.create_manual(component)
+    return ComponentTransformer.to_detail(created)
+
+
+@router.post("/{component_id}/versions", response_model=ComponentDetailDto, status_code=status.HTTP_201_CREATED)
+async def add_version(
+    component_id: uuid.UUID,
+    dto: Annotated[AddVersionRequestDto, Form(media_type="multipart/form-data")],
+    current_user: Annotated[User, Depends(AuthService.get_current_user)],
+    components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
+) -> ComponentDetailDto:
+    content = await dto.cwl_file.read()
+    if len(content) > MAX_CWL_FILE_SIZE:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Validation failed (expected size to be less than {MAX_CWL_FILE_SIZE} bytes)",
+        )
+
+    component = await components_service.add_manual_version(
+        component_id=component_id,
         cwl_content=content.decode("utf-8"),
-        author_name=dto.author_name,
-        repo_url=dto.repo_url,
         repo_commit_sha=dto.repo_commit_sha,
         description=dto.description,
-        created_by_id=current_user.id,
+        user_id=current_user.id,
     )
-    return to_detail(component)
+    return ComponentTransformer.to_detail(component)
 
 
 @router.get("/{component_id}", response_model=ComponentDetailDto)
@@ -58,7 +74,7 @@ async def get_component(
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
 ) -> ComponentDetailDto:
     component = await components_service.get_component(component_id)
-    return to_detail(component)
+    return ComponentTransformer.to_detail(component)
 
 
 @router.get("/{component_id}/versions", response_model=list[ComponentListItemDto])
@@ -67,7 +83,7 @@ async def get_versions(
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
 ) -> list[ComponentListItemDto]:
     versions = await components_service.get_versions(component_id)
-    return [to_list_item(v) for v in versions]
+    return [ComponentTransformer.to_list_item(v) for v in versions]
 
 
 @router.get("/{component_id}/download")

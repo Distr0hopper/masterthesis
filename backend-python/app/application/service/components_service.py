@@ -5,9 +5,9 @@ from typing import Annotated
 
 from fastapi import Depends
 
-from app.application.exception.component_exceptions import InvalidCwlError
+from app.application.exception.component_exceptions import InvalidCwlError, NotComponentCreatorError
 from app.domain.exception.component_exceptions import ComponentNotFoundError
-from app.domain.models.component import Component, ComponentSource
+from app.domain.models.component import Component
 from app.domain.models.parameter import Parameter
 from app.domain.repository.components_repository import ComponentsRepository
 from app.infrastructure.cwl.cwl_parser import extract_description, extract_parameters, generate_inputs_yaml, inject_description
@@ -55,33 +55,46 @@ class ComponentsService:
 
         return f"{base_name}.zip", buffer.getvalue()
 
-    async def create_manual(
+    async def create_manual(self, component: Component) -> Component:
+        component.parameters = self._parse_parameters(component.cwl_content, "Uploaded")
+        if component.description is None:
+            component.description = extract_description(component.cwl_content)
+
+        return await self._save_and_reload(component)
+
+    async def add_manual_version(
         self,
-        name: str,
-        domain: str,
+        component_id: uuid.UUID,
         cwl_content: str,
-        author_name: str | None,
-        repo_url: str | None,
         repo_commit_sha: str | None,
         description: str | None,
-        created_by_id: uuid.UUID,
+        user_id: uuid.UUID,
     ) -> Component:
-        parameters = self._parse_parameters(cwl_content, "Uploaded")
+        parent = await self.get_component(component_id)
+        if parent.created_by_id != user_id:
+            raise NotComponentCreatorError()
+
+        versions = await self.components_repository.find_versions_by_name(parent.name)
+        next_version = versions[-1].version + 1 if versions else 1
+        parameters = self._parse_parameters(cwl_content, f"v{next_version}")
 
         component = Component(
-            name=name,
-            author_name=author_name,
-            created_by_id=created_by_id,
-            repo_url=repo_url,
+            name=parent.name,
+            author_name=parent.author_name,
+            created_by_id=parent.created_by_id,
+            repo_url=parent.repo_url,
             repo_commit_sha=repo_commit_sha,
-            version=1,
+            version=next_version,
             cwl_content=cwl_content,
             description=description if description is not None else extract_description(cwl_content),
-            source=ComponentSource.MANUAL_UPLOAD,
-            domain=domain,
+            source=parent.source,
+            domain=parent.domain,
         )
         component.parameters = parameters
 
+        return await self._save_and_reload(component)
+
+    async def _save_and_reload(self, component: Component) -> Component:
         saved = await self.components_repository.create(component)
         # re-fetch: created_by is only guaranteed to be safely (selectin) loaded
         # via a fresh query, not by touching the just-inserted in-memory object

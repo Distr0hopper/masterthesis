@@ -87,3 +87,21 @@ class CreateComponentRequestDto(CamelModel):
             if not (parsed.scheme and parsed.netloc):
                 raise ValueError("repoUrl must be a valid URL")
         return value
+
+    # a blank Swagger/form field arrives as "", not omitted - without this, "" (not NULL)
+    # gets stored and collides with the partial unique index on (name, repo_commit_sha)
+    @field_validator("repo_commit_sha", mode="before")
+    @classmethod
+    def empty_repo_commit_sha_to_none(cls, value: str | None) -> str | None:
+        return None if value == "" else value
+
+
+class AddVersionRequestDto(CamelModel):
+    cwl_file: UploadFile
+    repo_commit_sha: str | None = None
+    description: str | None = None
+
+    @field_validator("repo_commit_sha", mode="before")
+    @classmethod
+    def empty_repo_commit_sha_to_none(cls, value: str | None) -> str | None:
+        return None if value == "" else value

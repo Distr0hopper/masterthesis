@@ -1,6 +1,7 @@
 import uuid
 
 from app.api.dto.component import (
+    AddVersionRequestDto,
     ComponentCreatorDto,
     ComponentDetailDto,
     ComponentListItemDto,
@@ -27,6 +28,22 @@ class ComponentTransformer:
             version=1,
             cwl_content=cwl_content,
             source=ComponentSource.MANUAL_UPLOAD,
+        )
+
+    @staticmethod
+    def from_add_version_dto(parent: Component, dto: AddVersionRequestDto, cwl_content: str) -> Component:
+        # version is intentionally left unset here (defaults to 1) - computing the real
+        # next-in-lineage number needs a repository query, which stays out of the transformer
+        return Component(
+            name=parent.name,
+            author_name=parent.author_name,
+            created_by_id=parent.created_by_id,
+            repo_url=parent.repo_url,
+            repo_commit_sha=dto.repo_commit_sha,
+            cwl_content=cwl_content,
+            description=dto.description,
+            source=parent.source,
+            domain=parent.domain,
         )
 
     @staticmethod

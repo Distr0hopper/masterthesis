@@ -32,6 +32,13 @@ class ComponentsRepository:
         result = await self.db.exec(query)
         return list(result.all())
 
+    async def find_by_repo_url(self, repo_url: str) -> Component | None:
+        # ordered by version desc so callers reliably get the latest version of the
+        # lineage, not an arbitrary one - a lineage can have many rows sharing this repo_url
+        query = select(Component).where(Component.repo_url == repo_url).order_by(Component.version.desc())
+        result = await self.db.exec(query)
+        return result.first()
+
     async def save(self, component: Component) -> Component:
         self.db.add(component)
         await self.db.commit()

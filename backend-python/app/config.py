@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     environment: str = "local"
     auto_migrate: bool = True
 
+    packaging_executable: str
+    github_token: str | None = None
+
     @property
     def database_url(self) -> str:
         return (

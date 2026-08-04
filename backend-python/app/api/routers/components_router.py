@@ -11,12 +11,12 @@ from app.api.dto.component import (
     ComponentDetailDto,
     ComponentListItemDto,
     CreateComponentRequestDto,
+    PackageComponentRequestDto,
     UpdateComponentRequestDto,
 )
-from app.api.exception.exceptions import ForbiddenException, NotFoundException
+from app.api.exception.exceptions import ForbiddenException
 from app.api.permission.component_permission_validator import ComponentPermissionValidator
 from app.api.transformer.component_transformer import ComponentTransformer
-from app.application.exception.exceptions import EntityNotFoundException
 from app.application.service.auth_service import AuthService
 from app.application.service.components_service import ComponentsService
 from app.domain.models.component_domain import VALID_DOMAINS
@@ -72,6 +72,42 @@ async def create(
 
 
 @router.post(
+    "/package",
+    response_model=ComponentDetailDto,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse, "description": "Invalid URL or packaging failed"},
+        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
+        status.HTTP_403_FORBIDDEN: {
+            "model": ErrorResponse,
+            "description": "Not the creator of this lineage (only applies when repoUrl already exists)",
+        },
+        status.HTTP_409_CONFLICT: {"model": ErrorResponse, "description": "This exact commit is already packaged"},
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErrorResponse, "description": "Request validation failed"},
+    },
+)
+async def package(
+    dto: PackageComponentRequestDto,
+    current_user: Annotated[User, Depends(AuthService.get_current_user)],
+    components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
+) -> ComponentDetailDto:
+    existing = await components_service.find_component_by_repo_url(dto.repo_url)
+    logger.info(f"Packaging component from {dto.repo_url}")
+
+    if existing is not None:
+        validator = ComponentPermissionValidator(current_user)
+        if not validator.can_update(existing):
+            logger.warning(f"User {current_user.id} not permitted to package a new version of repo {dto.repo_url}")
+            raise ForbiddenException("Insufficient permission to package a new version of this component")
+        component = await components_service.package_next_version(existing, dto.description)
+    else:
+        component = await components_service.create_from_url(dto.repo_url, dto.domain, dto.description, current_user.id)
+
+    logger.info(f"Packaging complete: '{component.name}' v{component.version} ({component.id})")
+    return ComponentTransformer.to_detail(component)
+
+
+@router.post(
     "/{component_id}/versions",
     response_model=ComponentDetailDto,
     status_code=status.HTTP_201_CREATED,
@@ -88,11 +124,7 @@ async def add_version(
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
 ) -> ComponentDetailDto:
-    try:
-        parent = await components_service.get_component(component_id)
-    except EntityNotFoundException as exc:
-        logger.warning(str(exc))
-        raise NotFoundException(str(exc)) from exc
+    parent = await components_service.get_component(component_id)
 
     validator = ComponentPermissionValidator(current_user)
     if not validator.can_update(parent):
@@ -112,6 +144,36 @@ async def add_version(
     return ComponentTransformer.to_detail(component)
 
 
+@router.post(
+    "/{component_id}/versions/package",
+    response_model=ComponentDetailDto,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse, "description": "Component has no repoUrl or packaging failed"},
+        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
+        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Not the creator of this component"},
+        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Component not found"},
+        status.HTTP_409_CONFLICT: {"model": ErrorResponse, "description": "This exact commit is already packaged"},
+    },
+)
+async def repackage(
+    component_id: uuid.UUID,
+    current_user: Annotated[User, Depends(AuthService.get_current_user)],
+    components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
+) -> ComponentDetailDto:
+    parent = await components_service.get_component(component_id)
+
+    validator = ComponentPermissionValidator(current_user)
+    if not validator.can_update(parent):
+        logger.warning(f"User {current_user.id} not permitted to repackage component {component_id}")
+        raise ForbiddenException("Insufficient permission to repackage this component")
+
+    logger.info(f"Repackaging component {component_id} from {parent.repo_url}")
+    component = await components_service.repackage_component(parent)
+    logger.info(f"Repackaging complete: '{component.name}' v{component.version} ({component.id})")
+    return ComponentTransformer.to_detail(component)
+
+
 @router.get(
     "/{component_id}",
     response_model=ComponentDetailDto,
@@ -121,11 +183,7 @@ async def get_component(
     component_id: uuid.UUID,
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
 ) -> ComponentDetailDto:
-    try:
-        component = await components_service.get_component(component_id)
-    except EntityNotFoundException as exc:
-        logger.warning(str(exc))
-        raise NotFoundException(str(exc)) from exc
+    component = await components_service.get_component(component_id)
     return ComponentTransformer.to_detail(component)
 
 
@@ -138,11 +196,7 @@ async def get_versions(
     component_id: uuid.UUID,
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
 ) -> list[ComponentListItemDto]:
-    try:
-        component = await components_service.get_component(component_id)
-    except EntityNotFoundException as exc:
-        logger.warning(str(exc))
-        raise NotFoundException(str(exc)) from exc
+    component = await components_service.get_component(component_id)
     versions = await components_service.get_versions(component)
     return [ComponentTransformer.to_list_item(v) for v in versions]
 
@@ -155,11 +209,7 @@ async def download(
     component_id: uuid.UUID,
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
 ) -> Response:
-    try:
-        component = await components_service.get_component(component_id)
-    except EntityNotFoundException as exc:
-        logger.warning(str(exc))
-        raise NotFoundException(str(exc)) from exc
+    component = await components_service.get_component(component_id)
     filename, content = await components_service.get_cwl_download(component)
     return Response(
         content=content,
@@ -184,11 +234,7 @@ async def update(
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
 ) -> ComponentDetailDto:
-    try:
-        existing = await components_service.get_component(component_id)
-    except EntityNotFoundException as exc:
-        logger.warning(str(exc))
-        raise NotFoundException(str(exc)) from exc
+    existing = await components_service.get_component(component_id)
 
     validator = ComponentPermissionValidator(current_user)
     if not validator.can_update(existing):
@@ -214,11 +260,7 @@ async def remove(
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
 ) -> None:
-    try:
-        component = await components_service.get_component(component_id)
-    except EntityNotFoundException as exc:
-        logger.warning(str(exc))
-        raise NotFoundException(str(exc)) from exc
+    component = await components_service.get_component(component_id)
 
     validator = ComponentPermissionValidator(current_user)
     if not validator.can_delete(component):
@@ -237,11 +279,7 @@ async def bundle(
     component_id: uuid.UUID,
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
 ) -> Response:
-    try:
-        component = await components_service.get_component(component_id)
-    except EntityNotFoundException as exc:
-        logger.warning(str(exc))
-        raise NotFoundException(str(exc)) from exc
+    component = await components_service.get_component(component_id)
     filename, content = await components_service.get_bundle(component)
     return Response(
         content=content,

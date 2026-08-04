@@ -1,16 +1,25 @@
 import io
+import subprocess
+import tempfile
 import uuid
 import zipfile
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends
 
-from app.application.exception.component_exceptions import InvalidCwlError
-from app.application.exception.exceptions import EntityNotFoundException
-from app.domain.models.component import Component
+from app.application.exception.component_exceptions import (
+    AlreadyPackagedError,
+    ComponentNotFoundError,
+    InvalidCwlError,
+    ManualUploadCannotBeRepackagedError,
+    PackagingFailedError,
+)
+from app.domain.models.component import Component, ComponentSource
 from app.domain.models.parameter import Parameter
 from app.domain.repository.components_repository import ComponentsRepository
 from app.infrastructure.cwl.cwl_parser import extract_description, extract_parameters, generate_inputs_yaml, inject_description
+from app.infrastructure.packaging.packaging_cli import read_packaging_output, run_packaging_cli
 
 
 class ComponentsService:
@@ -29,7 +38,7 @@ class ComponentsService:
     async def get_component(self, component_id: uuid.UUID) -> Component:
         component = await self.components_repository.find_by_id(component_id)
         if component is None:
-            raise EntityNotFoundException(f"Component {component_id} not found")
+            raise ComponentNotFoundError(component_id)
         return component
 
     async def get_versions(self, component: Component) -> list[Component]:
@@ -52,8 +61,8 @@ class ComponentsService:
 
         return f"{base_name}.zip", buffer.getvalue()
 
-    async def create_manual(self, component: Component) -> Component:
-        component.parameters = self._parse_parameters(component.cwl_content, "Uploaded")
+    async def create_manual(self, component: Component, context: str = "Uploaded") -> Component:
+        component.parameters = self._parse_parameters(component.cwl_content, context)
         if component.description is None:
             component.description = extract_description(component.cwl_content)
 
@@ -69,6 +78,88 @@ class ComponentsService:
             component.description = extract_description(component.cwl_content)
 
         return await self._save_and_reload(component)
+
+    async def find_component_by_repo_url(self, repo_url: str) -> Component | None:
+        return await self.components_repository.find_by_repo_url(repo_url)
+
+    async def create_from_url(
+        self,
+        repo_url: str,
+        domain: str,
+        description_override: str | None,
+        created_by_id: uuid.UUID,
+    ) -> Component:
+        repo_name, cwl_content, commit_sha, metadata_description, metadata_author = await self._run_packaging(repo_url)
+
+        component = Component(
+            name=repo_name,
+            author_name=metadata_author,
+            created_by_id=created_by_id,
+            repo_url=repo_url,
+            repo_commit_sha=commit_sha,
+            version=1,
+            cwl_content=cwl_content,
+            description=description_override if description_override is not None else metadata_description,
+            source=ComponentSource.AUTOMATED_PACKAGING,
+            domain=domain,
+        )
+        return await self.create_manual(component, context="CLI-generated")
+
+    async def package_next_version(self, existing: Component, description_override: str | None) -> Component:
+        repo_name, cwl_content, commit_sha, metadata_description, _ = await self._run_packaging(existing.repo_url)
+
+        if commit_sha and existing.repo_commit_sha == commit_sha:
+            raise AlreadyPackagedError(repo_name, commit_sha)
+
+        component = Component(
+            name=existing.name,
+            author_name=existing.author_name,
+            created_by_id=existing.created_by_id,
+            repo_url=existing.repo_url,
+            repo_commit_sha=commit_sha,
+            cwl_content=cwl_content,
+            description=description_override if description_override is not None else metadata_description,
+            source=existing.source,
+            domain=existing.domain,
+        )
+        return await self.add_manual_version(component)
+
+    async def repackage_component(self, parent: Component) -> Component:
+        if parent.repo_url is None:
+            raise ManualUploadCannotBeRepackagedError()
+
+        versions = await self.components_repository.find_versions_by_name(parent.name)
+        latest = versions[-1] if versions else None
+
+        repo_name, cwl_content, commit_sha, metadata_description, _ = await self._run_packaging(parent.repo_url)
+
+        if commit_sha and latest is not None and latest.repo_commit_sha == commit_sha:
+            raise AlreadyPackagedError(repo_name, commit_sha)
+
+        component = Component(
+            name=parent.name,
+            author_name=parent.author_name,
+            created_by_id=parent.created_by_id,
+            repo_url=parent.repo_url,
+            repo_commit_sha=commit_sha,
+            cwl_content=cwl_content,
+            description=metadata_description,
+            source=parent.source,
+            domain=parent.domain,
+        )
+        return await self.add_manual_version(component)
+
+    async def _run_packaging(self, repo_url: str) -> tuple[str, str, str | None, str | None, str | None]:
+        repo_name = repo_url.rstrip("/").split("/")[-1]
+        with tempfile.TemporaryDirectory(prefix="moveapps-") as tmp:
+            output_dir = Path(tmp)
+            try:
+                await run_packaging_cli(repo_url, output_dir)
+            except subprocess.CalledProcessError as err:
+                reason = err.stderr.decode().strip() if err.stderr else f"exit code {err.returncode}"
+                raise PackagingFailedError(repo_name, reason) from err
+            cwl_content, commit_sha, description, author = read_packaging_output(output_dir, repo_name)
+        return repo_name, cwl_content, commit_sha, description, author
 
     async def update_component(self, component: Component) -> Component:
         return await self._save_and_reload(component)

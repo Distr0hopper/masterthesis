@@ -1,15 +1,64 @@
+from typing import Any
+
 import yaml
 
-from app.domain.models.parameter import Parameter
+from app.domain.models.parameter import Parameter, ParameterDirection
 
 
 def inject_description(cwl_content: str, description: str | None) -> str:
-    doc = yaml.safe_load(cwl_content)
+    doc: Any = yaml.safe_load(cwl_content)
     if description:
         doc["doc"] = description
     else:
         doc.pop("doc", None)
     return yaml.dump(doc, default_flow_style=False, sort_keys=False, width=float("inf"))
+
+
+def extract_description(cwl_content: str) -> str | None:
+    try:
+        doc: Any = yaml.safe_load(cwl_content)
+    except yaml.YAMLError:
+        return None
+    return doc.get("doc") if isinstance(doc, dict) else None
+
+
+def extract_parameters(cwl_content: str) -> list[Parameter]:
+    try:
+        doc: Any = yaml.safe_load(cwl_content)
+    except yaml.YAMLError as err:
+        raise ValueError(f"YAML parse error: {err}") from err
+
+    inputs: dict[str, Any] = (doc or {}).get("inputs") or {}
+
+    parameters = []
+    for name, definition in inputs.items():
+        # Is input description a dict, or flat string?
+        # e.g. input_rds: type: File is valid and no dict!
+        is_mapping = isinstance(definition, dict)
+        cwl_type = _stringify_type(definition.get("type", "string") if is_mapping else "string").rstrip("?")
+        default_value = None
+        description = None
+        if is_mapping:
+            if definition.get("default") is not None:
+                default_value = str(definition["default"])
+            description = definition.get("doc")
+
+        parameters.append(
+            Parameter(
+                name=name,
+                cwl_type=cwl_type,
+                default_value=default_value,
+                description=description,
+                direction=ParameterDirection.INPUT,
+            )
+        )
+    return parameters
+
+
+def _stringify_type(value: Any) -> str:
+    if isinstance(value, list):
+        return ",".join(str(v) for v in value)
+    return str(value)
 
 
 def generate_inputs_yaml(parameters: list[Parameter], name: str, version: int) -> str:

@@ -1,4 +1,5 @@
 import uuid
+from typing import Annotated
 
 from fastapi import Depends
 from sqlmodel import select
@@ -13,7 +14,7 @@ class ComponentsRepository:
         self.db = db
 
     @staticmethod
-    def get_repository(db: AsyncSession = Depends(get_db)) -> "ComponentsRepository":
+    def get_repository(db: Annotated[AsyncSession, Depends(get_db)]) -> "ComponentsRepository":
         return ComponentsRepository(db)
 
     async def find_all(self, domain: str | None = None) -> list[Component]:
@@ -30,3 +31,9 @@ class ComponentsRepository:
         query = select(Component).where(Component.name == name).order_by(Component.version.asc())
         result = await self.db.exec(query)
         return list(result.all())
+
+    async def create(self, component: Component) -> Component:
+        self.db.add(component)
+        await self.db.commit()
+        await self.db.refresh(component)
+        return component

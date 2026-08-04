@@ -1,4 +1,5 @@
 import uuid
+from typing import Annotated
 
 import jwt as pyjwt
 from fastapi import Depends
@@ -20,13 +21,15 @@ class AuthService:
         self.users_repository = users_repository
 
     @staticmethod
-    def get_service(users_repository: UsersRepository = Depends(UsersRepository.get_repository)) -> "AuthService":
+    def get_service(
+        users_repository: Annotated[UsersRepository, Depends(UsersRepository.get_repository)],
+    ) -> "AuthService":
         return AuthService(users_repository)
 
     @staticmethod
     async def get_current_user(
-        credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-        users_repository: UsersRepository = Depends(UsersRepository.get_repository),
+        credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+        users_repository: Annotated[UsersRepository, Depends(UsersRepository.get_repository)],
     ) -> User:
         if credentials is None:
             raise InvalidTokenError()

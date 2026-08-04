@@ -1,13 +1,16 @@
 import io
 import uuid
 import zipfile
+from typing import Annotated
 
 from fastapi import Depends
 
+from app.application.exception.component_exceptions import InvalidCwlError
 from app.domain.exception.component_exceptions import ComponentNotFoundError
-from app.domain.models.component import Component
+from app.domain.models.component import Component, ComponentSource
+from app.domain.models.parameter import Parameter
 from app.domain.repository.components_repository import ComponentsRepository
-from app.infrastructure.cwl.cwl_parser import generate_inputs_yaml, inject_description
+from app.infrastructure.cwl.cwl_parser import extract_description, extract_parameters, generate_inputs_yaml, inject_description
 
 
 class ComponentsService:
@@ -16,7 +19,7 @@ class ComponentsService:
 
     @staticmethod
     def get_service(
-        components_repository: ComponentsRepository = Depends(ComponentsRepository.get_repository),
+        components_repository: Annotated[ComponentsRepository, Depends(ComponentsRepository.get_repository)],
     ) -> "ComponentsService":
         return ComponentsService(components_repository)
 
@@ -51,3 +54,43 @@ class ComponentsService:
             zf.writestr("inputs.yaml", inputs_yaml)
 
         return f"{base_name}.zip", buffer.getvalue()
+
+    async def create_manual(
+        self,
+        name: str,
+        domain: str,
+        cwl_content: str,
+        author_name: str | None,
+        repo_url: str | None,
+        repo_commit_sha: str | None,
+        description: str | None,
+        created_by_id: uuid.UUID,
+    ) -> Component:
+        parameters = self._parse_parameters(cwl_content, "Uploaded")
+
+        component = Component(
+            name=name,
+            author_name=author_name,
+            created_by_id=created_by_id,
+            repo_url=repo_url,
+            repo_commit_sha=repo_commit_sha,
+            version=1,
+            cwl_content=cwl_content,
+            description=description if description is not None else extract_description(cwl_content),
+            source=ComponentSource.MANUAL_UPLOAD,
+            domain=domain,
+        )
+        component.parameters = parameters
+
+        saved = await self.components_repository.create(component)
+        # re-fetch: created_by is only guaranteed to be safely (selectin) loaded
+        # via a fresh query, not by touching the just-inserted in-memory object
+        reloaded = await self.components_repository.find_by_id(saved.id)
+        assert reloaded is not None
+        return reloaded
+
+    def _parse_parameters(self, cwl_content: str, context: str) -> list[Parameter]:
+        try:
+            return extract_parameters(cwl_content)
+        except ValueError as err:
+            raise InvalidCwlError(context, str(err)) from err

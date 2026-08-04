@@ -1,4 +1,5 @@
 import uuid
+from typing import Annotated
 
 from fastapi import Depends
 from sqlmodel import select
@@ -13,7 +14,7 @@ class UsersRepository:
         self.db = db
 
     @staticmethod
-    def get_repository(db: AsyncSession = Depends(get_db)) -> "UsersRepository":
+    def get_repository(db: Annotated[AsyncSession, Depends(get_db)]) -> "UsersRepository":
         return UsersRepository(db)
 
     async def find_by_email(self, email: str) -> User | None:

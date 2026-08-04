@@ -1,8 +1,13 @@
 import uuid
 from datetime import datetime
+from urllib.parse import urlparse
+
+from fastapi import UploadFile
+from pydantic import Field, field_validator
 
 from app.api.dto.base import CamelModel
 from app.domain.models.component import ComponentSource
+from app.domain.models.component_domain import VALID_DOMAINS
 from app.domain.models.parameter import ParameterDirection
 
 
@@ -49,3 +54,36 @@ class ComponentDetailDto(CamelModel):
     source: ComponentSource
     parameters: list[ParameterDto]
     created_at: datetime
+
+
+class CreateComponentRequestDto(CamelModel):
+    name: str
+    # json_schema_extra adds the enum purely so Swagger UI renders a dropdown -
+    # the actual type stays plain str, validated for real by validate_domain below
+    domain: str = Field(json_schema_extra={"enum": VALID_DOMAINS})
+    cwl_file: UploadFile
+    author_name: str | None = None
+    repo_url: str | None = None
+    repo_commit_sha: str | None = None
+    description: str | None = None
+
+    @field_validator("domain")
+    @classmethod
+    def validate_domain(cls, value: str) -> str:
+        if value not in VALID_DOMAINS:
+            raise ValueError(f"domain must be one of {VALID_DOMAINS}")
+        return value
+
+    @field_validator("repo_url", mode="before")
+    @classmethod
+    def empty_repo_url_to_none(cls, value: str | None) -> str | None:
+        return None if value == "" else value
+
+    @field_validator("repo_url")
+    @classmethod
+    def validate_repo_url(cls, value: str | None) -> str | None:
+        if value is not None:
+            parsed = urlparse(value)
+            if not (parsed.scheme and parsed.netloc):
+                raise ValueError("repoUrl must be a valid URL")
+        return value

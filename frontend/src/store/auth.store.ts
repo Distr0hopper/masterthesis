@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { UserResponseDto } from '@/api/auth/types';
+import type { UserResponseDto } from '@/api/users/types';
 
 interface AuthState {
   token: string | null;

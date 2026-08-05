@@ -1,5 +1,6 @@
-import type { RequestOtpDto, UserResponseDto, VerifyOtpDto } from './types';
+import type { RequestOtpDto, VerifyOtpDto } from './types';
 import type { RequestOtpFormData, VerifyOtpFormData } from './schema';
+import type { UserResponseDto } from '@/api/users/types';
 
 export interface UserDisplayModel {
   id: string;

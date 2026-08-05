@@ -73,7 +73,9 @@ function CodeStep({ email, onChangeEmail }: { email: string; onChangeEmail: () =
   const onSubmit = (data: VerifyOtpFormData) => {
     const dto = authTransformer.formToVerifyOtpDto(email, data);
     mutate(dto, {
-      onSuccess: () => navigate('/'),
+      onSuccess: (user) => {
+        navigate(user.firstName && user.lastName ? '/' : '/profile');
+      },
       onError: (error) => {
         setError('root', { message: getErrorMessage(error) });
       },

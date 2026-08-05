@@ -1,5 +1,6 @@
 import { apiClient } from '../client';
-import type { AuthResponseDto, RequestOtpDto, UserResponseDto, VerifyOtpDto } from './types';
+import type { AuthResponseDto, RequestOtpDto, VerifyOtpDto } from './types';
+import type { UserResponseDto } from '@/api/users/types';
 
 const ENDPOINT = '/auth';
 

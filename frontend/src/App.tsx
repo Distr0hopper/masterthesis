@@ -24,7 +24,7 @@ export default function App() {
             <Route path="/browse" element={<ComponentsPage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/builder" element={<WorkflowBuilderPage />} />
-            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/profile" element={<ProtectedRoute> <ProfilePage /> </ProtectedRoute>} />
             <Route path="/components/:id" element={<ComponentDetailPage />} />
             <Route path="/upload" element={<ProtectedRoute> <UploadPage /> </ProtectedRoute>} />
             <Route path="/login" element={<LoginPage />} />

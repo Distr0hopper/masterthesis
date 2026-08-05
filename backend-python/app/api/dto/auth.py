@@ -1,18 +1,15 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import EmailStr, Field
 
 from app.api.dto.base import CamelModel
 
 
-class RegisterRequestDto(CamelModel):
+class RequestOtpDto(CamelModel):
     email: EmailStr
-    first_name: str
-    last_name: str
-    password: str = Field(min_length=8)
 
 
-class LoginRequestDto(CamelModel):
+class VerifyOtpDto(CamelModel):
     email: EmailStr
-    password: str
+    code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
 
 
 class AuthResponseDto(CamelModel):

@@ -1,32 +1,121 @@
-import {Card, CardContent} from "@/components/ui/card.tsx";
-import {authTransformer, type LoginFormData, loginFormSchema, useLogin} from "@/api/auth";
+import { useState } from 'react';
+import { Card, CardContent } from '@/components/ui/card.tsx';
+import {
+  authTransformer,
+  type RequestOtpFormData,
+  requestOtpFormSchema,
+  type VerifyOtpFormData,
+  verifyOtpFormSchema,
+  useRequestOtp,
+  useVerifyOtp,
+} from '@/api/auth';
 import { useForm } from 'react-hook-form';
-import {zodResolver} from "@hookform/resolvers/zod";
-import {Input} from "@/components/ui/input.tsx";
-import {Button} from "@/components/ui/button.tsx";
-import {Link, useNavigate} from "react-router-dom";
-import {Label} from "@/components/ui/label.tsx";
-import {getErrorMessage} from "@/lib/errors";
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Input } from '@/components/ui/input.tsx';
+import { Button } from '@/components/ui/button.tsx';
+import { useNavigate } from 'react-router-dom';
+import { Label } from '@/components/ui/label.tsx';
+import { getErrorMessage } from '@/lib/errors';
 
-export default function LoginPage() {
-  const navigate = useNavigate();
-  const { mutate, isPending } = useLogin();
-  const { register, handleSubmit, formState: { errors }, setError } = useForm<LoginFormData>({
-    resolver: zodResolver(loginFormSchema),
-    defaultValues: authTransformer.getInitialLoginFormValues(),
+function EmailStep({ onRequested }: { onRequested: (email: string) => void }) {
+  const { mutate, isPending } = useRequestOtp();
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    setError,
+  } = useForm<RequestOtpFormData>({
+    resolver: zodResolver(requestOtpFormSchema),
+    defaultValues: authTransformer.getInitialRequestOtpFormValues(),
   });
 
-  const onSubmit = (data: LoginFormData) => {
-    const loginDto = authTransformer.formToLoginDto(data);
-    mutate(loginDto, {
-      onSuccess: () => {
-        navigate('/')
-      },
+  const onSubmit = (data: RequestOtpFormData) => {
+    const dto = authTransformer.formToRequestOtpDto(data);
+    mutate(dto, {
+      onSuccess: () => onRequested(data.email),
       onError: (error) => {
-        setError('root', {message: getErrorMessage(error)});
-      }
+        setError('root', { message: getErrorMessage(error) });
+      },
     });
-  }
+  };
+
+  return (
+    <form className="flex flex-col gap-4" onSubmit={handleSubmit(onSubmit)} noValidate>
+      {errors.root && <p className="rounded-md bg-error px-3 py-2 text-sm text-error-foreground">{errors.root.message}</p>}
+
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="email">Email</Label>
+        <Input {...register('email')} type="email" id="email" placeholder="researcher@uni-wuerzburg.de" />
+        {errors.email && <p className="text-sm text-error-foreground">{errors.email.message}</p>}
+      </div>
+
+      <Button type="submit" className="w-full bg-jmu-blue-800 hover:bg-jmu-blue-800/90" disabled={isPending}>
+        {isPending ? 'Sending code...' : 'Send login code'}
+      </Button>
+    </form>
+  );
+}
+
+function CodeStep({ email, onChangeEmail }: { email: string; onChangeEmail: () => void }) {
+  const navigate = useNavigate();
+  const { mutate, isPending } = useVerifyOtp();
+  const { mutate: resend, isPending: isResending } = useRequestOtp();
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    setError,
+  } = useForm<VerifyOtpFormData>({
+    resolver: zodResolver(verifyOtpFormSchema),
+    defaultValues: authTransformer.getInitialVerifyOtpFormValues(),
+  });
+
+  const onSubmit = (data: VerifyOtpFormData) => {
+    const dto = authTransformer.formToVerifyOtpDto(email, data);
+    mutate(dto, {
+      onSuccess: () => navigate('/'),
+      onError: (error) => {
+        setError('root', { message: getErrorMessage(error) });
+      },
+    });
+  };
+
+  return (
+    <form className="flex flex-col gap-4" onSubmit={handleSubmit(onSubmit)} noValidate>
+      {errors.root && <p className="rounded-md bg-error px-3 py-2 text-sm text-error-foreground">{errors.root.message}</p>}
+
+      <p className="text-sm text-slate-500">
+        Code sent to <span className="font-medium text-slate-900">{email}</span>.{' '}
+        <Button type="button" variant="link" onClick={onChangeEmail} className="h-auto p-0 font-semibold text-jmu-blue-800">
+          Change email
+        </Button>
+      </p>
+
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="code">Login code</Label>
+        <Input {...register('code')} inputMode="numeric" id="code" placeholder="123456" maxLength={6} />
+        {errors.code && <p className="text-sm text-error-foreground">{errors.code.message}</p>}
+      </div>
+
+      <Button type="submit" className="w-full bg-jmu-blue-800 hover:bg-jmu-blue-800/90" disabled={isPending}>
+        {isPending ? 'Verifying...' : 'Verify and sign in'}
+      </Button>
+
+      <Button
+        type="button"
+        variant="link"
+        onClick={() => resend({ email })}
+        disabled={isResending}
+        className="h-auto w-full p-0 text-sm font-semibold text-jmu-blue-800"
+      >
+        {isResending ? 'Resending...' : 'Resend code'}
+      </Button>
+    </form>
+  );
+}
+
+export default function LoginPage() {
+  const [email, setEmail] = useState<string | null>(null);
 
   return (
     <div className="mx-auto flex min-h-[70vh] max-w-md flex-col items-center justify-center">
@@ -36,36 +125,11 @@ export default function LoginPage() {
 
       <Card className="mt-6 w-full shadow-lg">
         <CardContent className="pt-6">
-          <form className="flex flex-col gap-4" onSubmit={handleSubmit(onSubmit)} noValidate>
-            {errors.root && (
-              <p className="rounded-md bg-error px-3 py-2 text-sm text-error-foreground">{errors.root.message}</p>
-            )}
-
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="email">Email</Label>
-              <Input {...register('email')} type="email" id="email" placeholder="researcher@uni-wuerzburg.de" />
-              {errors.email && <p className="text-sm text-error-foreground">{errors.email.message}</p>}
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="password">Password</Label>
-              <Input {...register('password')} type="password" id="password" placeholder="••••••••" />
-              {errors.password && <p className="text-sm text-error-foreground">{errors.password.message}</p>}
-            </div>
-
-            <Button type="submit" className="w-full bg-jmu-blue-800 hover:bg-jmu-blue-800/90" disabled={isPending}>
-              {isPending ? 'Logging in...' : 'Login'}
-            </Button>
-          </form>
+          {email === null ? <EmailStep onRequested={setEmail} /> : <CodeStep email={email} onChangeEmail={() => setEmail(null)} />}
         </CardContent>
       </Card>
 
-      <p className="mt-6 text-sm text-slate-500">
-        No account?{' '}
-        <Link to="/register" className="font-semibold text-jmu-blue-800 hover:underline">
-          Register
-        </Link>
-      </p>
+      <p className="mt-6 text-sm text-slate-500">We'll email you a one-time code — no password needed.</p>
     </div>
   );
 }

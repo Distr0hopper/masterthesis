@@ -24,6 +24,19 @@ class Settings(BaseSettings):
     packaging_executable: str
     github_token: str | None = None
 
+    email_provider: str = "smtp"
+
+    smtp_host: str = "localhost"
+    smtp_port: int = 1025
+    smtp_from_email: str = "noreply@localhost"
+
+    resend_api_key: str | None = None
+    resend_from_email: str | None = None
+
+    otp_expires_in: int = 600
+    otp_max_attempts: int = 5
+    otp_request_cooldown: int = 60
+
     @property
     def database_url(self) -> str:
         return (

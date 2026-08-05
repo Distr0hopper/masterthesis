@@ -90,20 +90,12 @@ export default function Header() {
               </DropdownMenu>
             </>
           ) : (
-            <>
-              <Link
-                to="/login"
-                className="px-3 py-1.5 text-sm font-medium text-jmu-blue-100 transition-colors hover:text-white"
-              >
-                Login
-              </Link>
-              <Link
-                to="/register"
-                className="rounded-md bg-white px-3 py-1.5 text-sm font-medium text-jmu-blue-600 transition-colors hover:bg-jmu-blue-50"
-              >
-                Register
-              </Link>
-            </>
+            <Link
+              to="/login"
+              className="rounded-md bg-white px-3 py-1.5 text-sm font-medium text-jmu-blue-600 transition-colors hover:bg-jmu-blue-50"
+            >
+              Login
+            </Link>
           )}
         </div>
       </div>

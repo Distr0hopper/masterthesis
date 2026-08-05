@@ -1,23 +1,16 @@
 import { z } from 'zod';
 
-export const loginFormSchema = z.object({
+export const requestOtpFormSchema = z.object({
   email: z.email('Invalid email address'),
-  password: z.string().min(1, 'Password is required'),
 });
 
-export type LoginFormData = z.infer<typeof loginFormSchema>;
+export type RequestOtpFormData = z.infer<typeof requestOtpFormSchema>;
 
-export const registerFormSchema = z
-  .object({
-    email: z.email('Invalid email address'),
-    firstName: z.string().min(1, 'First name is required'),
-    lastName: z.string().min(1, 'Last name is required'),
-    password: z.string().min(8, 'Password must be at least 8 characters'),
-    confirmPassword: z.string().min(1, 'Please confirm your password'),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: 'Passwords do not match',
-    path: ['confirmPassword'],
-  });
+export const verifyOtpFormSchema = z.object({
+  code: z
+    .string()
+    .length(6, 'Enter the 6-digit code')
+    .regex(/^\d{6}$/, 'Code must be numeric'),
+});
 
-export type RegisterFormData = z.infer<typeof registerFormSchema>;
+export type VerifyOtpFormData = z.infer<typeof verifyOtpFormSchema>;

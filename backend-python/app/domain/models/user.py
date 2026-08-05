@@ -17,7 +17,6 @@ class User(SQLModel, table=True):
     first_name: str | None = None
     last_name: str | None = None
     affiliation: str | None = None
-    password_hash: str
     created_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     )

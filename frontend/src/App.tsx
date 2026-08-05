@@ -5,7 +5,6 @@ import ComponentsPage from '@/pages/ComponentsPage';
 import ComponentDetailPage from '@/pages/ComponentDetailPage';
 import UploadPage from '@/pages/UploadPage';
 import LoginPage from '@/pages/LoginPage';
-import RegisterPage from '@/pages/RegisterPage';
 import HomePage from "@/pages/HomePage.tsx";
 import AboutPage from "@/pages/AboutPage.tsx";
 import WorkflowBuilderPage from "@/pages/WorkflowBuilderPage.tsx";
@@ -29,7 +28,6 @@ export default function App() {
             <Route path="/components/:id" element={<ComponentDetailPage />} />
             <Route path="/upload" element={<ProtectedRoute> <UploadPage /> </ProtectedRoute>} />
             <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
           </Routes>
         </main>
       </Router>

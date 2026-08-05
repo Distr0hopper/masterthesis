@@ -10,8 +10,9 @@ app/
   application/    service/ (use-case orchestration), exception/ (use-case-level errors)
   api/            dto/, transformer/ (domain <-> dto), routers/, permission/ (authorization checks),
                   exception/ (HTTP handlers), util/ (endpoints.py aggregates all routers)
-  infrastructure/ db/ (session, migrations), security/ (JWT, password hashing), cwl/ (CWL parsing),
-                  packaging/ (moveapps-cwl-package subprocess wrapper)
+  infrastructure/ db/ (session, migrations), security/ (JWT, OTP-code hashing),
+                  email/ (EmailSender abstraction: SMTP for local dev, Resend for production),
+                  cwl/ (CWL parsing), packaging/ (moveapps-cwl-package subprocess wrapper)
   config.py, main.py
 ```
 
@@ -19,7 +20,7 @@ app/
 
 ```bash
 cp .env.example .env   # fill in JWT_SECRET (see comment in .env.example), PACKAGING_EXECUTABLE, GITHUB_TOKEN
-docker compose up -d
+docker compose up -d   # postgres + mailhog
 uv run alembic upgrade head
 uv run uvicorn app.main:app --reload --port 8000
 ```
@@ -27,3 +28,24 @@ uv run uvicorn app.main:app --reload --port 8000
 API: http://localhost:8000, interactive docs: http://localhost:8000/docs
 
 Packaging (`POST /components/package`, `POST /components/{id}/versions/package`) shells out to the [`automated-packaging`](../automated-packaging) CLI — build it first and point `PACKAGING_EXECUTABLE` in `.env` at its executable.
+
+## Authentication (OTP email login)
+
+No passwords are stored. Login works by emailing a 6-digit one-time code:
+
+- `POST /auth/otp/request {email}` — generates a code, emails it, 204 either way (doesn't
+  leak whether the email is already registered)
+- `POST /auth/otp/verify {email, code}` — verifies the code and returns a JWT. A brand-new
+  email is auto-provisioned (bare user, no name/affiliation) on first successful verify —
+  fill those in afterward via `PATCH /users/me`.
+
+Codes expire after `OTP_EXPIRES_IN` seconds (default 600), allow `OTP_MAX_ATTEMPTS` wrong
+guesses (default 5) before being locked out, and are rate-limited to one request per
+`OTP_REQUEST_COOLDOWN` seconds (default 60) per email — all configurable in `.env`.
+
+**Local dev**: `EMAIL_PROVIDER=smtp` (the `.env.example` default) sends mail via Mailhog,
+started by `docker compose up -d`. Read the codes at http://localhost:8025 — no real inbox
+needed.
+
+**Production**: set `EMAIL_PROVIDER=resend` plus `RESEND_API_KEY`/`RESEND_FROM_EMAIL` to send
+through [Resend](https://resend.com) instead.

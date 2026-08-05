@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { authService } from './service';
-import type { LoginDto, RegisterDto } from './types';
+import type { RequestOtpDto, VerifyOtpDto } from './types';
 import { useAuthStore } from '@/store/auth.store';
 
 export const authKeys = {
@@ -18,21 +18,21 @@ export const useMe = () => {
   });
 };
 
-export const useRegister = () => {
+export const useRequestOtp = () => {
   return useMutation({
-    mutationFn: (data: RegisterDto) => authService.register(data),
+    mutationFn: (data: RequestOtpDto) => authService.requestOtp(data),
   });
 };
 
-export const useLogin = () => {
+export const useVerifyOtp = () => {
   const queryClient = useQueryClient();
   const setToken = useAuthStore((state) => state.setToken);
   const setAuth = useAuthStore((state) => state.setAuth);
 
   return useMutation({
-    mutationFn: async (data: LoginDto) => {
-      const auth = await authService.login(data);
-      // token must be in the store before /auth/me so the request interceptor attaches it
+    mutationFn: async (data: VerifyOtpDto) => {
+      const auth = await authService.verifyOtp(data);
+      // token must be in the store before /users/me so the request interceptor attaches it
       setToken(auth.accessToken);
       const user = await authService.me();
       setAuth(auth.accessToken, user);

@@ -1,5 +1,5 @@
-import type { LoginDto, RegisterDto, UserResponseDto } from './types';
-import type { LoginFormData, RegisterFormData } from './schema';
+import type { RequestOtpDto, UserResponseDto, VerifyOtpDto } from './types';
+import type { RequestOtpFormData, VerifyOtpFormData } from './schema';
 
 export interface UserDisplayModel {
   id: string;
@@ -10,25 +10,20 @@ export interface UserDisplayModel {
 }
 
 export const authTransformer = {
-  getInitialLoginFormValues(): LoginFormData {
-    return { email: '', password: '' };
+  getInitialRequestOtpFormValues(): RequestOtpFormData {
+    return { email: '' };
   },
 
-  getInitialRegisterFormValues(): RegisterFormData {
-    return { email: '', firstName: '', lastName: '', password: '', confirmPassword: '' };
+  getInitialVerifyOtpFormValues(): VerifyOtpFormData {
+    return { code: '' };
   },
 
-  formToLoginDto(form: LoginFormData): LoginDto {
-    return { email: form.email, password: form.password };
+  formToRequestOtpDto(form: RequestOtpFormData): RequestOtpDto {
+    return { email: form.email };
   },
 
-  formToRegisterDto(form: RegisterFormData): RegisterDto {
-    return {
-      email: form.email,
-      firstName: form.firstName,
-      lastName: form.lastName,
-      password: form.password,
-    };
+  formToVerifyOtpDto(email: string, form: VerifyOtpFormData): VerifyOtpDto {
+    return { email, code: form.code };
   },
 
   dtoToDisplayModel(dto: UserResponseDto): UserDisplayModel {

@@ -1,13 +1,10 @@
-export interface RegisterDto {
+export interface RequestOtpDto {
   email: string;
-  firstName: string;
-  lastName: string;
-  password: string;
 }
 
-export interface LoginDto {
+export interface VerifyOtpDto {
   email: string;
-  password: string;
+  code: string;
 }
 
 export interface AuthResponseDto {

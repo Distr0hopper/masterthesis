@@ -1,15 +1,15 @@
 import { apiClient } from '../client';
-import type { AuthResponseDto, LoginDto, RegisterDto, UserResponseDto } from './types';
+import type { AuthResponseDto, RequestOtpDto, UserResponseDto, VerifyOtpDto } from './types';
 
 const ENDPOINT = '/auth';
 
 export const authService = {
-  register(data: RegisterDto): Promise<UserResponseDto> {
-    return apiClient.post(`${ENDPOINT}/register`, data);
+  requestOtp(data: RequestOtpDto): Promise<void> {
+    return apiClient.post(`${ENDPOINT}/otp/request`, data);
   },
 
-  login(data: LoginDto): Promise<AuthResponseDto> {
-    return apiClient.post(`${ENDPOINT}/login`, data);
+  verifyOtp(data: VerifyOtpDto): Promise<AuthResponseDto> {
+    return apiClient.post(`${ENDPOINT}/otp/verify`, data);
   },
 
   me(): Promise<UserResponseDto> {

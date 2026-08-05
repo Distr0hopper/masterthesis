@@ -10,6 +10,7 @@ import AboutPage from "@/pages/AboutPage.tsx";
 import WorkflowBuilderPage from "@/pages/WorkflowBuilderPage.tsx";
 import ProfilePage from "@/pages/ProfilePage.tsx";
 import ProtectedRoute from "@/pages/ProtectedRoutes.tsx";
+import { Toaster } from "@/components/ui/sonner.tsx";
 
 const queryClient = new QueryClient();
 
@@ -17,6 +18,7 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <Router>
+        <Toaster />
         <Header />
         <main className="container mx-auto mt-14 max-w-6xl px-4 py-8">
           <Routes>

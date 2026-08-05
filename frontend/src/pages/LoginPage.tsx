@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import {
   authTransformer,
@@ -16,6 +17,9 @@ import { Button } from '@/components/ui/button.tsx';
 import { useNavigate } from 'react-router-dom';
 import { Label } from '@/components/ui/label.tsx';
 import { getErrorMessage } from '@/lib/errors';
+
+// must match backend's OTP_REQUEST_COOLDOWN so the button re-enables exactly when a resend would succeed
+const RESEND_COOLDOWN_SECONDS = 60;
 
 function EmailStep({ onRequested }: { onRequested: (email: string) => void }) {
   const { mutate, isPending } = useRequestOtp();
@@ -60,6 +64,7 @@ function CodeStep({ email, onChangeEmail }: { email: string; onChangeEmail: () =
   const navigate = useNavigate();
   const { mutate, isPending } = useVerifyOtp();
   const { mutate: resend, isPending: isResending } = useRequestOtp();
+  const [cooldown, setCooldown] = useState(RESEND_COOLDOWN_SECONDS);
   const {
     register,
     handleSubmit,
@@ -69,6 +74,26 @@ function CodeStep({ email, onChangeEmail }: { email: string; onChangeEmail: () =
     resolver: zodResolver(verifyOtpFormSchema),
     defaultValues: authTransformer.getInitialVerifyOtpFormValues(),
   });
+
+  useEffect(() => {
+    const timer = setInterval(() => setCooldown((seconds) => Math.max(0, seconds - 1)), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const handleResend = () => {
+    resend(
+      { email },
+      {
+        onSuccess: () => {
+          toast.success('Code resent — check your inbox.');
+          setCooldown(RESEND_COOLDOWN_SECONDS);
+        },
+        onError: (error) => {
+          toast.error(getErrorMessage(error));
+        },
+      },
+    );
+  };
 
   const onSubmit = (data: VerifyOtpFormData) => {
     const dto = authTransformer.formToVerifyOtpDto(email, data);
@@ -106,11 +131,11 @@ function CodeStep({ email, onChangeEmail }: { email: string; onChangeEmail: () =
       <Button
         type="button"
         variant="link"
-        onClick={() => resend({ email })}
-        disabled={isResending}
+        onClick={handleResend}
+        disabled={isResending || cooldown > 0}
         className="h-auto w-full p-0 text-sm font-semibold text-jmu-blue-800"
       >
-        {isResending ? 'Resending...' : 'Resend code'}
+        {isResending ? 'Resending...' : cooldown > 0 ? `Resend code in ${cooldown}s` : 'Resend code'}
       </Button>
     </form>
   );

@@ -7,7 +7,6 @@ from app.api.dto.common import ErrorResponse
 from app.api.dto.user import UserResponseDto
 from app.api.transformer.user_transformer import UserTransformer
 from app.application.service.auth_service import AuthService
-from app.domain.models.user import User
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -44,12 +43,3 @@ async def login(
     user = await auth_service.validate_user(dto.email, dto.password)
     access_token, expires_in = auth_service.issue_token(user)
     return AuthResponseDto(access_token=access_token, expires_in=expires_in)
-
-
-@router.get(
-    "/me",
-    response_model=UserResponseDto,
-    responses={status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"}},
-)
-async def me(current_user: Annotated[User, Depends(AuthService.get_current_user)]) -> UserResponseDto:
-    return UserTransformer.to_user_response(current_user)

@@ -13,6 +13,6 @@ export const authService = {
   },
 
   me(): Promise<UserResponseDto> {
-    return apiClient.get(`${ENDPOINT}/me`);
+    return apiClient.get('/users/me');
   },
 };

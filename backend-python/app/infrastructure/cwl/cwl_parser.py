@@ -66,9 +66,9 @@ def _resolve_format(format_value: Any, namespaces: dict[str, str]) -> str | None
     # (no matching $namespaces entry) are stored as-is.
     if not isinstance(format_value, str):
         return None
-    prefix, sep, _ = format_value.partition(":")
+    prefix, sep, suffix = format_value.partition(":")
     if sep and prefix in namespaces:
-        return f"{namespaces[prefix]}{format_value}"
+        return f"{namespaces[prefix]}{suffix}"
     return format_value
 
 

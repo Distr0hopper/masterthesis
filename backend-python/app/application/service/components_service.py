@@ -10,6 +10,7 @@ from fastapi import Depends
 
 from app.application.exception.component_exceptions import (
     AlreadyPackagedError,
+    ComponentNameAlreadyExistsError,
     ComponentNotFoundError,
     InvalidCwlError,
     ManualUploadCannotBeRepackagedError,
@@ -62,6 +63,13 @@ class ComponentsService:
         return f"{base_name}.zip", buffer.getvalue()
 
     async def create_manual(self, component: Component, context: str = "Uploaded") -> Component:
+        # a brand new component always starts at version 1 - if a component with this name
+        # already exists (at any version), that insert would otherwise fail on the DB's
+        # unique (name, version) constraint instead of a handled error
+        existing_versions = await self.components_repository.find_versions_by_name(component.name)
+        if existing_versions:
+            raise ComponentNameAlreadyExistsError(component.name)
+
         component.parameters = self._parse_parameters(component.cwl_content, context, component.source)
         if component.description is None:
             component.description = extract_description(component.cwl_content)

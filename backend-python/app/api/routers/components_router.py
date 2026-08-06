@@ -45,6 +45,7 @@ async def list_components(
     responses={
         status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse, "description": "Invalid CWL content or file too large"},
         status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
+        status.HTTP_409_CONFLICT: {"model": ErrorResponse, "description": "A component with this name already exists"},
         status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErrorResponse, "description": "Request validation failed"},
     },
 )
@@ -82,7 +83,10 @@ async def create(
             "model": ErrorResponse,
             "description": "Not the creator of this lineage (only applies when repoUrl already exists)",
         },
-        status.HTTP_409_CONFLICT: {"model": ErrorResponse, "description": "This exact commit is already packaged"},
+        status.HTTP_409_CONFLICT: {
+            "model": ErrorResponse,
+            "description": "This exact commit is already packaged, or the derived name collides with an existing component",
+        },
         status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErrorResponse, "description": "Request validation failed"},
     },
 )

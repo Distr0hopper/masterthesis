@@ -24,3 +24,8 @@ class AlreadyPackagedError(Exception):
 class ManualUploadCannotBeRepackagedError(Exception):
     def __init__(self) -> None:
         super().__init__("Cannot repackage a manually uploaded component")
+
+
+class ComponentNameAlreadyExistsError(Exception):
+    def __init__(self, name: str) -> None:
+        super().__init__(f"A component named '{name}' already exists - add a new version instead of creating a new component")

@@ -6,6 +6,7 @@ from app.api.exception.exceptions import ForbiddenException
 from app.application.exception.auth_exceptions import InvalidTokenError
 from app.application.exception.component_exceptions import (
     AlreadyPackagedError,
+    ComponentNameAlreadyExistsError,
     ComponentNotFoundError,
     InvalidCwlError,
     ManualUploadCannotBeRepackagedError,
@@ -32,6 +33,10 @@ async def _manual_upload_cannot_be_repackaged_handler(request: Request, exc: Man
 
 
 async def _already_packaged_handler(request: Request, exc: AlreadyPackagedError) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=ErrorResponse(detail=str(exc)).model_dump())
+
+
+async def _component_name_already_exists_handler(request: Request, exc: ComponentNameAlreadyExistsError) -> JSONResponse:
     return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
@@ -77,5 +82,6 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(PackagingFailedError, _packaging_failed_handler)
     app.add_exception_handler(ManualUploadCannotBeRepackagedError, _manual_upload_cannot_be_repackaged_handler)
     app.add_exception_handler(AlreadyPackagedError, _already_packaged_handler)
+    app.add_exception_handler(ComponentNameAlreadyExistsError, _component_name_already_exists_handler)
     app.add_exception_handler(ComponentNotFoundError, _component_not_found_handler)
     app.add_exception_handler(ForbiddenException, _forbidden_handler)

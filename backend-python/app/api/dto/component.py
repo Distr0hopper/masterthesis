@@ -51,6 +51,8 @@ class ParameterDto(CamelModel):
     cwl_type: str
     default_value: str | None
     description: str | None
+    format: str | None
+    format_label: str | None
     direction: ParameterDirection
 
 

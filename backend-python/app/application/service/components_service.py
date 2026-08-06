@@ -62,7 +62,7 @@ class ComponentsService:
         return f"{base_name}.zip", buffer.getvalue()
 
     async def create_manual(self, component: Component, context: str = "Uploaded") -> Component:
-        component.parameters = self._parse_parameters(component.cwl_content, context)
+        component.parameters = self._parse_parameters(component.cwl_content, context, component.source)
         if component.description is None:
             component.description = extract_description(component.cwl_content)
 
@@ -73,7 +73,7 @@ class ComponentsService:
         next_version = versions[-1].version + 1 if versions else 1
 
         component.version = next_version
-        component.parameters = self._parse_parameters(component.cwl_content, f"v{next_version}")
+        component.parameters = self._parse_parameters(component.cwl_content, f"v{next_version}", component.source)
         if component.description is None:
             component.description = extract_description(component.cwl_content)
 
@@ -175,8 +175,15 @@ class ComponentsService:
         assert reloaded is not None
         return reloaded
 
-    def _parse_parameters(self, cwl_content: str, context: str) -> list[Parameter]:
+    def _parse_parameters(self, cwl_content: str, context: str, source: ComponentSource) -> list[Parameter]:
         try:
-            return extract_parameters(cwl_content)
+            parameters = extract_parameters(cwl_content)
         except ValueError as err:
             raise InvalidCwlError(context, str(err)) from err
+
+        # format is an ontology identifier requiring a resolution step we don't run yet -
+        # only trust/store it for manually uploaded components for now
+        if source != ComponentSource.MANUAL_UPLOAD:
+            for parameter in parameters:
+                parameter.format = None
+        return parameters

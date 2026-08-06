@@ -1,12 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { componentsService } from './service';
-import type {
-  AddVersionDto,
-  ComponentDomain,
-  CreateComponentDto,
-  PackageComponentDto,
-  UpdateComponentDto,
-} from './types';
+import type { AddVersionDto, ComponentDomain, CreateComponentDto, PackageComponentDto, UpdateComponentDto } from './types';
 
 export const componentKeys = {
   all: ['components'] as const,

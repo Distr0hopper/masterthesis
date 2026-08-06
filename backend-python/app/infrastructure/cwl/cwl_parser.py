@@ -29,6 +29,7 @@ def extract_parameters(cwl_content: str) -> list[Parameter]:
         raise ValueError(f"YAML parse error: {err}") from err
 
     inputs: dict[str, Any] = (doc or {}).get("inputs") or {}
+    namespaces: dict[str, str] = (doc or {}).get("$namespaces") or {}
 
     parameters = []
     for name, definition in inputs.items():
@@ -38,10 +39,12 @@ def extract_parameters(cwl_content: str) -> list[Parameter]:
         cwl_type = _stringify_type(definition.get("type", "string") if is_mapping else "string").rstrip("?")
         default_value = None
         description = None
+        format_ = None
         if is_mapping:
             if definition.get("default") is not None:
                 default_value = str(definition["default"])
             description = definition.get("doc")
+            format_ = _resolve_format(definition.get("format"), namespaces)
 
         parameters.append(
             Parameter(
@@ -49,10 +52,24 @@ def extract_parameters(cwl_content: str) -> list[Parameter]:
                 cwl_type=cwl_type,
                 default_value=default_value,
                 description=description,
+                format=format_,
                 direction=ParameterDirection.INPUT,
             )
         )
     return parameters
+
+
+def _resolve_format(format_value: Any, namespaces: dict[str, str]) -> str | None:
+    # format is a (possibly namespaced) ontology identifier, e.g. "edam:format_2572"
+    # with $namespaces: {edam: "http://edamontology.org/"} - expand to the full,
+    # unambiguous identifier by prefixing with the namespace URL. Unprefixed values
+    # (no matching $namespaces entry) are stored as-is.
+    if not isinstance(format_value, str):
+        return None
+    prefix, sep, _ = format_value.partition(":")
+    if sep and prefix in namespaces:
+        return f"{namespaces[prefix]}{format_value}"
+    return format_value
 
 
 def _stringify_type(value: Any) -> str:

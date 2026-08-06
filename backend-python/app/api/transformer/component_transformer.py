@@ -79,6 +79,8 @@ class ComponentTransformer:
             cwl_type=parameter.cwl_type,
             default_value=parameter.default_value,
             description=parameter.description,
+            format=parameter.format,
+            format_label=parameter.format_label,
             direction=parameter.direction,
         )
 

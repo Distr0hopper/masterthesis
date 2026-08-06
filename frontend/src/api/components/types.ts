@@ -18,6 +18,8 @@ export interface ParameterDto {
   cwlType: string;
   defaultValue: string | null;
   description: string | null;
+  format: string | null;
+  formatLabel: string | null;
   direction: ParameterDirection;
 }
 

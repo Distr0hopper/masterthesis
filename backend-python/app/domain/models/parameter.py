@@ -22,6 +22,11 @@ class Parameter(SQLModel, table=True):
     cwl_type: str
     default_value: str | None = None
     description: str | None = None
+    format: str | None = None
+    # resolved human-readable name for `format` (an ontology identifier, e.g. EDAM) -
+    # populated later by a separate resolution call against an external endpoint, not by
+    # anything in this codebase yet
+    format_label: str | None = None
     # explicit String column: SQLModel would otherwise infer a native Postgres
     # enum type from the Python Enum, which we deliberately avoided (see the
     # hand-written migration - VARCHAR only, no CREATE TYPE)

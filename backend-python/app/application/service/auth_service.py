@@ -34,6 +34,19 @@ class AuthService:
             raise InvalidTokenError()
         return await AuthService(users_repository).get_user_from_token(credentials.credentials)
 
+    @staticmethod
+    async def get_current_user_optional(
+        credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+        users_repository: Annotated[UsersRepository, Depends(UsersRepository.get_repository)],
+    ) -> User | None:
+        if credentials is None:
+            return None
+        try:
+            return await AuthService(users_repository).get_user_from_token(credentials.credentials)
+        except InvalidTokenError:
+            # anonymous browsing must never break because of a stale/garbage token
+            return None
+
     def issue_token(self, user: User) -> tuple[str, int]:
         return create_access_token(subject=str(user.id), email=user.email), settings.jwt_expires_in
 

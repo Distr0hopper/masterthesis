@@ -58,7 +58,7 @@ class ComponentTransformer:
         return component
 
     @staticmethod
-    def to_list_item(component: Component) -> ComponentListItemDto:
+    def to_list_item(component: Component, is_favorite: bool) -> ComponentListItemDto:
         return ComponentListItemDto(
             id=component.id,
             name=component.name,
@@ -69,6 +69,7 @@ class ComponentTransformer:
             domain=component.domain,
             source=component.source,
             created_at=component.created_at,
+            is_favorite=is_favorite,
         )
 
     @staticmethod
@@ -85,7 +86,7 @@ class ComponentTransformer:
         )
 
     @staticmethod
-    def to_detail(component: Component) -> ComponentDetailDto:
+    def to_detail(component: Component, is_favorite: bool) -> ComponentDetailDto:
         return ComponentDetailDto(
             id=component.id,
             name=component.name,
@@ -108,4 +109,5 @@ class ComponentTransformer:
             source=component.source,
             parameters=[ComponentTransformer.to_parameter(p) for p in component.parameters],
             created_at=component.created_at,
+            is_favorite=is_favorite,
         )

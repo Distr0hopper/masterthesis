@@ -12,6 +12,7 @@ from app.application.exception.component_exceptions import (
     ManualUploadCannotBeRepackagedError,
     PackagingFailedError,
 )
+from app.application.exception.favorites_exceptions import FavoritesRequireAuthError
 from app.application.exception.otp_exceptions import OtpRequestRateLimitedError
 from app.domain.exception.login_code_exceptions import (
     InvalidOtpCodeError,
@@ -72,6 +73,10 @@ async def _forbidden_handler(request: Request, exc: ForbiddenException) -> JSONR
     return JSONResponse(status_code=status.HTTP_403_FORBIDDEN, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
+async def _favorites_require_auth_handler(request: Request, exc: FavoritesRequireAuthError) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED, content=ErrorResponse(detail=str(exc)).model_dump())
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(InvalidTokenError, _invalid_token_handler)
     app.add_exception_handler(InvalidOtpCodeError, _invalid_otp_code_handler)
@@ -85,3 +90,4 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(ComponentNameAlreadyExistsError, _component_name_already_exists_handler)
     app.add_exception_handler(ComponentNotFoundError, _component_not_found_handler)
     app.add_exception_handler(ForbiddenException, _forbidden_handler)
+    app.add_exception_handler(FavoritesRequireAuthError, _favorites_require_auth_handler)

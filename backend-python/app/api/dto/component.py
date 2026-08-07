@@ -73,6 +73,7 @@ class ComponentListItemDto(CamelModel):
     domain: str
     source: ComponentSource
     created_at: datetime
+    is_favorite: bool
 
 
 class ComponentDetailDto(CamelModel):
@@ -90,6 +91,7 @@ class ComponentDetailDto(CamelModel):
     source: ComponentSource
     parameters: list[ParameterDto]
     created_at: datetime
+    is_favorite: bool
 
 
 class CreateComponentRequestDto(DomainValidatorMixin, RepoUrlValidatorMixin, EmptyRepoCommitShaToNoneMixin, CamelModel):

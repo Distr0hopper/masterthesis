@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import {
-  authTransformer,
-  type RequestOtpFormData,
-  requestOtpFormSchema,
-  type VerifyOtpFormData,
-  verifyOtpFormSchema,
-  useRequestOtp,
-  useVerifyOtp,
+    authTransformer,
+    type RequestOtpFormData,
+    requestOtpFormSchema,
+    type VerifyOtpFormData,
+    verifyOtpFormSchema,
+    useRequestOtp,
+    useVerifyOtp, type RequestOtpResponseDto, type RequestOtpDto,
 } from '@/api/auth';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -18,10 +18,7 @@ import { useNavigate } from 'react-router-dom';
 import { Label } from '@/components/ui/label.tsx';
 import { getErrorMessage } from '@/lib/errors';
 
-// must match backend's OTP_REQUEST_COOLDOWN so the button re-enables exactly when a resend would succeed
-const RESEND_COOLDOWN_SECONDS = 60;
-
-function EmailStep({ onRequested }: { onRequested: (email: string) => void }) {
+function EmailStep({ onRequested }: { onRequested: (email: string, cooldownSeconds: number) => void }) {
   const { mutate, isPending } = useRequestOtp();
   const {
     register,
@@ -34,9 +31,9 @@ function EmailStep({ onRequested }: { onRequested: (email: string) => void }) {
   });
 
   const onSubmit = (data: RequestOtpFormData) => {
-    const dto = authTransformer.formToRequestOtpDto(data);
+    const dto: RequestOtpDto = authTransformer.formToRequestOtpDto(data);
     mutate(dto, {
-      onSuccess: () => onRequested(data.email),
+      onSuccess: (response: RequestOtpResponseDto) => onRequested(data.email, response.cooldownSeconds),
       onError: (error) => {
         setError('root', { message: getErrorMessage(error) });
       },
@@ -60,11 +57,19 @@ function EmailStep({ onRequested }: { onRequested: (email: string) => void }) {
   );
 }
 
-function CodeStep({ email, onChangeEmail }: { email: string; onChangeEmail: () => void }) {
+function CodeStep({
+  email,
+  initialCooldown,
+  onChangeEmail,
+}: {
+  email: string;
+  initialCooldown: number;
+  onChangeEmail: () => void;
+}) {
   const navigate = useNavigate();
   const { mutate, isPending } = useVerifyOtp();
   const { mutate: resend, isPending: isResending } = useRequestOtp();
-  const [cooldown, setCooldown] = useState(RESEND_COOLDOWN_SECONDS);
+  const [cooldown, setCooldown] = useState(initialCooldown);
   const {
     register,
     handleSubmit,
@@ -84,9 +89,9 @@ function CodeStep({ email, onChangeEmail }: { email: string; onChangeEmail: () =
     resend(
       { email },
       {
-        onSuccess: () => {
+        onSuccess: (response) => {
           toast.success('Code resent — check your inbox.');
-          setCooldown(RESEND_COOLDOWN_SECONDS);
+          setCooldown(response.cooldownSeconds);
         },
         onError: (error) => {
           toast.error(getErrorMessage(error));
@@ -140,9 +145,13 @@ function CodeStep({ email, onChangeEmail }: { email: string; onChangeEmail: () =
     </form>
   );
 }
-
+/*
+    Login Page is holding state of the current step of the login process (email = null | set).
+    It starts with the email step (email = null), where the user can request a login code.
+    Once the code is requested (email = set), it moves to the code verification step, where the user can enter the received code to log in.
+ */
 export default function LoginPage() {
-  const [email, setEmail] = useState<string | null>(null);
+  const [requested, setRequested] = useState<{ email: string; cooldownSeconds: number } | null>(null);
 
   return (
     <div className="mx-auto flex min-h-[70vh] max-w-md flex-col items-center justify-center">
@@ -152,7 +161,15 @@ export default function LoginPage() {
 
       <Card className="mt-6 w-full shadow-lg">
         <CardContent className="pt-6">
-          {email === null ? <EmailStep onRequested={setEmail} /> : <CodeStep email={email} onChangeEmail={() => setEmail(null)} />}
+          {requested === null ? (
+            <EmailStep onRequested={(email: string, cooldownSeconds: number) => { setRequested({email: email, cooldownSeconds: cooldownSeconds})}} />
+          ) : (
+            <CodeStep
+              email={requested.email}
+              initialCooldown={requested.cooldownSeconds}
+              onChangeEmail={() => setRequested(null)}
+            />
+          )}
         </CardContent>
       </Card>
 

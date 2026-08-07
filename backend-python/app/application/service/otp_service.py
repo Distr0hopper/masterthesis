@@ -44,7 +44,7 @@ class OtpService:
     ) -> "OtpService":
         return OtpService(login_codes_repository, users_repository, email_sender, auth_service)
 
-    async def request_code(self, email: str) -> None:
+    async def request_code(self, email: str) -> int:
         now = datetime.now(timezone.utc)
         latest = await self.login_codes_repository.find_latest_by_email(email)
         if latest is not None and (now - latest.created_at) < timedelta(seconds=settings.otp_request_cooldown):
@@ -59,6 +59,7 @@ class OtpService:
         )
         await self.login_codes_repository.create(login_code)
         await self.email_sender.send_otp_email(email, code)
+        return settings.otp_request_cooldown
 
     async def verify_code(self, email: str, code: str) -> tuple[str, int]:
         login_code = await self.login_codes_repository.find_latest_by_email(email)

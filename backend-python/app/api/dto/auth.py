@@ -15,3 +15,9 @@ class VerifyOtpDto(CamelModel):
 class AuthResponseDto(CamelModel):
     access_token: str
     expires_in: int
+
+
+class RequestOtpResponseDto(CamelModel):
+    # mirrors the backend's actual cooldown so the frontend never has to hardcode
+    # a value that could drift from Settings.otp_request_cooldown
+    cooldown_seconds: int

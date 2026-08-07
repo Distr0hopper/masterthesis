@@ -1,11 +1,11 @@
 import { apiClient } from '../client';
-import type { AuthResponseDto, RequestOtpDto, VerifyOtpDto } from './types';
+import type { AuthResponseDto, RequestOtpDto, RequestOtpResponseDto, VerifyOtpDto } from './types';
 import type { UserResponseDto } from '@/api/users/types';
 
 const ENDPOINT = '/auth';
 
 export const authService = {
-  requestOtp(data: RequestOtpDto): Promise<void> {
+  requestOtp(data: RequestOtpDto): Promise<RequestOtpResponseDto> {
     return apiClient.post(`${ENDPOINT}/otp/request`, data);
   },
 

@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
 
-from app.api.dto.auth import AuthResponseDto, RequestOtpDto, VerifyOtpDto
+from app.api.dto.auth import AuthResponseDto, RequestOtpDto, RequestOtpResponseDto, VerifyOtpDto
 from app.api.dto.common import ErrorResponse
 from app.application.service.otp_service import OtpService
 
@@ -11,7 +11,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post(
     "/otp/request",
-    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=RequestOtpResponseDto,
     responses={
         status.HTTP_429_TOO_MANY_REQUESTS: {"model": ErrorResponse, "description": "Too many requests"},
         status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErrorResponse, "description": "Request validation failed"},
@@ -20,8 +20,9 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 async def request_otp(
     dto: RequestOtpDto,
     otp_service: Annotated[OtpService, Depends(OtpService.get_service)],
-) -> None:
-    await otp_service.request_code(dto.email)
+) -> RequestOtpResponseDto:
+    cooldown_seconds = await otp_service.request_code(dto.email)
+    return RequestOtpResponseDto(cooldown_seconds=cooldown_seconds)
 
 
 @router.post(

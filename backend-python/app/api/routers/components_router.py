@@ -299,6 +299,7 @@ async def remove(
     component_id: uuid.UUID,
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
+    favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
 ) -> None:
     component = await components_service.get_component(component_id)
 
@@ -307,8 +308,14 @@ async def remove(
         logger.warning(f"User {current_user.id} not permitted to delete component {component_id}")
         raise ForbiddenException("Insufficient permission to delete this component")
 
+    versions = await components_service.get_versions(component)
     await components_service.remove(component)
     logger.info(f"Deleted component {component_id}")
+
+    if len(versions) == 1:
+        # last version of this lineage is gone - sweep any leftover favorites so they
+        # don't become permanently orphaned (see FavoritesRepository.delete_by_component_name)
+        await favorites_service.remove_all_favorites(component.name)
 
 
 @router.post(

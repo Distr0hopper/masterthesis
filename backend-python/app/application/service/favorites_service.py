@@ -31,3 +31,6 @@ class FavoritesService:
 
     async def get_favorited_component_names(self, user_id: uuid.UUID) -> set[str]:
         return await self.favorites_repository.find_favorited_component_names(user_id)
+
+    async def remove_all_favorites(self, component_name: str) -> None:
+        await self.favorites_repository.delete_by_component_name(component_name)

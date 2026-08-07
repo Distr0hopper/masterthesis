@@ -89,7 +89,7 @@ function CodeStep({
     resend(
       { email },
       {
-        onSuccess: (response) => {
+        onSuccess: (response: RequestOtpResponseDto) => {
           toast.success('Code resent — check your inbox.');
           setCooldown(response.cooldownSeconds);
         },

@@ -1,17 +1,28 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Input } from '@/components/ui/input.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { Label } from '@/components/ui/label.tsx';
 import { getErrorMessage } from '@/lib/errors';
 import { useAuthStore } from '@/store/auth.store';
-import { type UpdateProfileFormData, updateProfileFormSchema, useUpdateProfile, usersTransformer } from '@/api/users';
+import {
+  type UpdateProfileFormData,
+  updateProfileFormSchema,
+  useUpdateProfile,
+  usersTransformer,
+  type UserResponseDto
+} from '@/api/users';
 
 export default function ProfilePage() {
-  const user = useAuthStore((state) => state.user);
+  const user: UserResponseDto | null = useAuthStore((state) => state.user);
+  const navigate = useNavigate();
   const [saved, setSaved] = useState(false);
+  // captured once, at mount - whether this visit is the one completing the profile for
+  // the first time (only then should saving redirect home instead of staying to edit)
+  const [wasIncomplete] = useState(() => !(user?.firstName && user?.lastName));
   const { mutate, isPending } = useUpdateProfile();
   const {
     register,
@@ -27,7 +38,13 @@ export default function ProfilePage() {
     setSaved(false);
     const dto = usersTransformer.formToUpdateUserDto(data);
     mutate(dto, {
-      onSuccess: () => setSaved(true),
+      onSuccess: () => {
+        if (wasIncomplete) {
+          navigate('/');
+        } else {
+          setSaved(true);
+        }
+      },
       onError: (error) => {
         setError('root', { message: getErrorMessage(error) });
       },

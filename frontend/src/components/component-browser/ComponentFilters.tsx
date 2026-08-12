@@ -11,6 +11,9 @@ interface ComponentFiltersProps {
   showHideMineToggle?: boolean;
   hideMine?: boolean;
   onHideMineChange?: (value: boolean) => void;
+  showFavoritesToggle?: boolean;
+  favoritesOnly?: boolean;
+  onFavoritesOnlyChange?: (value: boolean) => void;
 }
 
 export function ComponentFilters({
@@ -22,6 +25,9 @@ export function ComponentFilters({
   showHideMineToggle,
   hideMine,
   onHideMineChange,
+  showFavoritesToggle,
+  favoritesOnly,
+  onFavoritesOnlyChange,
 }: ComponentFiltersProps) {
   return (
     <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-end">
@@ -51,6 +57,19 @@ export function ComponentFilters({
           ))}
         </select>
       </div>
+
+      {showFavoritesToggle && (
+        <label htmlFor="favoritesOnly" className="flex items-center gap-2 pb-2.5 text-sm text-slate-700">
+          <input
+            id="favoritesOnly"
+            type="checkbox"
+            checked={favoritesOnly}
+            onChange={(e) => onFavoritesOnlyChange?.(e.target.checked)}
+            className="h-4 w-4 rounded border-input accent-jmu-blue-800"
+          />
+          Favorites only
+        </label>
+      )}
 
       {showHideMineToggle && (
         <label htmlFor="hideMine" className="flex items-center gap-2 pb-2.5 text-sm text-slate-700">

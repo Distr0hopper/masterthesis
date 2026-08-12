@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
+import { FavoriteButton } from '@/components/FavoriteButton';
 import { getDomainBadgeStyle, useDomains, type ComponentDisplayModel } from '@/api/components';
+import { useAuthStore } from '@/store/auth.store';
 
 interface ComponentCardProps {
   component: ComponentDisplayModel;
@@ -13,13 +15,18 @@ interface ComponentCardProps {
 export function ComponentCard({ component, actions }: ComponentCardProps) {
   const { data: domains } = useDomains();
   const domainBadgeStyle = domains ? getDomainBadgeStyle(component.domain, domains) : undefined;
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated());
 
   return (
     <Card>
       <CardContent className="flex flex-col gap-3 pt-6">
-        <Badge variant="outline" className="w-fit" style={domainBadgeStyle}>
-          {component.domainDisplay}
-        </Badge>
+        <div className="flex items-center justify-between">
+          <Badge variant="outline" className="w-fit" style={domainBadgeStyle}>
+            {component.domainDisplay}
+          </Badge>
+
+          {isAuthenticated && <FavoriteButton componentId={component.id} isFavorite={component.isFavorite} />}
+        </div>
 
         <h3 className="font-mono text-lg font-bold text-slate-900">{component.name}</h3>
 

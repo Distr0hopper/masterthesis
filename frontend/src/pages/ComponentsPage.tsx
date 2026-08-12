@@ -8,10 +8,15 @@ export default function ComponentsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDomain, setSelectedDomain] = useState('');
   const [hideMine, setHideMine] = useState(false);
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated());
 
   const { data: domains } = useDomains();
-  const { data: components, isLoading } = useComponents(selectedDomain || undefined, isAuthenticated && hideMine);
+  const { data: components, isLoading } = useComponents(
+    selectedDomain || undefined,
+    isAuthenticated && hideMine,
+    isAuthenticated && favoritesOnly,
+  );
 
   const models = componentTransformer.toListDisplayModels(components ?? []);
   const term = searchTerm.trim().toLowerCase();
@@ -30,6 +35,9 @@ export default function ComponentsPage() {
         showHideMineToggle={isAuthenticated}
         hideMine={hideMine}
         onHideMineChange={setHideMine}
+        showFavoritesToggle={isAuthenticated}
+        favoritesOnly={favoritesOnly}
+        onFavoritesOnlyChange={setFavoritesOnly}
       />
 
       {isLoading ? (

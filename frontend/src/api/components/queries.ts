@@ -4,17 +4,18 @@ import type { AddVersionDto, ComponentDomain, CreateComponentDto, PackageCompone
 
 export const componentKeys = {
   all: ['components'] as const,
-  lists: (domain?: ComponentDomain, excludeMine?: boolean) => [...componentKeys.all, 'list', domain, excludeMine] as const,
+  lists: (domain?: ComponentDomain, excludeMine?: boolean, favoritesOnly?: boolean) =>
+    [...componentKeys.all, 'list', domain, excludeMine, favoritesOnly] as const,
   mine: () => [...componentKeys.all, 'mine'] as const,
   detail: (id: string) => [...componentKeys.all, 'detail', id] as const,
   versions: (id: string) => [...componentKeys.all, 'versions', id] as const,
   domains: () => ['domains'] as const,
 };
 
-export const useComponents = (domain?: ComponentDomain, excludeMine?: boolean) => {
+export const useComponents = (domain?: ComponentDomain, excludeMine?: boolean, favoritesOnly?: boolean) => {
   return useQuery({
-    queryKey: componentKeys.lists(domain, excludeMine),
-    queryFn: () => componentsService.getAll(domain, excludeMine),
+    queryKey: componentKeys.lists(domain, excludeMine, favoritesOnly),
+    queryFn: () => componentsService.getAll(domain, excludeMine, favoritesOnly),
   });
 };
 
@@ -115,6 +116,28 @@ export const useDeleteComponent = () => {
 
   return useMutation({
     mutationFn: (id: string) => componentsService.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: componentKeys.all });
+    },
+  });
+};
+
+export const useFavoriteComponent = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => componentsService.addFavorite(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: componentKeys.all });
+    },
+  });
+};
+
+export const useUnfavoriteComponent = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => componentsService.removeFavorite(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: componentKeys.all });
     },

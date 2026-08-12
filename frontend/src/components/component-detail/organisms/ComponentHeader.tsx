@@ -4,6 +4,8 @@ import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { componentsService, getDomainBadgeStyle, useDomains, type ComponentDetailDisplayModel } from '@/api/components';
+import { FavoriteButton } from '@/components/FavoriteButton';
+import { useAuthStore } from '@/store/auth.store';
 
 interface ComponentHeaderProps {
   model: ComponentDetailDisplayModel;
@@ -12,6 +14,7 @@ interface ComponentHeaderProps {
 export function ComponentHeader({ model }: ComponentHeaderProps) {
   const { data: domains } = useDomains();
   const domainBadgeStyle = domains ? getDomainBadgeStyle(model.domain, domains) : undefined;
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated());
 
   return (
     <>
@@ -22,9 +25,13 @@ export function ComponentHeader({ model }: ComponentHeaderProps) {
       <Card className="mt-4">
         <CardContent className="flex flex-col gap-3 pt-6">
           <div className="flex items-center justify-between">
-            <Badge variant="outline" className="w-fit" style={domainBadgeStyle}>
-              {model.domainDisplay}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="w-fit" style={domainBadgeStyle}>
+                {model.domainDisplay}
+              </Badge>
+
+              {isAuthenticated && <FavoriteButton componentId={model.id} isFavorite={model.isFavorite} />}
+            </div>
 
             <Button asChild variant="outline" size="sm">
               <a href={componentsService.getBundleUrl(model.id)}>

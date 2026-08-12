@@ -13,8 +13,10 @@ import type {
 const ENDPOINT = '/components';
 
 export const componentsService = {
-  getAll(domain?: ComponentDomain, excludeMine?: boolean): Promise<ComponentListItemDto[]> {
-    return apiClient.get(ENDPOINT, { params: { domain, excludeMine: excludeMine || undefined } });
+  getAll(domain?: ComponentDomain, excludeMine?: boolean, favoritesOnly?: boolean): Promise<ComponentListItemDto[]> {
+    return apiClient.get(ENDPOINT, {
+      params: { domain, excludeMine: excludeMine || undefined, favoritesOnly: favoritesOnly || undefined },
+    });
   },
 
   getMine(): Promise<ComponentListItemDto[]> {
@@ -75,5 +77,13 @@ export const componentsService = {
 
   getDomains(): Promise<DomainDto[]> {
     return apiClient.get('/domains');
+  },
+
+  addFavorite(id: string): Promise<void> {
+    return apiClient.post(`${ENDPOINT}/${id}/favorite`);
+  },
+
+  removeFavorite(id: string): Promise<void> {
+    return apiClient.delete(`${ENDPOINT}/${id}/favorite`);
   },
 };

@@ -41,13 +41,6 @@ export function ComponentOverview({ model }: ComponentOverviewProps) {
         ))}
       </div>
 
-      {model.description && (
-        <div>
-          <h3 className="font-semibold text-slate-900">Description</h3>
-          <p className="mt-1 text-sm text-slate-600">{model.description}</p>
-        </div>
-      )}
-
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <ParameterList title="INPUTS" parameters={model.inputs} />
         <ParameterList title="OUTPUTS" parameters={model.outputs} />

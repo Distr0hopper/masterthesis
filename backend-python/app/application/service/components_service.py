@@ -43,6 +43,9 @@ class ComponentsService:
     async def list_components(self, domain: str | None = None) -> list[Component]:
         return await self.components_repository.find_all(domain)
 
+    async def list_my_components(self, created_by_id: uuid.UUID) -> list[Component]:
+        return await self.components_repository.find_by_created_by(created_by_id)
+
     async def get_component(self, component_id: uuid.UUID) -> Component:
         component = await self.components_repository.find_by_id(component_id)
         if component is None:

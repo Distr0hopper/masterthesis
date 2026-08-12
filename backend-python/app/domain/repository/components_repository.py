@@ -26,6 +26,17 @@ class ComponentsRepository:
         result = await self.db.exec(query)
         return list(result.all())
 
+    async def find_by_created_by(self, created_by_id: uuid.UUID) -> list[Component]:
+        # same latest-version-per-lineage shape as find_all, scoped to one user's components
+        query = (
+            select(Component)
+            .distinct(Component.name)
+            .where(Component.created_by_id == created_by_id)
+            .order_by(Component.name, Component.version.desc())
+        )
+        result = await self.db.exec(query)
+        return list(result.all())
+
     async def find_by_id(self, component_id: uuid.UUID) -> Component | None:
         return await self.db.get(Component, component_id)
 

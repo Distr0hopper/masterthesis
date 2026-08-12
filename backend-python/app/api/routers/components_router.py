@@ -55,6 +55,17 @@ async def list_components(
     return [ComponentTransformer.to_list_item(c, c.name in favorited_names) for c in components]
 
 
+@router.get("/mine", response_model=list[ComponentListItemDto])
+async def list_my_components(
+    components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
+    favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
+    current_user: Annotated[User, Depends(AuthService.get_current_user)],
+) -> list[ComponentListItemDto]:
+    components = await components_service.list_my_components(current_user.id)
+    favorited_names = await _favorited_names(favorites_service, current_user)
+    return [ComponentTransformer.to_list_item(c, c.name in favorited_names) for c in components]
+
+
 @router.post(
     "",
     response_model=ComponentDetailDto,

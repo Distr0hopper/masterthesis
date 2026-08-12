@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
-import type { ComponentDisplayModel } from '@/api/components';
+import { getDomainColor, useDomains, type ComponentDisplayModel } from '@/api/components';
 
 interface ComponentCardProps {
   component: ComponentDisplayModel;
@@ -11,10 +11,17 @@ interface ComponentCardProps {
 }
 
 export function ComponentCard({ component, actions }: ComponentCardProps) {
+  const { data: domains } = useDomains();
+  const domainColor = domains ? getDomainColor(component.domain, domains) : undefined;
+
   return (
     <Card>
       <CardContent className="flex flex-col gap-3 pt-6">
-        <Badge variant="outline" className="w-fit">
+        <Badge
+          variant="outline"
+          className="w-fit"
+          style={domainColor ? { borderColor: domainColor, color: domainColor } : undefined}
+        >
           {component.domainDisplay}
         </Badge>
 

@@ -3,6 +3,7 @@ import type {
   ComponentDetailDto,
   ComponentListItemDto,
   CreateComponentDto,
+  DomainDto,
   PackageComponentDto,
   ParameterDto,
   UpdateComponentDto,
@@ -78,6 +79,10 @@ export function getDomainLabel(domain: string): string {
     .split('_')
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
+}
+
+export function getDomainColor(domainId: string, domains: DomainDto[]): string | undefined {
+  return domains.find((d) => d.id === domainId)?.color;
 }
 
 export const componentTransformer = {

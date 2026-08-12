@@ -1,5 +1,10 @@
 export type ComponentDomain = string;
 
+export interface DomainDto {
+  id: string;
+  color: string;
+}
+
 export const ComponentSource = {
   AUTOMATED_PACKAGING: 'automated_packaging',
   MANUAL_UPLOAD: 'manual_upload',

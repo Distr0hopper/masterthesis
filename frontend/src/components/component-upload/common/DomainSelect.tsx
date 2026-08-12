@@ -23,8 +23,8 @@ export function DomainSelect({ value, onChange, error }: DomainSelectProps) {
           Select domain...
         </option>
         {domains?.map((domain) => (
-          <option key={domain} value={domain}>
-            {getDomainLabel(domain)}
+          <option key={domain.id} value={domain.id}>
+            {getDomainLabel(domain.id)}
           </option>
         ))}
       </select>

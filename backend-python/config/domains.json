@@ -1,1 +1,4 @@
-["animal_behavior", "earth_observation"]
+[
+  { "id": "animal_behavior", "color": "#059669" },
+  { "id": "earth_observation", "color": "#0891B2" }
+]

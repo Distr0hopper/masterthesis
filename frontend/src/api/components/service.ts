@@ -5,6 +5,7 @@ import type {
   ComponentDomain,
   ComponentListItemDto,
   CreateComponentDto,
+  DomainDto,
   PackageComponentDto,
   UpdateComponentDto,
 } from './types';
@@ -72,7 +73,7 @@ export const componentsService = {
     return apiClient.delete(`${ENDPOINT}/${id}`);
   },
 
-  getDomains(): Promise<string[]> {
+  getDomains(): Promise<DomainDto[]> {
     return apiClient.get('/domains');
   },
 };

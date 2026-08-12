@@ -1,11 +1,11 @@
 import { Input } from '@/components/ui/input.tsx';
 import { Label } from '@/components/ui/label.tsx';
-import { getDomainLabel } from '@/api/components';
+import { getDomainLabel, type DomainDto } from '@/api/components';
 
 interface ComponentFiltersProps {
   searchTerm: string;
   selectedDomain: string;
-  domains: string[];
+  domains: DomainDto[];
   onSearchTermChange: (value: string) => void;
   onDomainChange: (value: string) => void;
   showHideMineToggle?: boolean;
@@ -45,8 +45,8 @@ export function ComponentFilters({
         >
           <option value="">All Domains</option>
           {domains.map((domain) => (
-            <option key={domain} value={domain}>
-              {getDomainLabel(domain)}
+            <option key={domain.id} value={domain.id}>
+              {getDomainLabel(domain.id)}
             </option>
           ))}
         </select>

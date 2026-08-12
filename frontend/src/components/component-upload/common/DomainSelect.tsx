@@ -1,0 +1,34 @@
+import { Label } from '@/components/ui/label.tsx';
+import { getDomainLabel, useDomains } from '@/api/components';
+
+interface DomainSelectProps {
+  value: string;
+  onChange: (value: string) => void;
+  error?: string;
+}
+
+export function DomainSelect({ value, onChange, error }: DomainSelectProps) {
+  const { data: domains } = useDomains();
+
+  return (
+    <div className="flex flex-col gap-2">
+      <Label htmlFor="domain">Domain</Label>
+      <select
+        id="domain"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:text-sm"
+      >
+        <option value="" disabled>
+          Select domain...
+        </option>
+        {domains?.map((domain) => (
+          <option key={domain} value={domain}>
+            {getDomainLabel(domain)}
+          </option>
+        ))}
+      </select>
+      {error && <p className="text-sm text-error-foreground">{error}</p>}
+    </div>
+  );
+}

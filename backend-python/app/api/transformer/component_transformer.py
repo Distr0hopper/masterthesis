@@ -104,9 +104,12 @@ class ComponentTransformer:
             doi=component.doi,
             version=component.version,
             cwl_content=inject_description(component.cwl_content, component.description),
+            cwl_type=component.cwl_type,
+            dockerfile_content=component.dockerfile_content,
             domain=component.domain,
             source=component.source,
             parameters=[ComponentTransformer.to_parameter(p) for p in component.parameters],
             created_at=component.created_at,
+            updated_at=component.updated_at,
             is_favorite=is_favorite,
         )

@@ -86,10 +86,13 @@ class ComponentDetailDto(CamelModel):
     doi: str | None
     version: int
     cwl_content: str
+    cwl_type: str | None
+    dockerfile_content: str | None
     domain: str
     source: ComponentSource
     parameters: list[ParameterDto]
     created_at: datetime
+    updated_at: datetime
     is_favorite: bool
 
 

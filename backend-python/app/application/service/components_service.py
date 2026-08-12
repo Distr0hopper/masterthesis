@@ -19,7 +19,14 @@ from app.application.exception.component_exceptions import (
 from app.domain.models.component import Component, ComponentSource
 from app.domain.models.parameter import Parameter
 from app.domain.repository.components_repository import ComponentsRepository
-from app.infrastructure.cwl.cwl_parser import extract_description, extract_parameters, generate_inputs_yaml, inject_description
+from app.infrastructure.cwl.cwl_parser import (
+    extract_cwl_type,
+    extract_description,
+    extract_dockerfile_content,
+    extract_parameters,
+    generate_inputs_yaml,
+    inject_description,
+)
 from app.infrastructure.packaging.packaging_cli import read_packaging_output, run_packaging_cli
 
 
@@ -71,6 +78,8 @@ class ComponentsService:
             raise ComponentNameAlreadyExistsError(component.name)
 
         component.parameters = self._parse_parameters(component.cwl_content, context, component.source)
+        component.cwl_type = extract_cwl_type(component.cwl_content)
+        component.dockerfile_content = extract_dockerfile_content(component.cwl_content)
         if component.description is None:
             component.description = extract_description(component.cwl_content)
 
@@ -82,6 +91,8 @@ class ComponentsService:
 
         component.version = next_version
         component.parameters = self._parse_parameters(component.cwl_content, f"v{next_version}", component.source)
+        component.cwl_type = extract_cwl_type(component.cwl_content)
+        component.dockerfile_content = extract_dockerfile_content(component.cwl_content)
         if component.description is None:
             component.description = extract_description(component.cwl_content)
 

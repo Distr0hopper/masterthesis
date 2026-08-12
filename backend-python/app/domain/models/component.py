@@ -39,6 +39,11 @@ class Component(SQLModel, table=True):
     doi: str | None = None
     version: int = 1
     cwl_content: str = Field(sa_column=Column(Text, nullable=False))
+    # both derived from cwl_content at write time (see cwl_parser.extract_cwl_type /
+    # extract_dockerfile_content) - nullable because manual uploads or repos without a
+    # DockerRequirement legitimately have no Dockerfile
+    cwl_type: str | None = None
+    dockerfile_content: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
     # explicit String column: SQLModel would otherwise infer a native Postgres
     # enum type from the Python Enum, which was avoided (see the
     # hand-written migration - VARCHAR only, no CREATE TYPE)

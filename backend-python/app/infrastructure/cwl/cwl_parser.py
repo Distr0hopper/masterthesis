@@ -28,13 +28,18 @@ def extract_parameters(cwl_content: str) -> list[Parameter]:
     except yaml.YAMLError as err:
         raise ValueError(f"YAML parse error: {err}") from err
 
-    inputs: dict[str, Any] = (doc or {}).get("inputs") or {}
     namespaces: dict[str, str] = (doc or {}).get("$namespaces") or {}
+    inputs = _extract_parameter_group((doc or {}).get("inputs") or {}, ParameterDirection.INPUT, namespaces)
+    outputs = _extract_parameter_group((doc or {}).get("outputs") or {}, ParameterDirection.OUTPUT, namespaces)
+    return inputs + outputs
 
+
+def _extract_parameter_group(
+    group: dict[str, Any], direction: ParameterDirection, namespaces: dict[str, str]
+) -> list[Parameter]:
     parameters = []
-    for name, definition in inputs.items():
-        # Is input description a dict, or flat string?
-        # e.g. input_rds: type: File is valid and no dict!
+    for name, definition in group.items():
+        # Is the definition a dict, or flat string? e.g. input_rds: type: File is valid and no dict!
         is_mapping = isinstance(definition, dict)
         cwl_type = _stringify_type(definition.get("type", "string") if is_mapping else "string").rstrip("?")
         default_value = None
@@ -53,10 +58,30 @@ def extract_parameters(cwl_content: str) -> list[Parameter]:
                 default_value=default_value,
                 description=description,
                 format=format_,
-                direction=ParameterDirection.INPUT,
+                direction=direction,
             )
         )
     return parameters
+
+
+def extract_cwl_type(cwl_content: str) -> str | None:
+    try:
+        doc: Any = yaml.safe_load(cwl_content)
+    except yaml.YAMLError:
+        return None
+    return doc.get("class") if isinstance(doc, dict) else None
+
+
+def extract_dockerfile_content(cwl_content: str) -> str | None:
+    try:
+        doc: Any = yaml.safe_load(cwl_content)
+    except yaml.YAMLError:
+        return None
+    if not isinstance(doc, dict):
+        return None
+    requirements = doc.get("requirements") or {}
+    docker_requirement = requirements.get("DockerRequirement") or {}
+    return docker_requirement.get("dockerFile")
 
 
 def _resolve_format(format_value: Any, namespaces: dict[str, str]) -> str | None:
@@ -75,6 +100,8 @@ def _resolve_format(format_value: Any, namespaces: dict[str, str]) -> str | None
 def _stringify_type(value: Any) -> str:
     if isinstance(value, list):
         return ",".join(str(v) for v in value)
+    if isinstance(value, dict) and value.get("type") == "array":
+        return f"{_stringify_type(value.get('items', 'string'))}[]"
     return str(value)
 
 

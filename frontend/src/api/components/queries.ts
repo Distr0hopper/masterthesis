@@ -5,6 +5,7 @@ import type { AddVersionDto, ComponentDomain, CreateComponentDto, PackageCompone
 export const componentKeys = {
   all: ['components'] as const,
   lists: (domain?: ComponentDomain) => [...componentKeys.all, 'list', domain] as const,
+  mine: () => [...componentKeys.all, 'mine'] as const,
   detail: (id: string) => [...componentKeys.all, 'detail', id] as const,
   versions: (id: string) => [...componentKeys.all, 'versions', id] as const,
   domains: () => ['domains'] as const,
@@ -14,6 +15,13 @@ export const useComponents = (domain?: ComponentDomain) => {
   return useQuery({
     queryKey: componentKeys.lists(domain),
     queryFn: () => componentsService.getAll(domain),
+  });
+};
+
+export const useMyComponents = () => {
+  return useQuery({
+    queryKey: componentKeys.mine(),
+    queryFn: () => componentsService.getMine(),
   });
 };
 

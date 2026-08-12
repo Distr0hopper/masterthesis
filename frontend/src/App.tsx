@@ -4,6 +4,7 @@ import Header from '@/components/layout/Header';
 import ComponentsPage from '@/pages/ComponentsPage';
 import ComponentDetailPage from '@/pages/ComponentDetailPage';
 import UploadPage from '@/pages/UploadPage';
+import MyComponentsPage from '@/pages/MyComponentsPage';
 import LoginPage from '@/pages/LoginPage';
 import HomePage from "@/pages/HomePage.tsx";
 import AboutPage from "@/pages/AboutPage.tsx";
@@ -29,6 +30,7 @@ export default function App() {
             <Route path="/profile" element={<ProtectedRoute> <ProfilePage /> </ProtectedRoute>} />
             <Route path="/components/:id" element={<ComponentDetailPage />} />
             <Route path="/upload" element={<ProtectedRoute> <UploadPage /> </ProtectedRoute>} />
+            <Route path="/my-components" element={<ProtectedRoute> <MyComponentsPage /> </ProtectedRoute>} />
             <Route path="/login" element={<LoginPage />} />
           </Routes>
         </main>

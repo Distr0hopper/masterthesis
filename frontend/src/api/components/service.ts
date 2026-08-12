@@ -16,6 +16,10 @@ export const componentsService = {
     return apiClient.get(ENDPOINT, { params: domain ? { domain } : undefined });
   },
 
+  getMine(): Promise<ComponentListItemDto[]> {
+    return apiClient.get(`${ENDPOINT}/mine`);
+  },
+
   getById(id: string): Promise<ComponentDetailDto> {
     return apiClient.get(`${ENDPOINT}/${id}`);
   },

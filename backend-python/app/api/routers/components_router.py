@@ -42,11 +42,15 @@ async def list_components(
     # json_schema_extra adds the enum purely so Swagger UI renders a dropdown
     domain: Annotated[str | None, Query(json_schema_extra={"enum": VALID_DOMAINS})] = None,
     favorites_only: Annotated[bool, Query(alias="favoritesOnly")] = False,
+    exclude_mine: Annotated[bool, Query(alias="excludeMine")] = False,
 ) -> list[ComponentListItemDto]:
     if favorites_only and current_user is None:
         raise FavoritesRequireAuthError()
 
-    components = await components_service.list_components(domain)
+    # unlike favoritesOnly, excludeMine has a sensible no-op meaning for anonymous
+    # visitors (there's no "mine" to exclude), so no auth error here
+    exclude_created_by = current_user.id if exclude_mine and current_user is not None else None
+    components = await components_service.list_components(domain, exclude_created_by)
     favorited_names = await _favorited_names(favorites_service, current_user)
 
     if favorites_only:

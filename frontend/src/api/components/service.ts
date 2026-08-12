@@ -12,8 +12,8 @@ import type {
 const ENDPOINT = '/components';
 
 export const componentsService = {
-  getAll(domain?: ComponentDomain): Promise<ComponentListItemDto[]> {
-    return apiClient.get(ENDPOINT, { params: domain ? { domain } : undefined });
+  getAll(domain?: ComponentDomain, excludeMine?: boolean): Promise<ComponentListItemDto[]> {
+    return apiClient.get(ENDPOINT, { params: { domain, excludeMine: excludeMine || undefined } });
   },
 
   getMine(): Promise<ComponentListItemDto[]> {

@@ -2,7 +2,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import Depends
-from sqlmodel import select
+from sqlmodel import or_, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.domain.models.component import Component
@@ -17,12 +17,17 @@ class ComponentsRepository:
     def get_repository(db: Annotated[AsyncSession, Depends(get_db)]) -> "ComponentsRepository":
         return ComponentsRepository(db)
 
-    async def find_all(self, domain: str | None = None) -> list[Component]:
+    async def find_all(self, domain: str | None = None, exclude_created_by: uuid.UUID | None = None) -> list[Component]:
         # DISTINCT ON (name) + ORDER BY name, version DESC keeps only the latest version
         # of each lineage - browsing should show one card per component, not per version
         query = select(Component).distinct(Component.name).order_by(Component.name, Component.version.desc())
         if domain is not None:
             query = query.where(Component.domain == domain)
+        if exclude_created_by is not None:
+            # created_by_id IS NULL must still pass through - a plain `!=` comparison
+            # against NULL is neither true nor false in SQL, so those rows would
+            # otherwise be silently dropped instead of just not being excluded
+            query = query.where(or_(Component.created_by_id != exclude_created_by, Component.created_by_id.is_(None)))
         result = await self.db.exec(query)
         return list(result.all())
 

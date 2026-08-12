@@ -8,6 +8,9 @@ interface ComponentFiltersProps {
   domains: string[];
   onSearchTermChange: (value: string) => void;
   onDomainChange: (value: string) => void;
+  showHideMineToggle?: boolean;
+  hideMine?: boolean;
+  onHideMineChange?: (value: boolean) => void;
 }
 
 export function ComponentFilters({
@@ -16,6 +19,9 @@ export function ComponentFilters({
   domains,
   onSearchTermChange,
   onDomainChange,
+  showHideMineToggle,
+  hideMine,
+  onHideMineChange,
 }: ComponentFiltersProps) {
   return (
     <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-end">
@@ -45,6 +51,19 @@ export function ComponentFilters({
           ))}
         </select>
       </div>
+
+      {showHideMineToggle && (
+        <label htmlFor="hideMine" className="flex items-center gap-2 pb-2.5 text-sm text-slate-700">
+          <input
+            id="hideMine"
+            type="checkbox"
+            checked={hideMine}
+            onChange={(e) => onHideMineChange?.(e.target.checked)}
+            className="h-4 w-4 rounded border-input accent-jmu-blue-800"
+          />
+          Hide my components
+        </label>
+      )}
     </div>
   );
 }

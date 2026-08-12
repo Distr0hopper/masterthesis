@@ -2,13 +2,16 @@ import { useState } from 'react';
 import { componentTransformer, useComponents, useDomains } from '@/api/components';
 import { ComponentCard } from '@/components/component-browser/ComponentCard';
 import { ComponentFilters } from '@/components/component-browser/ComponentFilters';
+import { useAuthStore } from '@/store/auth.store';
 
 export default function ComponentsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDomain, setSelectedDomain] = useState('');
+  const [hideMine, setHideMine] = useState(false);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated());
 
   const { data: domains } = useDomains();
-  const { data: components, isLoading } = useComponents(selectedDomain || undefined);
+  const { data: components, isLoading } = useComponents(selectedDomain || undefined, isAuthenticated && hideMine);
 
   const models = componentTransformer.toListDisplayModels(components ?? []);
   const term = searchTerm.trim().toLowerCase();
@@ -24,6 +27,9 @@ export default function ComponentsPage() {
         domains={domains ?? []}
         onSearchTermChange={setSearchTerm}
         onDomainChange={setSelectedDomain}
+        showHideMineToggle={isAuthenticated}
+        hideMine={hideMine}
+        onHideMineChange={setHideMine}
       />
 
       {isLoading ? (

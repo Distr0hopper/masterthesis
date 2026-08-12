@@ -45,6 +45,17 @@ class EmptyRepoCommitShaToNoneMixin:
         return None if value == "" else value
 
 
+class EmptyDescriptionToNoneMixin:
+    # same blank-Swagger/form-field issue as above - an empty description must fall back
+    # to the CWL's own `doc:` field (see ComponentsService.create_manual /
+    # add_manual_version, which only auto-extract when description is None), not get
+    # stored as "" verbatim
+    @field_validator("description", mode="before")
+    @classmethod
+    def empty_description_to_none(cls, value: str | None) -> str | None:
+        return None if value == "" else value
+
+
 class ParameterDto(CamelModel):
     id: uuid.UUID
     name: str
@@ -96,7 +107,9 @@ class ComponentDetailDto(CamelModel):
     is_favorite: bool
 
 
-class CreateComponentRequestDto(DomainValidatorMixin, RepoUrlValidatorMixin, EmptyRepoCommitShaToNoneMixin, CamelModel):
+class CreateComponentRequestDto(
+    DomainValidatorMixin, RepoUrlValidatorMixin, EmptyRepoCommitShaToNoneMixin, EmptyDescriptionToNoneMixin, CamelModel
+):
     name: str
     # json_schema_extra adds the enum purely so Swagger UI renders a dropdown -
     # the actual type stays plain str, validated for real by DomainValidatorMixin
@@ -113,7 +126,7 @@ class CreateComponentRequestDto(DomainValidatorMixin, RepoUrlValidatorMixin, Emp
         return None if value == "" else value
 
 
-class AddVersionRequestDto(EmptyRepoCommitShaToNoneMixin, CamelModel):
+class AddVersionRequestDto(EmptyRepoCommitShaToNoneMixin, EmptyDescriptionToNoneMixin, CamelModel):
     cwl_file: UploadFile
     repo_commit_sha: str | None = None
     description: str | None = None

@@ -2,7 +2,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import Depends
-from sqlmodel import or_, select
+from sqlmodel import func, or_, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.domain.models.component import Component
@@ -41,6 +41,16 @@ class ComponentsRepository:
         )
         result = await self.db.exec(query)
         return list(result.all())
+
+    async def count_distinct_names(self) -> int:
+        result = await self.db.exec(select(func.count(func.distinct(Component.name))))
+        return result.one()
+
+    async def count_distinct_contributors(self) -> int:
+        result = await self.db.exec(
+            select(func.count(func.distinct(Component.created_by_id))).where(Component.created_by_id.is_not(None))
+        )
+        return result.one()
 
     async def find_by_id(self, component_id: uuid.UUID) -> Component | None:
         return await self.db.get(Component, component_id)

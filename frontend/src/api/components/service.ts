@@ -23,6 +23,10 @@ export const componentsService = {
     return apiClient.get(`${ENDPOINT}/mine`);
   },
 
+  getLatest(limit?: number): Promise<ComponentListItemDto[]> {
+    return apiClient.get(`${ENDPOINT}/latest`, { params: { limit } });
+  },
+
   getById(id: string): Promise<ComponentDetailDto> {
     return apiClient.get(`${ENDPOINT}/${id}`);
   },

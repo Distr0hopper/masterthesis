@@ -70,6 +70,18 @@ async def list_my_components(
     return [ComponentTransformer.to_list_item(c, c.name in favorited_names) for c in components]
 
 
+@router.get("/latest", response_model=list[ComponentListItemDto])
+async def list_latest_components(
+    components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
+    favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
+    current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
+    limit: int = 6,
+) -> list[ComponentListItemDto]:
+    components = await components_service.get_latest_components(limit)
+    favorited_names = await _favorited_names(favorites_service, current_user)
+    return [ComponentTransformer.to_list_item(c, c.name in favorited_names) for c in components]
+
+
 @router.post(
     "",
     response_model=ComponentDetailDto,

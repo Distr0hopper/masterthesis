@@ -46,6 +46,20 @@ class ComponentsService:
     async def list_my_components(self, created_by_id: uuid.UUID) -> list[Component]:
         return await self.components_repository.find_by_created_by(created_by_id)
 
+    async def get_latest_components(self, limit: int) -> list[Component]:
+        # reuses the already-deduped (latest-version-per-lineage) list find_all returns -
+        # sorting/slicing in Python instead of a SQL ORDER BY + LIMIT on top of the
+        # existing DISTINCT ON query, which would need a subquery; fine at this project's
+        # realistic data scale
+        components = await self.components_repository.find_all()
+        return sorted(components, key=lambda c: c.created_at, reverse=True)[:limit]
+
+    async def get_stats(self) -> tuple[int, int]:
+        return (
+            await self.components_repository.count_distinct_names(),
+            await self.components_repository.count_distinct_contributors(),
+        )
+
     async def get_component(self, component_id: uuid.UUID) -> Component:
         component = await self.components_repository.find_by_id(component_id)
         if component is None:

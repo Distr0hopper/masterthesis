@@ -7,6 +7,7 @@ export const componentKeys = {
   lists: (domain?: ComponentDomain, excludeMine?: boolean, favoritesOnly?: boolean) =>
     [...componentKeys.all, 'list', domain, excludeMine, favoritesOnly] as const,
   mine: () => [...componentKeys.all, 'mine'] as const,
+  latest: (limit?: number) => [...componentKeys.all, 'latest', limit] as const,
   detail: (id: string) => [...componentKeys.all, 'detail', id] as const,
   versions: (id: string) => [...componentKeys.all, 'versions', id] as const,
   domains: () => ['domains'] as const,
@@ -23,6 +24,13 @@ export const useMyComponents = () => {
   return useQuery({
     queryKey: componentKeys.mine(),
     queryFn: () => componentsService.getMine(),
+  });
+};
+
+export const useLatestComponents = (limit?: number) => {
+  return useQuery({
+    queryKey: componentKeys.latest(limit),
+    queryFn: () => componentsService.getLatest(limit),
   });
 };
 

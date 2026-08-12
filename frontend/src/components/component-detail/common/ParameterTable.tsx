@@ -28,6 +28,7 @@ export function ParameterTable({ parameters }: ParameterTableProps) {
           <TableHead>Type</TableHead>
           <TableHead>Direction</TableHead>
           <TableHead>Default</TableHead>
+          <TableHead>Format</TableHead>
           <TableHead>Description</TableHead>
         </TableRow>
       </TableHeader>
@@ -42,6 +43,24 @@ export function ParameterTable({ parameters }: ParameterTableProps) {
               </Badge>
             </TableCell>
             <TableCell className="text-slate-500">{parameter.defaultValue ?? '—'}</TableCell>
+            <TableCell className="text-slate-500">
+              {parameter.format ? (
+                parameter.format.startsWith('http') ? (
+                  <a
+                    href={parameter.format}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-jmu-blue-800 hover:underline"
+                  >
+                    {parameter.formatLabel ?? parameter.format}
+                  </a>
+                ) : (
+                  (parameter.formatLabel ?? parameter.format)
+                )
+              ) : (
+                '—'
+              )}
+            </TableCell>
             <TableCell className="text-slate-500">{parameter.description ?? '—'}</TableCell>
           </TableRow>
         ))}

@@ -1,8 +1,9 @@
 import { Link } from 'react-router-dom';
-import { ChevronLeft, ExternalLink } from 'lucide-react';
+import { ChevronLeft, Download, ExternalLink } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
-import type { ComponentDetailDisplayModel } from '@/api/components';
+import { Button } from '@/components/ui/button.tsx';
+import { componentsService, type ComponentDetailDisplayModel } from '@/api/components';
 
 interface ComponentHeaderProps {
   model: ComponentDetailDisplayModel;
@@ -17,9 +18,17 @@ export function ComponentHeader({ model }: ComponentHeaderProps) {
 
       <Card className="mt-4">
         <CardContent className="flex flex-col gap-3 pt-6">
-          <Badge variant="outline" className="w-fit">
-            {model.domainDisplay}
-          </Badge>
+          <div className="flex items-center justify-between">
+            <Badge variant="outline" className="w-fit">
+              {model.domainDisplay}
+            </Badge>
+
+            <Button asChild variant="outline" size="sm">
+              <a href={componentsService.getBundleUrl(model.id)}>
+                <Download className="mr-1 h-4 w-4" /> Download
+              </a>
+            </Button>
+          </div>
 
           <h1 className="font-mono text-2xl font-bold text-slate-900">{model.name}</h1>
 

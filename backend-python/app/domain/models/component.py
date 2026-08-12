@@ -16,6 +16,9 @@ class ComponentSource(str, Enum):
     MANUAL_UPLOAD = "manual_upload"
 
 
+MAX_DESCRIPTION_LENGTH = 2000
+
+
 class Component(SQLModel, table=True):
     __tablename__ = "components"
     __table_args__ = (
@@ -33,7 +36,7 @@ class Component(SQLModel, table=True):
     name: str
     author_name: str | None = None
     created_by_id: uuid.UUID | None = Field(default=None, sa_column=Column(ForeignKey("users.id"), nullable=True))
-    description: str | None = None
+    description: str | None = Field(default=None, sa_column=Column(String(MAX_DESCRIPTION_LENGTH), nullable=True))
     repo_url: str | None = None
     repo_commit_sha: str | None = None
     doi: str | None = None

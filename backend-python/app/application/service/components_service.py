@@ -16,7 +16,7 @@ from app.application.exception.component_exceptions import (
     ManualUploadCannotBeRepackagedError,
     PackagingFailedError,
 )
-from app.domain.models.component import Component, ComponentSource
+from app.domain.models.component import MAX_DESCRIPTION_LENGTH, Component, ComponentSource
 from app.domain.models.parameter import Parameter
 from app.domain.repository.components_repository import ComponentsRepository
 from app.infrastructure.cwl.cwl_parser import (
@@ -82,6 +82,7 @@ class ComponentsService:
         component.dockerfile_content = extract_dockerfile_content(component.cwl_content)
         if component.description is None:
             component.description = extract_description(component.cwl_content)
+        component.description = self._truncate_description(component.description)
 
         return await self._save_and_reload(component)
 
@@ -95,6 +96,7 @@ class ComponentsService:
         component.dockerfile_content = extract_dockerfile_content(component.cwl_content)
         if component.description is None:
             component.description = extract_description(component.cwl_content)
+        component.description = self._truncate_description(component.description)
 
         return await self._save_and_reload(component)
 
@@ -193,6 +195,13 @@ class ComponentsService:
         reloaded = await self.components_repository.find_by_id(saved.id)
         assert reloaded is not None
         return reloaded
+
+    def _truncate_description(self, description: str | None) -> str | None:
+        # explicit user-submitted descriptions are already length-validated at the DTO
+        # boundary (a no-op here) - this only actually kicks in for descriptions pulled
+        # from the CWL's own `doc:` field or a repo's README during packaging, neither of
+        # which the user directly typed, so silently truncating beats a hard failure
+        return description if description is None else description[:MAX_DESCRIPTION_LENGTH]
 
     def _parse_parameters(self, cwl_content: str, context: str, source: ComponentSource) -> list[Parameter]:
         try:

@@ -6,7 +6,7 @@ from fastapi import UploadFile
 from pydantic import Field, field_validator
 
 from app.api.dto.base import CamelModel
-from app.domain.models.component import ComponentSource
+from app.domain.models.component import MAX_DESCRIPTION_LENGTH, ComponentSource
 from app.domain.models.component_domain import VALID_DOMAINS
 from app.domain.models.parameter import ParameterDirection
 
@@ -118,7 +118,7 @@ class CreateComponentRequestDto(
     author_name: str | None = None
     repo_url: str | None = None
     repo_commit_sha: str | None = None
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
 
     @field_validator("repo_url", mode="before")
     @classmethod
@@ -129,7 +129,7 @@ class CreateComponentRequestDto(
 class AddVersionRequestDto(EmptyRepoCommitShaToNoneMixin, EmptyDescriptionToNoneMixin, CamelModel):
     cwl_file: UploadFile
     repo_commit_sha: str | None = None
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
 
 
 class UpdateComponentRequestDto(CamelModel):
@@ -137,7 +137,7 @@ class UpdateComponentRequestDto(CamelModel):
     # so None is unambiguous here - unlike description below, no presence-tracking needed).
     # Domain is optional here (unlike Create/Package), so this can't reuse DomainValidatorMixin.
     domain: str | None = Field(default=None, json_schema_extra={"enum": VALID_DOMAINS})
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
 
     @field_validator("domain")
     @classmethod
@@ -150,4 +150,4 @@ class UpdateComponentRequestDto(CamelModel):
 class PackageComponentRequestDto(DomainValidatorMixin, RepoUrlValidatorMixin, CamelModel):
     repo_url: str
     domain: str = Field(json_schema_extra={"enum": VALID_DOMAINS})
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)

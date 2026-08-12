@@ -113,6 +113,10 @@ export const componentTransformer = {
     return dto;
   },
 
+  getInitialUpdateFormValues(component: ComponentDisplayModel): UpdateComponentFormData {
+    return { domain: component.domain, description: component.description ?? '' };
+  },
+
   toParameterDisplayModel(parameter: ParameterDto): ParameterDisplayModel {
     return {
       ...parameter,

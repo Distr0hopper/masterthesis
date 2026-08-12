@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { componentTransformer, useMyComponents } from '@/api/components';
 import { ComponentCard } from '@/components/component-browser/ComponentCard';
+import { MyComponentCardActions } from '@/components/component-mine/organisms/MyComponentCardActions';
 
 export default function MyComponentsPage() {
   const { data: components, isLoading } = useMyComponents();
@@ -29,7 +30,7 @@ export default function MyComponentsPage() {
           ) : (
             <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
               {displayModels.map((component) => (
-                <ComponentCard key={component.id} component={component} />
+                <ComponentCard key={component.id} component={component} actions={<MyComponentCardActions component={component} />} />
               ))}
             </div>
           )}

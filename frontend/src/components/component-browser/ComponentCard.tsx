@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
@@ -6,9 +7,10 @@ import type { ComponentDisplayModel } from '@/api/components';
 
 interface ComponentCardProps {
   component: ComponentDisplayModel;
+  actions?: ReactNode;
 }
 
-export function ComponentCard({ component }: ComponentCardProps) {
+export function ComponentCard({ component, actions }: ComponentCardProps) {
   return (
     <Card>
       <CardContent className="flex flex-col gap-3 pt-6">
@@ -30,6 +32,8 @@ export function ComponentCard({ component }: ComponentCardProps) {
         <Button asChild className="w-full bg-jmu-blue-800 hover:bg-jmu-blue-800/90">
           <Link to={`/components/${component.id}`}>View</Link>
         </Button>
+
+        {actions}
       </CardContent>
     </Card>
   );

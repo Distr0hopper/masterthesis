@@ -3,7 +3,7 @@ import { ChevronLeft, Download, ExternalLink } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
-import { componentsService, getDomainColor, useDomains, type ComponentDetailDisplayModel } from '@/api/components';
+import { componentsService, getDomainBadgeStyle, useDomains, type ComponentDetailDisplayModel } from '@/api/components';
 
 interface ComponentHeaderProps {
   model: ComponentDetailDisplayModel;
@@ -11,7 +11,7 @@ interface ComponentHeaderProps {
 
 export function ComponentHeader({ model }: ComponentHeaderProps) {
   const { data: domains } = useDomains();
-  const domainColor = domains ? getDomainColor(model.domain, domains) : undefined;
+  const domainBadgeStyle = domains ? getDomainBadgeStyle(model.domain, domains) : undefined;
 
   return (
     <>
@@ -22,11 +22,7 @@ export function ComponentHeader({ model }: ComponentHeaderProps) {
       <Card className="mt-4">
         <CardContent className="flex flex-col gap-3 pt-6">
           <div className="flex items-center justify-between">
-            <Badge
-              variant="outline"
-              className="w-fit"
-              style={domainColor ? { borderColor: domainColor, color: domainColor } : undefined}
-            >
+            <Badge variant="outline" className="w-fit" style={domainBadgeStyle}>
               {model.domainDisplay}
             </Badge>
 

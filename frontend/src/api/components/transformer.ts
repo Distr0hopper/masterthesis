@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import type {
   ComponentCreatorDto,
   ComponentDetailDto,
@@ -81,8 +82,11 @@ export function getDomainLabel(domain: string): string {
     .join(' ');
 }
 
-export function getDomainColor(domainId: string, domains: DomainDto[]): string | undefined {
-  return domains.find((d) => d.id === domainId)?.color;
+export function getDomainBadgeStyle(domainId: string, domains: DomainDto[]): CSSProperties | undefined {
+  const color = domains.find((d) => d.id === domainId)?.color;
+  if (!color) return undefined;
+  // color + alpha suffix for a light tinted background, matching the border/text color
+  return { borderColor: color, color, backgroundColor: `${color}1A` };
 }
 
 export const componentTransformer = {

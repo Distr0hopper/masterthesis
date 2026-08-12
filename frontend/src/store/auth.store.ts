@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
 import type { UserResponseDto } from '@/api/users/types';
 
 interface AuthState {
@@ -10,11 +11,20 @@ interface AuthState {
   isAuthenticated: () => boolean;
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
-  token: null,
-  user: null,
-  setToken: (token) => set({ token }),
-  setAuth: (token, user) => set({ token, user }),
-  logout: () => set({ token: null, user: null }),
-  isAuthenticated: () => !!get().token,
-}));
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set, get) => ({
+      token: null,
+      user: null,
+      setToken: (token) => set({ token }),
+      setAuth: (token, user) => set({ token, user }),
+      logout: () => set({ token: null, user: null }),
+      isAuthenticated: () => !!get().token,
+    }),
+    {
+      name: 'auth-storage',
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({ token: state.token, user: state.user }),
+    },
+  ),
+);

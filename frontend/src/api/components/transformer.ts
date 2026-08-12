@@ -53,9 +53,16 @@ export interface ComponentDetailDisplayModel extends ComponentDisplayModel {
   source: ComponentSource;
   sourceDisplay: string;
   repoCommitSha: string | null;
+  repoCommitShaShort: string | null;
   doi: string | null;
   cwlContent: string;
+  cwlType: string | null;
+  dockerfileContent: string | null;
+  updatedAt: Date;
+  updatedAtDisplay: string;
   parameters: ParameterDisplayModel[];
+  inputs: ParameterDisplayModel[];
+  outputs: ParameterDisplayModel[];
 }
 
 function getAuthorDisplay(authorName: string | null, createdBy?: ComponentCreatorDto | null): string {
@@ -135,15 +142,24 @@ export const componentTransformer = {
   },
 
   toDetailDisplayModel(dto: ComponentDetailDto): ComponentDetailDisplayModel {
+    const updatedAt = new Date(dto.updatedAt);
+    const parameters = dto.parameters.map(this.toParameterDisplayModel);
     return {
       ...this.toDisplayModel(dto),
       authorDisplay: getAuthorDisplay(dto.authorName, dto.createdBy),
       source: dto.source,
       sourceDisplay: SOURCE_LABELS[dto.source],
       repoCommitSha: dto.repoCommitSha,
+      repoCommitShaShort: dto.repoCommitSha ? dto.repoCommitSha.slice(0, 8) : null,
       doi: dto.doi,
       cwlContent: dto.cwlContent,
-      parameters: dto.parameters.map(this.toParameterDisplayModel),
+      cwlType: dto.cwlType,
+      dockerfileContent: dto.dockerfileContent,
+      updatedAt,
+      updatedAtDisplay: formatDate(updatedAt),
+      parameters,
+      inputs: parameters.filter((p) => p.direction === ParameterDirection.INPUT),
+      outputs: parameters.filter((p) => p.direction === ParameterDirection.OUTPUT),
     };
   },
 };

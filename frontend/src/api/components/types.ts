@@ -53,10 +53,13 @@ export interface ComponentDetailDto {
   doi: string | null;
   version: number;
   cwlContent: string;
+  cwlType: string | null;
+  dockerfileContent: string | null;
   domain: ComponentDomain;
   source: ComponentSource;
   parameters: ParameterDto[];
   createdAt: string;
+  updatedAt: string;
   isFavorite: boolean;
 }
 

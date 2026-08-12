@@ -13,6 +13,7 @@ import type {
   UpdateComponentFormData,
   UploadComponentFormData,
 } from './schema';
+import { formatDate } from '@/api/transformer';
 
 const SOURCE_LABELS: Record<ComponentSource, string> = {
   [ComponentSource.AUTOMATED_PACKAGING]: 'Packaged from GitHub',
@@ -27,14 +28,15 @@ const DIRECTION_LABELS: Record<ParameterDirection, string> = {
 export interface ComponentDisplayModel {
   id: string;
   name: string;
+  description: string | null;
   authorDisplay: string;
   repoUrl: string | null;
   version: number;
   domain: string;
   domainDisplay: string;
-  source: ComponentSource;
-  sourceDisplay: string;
   createdAt: Date;
+  createdAtDisplay: string;
+  isFavorite: boolean;
 }
 
 export interface ParameterDisplayModel {
@@ -48,7 +50,8 @@ export interface ParameterDisplayModel {
 }
 
 export interface ComponentDetailDisplayModel extends ComponentDisplayModel {
-  description: string | null;
+  source: ComponentSource;
+  sourceDisplay: string;
   repoCommitSha: string | null;
   doi: string | null;
   cwlContent: string;
@@ -111,17 +114,19 @@ export const componentTransformer = {
   },
 
   toDisplayModel(dto: ComponentListItemDto): ComponentDisplayModel {
+    const createdAt = new Date(dto.createdAt);
     return {
       id: dto.id,
       name: dto.name,
+      description: dto.description,
       authorDisplay: getAuthorDisplay(dto.authorName),
       repoUrl: dto.repoUrl,
       version: dto.version,
       domain: dto.domain,
       domainDisplay: getDomainLabel(dto.domain),
-      source: dto.source,
-      sourceDisplay: SOURCE_LABELS[dto.source],
-      createdAt: new Date(dto.createdAt),
+      createdAt,
+      createdAtDisplay: formatDate(createdAt),
+      isFavorite: dto.isFavorite,
     };
   },
 
@@ -133,7 +138,8 @@ export const componentTransformer = {
     return {
       ...this.toDisplayModel(dto),
       authorDisplay: getAuthorDisplay(dto.authorName, dto.createdBy),
-      description: dto.description,
+      source: dto.source,
+      sourceDisplay: SOURCE_LABELS[dto.source],
       repoCommitSha: dto.repoCommitSha,
       doi: dto.doi,
       cwlContent: dto.cwlContent,

@@ -62,12 +62,11 @@ class ComponentTransformer:
         return ComponentListItemDto(
             id=component.id,
             name=component.name,
+            description=component.description,
             author_name=component.author_name,
             repo_url=component.repo_url,
-            repo_commit_sha=component.repo_commit_sha,
             version=component.version,
             domain=component.domain,
-            source=component.source,
             created_at=component.created_at,
             is_favorite=is_favorite,
         )

@@ -1,6 +1,7 @@
 import type { RequestOtpDto, VerifyOtpDto } from './types';
 import type { RequestOtpFormData, VerifyOtpFormData } from './schema';
 import type { UserResponseDto } from '@/api/users/types';
+import { formatDate } from '@/api/transformer';
 
 export interface UserDisplayModel {
   id: string;
@@ -8,6 +9,7 @@ export interface UserDisplayModel {
   fullName: string | null;
   affiliation: string | null;
   createdAt: Date;
+  createdAtDisplay: string;
 }
 
 export const authTransformer = {
@@ -28,12 +30,14 @@ export const authTransformer = {
   },
 
   dtoToDisplayModel(dto: UserResponseDto): UserDisplayModel {
+    const createdAt = new Date(dto.createdAt);
     return {
       id: dto.id,
       email: dto.email,
       fullName: dto.firstName && dto.lastName ? `${dto.firstName} ${dto.lastName}` : null,
       affiliation: dto.affiliation,
-      createdAt: new Date(dto.createdAt),
+      createdAt,
+      createdAtDisplay: formatDate(createdAt),
     };
   },
 };

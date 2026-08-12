@@ -66,12 +66,11 @@ class ComponentCreatorDto(CamelModel):
 class ComponentListItemDto(CamelModel):
     id: uuid.UUID
     name: str
+    description: str | None
     author_name: str | None
     repo_url: str | None
-    repo_commit_sha: str | None
     version: int
     domain: str
-    source: ComponentSource
     created_at: datetime
     is_favorite: bool
 

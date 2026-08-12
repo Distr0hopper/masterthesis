@@ -26,13 +26,13 @@ export interface ParameterDto {
 export interface ComponentListItemDto {
   id: string;
   name: string;
+  description: string | null;
   authorName: string | null;
   repoUrl: string | null;
-  repoCommitSha: string | null;
   version: number;
   domain: ComponentDomain;
-  source: ComponentSource;
   createdAt: string;
+  isFavorite: boolean;
 }
 
 export interface ComponentCreatorDto {
@@ -57,6 +57,7 @@ export interface ComponentDetailDto {
   source: ComponentSource;
   parameters: ParameterDto[];
   createdAt: string;
+  isFavorite: boolean;
 }
 
 export interface CreateComponentDto {

@@ -18,7 +18,9 @@ class ComponentsRepository:
         return ComponentsRepository(db)
 
     async def find_all(self, domain: str | None = None) -> list[Component]:
-        query = select(Component)
+        # DISTINCT ON (name) + ORDER BY name, version DESC keeps only the latest version
+        # of each lineage - browsing should show one card per component, not per version
+        query = select(Component).distinct(Component.name).order_by(Component.name, Component.version.desc())
         if domain is not None:
             query = query.where(Component.domain == domain)
         result = await self.db.exec(query)

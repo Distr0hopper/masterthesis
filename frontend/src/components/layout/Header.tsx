@@ -47,6 +47,9 @@ export default function Header() {
           <Link to="/browse" className={navLinkClass(pathname === '/browse')}>
             Browse
           </Link>
+          <Link to="/workflows" className={navLinkClass(pathname === '/workflows' || pathname.startsWith('/workflows/'))}>
+            Workflows
+          </Link>
           <Link to="/builder" className={navLinkClass(pathname === '/builder')}>
             Workflow Builder
           </Link>

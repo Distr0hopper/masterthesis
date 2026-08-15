@@ -13,6 +13,9 @@ from app.domain.models.favorite import Favorite  # noqa: F401 - registers the ta
 from app.domain.models.login_code import LoginCode  # noqa: F401 - registers the table with SQLModel.metadata
 from app.domain.models.parameter import Parameter  # noqa: F401 - registers the table with SQLModel.metadata
 from app.domain.models.user import User  # noqa: F401 - registers the table with SQLModel.metadata
+from app.domain.models.workflow import Workflow  # noqa: F401 - registers the table with SQLModel.metadata
+from app.domain.models.workflow_domain import WorkflowDomain  # noqa: F401 - registers the table with SQLModel.metadata
+from app.domain.models.workflow_step import WorkflowStep  # noqa: F401 - registers the table with SQLModel.metadata
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

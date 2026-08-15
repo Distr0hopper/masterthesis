@@ -14,6 +14,11 @@ from app.application.exception.component_exceptions import (
 )
 from app.application.exception.favorites_exceptions import FavoritesRequireAuthError
 from app.application.exception.otp_exceptions import OtpRequestRateLimitedError
+from app.application.exception.workflow_exceptions import (
+    InvalidWorkflowArchiveError,
+    WorkflowNotFoundError,
+    WorkflowStepNotFoundError,
+)
 from app.domain.exception.login_code_exceptions import (
     InvalidOtpCodeError,
     OtpAttemptsExceededError,
@@ -77,6 +82,18 @@ async def _favorites_require_auth_handler(request: Request, exc: FavoritesRequir
     return JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
+async def _workflow_not_found_handler(request: Request, exc: WorkflowNotFoundError) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content=ErrorResponse(detail=str(exc)).model_dump())
+
+
+async def _workflow_step_not_found_handler(request: Request, exc: WorkflowStepNotFoundError) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content=ErrorResponse(detail=str(exc)).model_dump())
+
+
+async def _invalid_workflow_archive_handler(request: Request, exc: InvalidWorkflowArchiveError) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(InvalidTokenError, _invalid_token_handler)
     app.add_exception_handler(InvalidOtpCodeError, _invalid_otp_code_handler)
@@ -91,3 +108,6 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(ComponentNotFoundError, _component_not_found_handler)
     app.add_exception_handler(ForbiddenException, _forbidden_handler)
     app.add_exception_handler(FavoritesRequireAuthError, _favorites_require_auth_handler)
+    app.add_exception_handler(WorkflowNotFoundError, _workflow_not_found_handler)
+    app.add_exception_handler(WorkflowStepNotFoundError, _workflow_step_not_found_handler)
+    app.add_exception_handler(InvalidWorkflowArchiveError, _invalid_workflow_archive_handler)

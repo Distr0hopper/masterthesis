@@ -1,9 +1,17 @@
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { isAxiosError } from 'axios';
-import { ChevronLeft, Download, Trash2 } from 'lucide-react';
+import { ChevronLeft, Download, Globe, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getDomainBadgeStyle, useDomains } from '@/api/components';
-import { useDeleteWorkflow, useWorkflow, WorkflowStatus, workflowsService, workflowTransformer } from '@/api/workflows';
+import {
+  StepMatchStatus,
+  useDeleteWorkflow,
+  usePublishWorkflow,
+  useWorkflow,
+  WorkflowStatus,
+  workflowsService,
+  workflowTransformer,
+} from '@/api/workflows';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
@@ -21,6 +29,7 @@ export default function WorkflowDetailPage() {
   const { data: domains } = useDomains();
   const currentUser = useAuthStore((state) => state.user);
   const { mutate: deleteWorkflow, isPending: isDeleting } = useDeleteWorkflow();
+  const { mutate: publishWorkflow, isPending: isPublishing } = usePublishWorkflow();
 
   if (isLoading) {
     return <p className="text-slate-500">Loading workflow...</p>;
@@ -43,6 +52,8 @@ export default function WorkflowDetailPage() {
 
   const model = workflowTransformer.toDetailDisplayModel(workflow);
   const canDelete = currentUser?.id === model.createdById;
+  const allStepsConfirmed = model.steps.every((step) => step.matchStatus === StepMatchStatus.CONFIRMED);
+  const canPublish = canDelete && model.status === WorkflowStatus.PENDING_VALIDATION;
 
   const handleDelete = () => {
     if (!confirm(`Delete workflow "${model.name}"? This cannot be undone.`)) return;
@@ -55,6 +66,13 @@ export default function WorkflowDetailPage() {
     });
   };
 
+  const handlePublish = () => {
+    publishWorkflow(model.id, {
+      onSuccess: () => toast.success('Workflow published'),
+      onError: (publishError) => toast.error(getErrorMessage(publishError)),
+    });
+  };
+
   return (
     <div>
       <Link to={backTo} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900">
@@ -63,7 +81,8 @@ export default function WorkflowDetailPage() {
 
       {model.status === WorkflowStatus.PENDING_VALIDATION && (
         <div className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          This workflow is pending validation and is only visible to you. Confirm every step below to publish it.
+          This workflow is pending validation and is only visible to you. Confirm every step below, then click
+          Publish to make it public.
         </div>
       )}
 
@@ -89,6 +108,18 @@ export default function WorkflowDetailPage() {
                   <Download className="mr-1 h-4 w-4" /> Download
                 </a>
               </Button>
+
+              {canPublish && (
+                <Button
+                  size="sm"
+                  className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90"
+                  onClick={handlePublish}
+                  disabled={isPublishing || !allStepsConfirmed}
+                  title={allStepsConfirmed ? undefined : 'Confirm every step before publishing'}
+                >
+                  <Globe className="mr-1 h-4 w-4" /> Publish
+                </Button>
+              )}
 
               {canDelete && (
                 <Button variant="destructive" size="sm" onClick={handleDelete} disabled={isDeleting}>

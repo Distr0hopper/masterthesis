@@ -9,6 +9,7 @@ from app.application.exception.component_exceptions import ComponentNotFoundErro
 from app.application.exception.workflow_exceptions import (
     InvalidWorkflowArchiveError,
     WorkflowNotFoundError,
+    WorkflowNotReadyToPublishError,
     WorkflowStepNotFoundError,
     WorkflowStepNotMatchedError,
 )
@@ -146,7 +147,10 @@ class WorkflowsService:
             step.match_score = None
 
         saved_step = await self.workflows_repository.save_step(step)
-        await self._recompute_workflow_status(saved_step.workflow_id)
+        # a step edit can never re-publish a workflow, only un-publish an already-published
+        # one whose steps are no longer all confirmed - publishing itself is a separate,
+        # explicit creator action (see publish())
+        await self._revert_to_pending_if_needed(saved_step.workflow_id)
         return saved_step
 
     async def confirm_step(self, step_id: uuid.UUID) -> WorkflowStep:
@@ -157,9 +161,17 @@ class WorkflowsService:
             raise WorkflowStepNotMatchedError(step_id)
 
         step.match_status = StepMatchStatus.CONFIRMED
-        saved_step = await self.workflows_repository.save_step(step)
-        await self._recompute_workflow_status(saved_step.workflow_id)
-        return saved_step
+        # confirming a step only ever moves it towards "ready to publish" - it can never
+        # invalidate an already-published workflow, so no revert check is needed here
+        return await self.workflows_repository.save_step(step)
+
+    async def publish(self, workflow: Workflow) -> Workflow:
+        if workflow.status == WorkflowStatus.VALIDATED:
+            return workflow
+        if not all(s.match_status == StepMatchStatus.CONFIRMED for s in workflow.steps):
+            raise WorkflowNotReadyToPublishError(workflow.id)
+        workflow.status = WorkflowStatus.VALIDATED
+        return await self.workflows_repository.save(workflow)
 
     async def remove(self, workflow: Workflow) -> None:
         await self.workflows_repository.delete(workflow)
@@ -204,15 +216,19 @@ class WorkflowsService:
         except zipfile.BadZipFile as err:
             raise InvalidWorkflowArchiveError("Not a valid zip archive") from err
 
-    async def _recompute_workflow_status(self, workflow_id: uuid.UUID) -> None:
-        # re-fetch fresh so lazy="selectin" gives an accurate view of every sibling step's
-        # current status after the just-committed step save, not a possibly-stale in-session copy
+    async def _revert_to_pending_if_needed(self, workflow_id: uuid.UUID) -> None:
+        # only ever downgrades VALIDATED -> PENDING_VALIDATION when a step edit leaves it
+        # no longer fully confirmed - never auto-promotes to VALIDATED, that only happens
+        # via the explicit publish() action. Re-fetch fresh so lazy="selectin" gives an
+        # accurate view of every sibling step's current status after the just-committed
+        # step save, not a possibly-stale in-session copy.
         workflow = await self.workflows_repository.find_by_id(workflow_id)
         assert workflow is not None
+        if workflow.status != WorkflowStatus.VALIDATED:
+            return
         all_confirmed = all(s.match_status == StepMatchStatus.CONFIRMED for s in workflow.steps)
-        new_status = WorkflowStatus.VALIDATED if all_confirmed else WorkflowStatus.PENDING_VALIDATION
-        if workflow.status != new_status:
-            workflow.status = new_status
+        if not all_confirmed:
+            workflow.status = WorkflowStatus.PENDING_VALIDATION
             await self.workflows_repository.save(workflow)
 
     async def _save_and_reload(self, workflow: Workflow) -> Workflow:

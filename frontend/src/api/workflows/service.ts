@@ -37,6 +37,10 @@ export const workflowsService = {
     return apiClient.post(`${ENDPOINT}/steps/${stepId}/confirm`);
   },
 
+  publish(id: string): Promise<WorkflowDetailDto> {
+    return apiClient.post(`${ENDPOINT}/${id}/publish`);
+  },
+
   delete(id: string): Promise<void> {
     return apiClient.delete(`${ENDPOINT}/${id}`);
   },

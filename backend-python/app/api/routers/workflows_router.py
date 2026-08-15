@@ -167,6 +167,33 @@ async def confirm_step(
     return WorkflowTransformer.to_step(confirmed)
 
 
+@router.post(
+    "/{workflow_id}/publish",
+    response_model=WorkflowDetailDto,
+    responses={
+        status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse, "description": "Not every step is confirmed yet"},
+        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
+        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Not the creator of this workflow"},
+        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Workflow not found"},
+    },
+)
+async def publish(
+    workflow_id: uuid.UUID,
+    current_user: Annotated[User, Depends(AuthService.get_current_user)],
+    workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
+) -> WorkflowDetailDto:
+    workflow = await workflows_service.get_workflow(workflow_id)
+
+    validator = WorkflowPermissionValidator(current_user)
+    if not validator.can_update(workflow):
+        logger.warning(f"User {current_user.id} not permitted to publish workflow {workflow_id}")
+        raise ForbiddenException("Insufficient permission to publish this workflow")
+
+    published = await workflows_service.publish(workflow)
+    logger.info(f"Published workflow {workflow_id}")
+    return WorkflowTransformer.to_detail(published)
+
+
 @router.delete(
     "/{workflow_id}",
     status_code=status.HTTP_204_NO_CONTENT,

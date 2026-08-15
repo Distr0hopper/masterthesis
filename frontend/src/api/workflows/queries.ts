@@ -62,7 +62,18 @@ export const useConfirmWorkflowStep = () => {
   return useMutation({
     mutationFn: ({ stepId }: { stepId: string; workflowId: string }) => workflowsService.confirmStep(stepId),
     onSuccess: () => {
-      // confirming the last step can flip the workflow to validated (now publicly listed)
+      queryClient.invalidateQueries({ queryKey: workflowKeys.all });
+    },
+  });
+};
+
+export const usePublishWorkflow = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => workflowsService.publish(id),
+    onSuccess: () => {
+      // publishing makes the workflow appear in the public browse list
       queryClient.invalidateQueries({ queryKey: workflowKeys.all });
     },
   });

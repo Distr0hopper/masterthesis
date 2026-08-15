@@ -12,6 +12,7 @@ import {
   type WorkflowStepDisplayModel,
 } from '@/api/workflows';
 import { getErrorMessage } from '@/lib/errors';
+import { ROUTES } from '@/lib/routes';
 import { ComponentPickerDialog } from './ComponentPickerDialog';
 
 const STATUS_BADGE_VARIANT: Record<StepMatchStatus, 'secondary' | 'default' | 'destructive'> = {
@@ -70,10 +71,16 @@ export function StepMatchCard({ step, workflowId }: StepMatchCardProps) {
           <Label>Matched Component</Label>
           {step.componentId ? (
             <div className="flex items-center justify-between gap-2 rounded-md border border-input px-3 py-2">
-              <div className="flex items-baseline gap-2">
+              <a
+                href={ROUTES.componentDetail(step.componentId)}
+                target="_blank"
+                rel="noreferrer"
+                title="View component details"
+                className="flex items-baseline gap-2 hover:underline"
+              >
                 <span className="font-mono text-sm font-semibold text-slate-900">{step.componentName}</span>
                 <span className="text-xs text-slate-500">v{step.componentVersion}</span>
-              </div>
+              </a>
               <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={() => setPickerOpen(true)}>
                 Change
               </Button>

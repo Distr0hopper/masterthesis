@@ -10,6 +10,7 @@ import {
   componentTransformer,
   uploadComponentFormSchema,
   useUploadComponent,
+  type ComponentDetailDto,
   type UploadComponentFormData,
 } from '@/api/components';
 import { getErrorMessage } from '@/lib/errors';
@@ -17,7 +18,14 @@ import { ROUTES } from '@/lib/routes';
 import { DomainSelect } from '../common/DomainSelect';
 import { CwlFileDropzone } from '../common/CwlFileDropzone';
 
-export function ManualUploadForm() {
+interface ManualUploadFormProps {
+  // when provided, replaces the default post-upload navigation - used to embed this form
+  // in contexts like the workflow step picker, where navigating away would abandon
+  // whatever page it was opened from
+  onSuccess?: (created: ComponentDetailDto) => void;
+}
+
+export function ManualUploadForm({ onSuccess }: ManualUploadFormProps) {
   const navigate = useNavigate();
   const { mutate, isPending } = useUploadComponent();
   const {
@@ -38,7 +46,11 @@ export function ManualUploadForm() {
       {
         onSuccess: (created) => {
           toast.success(`${created.name} created`);
-          navigate(ROUTES.componentDetail(created.id));
+          if (onSuccess) {
+            onSuccess(created);
+          } else {
+            navigate(ROUTES.componentDetail(created.id));
+          }
         },
         onError: (error) => {
           setError('root', { message: getErrorMessage(error) });

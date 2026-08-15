@@ -5,6 +5,7 @@ import { useComponent } from '@/api/components';
 import { ComponentHeader } from '@/components/component-detail/organisms/ComponentHeader';
 import { ComponentTabs } from '@/components/component-detail/organisms/ComponentTabs';
 import { RelatedComponents } from '@/components/component-detail/organisms/RelatedComponents';
+import { ROUTES } from '@/lib/routes';
 
 export default function ComponentDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -18,7 +19,7 @@ export default function ComponentDetailPage() {
     return (
       <div>
         <p className="text-slate-500">Component not found.</p>
-        <Link to="/browse" className="mt-4 inline-flex items-center gap-1 text-sm text-jmu-blue-800 hover:underline">
+        <Link to={ROUTES.browse} className="mt-4 inline-flex items-center gap-1 text-sm text-jmu-blue-800 hover:underline">
           <ChevronLeft className="h-4 w-4" /> Back to Browse
         </Link>
       </div>

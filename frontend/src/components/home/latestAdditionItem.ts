@@ -1,5 +1,6 @@
 import type { ComponentDisplayModel } from '@/api/components';
 import type { WorkflowDisplayModel } from '@/api/workflows';
+import { ROUTES } from '@/lib/routes';
 
 export interface LatestAdditionItem {
   id: string;
@@ -19,7 +20,7 @@ export function toLatestAdditionItems(
       id: c.id,
       name: c.name,
       subtitle: `${c.domainDisplay} · ${c.createdAtDisplay}`,
-      href: `/components/${c.id}`,
+      href: ROUTES.componentDetail(c.id),
       badgeLabel: 'Component' as const,
       createdAt: c.createdAt,
     })),
@@ -27,7 +28,7 @@ export function toLatestAdditionItems(
       id: w.id,
       name: w.name,
       subtitle: `${w.domainsDisplay.join(', ')} · ${w.createdAtDisplay}`,
-      href: `/workflows/${w.id}`,
+      href: ROUTES.workflowDetail(w.id),
       badgeLabel: 'Workflow' as const,
       createdAt: w.createdAt,
     })),

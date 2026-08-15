@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuthStore } from '@/store/auth.store';
+import { ROUTES } from '@/lib/routes';
 
 const navLinkClass = (active: boolean) =>
   cn(
@@ -25,7 +26,7 @@ export default function Header() {
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
+    navigate(ROUTES.login);
   };
 
   const displayName = user?.firstName ?? user?.email.split('@')[0] ?? 'user';
@@ -33,7 +34,7 @@ export default function Header() {
   return (
     <header className="fixed inset-x-0 top-0 z-50 h-14 border-b border-jmu-blue-800 bg-jmu-blue-600 text-white">
       <div className="mx-auto flex h-full max-w-6xl items-center justify-between px-4">
-        <Link to="/" className="flex items-center gap-2.5">
+        <Link to={ROUTES.home} className="flex items-center gap-2.5">
           <img src="/icons/Icon-XS.svg" alt="" />
           <span className="text-sm font-semibold uppercase tracking-tight">
             JMU Component Repository
@@ -41,19 +42,22 @@ export default function Header() {
         </Link>
 
         <nav className="flex items-center gap-6">
-          <Link to="/" className={navLinkClass(pathname === '/')}>
+          <Link to={ROUTES.home} className={navLinkClass(pathname === ROUTES.home)}>
             Home
           </Link>
-          <Link to="/browse" className={navLinkClass(pathname === '/browse')}>
+          <Link to={ROUTES.browse} className={navLinkClass(pathname === ROUTES.browse)}>
             Browse
           </Link>
-          <Link to="/workflows" className={navLinkClass(pathname === '/workflows' || pathname.startsWith('/workflows/'))}>
+          <Link
+            to={ROUTES.workflows}
+            className={navLinkClass(pathname === ROUTES.workflows || pathname.startsWith(`${ROUTES.workflows}/`))}
+          >
             Workflows
           </Link>
-          <Link to="/builder" className={navLinkClass(pathname === '/builder')}>
+          <Link to={ROUTES.builder} className={navLinkClass(pathname === ROUTES.builder)}>
             Workflow Builder
           </Link>
-          <Link to="/about" className={navLinkClass(pathname === '/about')}>
+          <Link to={ROUTES.about} className={navLinkClass(pathname === ROUTES.about)}>
             About
           </Link>
         </nav>
@@ -69,13 +73,13 @@ export default function Header() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-48">
                   <DropdownMenuItem asChild>
-                    <Link to="/components/upload" className="cursor-pointer text-slate-900">
+                    <Link to={ROUTES.componentUpload} className="cursor-pointer text-slate-900">
                       <Package size={14} className="text-slate-500" />
                       Upload Component
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link to="/workflows/upload" className="cursor-pointer text-slate-900">
+                    <Link to={ROUTES.workflowUpload} className="cursor-pointer text-slate-900">
                       <Workflow size={14} className="text-slate-500" />
                       Upload Workflow
                     </Link>
@@ -93,19 +97,19 @@ export default function Header() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
                   <DropdownMenuItem asChild>
-                    <Link to="/profile" className="cursor-pointer text-slate-900">
+                    <Link to={ROUTES.profile} className="cursor-pointer text-slate-900">
                       <User size={14} className="text-slate-500" />
                       Profile
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link to="/my-components" className="cursor-pointer text-slate-900">
+                    <Link to={ROUTES.myComponents} className="cursor-pointer text-slate-900">
                       <Package size={14} className="text-slate-500" />
                       My Components
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link to="/my-workflows" className="cursor-pointer text-slate-900">
+                    <Link to={ROUTES.myWorkflows} className="cursor-pointer text-slate-900">
                       <Workflow size={14} className="text-slate-500" />
                       My Workflows
                     </Link>
@@ -120,7 +124,7 @@ export default function Header() {
             </>
           ) : (
             <Link
-              to="/login"
+              to={ROUTES.login}
               className="rounded-md bg-white px-3 py-1.5 text-sm font-medium text-jmu-blue-600 transition-colors hover:bg-jmu-blue-50"
             >
               Login

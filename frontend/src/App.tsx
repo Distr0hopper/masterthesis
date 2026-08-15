@@ -16,6 +16,7 @@ import WorkflowBuilderPage from "@/pages/WorkflowBuilderPage.tsx";
 import ProfilePage from "@/pages/ProfilePage.tsx";
 import ProtectedRoute from "@/pages/ProtectedRoutes.tsx";
 import { Toaster } from "@/components/ui/sonner.tsx";
+import { ROUTES } from "@/lib/routes";
 
 const queryClient = new QueryClient();
 
@@ -27,19 +28,19 @@ export default function App() {
         <Header />
         <main className="container mx-auto mt-14 max-w-6xl px-4 py-8">
           <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/browse" element={<ComponentsPage />} />
-            <Route path="/about" element={<AboutPage />} />
-            <Route path="/builder" element={<WorkflowBuilderPage />} />
-            <Route path="/profile" element={<ProtectedRoute> <ProfilePage /> </ProtectedRoute>} />
-            <Route path="/components/:id" element={<ComponentDetailPage />} />
-            <Route path="/components/upload" element={<ProtectedRoute> <UploadPage /> </ProtectedRoute>} />
-            <Route path="/my-components" element={<ProtectedRoute> <MyComponentsPage /> </ProtectedRoute>} />
-            <Route path="/workflows" element={<WorkflowsPage />} />
-            <Route path="/workflows/upload" element={<ProtectedRoute> <WorkflowUploadPage /> </ProtectedRoute>} />
-            <Route path="/workflows/:id" element={<WorkflowDetailPage />} />
-            <Route path="/my-workflows" element={<ProtectedRoute> <MyWorkflowsPage /> </ProtectedRoute>} />
-            <Route path="/login" element={<LoginPage />} />
+            <Route path={ROUTES.home} element={<HomePage />} />
+            <Route path={ROUTES.browse} element={<ComponentsPage />} />
+            <Route path={ROUTES.about} element={<AboutPage />} />
+            <Route path={ROUTES.builder} element={<WorkflowBuilderPage />} />
+            <Route path={ROUTES.profile} element={<ProtectedRoute> <ProfilePage /> </ProtectedRoute>} />
+            <Route path={ROUTES.componentDetail(':id')} element={<ComponentDetailPage />} />
+            <Route path={ROUTES.componentUpload} element={<ProtectedRoute> <UploadPage /> </ProtectedRoute>} />
+            <Route path={ROUTES.myComponents} element={<ProtectedRoute> <MyComponentsPage /> </ProtectedRoute>} />
+            <Route path={ROUTES.workflows} element={<WorkflowsPage />} />
+            <Route path={ROUTES.workflowUpload} element={<ProtectedRoute> <WorkflowUploadPage /> </ProtectedRoute>} />
+            <Route path={ROUTES.workflowDetail(':id')} element={<WorkflowDetailPage />} />
+            <Route path={ROUTES.myWorkflows} element={<ProtectedRoute> <MyWorkflowsPage /> </ProtectedRoute>} />
+            <Route path={ROUTES.login} element={<LoginPage />} />
           </Routes>
         </main>
       </Router>

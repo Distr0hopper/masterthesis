@@ -4,13 +4,14 @@ import { ChevronLeft } from 'lucide-react';
 import { useWorkflow } from '@/api/workflows';
 import { WorkflowHeader } from '@/components/workflow-detail/organisms/WorkflowHeader';
 import { WorkflowSteps } from '@/components/workflow-detail/organisms/WorkflowSteps';
+import { ROUTES } from '@/lib/routes';
 
 export default function WorkflowDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const backTo = (location.state as { from?: string } | null)?.from ?? '/workflows';
-  const backLabel = backTo === '/my-workflows' ? 'Back to My Workflows' : 'Back to Workflows';
+  const backTo = (location.state as { from?: string } | null)?.from ?? ROUTES.workflows;
+  const backLabel = backTo === ROUTES.myWorkflows ? 'Back to My Workflows' : 'Back to Workflows';
   const { data: model, isLoading, error } = useWorkflow(id ?? '');
 
   if (isLoading) {

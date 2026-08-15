@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button.tsx';
 import { FavoriteButton } from '@/components/FavoriteButton';
 import { getDomainBadgeStyle, useDomains, type ComponentDisplayModel } from '@/api/components';
 import { useAuthStore } from '@/store/auth.store';
+import { ROUTES } from '@/lib/routes';
 
 interface ComponentCardProps {
   component: ComponentDisplayModel;
@@ -40,7 +41,7 @@ export function ComponentCard({ component, actions }: ComponentCardProps) {
         </div>
 
         <Button asChild className="w-full bg-jmu-blue-800 hover:bg-jmu-blue-800/90">
-          <Link to={`/components/${component.id}`}>View</Link>
+          <Link to={ROUTES.componentDetail(component.id)}>View</Link>
         </Button>
 
         {actions}

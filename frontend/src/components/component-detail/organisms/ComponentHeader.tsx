@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button.tsx';
 import { componentsService, getDomainBadgeStyle, useDomains, type ComponentDetailDisplayModel } from '@/api/components';
 import { FavoriteButton } from '@/components/FavoriteButton';
 import { useAuthStore } from '@/store/auth.store';
+import { ROUTES } from '@/lib/routes';
 
 interface ComponentHeaderProps {
   model: ComponentDetailDisplayModel;
@@ -18,7 +19,7 @@ export function ComponentHeader({ model }: ComponentHeaderProps) {
 
   return (
     <>
-      <Link to="/browse" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900">
+      <Link to={ROUTES.browse} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900">
         <ChevronLeft className="h-4 w-4" /> Back to Browse
       </Link>
 

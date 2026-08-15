@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { useMyComponents } from '@/api/components';
 import { ComponentCard } from '@/components/component-browser/ComponentCard';
 import { MyComponentCardActions } from '@/components/component-mine/organisms/MyComponentCardActions';
+import { ROUTES } from '@/lib/routes';
 
 export default function MyComponentsPage() {
   const { data: components, isLoading } = useMyComponents();
@@ -22,7 +23,7 @@ export default function MyComponentsPage() {
           {displayModels.length === 0 ? (
             <p className="mt-8 text-slate-500">
               You haven't uploaded any components yet.{' '}
-              <Link to="/upload" className="font-semibold text-jmu-blue-800 hover:underline">
+              <Link to={ROUTES.componentUpload} className="font-semibold text-jmu-blue-800 hover:underline">
                 Upload one
               </Link>
               .

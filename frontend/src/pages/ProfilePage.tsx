@@ -15,6 +15,7 @@ import {
   usersTransformer,
   type UserResponseDto
 } from '@/api/users';
+import { ROUTES } from '@/lib/routes';
 
 export default function ProfilePage() {
   const user: UserResponseDto | null = useAuthStore((state) => state.user);
@@ -40,7 +41,7 @@ export default function ProfilePage() {
     mutate(dto, {
       onSuccess: () => {
         if (wasIncomplete) {
-          navigate('/');
+          navigate(ROUTES.home);
         } else {
           setSaved(true);
         }

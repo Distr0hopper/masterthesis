@@ -13,6 +13,7 @@ import {
   type UploadComponentFormData,
 } from '@/api/components';
 import { getErrorMessage } from '@/lib/errors';
+import { ROUTES } from '@/lib/routes';
 import { DomainSelect } from '../common/DomainSelect';
 import { CwlFileDropzone } from '../common/CwlFileDropzone';
 
@@ -37,7 +38,7 @@ export function ManualUploadForm() {
       {
         onSuccess: (created) => {
           toast.success(`${created.name} created`);
-          navigate(`/components/${created.id}`);
+          navigate(ROUTES.componentDetail(created.id));
         },
         onError: (error) => {
           setError('root', { message: getErrorMessage(error) });

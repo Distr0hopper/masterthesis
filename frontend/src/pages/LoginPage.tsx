@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button.tsx';
 import { useNavigate } from 'react-router-dom';
 import { Label } from '@/components/ui/label.tsx';
 import { getErrorMessage } from '@/lib/errors';
+import { ROUTES } from '@/lib/routes';
 
 function EmailStep({ onRequested }: { onRequested: (email: string, cooldownSeconds: number) => void }) {
   const { mutate, isPending } = useRequestOtp();
@@ -104,7 +105,7 @@ function CodeStep({
     const dto = authTransformer.formToVerifyOtpDto(email, data);
     mutate(dto, {
       onSuccess: (user) => {
-        navigate(user.firstName && user.lastName ? '/' : '/profile');
+        navigate(user.firstName && user.lastName ? ROUTES.home : ROUTES.profile);
       },
       onError: (error) => {
         setError('root', { message: getErrorMessage(error) });

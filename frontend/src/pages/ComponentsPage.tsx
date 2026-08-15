@@ -6,6 +6,7 @@ import { ComponentCard } from '@/components/component-browser/ComponentCard';
 import { ComponentFilters } from '@/components/component-browser/ComponentFilters';
 import { Button } from '@/components/ui/button.tsx';
 import { useAuthStore } from '@/store/auth.store';
+import { ROUTES } from '@/lib/routes';
 
 export default function ComponentsPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -32,7 +33,7 @@ export default function ComponentsPage() {
 
         {isAuthenticated && (
           <Button asChild className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90">
-            <Link to="/components/upload">
+            <Link to={ROUTES.componentUpload}>
               <Upload size={14} />
               Upload Component
             </Link>

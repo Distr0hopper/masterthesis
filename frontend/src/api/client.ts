@@ -1,5 +1,6 @@
 import axios, { type AxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/store/auth.store';
+import { ROUTES } from '@/lib/routes';
 
 const axiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
@@ -24,7 +25,7 @@ axiosInstance.interceptors.response.use(
     // handled by the caller, not treated as "you were logged out"
     if (error.response?.status === 401 && useAuthStore.getState().token) {
       useAuthStore.getState().logout();
-      window.location.href = '/login';
+      window.location.href = ROUTES.login;
     }
     return Promise.reject(error);
   },

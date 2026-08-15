@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useMyWorkflows, WorkflowStatus } from '@/api/workflows';
 import { WorkflowSection } from '@/components/workflow-mine/organisms/WorkflowSection';
+import { ROUTES } from '@/lib/routes';
 
 export default function MyWorkflowsPage() {
   const { data: workflows, isLoading } = useMyWorkflows();
@@ -19,7 +20,7 @@ export default function MyWorkflowsPage() {
       ) : displayModels.length === 0 ? (
         <p className="mt-8 text-slate-500">
           You haven't uploaded any workflows yet.{' '}
-          <Link to="/workflows/upload" className="font-semibold text-jmu-blue-800 hover:underline">
+          <Link to={ROUTES.workflowUpload} className="font-semibold text-jmu-blue-800 hover:underline">
             Upload one
           </Link>
           .

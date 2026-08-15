@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button.tsx';
 import { Label } from '@/components/ui/label.tsx';
 import { uploadWorkflowFormSchema, useUploadWorkflow, workflowTransformer, type UploadWorkflowFormData } from '@/api/workflows';
 import { getErrorMessage } from '@/lib/errors';
+import { ROUTES } from '@/lib/routes';
 import { DomainMultiSelect } from '../common/DomainMultiSelect';
 import { WorkflowZipDropzone } from '../common/WorkflowZipDropzone';
 
@@ -31,7 +32,7 @@ export function WorkflowUploadForm() {
       {
         onSuccess: (created) => {
           toast.success(`${created.name} created`);
-          navigate(`/workflows/${created.id}`);
+          navigate(ROUTES.workflowDetail(created.id));
         },
         onError: (error) => {
           setError('root', { message: getErrorMessage(error) });

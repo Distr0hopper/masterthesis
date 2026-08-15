@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button.tsx';
+import { ROUTES } from '@/lib/routes';
 
 export function HomeHero() {
   return (
@@ -18,10 +19,10 @@ export function HomeHero() {
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Button asChild className="bg-white text-jmu-blue-600 hover:bg-jmu-blue-50">
-            <Link to="/browse">Browse Components</Link>
+            <Link to={ROUTES.browse}>Browse Components</Link>
           </Button>
           <Button asChild variant="outline" className="border-white bg-transparent text-white hover:bg-white/10">
-            <Link to="/builder">Browse Workflows</Link>
+            <Link to={ROUTES.workflows}>Browse Workflows</Link>
           </Button>
         </div>
       </div>

@@ -1,12 +1,13 @@
 import { Link } from 'react-router-dom';
 import { GitMerge, LayoutGrid, Upload, Workflow } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card.tsx';
+import { ROUTES } from '@/lib/routes';
 
 const FIND_CONTENT_LINKS = [
-  { label: 'Browse Components', to: '/browse', icon: LayoutGrid },
-  { label: 'Browse Workflows', to: '/builder', icon: Workflow },
-  { label: 'Upload a Component', to: '/upload', icon: Upload },
-  { label: 'Build a Workflow', to: '/builder', icon: GitMerge },
+  { label: 'Browse Components', to: ROUTES.browse, icon: LayoutGrid },
+  { label: 'Browse Workflows', to: ROUTES.workflows, icon: Workflow },
+  { label: 'Upload a Component', to: ROUTES.componentUpload, icon: Upload },
+  { label: 'Build a Workflow', to: ROUTES.builder, icon: GitMerge },
 ];
 
 export function FindContent() {

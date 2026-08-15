@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { getDomainBadgeStyle, useDomains } from '@/api/components';
 import { WorkflowStatus, type WorkflowDisplayModel } from '@/api/workflows';
+import { ROUTES } from '@/lib/routes';
 
 interface WorkflowCardProps {
   workflow: WorkflowDisplayModel;
@@ -11,7 +12,7 @@ interface WorkflowCardProps {
   backTo?: string;
 }
 
-export function WorkflowCard({ workflow, backTo = '/workflows' }: WorkflowCardProps) {
+export function WorkflowCard({ workflow, backTo = ROUTES.workflows }: WorkflowCardProps) {
   const { data: domains } = useDomains();
 
   return (
@@ -45,7 +46,7 @@ export function WorkflowCard({ workflow, backTo = '/workflows' }: WorkflowCardPr
         </div>
 
         <Button asChild className="w-full bg-jmu-blue-800 hover:bg-jmu-blue-800/90">
-          <Link to={`/workflows/${workflow.id}`} state={{ from: backTo }}>
+          <Link to={ROUTES.workflowDetail(workflow.id)} state={{ from: backTo }}>
             View
           </Link>
         </Button>

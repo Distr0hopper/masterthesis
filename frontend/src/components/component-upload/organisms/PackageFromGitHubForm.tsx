@@ -12,6 +12,7 @@ import {
   type PackageComponentFormData,
 } from '@/api/components';
 import { getErrorMessage } from '@/lib/errors';
+import { ROUTES } from '@/lib/routes';
 import { DomainSelect } from '../common/DomainSelect';
 
 export function PackageFromGitHubForm() {
@@ -33,7 +34,7 @@ export function PackageFromGitHubForm() {
     mutate(dto, {
       onSuccess: (created) => {
         toast.success(`${created.name} packaged`);
-        navigate(`/components/${created.id}`);
+        navigate(ROUTES.componentDetail(created.id));
       },
       onError: (error) => {
         setError('root', { message: getErrorMessage(error) });

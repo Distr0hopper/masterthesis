@@ -7,6 +7,7 @@ import { WorkflowCard } from '@/components/workflow-browse/WorkflowCard';
 import { WorkflowFilters } from '@/components/workflow-browse/WorkflowFilters';
 import { Button } from '@/components/ui/button.tsx';
 import { useAuthStore } from '@/store/auth.store';
+import { ROUTES } from '@/lib/routes';
 
 export default function WorkflowsPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -30,7 +31,7 @@ export default function WorkflowsPage() {
 
         {isAuthenticated && (
           <Button asChild className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90">
-            <Link to="/workflows/upload">
+            <Link to={ROUTES.workflowUpload}>
               <Upload size={14} />
               Upload Workflow
             </Link>

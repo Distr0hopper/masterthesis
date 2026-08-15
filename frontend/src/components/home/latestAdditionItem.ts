@@ -1,0 +1,36 @@
+import type { ComponentDisplayModel } from '@/api/components';
+import type { WorkflowDisplayModel } from '@/api/workflows';
+
+export interface LatestAdditionItem {
+  id: string;
+  name: string;
+  subtitle: string;
+  href: string;
+  badgeLabel: 'Component' | 'Workflow';
+}
+
+export function toLatestAdditionItems(
+  components: ComponentDisplayModel[],
+  workflows: WorkflowDisplayModel[],
+  limit: number,
+): LatestAdditionItem[] {
+  const items = [
+    ...components.map((c) => ({
+      id: c.id,
+      name: c.name,
+      subtitle: `${c.domainDisplay} · ${c.createdAtDisplay}`,
+      href: `/components/${c.id}`,
+      badgeLabel: 'Component' as const,
+      createdAt: c.createdAt,
+    })),
+    ...workflows.map((w) => ({
+      id: w.id,
+      name: w.name,
+      subtitle: `${w.domainsDisplay.join(', ')} · ${w.createdAtDisplay}`,
+      href: `/workflows/${w.id}`,
+      badgeLabel: 'Workflow' as const,
+      createdAt: w.createdAt,
+    })),
+  ];
+  return items.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, limit);
+}

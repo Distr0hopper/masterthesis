@@ -7,6 +7,7 @@ export const workflowKeys = {
   all: ['workflows'] as const,
   lists: (domain?: string) => [...workflowKeys.all, 'list', domain] as const,
   mine: () => [...workflowKeys.all, 'mine'] as const,
+  latest: (limit?: number) => [...workflowKeys.all, 'latest', limit] as const,
   detail: (id: string) => [...workflowKeys.all, 'detail', id] as const,
 };
 
@@ -22,6 +23,14 @@ export const useMyWorkflows = () => {
   return useQuery({
     queryKey: workflowKeys.mine(),
     queryFn: () => workflowsService.getMine(),
+    select: (dtos) => workflowTransformer.toListDisplayModels(dtos),
+  });
+};
+
+export const useLatestWorkflows = (limit?: number) => {
+  return useQuery({
+    queryKey: workflowKeys.latest(limit),
+    queryFn: () => workflowsService.getLatest(limit),
     select: (dtos) => workflowTransformer.toListDisplayModels(dtos),
   });
 };

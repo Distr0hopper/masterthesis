@@ -41,6 +41,12 @@ class WorkflowsService:
     async def list_my_workflows(self, created_by_id: uuid.UUID) -> list[Workflow]:
         return await self.workflows_repository.find_by_created_by(created_by_id)
 
+    async def get_latest_workflows(self, limit: int) -> list[Workflow]:
+        # mirrors ComponentsService.get_latest_components - sort/slice in Python over the
+        # already-fetched (VALIDATED-only) list rather than a SQL ORDER BY + LIMIT
+        workflows = await self.workflows_repository.find_all()
+        return sorted(workflows, key=lambda w: w.created_at, reverse=True)[:limit]
+
     async def get_workflow(self, workflow_id: uuid.UUID) -> Workflow:
         workflow = await self.workflows_repository.find_by_id(workflow_id)
         if workflow is None:

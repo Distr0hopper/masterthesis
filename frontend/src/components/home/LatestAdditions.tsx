@@ -1,14 +1,19 @@
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
-import type { ComponentDisplayModel } from '@/api/components';
+import type { LatestAdditionItem } from './latestAdditionItem';
+
+const BADGE_CLASSNAME: Record<LatestAdditionItem['badgeLabel'], string> = {
+  Component: 'border-emerald-300 text-emerald-700',
+  Workflow: 'border-jmu-blue-300 text-jmu-blue-700',
+};
 
 interface LatestAdditionsProps {
-  components: ComponentDisplayModel[];
+  items: LatestAdditionItem[];
   isLoading: boolean;
 }
 
-export function LatestAdditions({ components, isLoading }: LatestAdditionsProps) {
+export function LatestAdditions({ items, isLoading }: LatestAdditionsProps) {
   return (
     <div>
       <h2 className="text-lg font-semibold text-slate-900">Latest additions</h2>
@@ -16,23 +21,21 @@ export function LatestAdditions({ components, isLoading }: LatestAdditionsProps)
         <CardContent className="divide-y p-0">
           {isLoading ? (
             <p className="p-6 text-sm text-slate-500">Loading...</p>
-          ) : components.length === 0 ? (
-            <p className="p-6 text-sm text-slate-500">No components yet.</p>
+          ) : items.length === 0 ? (
+            <p className="p-6 text-sm text-slate-500">Nothing uploaded yet.</p>
           ) : (
-            components.map((component) => (
+            items.map((item) => (
               <Link
-                key={component.id}
-                to={`/components/${component.id}`}
+                key={`${item.badgeLabel}-${item.id}`}
+                to={item.href}
                 className="flex items-center justify-between px-6 py-4 hover:bg-slate-50"
               >
                 <div>
-                  <p className="font-mono font-semibold text-slate-900">{component.name}</p>
-                  <p className="mt-0.5 text-sm text-slate-500">
-                    {component.domainDisplay} · {component.createdAtDisplay}
-                  </p>
+                  <p className="font-mono font-semibold text-slate-900">{item.name}</p>
+                  <p className="mt-0.5 text-sm text-slate-500">{item.subtitle}</p>
                 </div>
-                <Badge variant="outline" className="border-emerald-300 text-emerald-700">
-                  Component
+                <Badge variant="outline" className={BADGE_CLASSNAME[item.badgeLabel]}>
+                  {item.badgeLabel}
                 </Badge>
               </Link>
             ))

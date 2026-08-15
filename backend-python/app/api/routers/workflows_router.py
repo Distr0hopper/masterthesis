@@ -49,6 +49,15 @@ async def list_my_workflows(
     return [WorkflowTransformer.to_list_item(w) for w in workflows]
 
 
+@router.get("/latest", response_model=list[WorkflowListItemDto])
+async def list_latest_workflows(
+    workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
+    limit: int = 6,
+) -> list[WorkflowListItemDto]:
+    workflows = await workflows_service.get_latest_workflows(limit)
+    return [WorkflowTransformer.to_list_item(w) for w in workflows]
+
+
 @router.post(
     "",
     response_model=WorkflowDetailDto,

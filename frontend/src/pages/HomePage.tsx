@@ -1,8 +1,10 @@
 import { useLatestComponents } from '@/api/components';
+import { useLatestWorkflows } from '@/api/workflows';
 import { useStats } from '@/api/stats';
 import { HomeHero } from '@/components/home/HomeHero';
 import { HomeStats } from '@/components/home/HomeStats';
 import { LatestAdditions } from '@/components/home/LatestAdditions';
+import { toLatestAdditionItems } from '@/components/home/latestAdditionItem';
 import { FindContent } from '@/components/home/FindContent';
 import { HomeTags } from '@/components/home/HomeTags';
 import { StandardsIntegrations } from '@/components/home/StandardsIntegrations';
@@ -10,8 +12,10 @@ import { HomeFooter } from '@/components/home/HomeFooter';
 
 export default function HomePage() {
   const { data: stats } = useStats();
-  const { data: latest, isLoading: isLoadingLatest } = useLatestComponents(6);
-  const latestDisplayModels = latest ?? [];
+  const { data: latestComponents, isLoading: isLoadingComponents } = useLatestComponents(6);
+  const { data: latestWorkflows, isLoading: isLoadingWorkflows } = useLatestWorkflows(6);
+  const latestItems = toLatestAdditionItems(latestComponents ?? [], latestWorkflows ?? [], 6);
+  const isLoadingLatest = isLoadingComponents || isLoadingWorkflows;
 
   return (
     <div className="-mx-4 -mt-8">
@@ -22,7 +26,7 @@ export default function HomePage() {
 
         <div className="mt-10 grid grid-cols-1 gap-8 lg:grid-cols-3">
           <div className="lg:col-span-2">
-            <LatestAdditions components={latestDisplayModels} isLoading={isLoadingLatest} />
+            <LatestAdditions items={latestItems} isLoading={isLoadingLatest} />
           </div>
 
           <div className="flex flex-col gap-6">

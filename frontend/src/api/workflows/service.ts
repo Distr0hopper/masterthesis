@@ -16,6 +16,10 @@ export const workflowsService = {
     return apiClient.get(`${ENDPOINT}/mine`);
   },
 
+  getLatest(limit?: number): Promise<WorkflowListItemDto[]> {
+    return apiClient.get(`${ENDPOINT}/latest`, { params: { limit } });
+  },
+
   download(id: string): Promise<{ blob: Blob; filename: string }> {
     return apiClient.getBlob(`${ENDPOINT}/${id}/download`, 'workflow.zip');
   },

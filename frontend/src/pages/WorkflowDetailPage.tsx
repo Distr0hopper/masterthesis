@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { isAxiosError } from 'axios';
 import { ChevronLeft, Download, Globe, Trash2 } from 'lucide-react';
@@ -5,7 +6,6 @@ import { toast } from 'sonner';
 import { getDomainBadgeStyle, useDomains } from '@/api/components';
 import {
   StepMatchStatus,
-  useDeleteWorkflow,
   usePublishWorkflow,
   useWorkflow,
   WorkflowStatus,
@@ -15,7 +15,8 @@ import {
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
-import { StepMatchCard } from '@/components/workflow-detail/StepMatchCard';
+import { StepMatchCard } from '@/components/workflow-detail/organisms/StepMatchCard';
+import { DeleteWorkflowDialog } from '@/components/workflow-detail/organisms/DeleteWorkflowDialog';
 import { useAuthStore } from '@/store/auth.store';
 import { getErrorMessage } from '@/lib/errors';
 
@@ -28,8 +29,8 @@ export default function WorkflowDetailPage() {
   const { data: workflow, isLoading, error } = useWorkflow(id ?? '');
   const { data: domains } = useDomains();
   const currentUser = useAuthStore((state) => state.user);
-  const { mutate: deleteWorkflow, isPending: isDeleting } = useDeleteWorkflow();
   const { mutate: publishWorkflow, isPending: isPublishing } = usePublishWorkflow();
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   if (isLoading) {
     return <p className="text-slate-500">Loading workflow...</p>;
@@ -54,17 +55,6 @@ export default function WorkflowDetailPage() {
   const canDelete = currentUser?.id === model.createdById;
   const allStepsConfirmed = model.steps.every((step) => step.matchStatus === StepMatchStatus.CONFIRMED);
   const canPublish = canDelete && model.status === WorkflowStatus.PENDING_VALIDATION;
-
-  const handleDelete = () => {
-    if (!confirm(`Delete workflow "${model.name}"? This cannot be undone.`)) return;
-    deleteWorkflow(model.id, {
-      onSuccess: () => {
-        toast.success('Workflow deleted');
-        navigate(backTo);
-      },
-      onError: (deleteError) => toast.error(getErrorMessage(deleteError)),
-    });
-  };
 
   const handlePublish = () => {
     publishWorkflow(model.id, {
@@ -122,7 +112,7 @@ export default function WorkflowDetailPage() {
               )}
 
               {canDelete && (
-                <Button variant="destructive" size="sm" onClick={handleDelete} disabled={isDeleting}>
+                <Button variant="destructive" size="sm" onClick={() => setDeleteDialogOpen(true)}>
                   <Trash2 className="mr-1 h-4 w-4" /> Delete
                 </Button>
               )}
@@ -147,6 +137,13 @@ export default function WorkflowDetailPage() {
           <StepMatchCard key={step.id} step={step} workflowId={model.id} />
         ))}
       </div>
+
+      <DeleteWorkflowDialog
+        workflow={model}
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onDeleted={() => navigate(backTo)}
+      />
     </div>
   );
 }

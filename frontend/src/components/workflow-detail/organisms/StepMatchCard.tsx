@@ -1,9 +1,10 @@
+import { useState } from 'react';
+import { Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { Label } from '@/components/ui/label.tsx';
-import { useComponents } from '@/api/components';
 import {
   StepMatchStatus,
   useConfirmWorkflowStep,
@@ -11,6 +12,7 @@ import {
   type WorkflowStepDisplayModel,
 } from '@/api/workflows';
 import { getErrorMessage } from '@/lib/errors';
+import { ComponentPickerDialog } from './ComponentPickerDialog';
 
 const STATUS_BADGE_VARIANT: Record<StepMatchStatus, 'secondary' | 'default' | 'destructive'> = {
   [StepMatchStatus.SUGGESTED]: 'secondary',
@@ -24,7 +26,7 @@ interface StepMatchCardProps {
 }
 
 export function StepMatchCard({ step, workflowId }: StepMatchCardProps) {
-  const { data: components } = useComponents();
+  const [pickerOpen, setPickerOpen] = useState(false);
   const { mutate: updateComponent, isPending: isUpdating } = useUpdateWorkflowStepComponent();
   const { mutate: confirmStep, isPending: isConfirming } = useConfirmWorkflowStep();
 
@@ -65,22 +67,25 @@ export function StepMatchCard({ step, workflowId }: StepMatchCardProps) {
         )}
 
         <div className="flex flex-col gap-2">
-          <Label htmlFor={`step-component-${step.id}`}>Matched Component</Label>
-          <select
-            id={`step-component-${step.id}`}
-            value={step.componentId ?? ''}
-            disabled={isPending}
-            onChange={(e) => handleChange(e.target.value || null)}
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:text-sm"
-          >
-            <option value="">— No match —</option>
-            {components?.map((component) => (
-              <option key={component.id} value={component.id}>
-                {component.name} (v{component.version})
-              </option>
-            ))}
-          </select>
+          <Label>Matched Component</Label>
+          {step.componentId ? (
+            <div className="flex items-center justify-between gap-2 rounded-md border border-input px-3 py-2">
+              <div className="flex items-baseline gap-2">
+                <span className="font-mono text-sm font-semibold text-slate-900">{step.componentName}</span>
+                <span className="text-xs text-slate-500">v{step.componentVersion}</span>
+              </div>
+              <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={() => setPickerOpen(true)}>
+                Change
+              </Button>
+            </div>
+          ) : (
+            <Button type="button" variant="outline" disabled={isPending} onClick={() => setPickerOpen(true)}>
+              <Search className="mr-1 h-4 w-4" /> Browse Components
+            </Button>
+          )}
         </div>
+
+        <ComponentPickerDialog open={pickerOpen} onOpenChange={setPickerOpen} value={step.componentId} onSelect={handleChange} />
 
         <Button
           size="sm"

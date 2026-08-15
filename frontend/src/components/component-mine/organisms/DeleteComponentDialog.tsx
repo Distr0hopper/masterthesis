@@ -1,6 +1,5 @@
 import { toast } from 'sonner';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog.tsx';
-import { Button } from '@/components/ui/button.tsx';
+import { ConfirmDeleteDialog } from '@/components/common/ConfirmDeleteDialog';
 import { useDeleteComponent, type ComponentDisplayModel } from '@/api/components';
 import { getErrorMessage } from '@/lib/errors';
 
@@ -26,25 +25,18 @@ export function DeleteComponentDialog({ component, open, onOpenChange }: DeleteC
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Delete {component.name}?</DialogTitle>
-          <DialogDescription>
-            This will permanently delete version {component.version}. If this is the only version, the component will be
-            removed from the repository entirely. This action cannot be undone.
-          </DialogDescription>
-        </DialogHeader>
-
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancel
-          </Button>
-          <Button type="button" variant="destructive" onClick={handleDelete} disabled={isPending}>
-            {isPending ? 'Deleting...' : 'Delete'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <ConfirmDeleteDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={`Delete ${component.name}?`}
+      description={
+        <>
+          This will permanently delete version {component.version}. If this is the only version, the component will be
+          removed from the repository entirely. This action cannot be undone.
+        </>
+      }
+      onConfirm={handleDelete}
+      isPending={isPending}
+    />
   );
 }

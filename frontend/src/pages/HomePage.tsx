@@ -1,4 +1,4 @@
-import { componentTransformer, useLatestComponents } from '@/api/components';
+import { useLatestComponents } from '@/api/components';
 import { useStats } from '@/api/stats';
 import { HomeHero } from '@/components/home/HomeHero';
 import { HomeStats } from '@/components/home/HomeStats';
@@ -11,7 +11,7 @@ import { HomeFooter } from '@/components/home/HomeFooter';
 export default function HomePage() {
   const { data: stats } = useStats();
   const { data: latest, isLoading: isLoadingLatest } = useLatestComponents(6);
-  const latestDisplayModels = componentTransformer.toListDisplayModels(latest ?? []);
+  const latestDisplayModels = latest ?? [];
 
   return (
     <div className="-mx-4 -mt-8">

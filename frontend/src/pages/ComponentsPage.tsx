@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { componentTransformer, useComponents, useDomains } from '@/api/components';
+import { useComponents, useDomains } from '@/api/components';
 import { ComponentCard } from '@/components/component-browser/ComponentCard';
 import { ComponentFilters } from '@/components/component-browser/ComponentFilters';
 import { useAuthStore } from '@/store/auth.store';
@@ -18,7 +18,7 @@ export default function ComponentsPage() {
     isAuthenticated && favoritesOnly,
   );
 
-  const models = componentTransformer.toListDisplayModels(components ?? []);
+  const models = components ?? [];
   const term = searchTerm.trim().toLowerCase();
   const displayModels = term ? models.filter((c) => c.name.toLowerCase().includes(term)) : models;
 

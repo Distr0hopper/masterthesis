@@ -16,8 +16,8 @@ export const workflowsService = {
     return apiClient.get(`${ENDPOINT}/mine`);
   },
 
-  getDownloadUrl(id: string): string {
-    return `${apiClient.baseURL}${ENDPOINT}/${id}/download`;
+  download(id: string): Promise<{ blob: Blob; filename: string }> {
+    return apiClient.getBlob(`${ENDPOINT}/${id}/download`, 'workflow.zip');
   },
 
   upload(file: File, dto: CreateWorkflowDto): Promise<WorkflowDetailDto> {

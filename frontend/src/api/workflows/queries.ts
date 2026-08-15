@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { workflowsService } from './service';
+import { workflowTransformer } from './transformer';
 import type { CreateWorkflowDto } from './types';
 
 export const workflowKeys = {
@@ -13,6 +14,7 @@ export const useWorkflows = (domain?: string) => {
   return useQuery({
     queryKey: workflowKeys.lists(domain),
     queryFn: () => workflowsService.getAll(domain),
+    select: (dtos) => workflowTransformer.toListDisplayModels(dtos),
   });
 };
 
@@ -20,6 +22,7 @@ export const useMyWorkflows = () => {
   return useQuery({
     queryKey: workflowKeys.mine(),
     queryFn: () => workflowsService.getMine(),
+    select: (dtos) => workflowTransformer.toListDisplayModels(dtos),
   });
 };
 
@@ -28,6 +31,7 @@ export const useWorkflow = (id: string) => {
     queryKey: workflowKeys.detail(id),
     queryFn: () => workflowsService.getById(id),
     enabled: !!id,
+    select: (dto) => workflowTransformer.toDetailDisplayModel(dto),
   });
 };
 
@@ -76,6 +80,12 @@ export const usePublishWorkflow = () => {
       // publishing makes the workflow appear in the public browse list
       queryClient.invalidateQueries({ queryKey: workflowKeys.all });
     },
+  });
+};
+
+export const useDownloadWorkflow = () => {
+  return useMutation({
+    mutationFn: (id: string) => workflowsService.download(id),
   });
 };
 

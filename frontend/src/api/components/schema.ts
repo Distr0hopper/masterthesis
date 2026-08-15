@@ -1,12 +1,5 @@
 import { z } from 'zod';
-
-// mirrors the backend's MAX_DESCRIPTION_LENGTH (app/domain/models/component.py)
-export const MAX_DESCRIPTION_LENGTH = 2000;
-
-const descriptionSchema = z
-  .string()
-  .max(MAX_DESCRIPTION_LENGTH, `Description must be at most ${MAX_DESCRIPTION_LENGTH} characters`)
-  .optional();
+import { descriptionSchema } from '@/api/schema';
 
 export const uploadComponentFormSchema = z.object({
   name: z.string().min(1, 'Name is required'),

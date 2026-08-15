@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { componentsService } from './service';
+import { componentTransformer } from './transformer';
 import type { AddVersionDto, ComponentDomain, CreateComponentDto, PackageComponentDto, UpdateComponentDto } from './types';
 
 export const componentKeys = {
@@ -17,6 +18,7 @@ export const useComponents = (domain?: ComponentDomain, excludeMine?: boolean, f
   return useQuery({
     queryKey: componentKeys.lists(domain, excludeMine, favoritesOnly),
     queryFn: () => componentsService.getAll(domain, excludeMine, favoritesOnly),
+    select: (dtos) => componentTransformer.toListDisplayModels(dtos),
   });
 };
 
@@ -24,6 +26,7 @@ export const useMyComponents = () => {
   return useQuery({
     queryKey: componentKeys.mine(),
     queryFn: () => componentsService.getMine(),
+    select: (dtos) => componentTransformer.toListDisplayModels(dtos),
   });
 };
 
@@ -31,6 +34,7 @@ export const useLatestComponents = (limit?: number) => {
   return useQuery({
     queryKey: componentKeys.latest(limit),
     queryFn: () => componentsService.getLatest(limit),
+    select: (dtos) => componentTransformer.toListDisplayModels(dtos),
   });
 };
 
@@ -39,6 +43,7 @@ export const useComponent = (id: string) => {
     queryKey: componentKeys.detail(id),
     queryFn: () => componentsService.getById(id),
     enabled: !!id,
+    select: (dto) => componentTransformer.toDetailDisplayModel(dto),
   });
 };
 
@@ -47,6 +52,7 @@ export const useComponentVersions = (id: string) => {
     queryKey: componentKeys.versions(id),
     queryFn: () => componentsService.getVersions(id),
     enabled: !!id,
+    select: (dtos) => componentTransformer.toListDisplayModels(dtos),
   });
 };
 

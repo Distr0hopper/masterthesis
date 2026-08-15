@@ -15,7 +15,7 @@ import type {
   UpdateComponentFormData,
   UploadComponentFormData,
 } from './schema';
-import { formatDate } from '@/api/transformer';
+import { formatDate, getCreatorDisplay } from '@/api/transformer';
 
 const SOURCE_LABELS: Record<ComponentSource, string> = {
   [ComponentSource.AUTOMATED_PACKAGING]: 'Packaged from GitHub',
@@ -70,11 +70,7 @@ export interface ComponentDetailDisplayModel extends ComponentDisplayModel {
 }
 
 function getAuthorDisplay(authorName: string | null, createdBy?: ComponentCreatorDto | null): string {
-  if (createdBy) {
-    const { firstName, lastName, email } = createdBy;
-    return firstName && lastName ? `${firstName} ${lastName}` : email;
-  }
-  return authorName ?? 'Unknown';
+  return createdBy ? getCreatorDisplay(createdBy) : (authorName ?? 'Unknown');
 }
 
 export function getDomainLabel(domain: string): string {

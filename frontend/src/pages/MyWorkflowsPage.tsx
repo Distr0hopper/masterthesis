@@ -1,11 +1,11 @@
 import { Link } from 'react-router-dom';
-import { useMyWorkflows, WorkflowStatus, workflowTransformer } from '@/api/workflows';
+import { useMyWorkflows, WorkflowStatus } from '@/api/workflows';
 import { WorkflowSection } from '@/components/workflow-mine/organisms/WorkflowSection';
 
 export default function MyWorkflowsPage() {
   const { data: workflows, isLoading } = useMyWorkflows();
 
-  const displayModels = workflowTransformer.toListDisplayModels(workflows ?? []);
+  const displayModels = workflows ?? [];
   const published = displayModels.filter((w) => w.status === WorkflowStatus.VALIDATED);
   const unpublished = displayModels.filter((w) => w.status !== WorkflowStatus.VALIDATED);
 

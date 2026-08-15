@@ -1,14 +1,14 @@
 import { Link, useParams } from 'react-router-dom';
 import { isAxiosError } from 'axios';
 import { ChevronLeft } from 'lucide-react';
-import { componentTransformer, useComponent } from '@/api/components';
+import { useComponent } from '@/api/components';
 import { ComponentHeader } from '@/components/component-detail/organisms/ComponentHeader';
 import { ComponentTabs } from '@/components/component-detail/organisms/ComponentTabs';
 import { RelatedComponents } from '@/components/component-detail/organisms/RelatedComponents';
 
 export default function ComponentDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { data: component, isLoading, error } = useComponent(id ?? '');
+  const { data: model, isLoading, error } = useComponent(id ?? '');
 
   if (isLoading) {
     return <p className="text-slate-500">Loading component...</p>;
@@ -25,11 +25,9 @@ export default function ComponentDetailPage() {
     );
   }
 
-  if (error || !component) {
+  if (error || !model) {
     return <p className="text-slate-500">Something went wrong loading this component.</p>;
   }
-
-  const model = componentTransformer.toDetailDisplayModel(component);
 
   return (
     <div>

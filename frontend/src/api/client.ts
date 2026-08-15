@@ -41,4 +41,12 @@ export const apiClient = {
     axiosInstance.patch<T>(url, data, config).then((res) => res.data),
   delete: <T>(url: string, config?: AxiosRequestConfig) =>
     axiosInstance.delete<T>(url, config).then((res) => res.data),
+  // for file downloads that need the Authorization header attached (unlike a plain
+  // `window.location.href` navigation, which never sends custom headers) - goes through
+  // this axios instance's interceptor instead of a raw browser request
+  async getBlob(url: string, fallbackFilename: string): Promise<{ blob: Blob; filename: string }> {
+    const res = await axiosInstance.get<Blob>(url, { responseType: 'blob' });
+    const match = (res.headers['content-disposition'] as string | undefined)?.match(/filename="?([^";]+)"?/);
+    return { blob: res.data, filename: match?.[1] ?? fallbackFilename };
+  },
 };

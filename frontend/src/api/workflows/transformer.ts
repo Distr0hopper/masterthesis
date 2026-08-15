@@ -1,8 +1,8 @@
-import type { WorkflowCreatorDto, WorkflowDetailDto, WorkflowListItemDto, WorkflowStepDto } from './types';
+import type { WorkflowDetailDto, WorkflowListItemDto, WorkflowStepDto } from './types';
 import { StepMatchStatus, WorkflowStatus } from './types';
 import type { UploadWorkflowFormData } from './schema';
 import { getDomainLabel } from '@/api/components';
-import { formatDate } from '@/api/transformer';
+import { formatDate, getCreatorDisplay } from '@/api/transformer';
 
 const MATCH_STATUS_LABELS: Record<StepMatchStatus, string> = {
   [StepMatchStatus.SUGGESTED]: 'Suggested match — please confirm',
@@ -26,12 +26,6 @@ export interface WorkflowStepDisplayModel {
   matchStatus: StepMatchStatus;
   matchStatusDisplay: string;
   matchScore: number | null;
-}
-
-function getCreatorDisplay(createdBy: WorkflowCreatorDto | null): string {
-  if (!createdBy) return 'Unknown';
-  const { firstName, lastName, email } = createdBy;
-  return firstName && lastName ? `${firstName} ${lastName}` : email;
 }
 
 export interface WorkflowDisplayModel {

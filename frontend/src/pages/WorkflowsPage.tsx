@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Upload } from 'lucide-react';
 import { useDomains } from '@/api/components';
-import { useWorkflows, workflowTransformer } from '@/api/workflows';
+import { useWorkflows } from '@/api/workflows';
 import { WorkflowCard } from '@/components/workflow-browse/WorkflowCard';
 import { WorkflowFilters } from '@/components/workflow-browse/WorkflowFilters';
 import { Button } from '@/components/ui/button.tsx';
@@ -16,7 +16,7 @@ export default function WorkflowsPage() {
   const { data: domains } = useDomains();
   const { data: workflows, isLoading } = useWorkflows(selectedDomain || undefined);
 
-  const models = workflowTransformer.toListDisplayModels(workflows ?? []);
+  const models = workflows ?? [];
   const term = searchTerm.trim().toLowerCase();
   const displayModels = term ? models.filter((w) => w.name.toLowerCase().includes(term)) : models;
 

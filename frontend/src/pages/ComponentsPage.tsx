@@ -1,7 +1,10 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Upload } from 'lucide-react';
 import { useComponents, useDomains } from '@/api/components';
 import { ComponentCard } from '@/components/component-browser/ComponentCard';
 import { ComponentFilters } from '@/components/component-browser/ComponentFilters';
+import { Button } from '@/components/ui/button.tsx';
 import { useAuthStore } from '@/store/auth.store';
 
 export default function ComponentsPage() {
@@ -24,7 +27,18 @@ export default function ComponentsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-slate-900">Browse Repository</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold text-slate-900">Browse Repository</h1>
+
+        {isAuthenticated && (
+          <Button asChild className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90">
+            <Link to="/components/upload">
+              <Upload size={14} />
+              Upload Component
+            </Link>
+          </Button>
+        )}
+      </div>
 
       <ComponentFilters
         searchTerm={searchTerm}

@@ -61,13 +61,27 @@ export default function Header() {
         <div className="flex items-center gap-2">
           {isAuthenticated ? (
             <>
-              <Link
-                to="/upload"
-                className="flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-sm font-medium text-jmu-blue-600 transition-colors hover:bg-jmu-blue-50"
-              >
-                <Upload size={14} />
-                Upload
-              </Link>
+              <DropdownMenu>
+                <DropdownMenuTrigger className="flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-sm font-medium text-jmu-blue-600 transition-colors hover:bg-jmu-blue-50 focus:outline-none">
+                  <Upload size={14} />
+                  Upload
+                  <ChevronDown size={13} />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-48">
+                  <DropdownMenuItem asChild>
+                    <Link to="/components/upload" className="cursor-pointer text-slate-900">
+                      <Package size={14} className="text-slate-500" />
+                      Upload Component
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/workflows/upload" className="cursor-pointer text-slate-900">
+                      <Workflow size={14} className="text-slate-500" />
+                      Upload Workflow
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               <DropdownMenu>
                 <DropdownMenuTrigger className="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-sm text-jmu-blue-100 transition-colors hover:text-white focus:outline-none">

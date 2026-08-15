@@ -33,7 +33,7 @@ export default function App() {
             <Route path="/builder" element={<WorkflowBuilderPage />} />
             <Route path="/profile" element={<ProtectedRoute> <ProfilePage /> </ProtectedRoute>} />
             <Route path="/components/:id" element={<ComponentDetailPage />} />
-            <Route path="/upload" element={<ProtectedRoute> <UploadPage /> </ProtectedRoute>} />
+            <Route path="/components/upload" element={<ProtectedRoute> <UploadPage /> </ProtectedRoute>} />
             <Route path="/my-components" element={<ProtectedRoute> <MyComponentsPage /> </ProtectedRoute>} />
             <Route path="/workflows" element={<WorkflowsPage />} />
             <Route path="/workflows/upload" element={<ProtectedRoute> <WorkflowUploadPage /> </ProtectedRoute>} />

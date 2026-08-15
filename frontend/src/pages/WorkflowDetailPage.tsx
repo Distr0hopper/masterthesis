@@ -1,9 +1,9 @@
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { isAxiosError } from 'axios';
 import { ChevronLeft, Download, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getDomainBadgeStyle, useDomains } from '@/api/components';
-import { useDeleteWorkflow, useWorkflow, workflowsService, workflowTransformer } from '@/api/workflows';
+import { useDeleteWorkflow, useWorkflow, WorkflowStatus, workflowsService, workflowTransformer } from '@/api/workflows';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
@@ -14,6 +14,9 @@ import { getErrorMessage } from '@/lib/errors';
 export default function WorkflowDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const backTo = (location.state as { from?: string } | null)?.from ?? '/workflows';
+  const backLabel = backTo === '/my-workflows' ? 'Back to My Workflows' : 'Back to Workflows';
   const { data: workflow, isLoading, error } = useWorkflow(id ?? '');
   const { data: domains } = useDomains();
   const currentUser = useAuthStore((state) => state.user);
@@ -27,8 +30,8 @@ export default function WorkflowDetailPage() {
     return (
       <div>
         <p className="text-slate-500">Workflow not found.</p>
-        <Link to="/workflows" className="mt-4 inline-flex items-center gap-1 text-sm text-jmu-blue-800 hover:underline">
-          <ChevronLeft className="h-4 w-4" /> Back to Workflows
+        <Link to={backTo} className="mt-4 inline-flex items-center gap-1 text-sm text-jmu-blue-800 hover:underline">
+          <ChevronLeft className="h-4 w-4" /> {backLabel}
         </Link>
       </div>
     );
@@ -46,7 +49,7 @@ export default function WorkflowDetailPage() {
     deleteWorkflow(model.id, {
       onSuccess: () => {
         toast.success('Workflow deleted');
-        navigate('/workflows');
+        navigate(backTo);
       },
       onError: (deleteError) => toast.error(getErrorMessage(deleteError)),
     });
@@ -54,9 +57,15 @@ export default function WorkflowDetailPage() {
 
   return (
     <div>
-      <Link to="/workflows" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900">
-        <ChevronLeft className="h-4 w-4" /> Back to Workflows
+      <Link to={backTo} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900">
+        <ChevronLeft className="h-4 w-4" /> {backLabel}
       </Link>
+
+      {model.status === WorkflowStatus.PENDING_VALIDATION && (
+        <div className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          This workflow is pending validation and is only visible to you. Confirm every step below to publish it.
+        </div>
+      )}
 
       <Card className="mt-4">
         <CardContent className="flex flex-col gap-3 pt-6">

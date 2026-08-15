@@ -1,5 +1,5 @@
 import type { WorkflowCreatorDto, WorkflowDetailDto, WorkflowListItemDto, WorkflowStepDto } from './types';
-import { StepMatchStatus } from './types';
+import { StepMatchStatus, WorkflowStatus } from './types';
 import type { UploadWorkflowFormData } from './schema';
 import { getDomainLabel } from '@/api/components';
 import { formatDate } from '@/api/transformer';
@@ -8,6 +8,11 @@ const MATCH_STATUS_LABELS: Record<StepMatchStatus, string> = {
   [StepMatchStatus.SUGGESTED]: 'Suggested match — please confirm',
   [StepMatchStatus.CONFIRMED]: 'Confirmed',
   [StepMatchStatus.UNMATCHED]: 'Not matched',
+};
+
+const WORKFLOW_STATUS_LABELS: Record<WorkflowStatus, string> = {
+  [WorkflowStatus.PENDING_VALIDATION]: 'Pending validation',
+  [WorkflowStatus.VALIDATED]: 'Validated',
 };
 
 export interface WorkflowStepDisplayModel {
@@ -36,6 +41,8 @@ export interface WorkflowDisplayModel {
   domains: string[];
   domainsDisplay: string[];
   stepCount: number;
+  status: WorkflowStatus;
+  statusDisplay: string;
   createdAt: Date;
   createdAtDisplay: string;
 }
@@ -54,6 +61,9 @@ export const workflowTransformer = {
   },
 
   toStepDisplayModel(dto: WorkflowStepDto): WorkflowStepDisplayModel {
+    // a manually-touched selection always has matchScore === null (backend clears it on
+    // any PATCH), so this distinguishes "algorithm guessed this" from "you picked this"
+    const isManualPick = dto.matchStatus === StepMatchStatus.SUGGESTED && dto.matchScore === null;
     return {
       id: dto.id,
       stepId: dto.stepId,
@@ -63,7 +73,7 @@ export const workflowTransformer = {
       componentName: dto.component?.name ?? null,
       componentVersion: dto.component?.version ?? null,
       matchStatus: dto.matchStatus,
-      matchStatusDisplay: MATCH_STATUS_LABELS[dto.matchStatus],
+      matchStatusDisplay: isManualPick ? 'Selected — please confirm' : MATCH_STATUS_LABELS[dto.matchStatus],
       matchScore: dto.matchScore,
     };
   },
@@ -77,6 +87,8 @@ export const workflowTransformer = {
       domains: dto.domains,
       domainsDisplay: dto.domains.map(getDomainLabel),
       stepCount: dto.stepCount,
+      status: dto.status,
+      statusDisplay: WORKFLOW_STATUS_LABELS[dto.status],
       createdAt,
       createdAtDisplay: formatDate(createdAt),
     };

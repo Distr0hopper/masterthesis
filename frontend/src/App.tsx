@@ -8,6 +8,7 @@ import MyComponentsPage from '@/pages/MyComponentsPage';
 import WorkflowsPage from '@/pages/WorkflowsPage';
 import WorkflowDetailPage from '@/pages/WorkflowDetailPage';
 import WorkflowUploadPage from '@/pages/WorkflowUploadPage';
+import MyWorkflowsPage from '@/pages/MyWorkflowsPage';
 import LoginPage from '@/pages/LoginPage';
 import HomePage from "@/pages/HomePage.tsx";
 import AboutPage from "@/pages/AboutPage.tsx";
@@ -37,6 +38,7 @@ export default function App() {
             <Route path="/workflows" element={<WorkflowsPage />} />
             <Route path="/workflows/upload" element={<ProtectedRoute> <WorkflowUploadPage /> </ProtectedRoute>} />
             <Route path="/workflows/:id" element={<WorkflowDetailPage />} />
+            <Route path="/my-workflows" element={<ProtectedRoute> <MyWorkflowsPage /> </ProtectedRoute>} />
             <Route path="/login" element={<LoginPage />} />
           </Routes>
         </main>

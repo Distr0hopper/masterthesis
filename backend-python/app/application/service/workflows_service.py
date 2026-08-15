@@ -10,8 +10,10 @@ from app.application.exception.workflow_exceptions import (
     InvalidWorkflowArchiveError,
     WorkflowNotFoundError,
     WorkflowStepNotFoundError,
+    WorkflowStepNotMatchedError,
 )
-from app.domain.models.workflow import Workflow
+from app.domain.models.user import User
+from app.domain.models.workflow import Workflow, WorkflowStatus
 from app.domain.models.workflow_domain import WorkflowDomain
 from app.domain.models.workflow_step import StepMatchStatus, WorkflowStep
 from app.domain.repository.components_repository import ComponentsRepository
@@ -35,9 +37,20 @@ class WorkflowsService:
     async def list_workflows(self, domain: str | None = None) -> list[Workflow]:
         return await self.workflows_repository.find_all(domain)
 
+    async def list_my_workflows(self, created_by_id: uuid.UUID) -> list[Workflow]:
+        return await self.workflows_repository.find_by_created_by(created_by_id)
+
     async def get_workflow(self, workflow_id: uuid.UUID) -> Workflow:
         workflow = await self.workflows_repository.find_by_id(workflow_id)
         if workflow is None:
+            raise WorkflowNotFoundError(workflow_id)
+        return workflow
+
+    async def get_visible_workflow(self, workflow_id: uuid.UUID, current_user: User | None) -> Workflow:
+        workflow = await self.get_workflow(workflow_id)
+        is_owner = current_user is not None and current_user.id == workflow.created_by_id
+        if workflow.status == WorkflowStatus.PENDING_VALIDATION and not is_owner:
+            # deliberately indistinguishable from "doesn't exist" to non-owners
             raise WorkflowNotFoundError(workflow_id)
         return workflow
 
@@ -117,18 +130,36 @@ class WorkflowsService:
         if step is None:
             raise WorkflowStepNotFoundError(step_id)
 
+        # selecting a candidate here never confirms it - only confirm_step() does. A
+        # manually-touched selection also has no algorithmic confidence value, so
+        # match_score is always cleared, whether a component was picked or cleared.
         if component_id is not None:
             component = await self.components_repository.find_by_id(component_id)
             if component is None:
                 raise ComponentNotFoundError(component_id)
             step.component_id = component_id
-            step.match_status = StepMatchStatus.CONFIRMED
+            step.match_status = StepMatchStatus.SUGGESTED
+            step.match_score = None
         else:
             step.component_id = None
             step.match_status = StepMatchStatus.UNMATCHED
             step.match_score = None
 
-        return await self.workflows_repository.save_step(step)
+        saved_step = await self.workflows_repository.save_step(step)
+        await self._recompute_workflow_status(saved_step.workflow_id)
+        return saved_step
+
+    async def confirm_step(self, step_id: uuid.UUID) -> WorkflowStep:
+        step = await self.workflows_repository.find_step_by_id(step_id)
+        if step is None:
+            raise WorkflowStepNotFoundError(step_id)
+        if step.component_id is None:
+            raise WorkflowStepNotMatchedError(step_id)
+
+        step.match_status = StepMatchStatus.CONFIRMED
+        saved_step = await self.workflows_repository.save_step(step)
+        await self._recompute_workflow_status(saved_step.workflow_id)
+        return saved_step
 
     async def remove(self, workflow: Workflow) -> None:
         await self.workflows_repository.delete(workflow)
@@ -172,6 +203,17 @@ class WorkflowsService:
                 return result
         except zipfile.BadZipFile as err:
             raise InvalidWorkflowArchiveError("Not a valid zip archive") from err
+
+    async def _recompute_workflow_status(self, workflow_id: uuid.UUID) -> None:
+        # re-fetch fresh so lazy="selectin" gives an accurate view of every sibling step's
+        # current status after the just-committed step save, not a possibly-stale in-session copy
+        workflow = await self.workflows_repository.find_by_id(workflow_id)
+        assert workflow is not None
+        all_confirmed = all(s.match_status == StepMatchStatus.CONFIRMED for s in workflow.steps)
+        new_status = WorkflowStatus.VALIDATED if all_confirmed else WorkflowStatus.PENDING_VALIDATION
+        if workflow.status != new_status:
+            workflow.status = new_status
+            await self.workflows_repository.save(workflow)
 
     async def _save_and_reload(self, workflow: Workflow) -> Workflow:
         saved = await self.workflows_repository.save(workflow)

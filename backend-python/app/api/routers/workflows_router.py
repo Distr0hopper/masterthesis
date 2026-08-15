@@ -36,6 +36,19 @@ async def list_workflows(
     return [WorkflowTransformer.to_list_item(w) for w in workflows]
 
 
+@router.get(
+    "/mine",
+    response_model=list[WorkflowListItemDto],
+    responses={status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"}},
+)
+async def list_my_workflows(
+    current_user: Annotated[User, Depends(AuthService.get_current_user)],
+    workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
+) -> list[WorkflowListItemDto]:
+    workflows = await workflows_service.list_my_workflows(current_user.id)
+    return [WorkflowTransformer.to_list_item(w) for w in workflows]
+
+
 @router.post(
     "",
     response_model=WorkflowDetailDto,
@@ -76,8 +89,9 @@ async def create(
 async def get_workflow(
     workflow_id: uuid.UUID,
     workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
+    current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
 ) -> WorkflowDetailDto:
-    workflow = await workflows_service.get_workflow(workflow_id)
+    workflow = await workflows_service.get_visible_workflow(workflow_id, current_user)
     return WorkflowTransformer.to_detail(workflow)
 
 
@@ -88,8 +102,9 @@ async def get_workflow(
 async def download(
     workflow_id: uuid.UUID,
     workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
+    current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
 ) -> Response:
-    workflow = await workflows_service.get_workflow(workflow_id)
+    workflow = await workflows_service.get_visible_workflow(workflow_id, current_user)
     filename, content = await workflows_service.get_download(workflow)
     return Response(
         content=content,
@@ -123,6 +138,33 @@ async def update_step(
     updated = await workflows_service.update_step_component(step_id, dto.component_id)
     logger.info(f"Updated step {step_id} -> component {dto.component_id}")
     return WorkflowTransformer.to_step(updated)
+
+
+@router.post(
+    "/steps/{step_id}/confirm",
+    response_model=WorkflowStepDto,
+    responses={
+        status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse, "description": "Step has no matched component to confirm"},
+        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
+        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Not the creator of this workflow"},
+        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Step not found"},
+    },
+)
+async def confirm_step(
+    step_id: uuid.UUID,
+    current_user: Annotated[User, Depends(AuthService.get_current_user)],
+    workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
+) -> WorkflowStepDto:
+    _step, workflow = await workflows_service.get_step_with_workflow(step_id)
+
+    validator = WorkflowPermissionValidator(current_user)
+    if not validator.can_update(workflow):
+        logger.warning(f"User {current_user.id} not permitted to confirm step {step_id}")
+        raise ForbiddenException("Insufficient permission to confirm this workflow's step")
+
+    confirmed = await workflows_service.confirm_step(step_id)
+    logger.info(f"Confirmed step {step_id}")
+    return WorkflowTransformer.to_step(confirmed)
 
 
 @router.delete(

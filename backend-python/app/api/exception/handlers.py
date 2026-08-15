@@ -18,6 +18,7 @@ from app.application.exception.workflow_exceptions import (
     InvalidWorkflowArchiveError,
     WorkflowNotFoundError,
     WorkflowStepNotFoundError,
+    WorkflowStepNotMatchedError,
 )
 from app.domain.exception.login_code_exceptions import (
     InvalidOtpCodeError,
@@ -94,6 +95,10 @@ async def _invalid_workflow_archive_handler(request: Request, exc: InvalidWorkfl
     return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
+async def _workflow_step_not_matched_handler(request: Request, exc: WorkflowStepNotMatchedError) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(InvalidTokenError, _invalid_token_handler)
     app.add_exception_handler(InvalidOtpCodeError, _invalid_otp_code_handler)
@@ -111,3 +116,4 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(WorkflowNotFoundError, _workflow_not_found_handler)
     app.add_exception_handler(WorkflowStepNotFoundError, _workflow_step_not_found_handler)
     app.add_exception_handler(InvalidWorkflowArchiveError, _invalid_workflow_archive_handler)
+    app.add_exception_handler(WorkflowStepNotMatchedError, _workflow_step_not_matched_handler)

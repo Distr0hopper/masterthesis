@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Column, DateTime, ForeignKey, String, Text, func
@@ -14,6 +15,11 @@ if TYPE_CHECKING:
 MAX_DESCRIPTION_LENGTH = 2000
 
 
+class WorkflowStatus(str, Enum):
+    PENDING_VALIDATION = "pending_validation"
+    VALIDATED = "validated"
+
+
 class Workflow(SQLModel, table=True):
     __tablename__ = "workflows"
 
@@ -23,6 +29,11 @@ class Workflow(SQLModel, table=True):
     created_by_id: uuid.UUID | None = Field(default=None, sa_column=Column(ForeignKey("users.id"), nullable=True))
     # the raw pipeline CWL content (class: Workflow), stored verbatim for download/rebuild
     cwl_content: str = Field(sa_column=Column(Text, nullable=False))
+    # explicit String column, same convention as StepMatchStatus/Component.source - never a
+    # native PG enum. Only VALIDATED workflows are publicly visible/listed (see
+    # WorkflowsRepository.find_all / WorkflowsService.get_visible_workflow) - a workflow
+    # flips to VALIDATED only once every one of its steps is explicitly CONFIRMED.
+    status: WorkflowStatus = Field(default=WorkflowStatus.PENDING_VALIDATION, sa_column=Column(String, nullable=False))
     created_at: datetime = Field(sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False))
     updated_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

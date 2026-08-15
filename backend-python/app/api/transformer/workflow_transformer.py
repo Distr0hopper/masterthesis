@@ -18,6 +18,7 @@ class WorkflowTransformer:
             description=workflow.description,
             domains=[d.domain for d in workflow.domains],
             step_count=len(workflow.steps),
+            status=workflow.status,
             created_at=workflow.created_at,
         )
 
@@ -56,6 +57,7 @@ class WorkflowTransformer:
             if workflow.created_by
             else None,
             steps=[WorkflowTransformer.to_step(s) for s in workflow.steps],
+            status=workflow.status,
             created_at=workflow.created_at,
             updated_at=workflow.updated_at,
         )

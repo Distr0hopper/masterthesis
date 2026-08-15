@@ -12,6 +12,10 @@ export const workflowsService = {
     return apiClient.get(`${ENDPOINT}/${id}`);
   },
 
+  getMine(): Promise<WorkflowListItemDto[]> {
+    return apiClient.get(`${ENDPOINT}/mine`);
+  },
+
   getDownloadUrl(id: string): string {
     return `${apiClient.baseURL}${ENDPOINT}/${id}/download`;
   },
@@ -27,6 +31,10 @@ export const workflowsService = {
 
   updateStepComponent(stepId: string, componentId: string | null): Promise<WorkflowStepDto> {
     return apiClient.patch(`${ENDPOINT}/steps/${stepId}`, { componentId });
+  },
+
+  confirmStep(stepId: string): Promise<WorkflowStepDto> {
+    return apiClient.post(`${ENDPOINT}/steps/${stepId}/confirm`);
   },
 
   delete(id: string): Promise<void> {

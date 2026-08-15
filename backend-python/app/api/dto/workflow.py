@@ -7,7 +7,7 @@ from pydantic import Field, field_validator
 from app.api.dto.base import CamelModel
 from app.api.dto.component import ComponentCreatorDto
 from app.domain.models.component_domain import VALID_DOMAINS
-from app.domain.models.workflow import MAX_DESCRIPTION_LENGTH
+from app.domain.models.workflow import MAX_DESCRIPTION_LENGTH, WorkflowStatus
 from app.domain.models.workflow_step import StepMatchStatus
 
 
@@ -58,6 +58,7 @@ class WorkflowListItemDto(CamelModel):
     description: str | None
     domains: list[str]
     step_count: int
+    status: WorkflowStatus
     created_at: datetime
 
 
@@ -68,6 +69,7 @@ class WorkflowDetailDto(CamelModel):
     domains: list[str]
     created_by: ComponentCreatorDto | None
     steps: list[WorkflowStepDto]
+    status: WorkflowStatus
     created_at: datetime
     updated_at: datetime
 

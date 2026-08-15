@@ -5,6 +5,12 @@ export const StepMatchStatus = {
 } as const;
 export type StepMatchStatus = (typeof StepMatchStatus)[keyof typeof StepMatchStatus];
 
+export const WorkflowStatus = {
+  PENDING_VALIDATION: 'pending_validation',
+  VALIDATED: 'validated',
+} as const;
+export type WorkflowStatus = (typeof WorkflowStatus)[keyof typeof WorkflowStatus];
+
 export interface ComponentSummaryDto {
   id: string;
   name: string;
@@ -35,6 +41,7 @@ export interface WorkflowListItemDto {
   description: string | null;
   domains: string[];
   stepCount: number;
+  status: WorkflowStatus;
   createdAt: string;
 }
 
@@ -45,6 +52,7 @@ export interface WorkflowDetailDto {
   domains: string[];
   createdBy: WorkflowCreatorDto | null;
   steps: WorkflowStepDto[];
+  status: WorkflowStatus;
   createdAt: string;
   updatedAt: string;
 }

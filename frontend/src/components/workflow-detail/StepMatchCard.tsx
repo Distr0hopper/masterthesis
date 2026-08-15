@@ -1,9 +1,15 @@
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
+import { Button } from '@/components/ui/button.tsx';
 import { Label } from '@/components/ui/label.tsx';
 import { useComponents } from '@/api/components';
-import { StepMatchStatus, useUpdateWorkflowStepComponent, type WorkflowStepDisplayModel } from '@/api/workflows';
+import {
+  StepMatchStatus,
+  useConfirmWorkflowStep,
+  useUpdateWorkflowStepComponent,
+  type WorkflowStepDisplayModel,
+} from '@/api/workflows';
 import { getErrorMessage } from '@/lib/errors';
 
 const STATUS_BADGE_VARIANT: Record<StepMatchStatus, 'secondary' | 'default' | 'destructive'> = {
@@ -19,10 +25,11 @@ interface StepMatchCardProps {
 
 export function StepMatchCard({ step, workflowId }: StepMatchCardProps) {
   const { data: components } = useComponents();
-  const { mutate, isPending } = useUpdateWorkflowStepComponent();
+  const { mutate: updateComponent, isPending: isUpdating } = useUpdateWorkflowStepComponent();
+  const { mutate: confirmStep, isPending: isConfirming } = useConfirmWorkflowStep();
 
   const handleChange = (componentId: string | null) => {
-    mutate(
+    updateComponent(
       { stepId: step.id, componentId, workflowId },
       {
         onSuccess: () => toast.success('Step updated'),
@@ -30,6 +37,18 @@ export function StepMatchCard({ step, workflowId }: StepMatchCardProps) {
       },
     );
   };
+
+  const handleConfirm = () => {
+    confirmStep(
+      { stepId: step.id, workflowId },
+      {
+        onSuccess: () => toast.success('Step confirmed'),
+        onError: (error) => toast.error(getErrorMessage(error)),
+      },
+    );
+  };
+
+  const isPending = isUpdating || isConfirming;
 
   return (
     <Card>
@@ -62,6 +81,15 @@ export function StepMatchCard({ step, workflowId }: StepMatchCardProps) {
             ))}
           </select>
         </div>
+
+        <Button
+          size="sm"
+          className="self-start"
+          disabled={isPending || step.componentId === null || step.matchStatus === StepMatchStatus.CONFIRMED}
+          onClick={handleConfirm}
+        >
+          {step.matchStatus === StepMatchStatus.CONFIRMED ? 'Confirmed' : 'Confirm'}
+        </Button>
       </CardContent>
     </Card>
   );

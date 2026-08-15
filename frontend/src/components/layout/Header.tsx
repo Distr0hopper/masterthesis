@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronDown, LogOut, Package, Upload, User } from 'lucide-react';
+import { ChevronDown, LogOut, Package, Upload, User, Workflow } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -88,6 +88,12 @@ export default function Header() {
                     <Link to="/my-components" className="cursor-pointer text-slate-900">
                       <Package size={14} className="text-slate-500" />
                       My Components
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/my-workflows" className="cursor-pointer text-slate-900">
+                      <Workflow size={14} className="text-slate-500" />
+                      My Workflows
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />

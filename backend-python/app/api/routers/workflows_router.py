@@ -30,10 +30,11 @@ MAX_WORKFLOW_ZIP_SIZE = 10 * 1024 * 1024
 @router.get("", response_model=list[WorkflowListItemDto])
 async def list_workflows(
     workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
+    current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
     domain: Annotated[str | None, Query(json_schema_extra={"enum": VALID_DOMAINS})] = None,
 ) -> list[WorkflowListItemDto]:
     workflows = await workflows_service.list_workflows(domain)
-    return [WorkflowTransformer.to_list_item(w) for w in workflows]
+    return [WorkflowTransformer.to_list_item(w, current_user) for w in workflows]
 
 
 @router.get(
@@ -46,16 +47,17 @@ async def list_my_workflows(
     workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
 ) -> list[WorkflowListItemDto]:
     workflows = await workflows_service.list_my_workflows(current_user.id)
-    return [WorkflowTransformer.to_list_item(w) for w in workflows]
+    return [WorkflowTransformer.to_list_item(w, current_user) for w in workflows]
 
 
 @router.get("/latest", response_model=list[WorkflowListItemDto])
 async def list_latest_workflows(
     workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
+    current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
     limit: int = 6,
 ) -> list[WorkflowListItemDto]:
     workflows = await workflows_service.get_latest_workflows(limit)
-    return [WorkflowTransformer.to_list_item(w) for w in workflows]
+    return [WorkflowTransformer.to_list_item(w, current_user) for w in workflows]
 
 
 @router.post(
@@ -87,7 +89,7 @@ async def create(
     logger.info(f"Creating workflow '{dto.name}' for user {current_user.id}")
     workflow = await workflows_service.create_from_zip(content, dto.name, dto.description, dto.domains, current_user.id)
     logger.info(f"Created workflow {workflow.id} ('{workflow.name}') with {len(workflow.steps)} steps")
-    return WorkflowTransformer.to_detail(workflow)
+    return WorkflowTransformer.to_detail(workflow, current_user)
 
 
 @router.get(
@@ -101,7 +103,7 @@ async def get_workflow(
     current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
 ) -> WorkflowDetailDto:
     workflow = await workflows_service.get_visible_workflow(workflow_id, current_user)
-    return WorkflowTransformer.to_detail(workflow)
+    return WorkflowTransformer.to_detail(workflow, current_user)
 
 
 @router.get(
@@ -146,7 +148,7 @@ async def update_step(
 
     updated = await workflows_service.update_step_component(step_id, dto.component_id)
     logger.info(f"Updated step {step_id} -> component {dto.component_id}")
-    return WorkflowTransformer.to_step(updated)
+    return WorkflowTransformer.to_step(updated, current_user)
 
 
 @router.post(
@@ -173,7 +175,7 @@ async def confirm_step(
 
     confirmed = await workflows_service.confirm_step(step_id)
     logger.info(f"Confirmed step {step_id}")
-    return WorkflowTransformer.to_step(confirmed)
+    return WorkflowTransformer.to_step(confirmed, current_user)
 
 
 @router.post(
@@ -200,7 +202,7 @@ async def publish(
 
     published = await workflows_service.publish(workflow)
     logger.info(f"Published workflow {workflow_id}")
-    return WorkflowTransformer.to_detail(published)
+    return WorkflowTransformer.to_detail(published, current_user)
 
 
 @router.delete(

@@ -5,14 +5,17 @@ from app.api.dto.workflow import (
     WorkflowListItemDto,
     WorkflowStepDto,
 )
+from app.api.link.workflow import WorkflowLinkBuilder
+from app.api.link.workflow_step import WorkflowStepLinkBuilder
+from app.domain.models.user import User
 from app.domain.models.workflow import Workflow
 from app.domain.models.workflow_step import WorkflowStep
 
 
 class WorkflowTransformer:
     @staticmethod
-    def to_list_item(workflow: Workflow) -> WorkflowListItemDto:
-        return WorkflowListItemDto(
+    def to_list_item(workflow: Workflow, current_user: User | None) -> WorkflowListItemDto:
+        dto = WorkflowListItemDto(
             id=workflow.id,
             name=workflow.name,
             description=workflow.description,
@@ -21,10 +24,11 @@ class WorkflowTransformer:
             status=workflow.status,
             created_at=workflow.created_at,
         )
+        return WorkflowLinkBuilder(current_user).attach_links(dto, workflow)
 
     @staticmethod
-    def to_step(step: WorkflowStep) -> WorkflowStepDto:
-        return WorkflowStepDto(
+    def to_step(step: WorkflowStep, current_user: User | None) -> WorkflowStepDto:
+        dto = WorkflowStepDto(
             id=step.id,
             step_id=step.step_id,
             run_reference=step.run_reference,
@@ -40,10 +44,11 @@ class WorkflowTransformer:
             match_status=step.match_status,
             match_score=step.match_score,
         )
+        return WorkflowStepLinkBuilder(current_user).attach_links(dto, step)
 
     @staticmethod
-    def to_detail(workflow: Workflow) -> WorkflowDetailDto:
-        return WorkflowDetailDto(
+    def to_detail(workflow: Workflow, current_user: User | None) -> WorkflowDetailDto:
+        dto = WorkflowDetailDto(
             id=workflow.id,
             name=workflow.name,
             description=workflow.description,
@@ -56,8 +61,9 @@ class WorkflowTransformer:
             )
             if workflow.created_by
             else None,
-            steps=[WorkflowTransformer.to_step(s) for s in workflow.steps],
+            steps=[WorkflowTransformer.to_step(s, current_user) for s in workflow.steps],
             status=workflow.status,
             created_at=workflow.created_at,
             updated_at=workflow.updated_at,
         )
+        return WorkflowLinkBuilder(current_user).attach_links(dto, workflow)

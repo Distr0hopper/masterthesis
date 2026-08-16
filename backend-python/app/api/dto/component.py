@@ -6,6 +6,7 @@ from fastapi import UploadFile
 from pydantic import Field, field_validator
 
 from app.api.dto.base import CamelModel
+from app.api.link.model import LinkModel
 from app.domain.models.component import MAX_DESCRIPTION_LENGTH, ComponentSource
 from app.domain.models.component_domain import VALID_DOMAINS
 from app.domain.models.parameter import ParameterDirection
@@ -74,7 +75,7 @@ class ComponentCreatorDto(CamelModel):
     last_name: str | None
 
 
-class ComponentListItemDto(CamelModel):
+class ComponentListItemDto(CamelModel, LinkModel):
     id: uuid.UUID
     name: str
     description: str | None
@@ -86,7 +87,7 @@ class ComponentListItemDto(CamelModel):
     is_favorite: bool
 
 
-class ComponentDetailDto(CamelModel):
+class ComponentDetailDto(CamelModel, LinkModel):
     id: uuid.UUID
     name: str
     author_name: str | None

@@ -9,8 +9,10 @@ from app.api.dto.component import (
     ParameterDto,
     UpdateComponentRequestDto,
 )
+from app.api.link.component import ComponentLinkBuilder
 from app.domain.models.component import Component, ComponentSource
 from app.domain.models.parameter import Parameter
+from app.domain.models.user import User
 from app.infrastructure.cwl.cwl_parser import inject_description
 
 
@@ -58,8 +60,8 @@ class ComponentTransformer:
         return component
 
     @staticmethod
-    def to_list_item(component: Component, is_favorite: bool) -> ComponentListItemDto:
-        return ComponentListItemDto(
+    def to_list_item(component: Component, is_favorite: bool, current_user: User | None) -> ComponentListItemDto:
+        dto = ComponentListItemDto(
             id=component.id,
             name=component.name,
             description=component.description,
@@ -70,6 +72,7 @@ class ComponentTransformer:
             created_at=component.created_at,
             is_favorite=is_favorite,
         )
+        return ComponentLinkBuilder(current_user).attach_links(dto, component)
 
     @staticmethod
     def to_parameter(parameter: Parameter) -> ParameterDto:
@@ -85,8 +88,8 @@ class ComponentTransformer:
         )
 
     @staticmethod
-    def to_detail(component: Component, is_favorite: bool) -> ComponentDetailDto:
-        return ComponentDetailDto(
+    def to_detail(component: Component, is_favorite: bool, current_user: User | None) -> ComponentDetailDto:
+        dto = ComponentDetailDto(
             id=component.id,
             name=component.name,
             author_name=component.author_name,
@@ -113,3 +116,4 @@ class ComponentTransformer:
             updated_at=component.updated_at,
             is_favorite=is_favorite,
         )
+        return ComponentLinkBuilder(current_user).attach_links(dto, component)

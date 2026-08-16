@@ -56,7 +56,7 @@ async def list_components(
     if favorites_only:
         components = [c for c in components if c.name in favorited_names]
 
-    return [ComponentTransformer.to_list_item(c, c.name in favorited_names) for c in components]
+    return [ComponentTransformer.to_list_item(c, c.name in favorited_names, current_user) for c in components]
 
 
 @router.get("/mine", response_model=list[ComponentListItemDto])
@@ -67,7 +67,7 @@ async def list_my_components(
 ) -> list[ComponentListItemDto]:
     components = await components_service.list_my_components(current_user.id)
     favorited_names = await _favorited_names(favorites_service, current_user)
-    return [ComponentTransformer.to_list_item(c, c.name in favorited_names) for c in components]
+    return [ComponentTransformer.to_list_item(c, c.name in favorited_names, current_user) for c in components]
 
 
 @router.get("/latest", response_model=list[ComponentListItemDto])
@@ -79,7 +79,7 @@ async def list_latest_components(
 ) -> list[ComponentListItemDto]:
     components = await components_service.get_latest_components(limit)
     favorited_names = await _favorited_names(favorites_service, current_user)
-    return [ComponentTransformer.to_list_item(c, c.name in favorited_names) for c in components]
+    return [ComponentTransformer.to_list_item(c, c.name in favorited_names, current_user) for c in components]
 
 
 @router.post(
@@ -114,7 +114,7 @@ async def create(
     created = await components_service.create_manual(component)
     logger.info(f"Created component {created.id} ('{created.name}' v{created.version})")
     # brand-new component row, cannot already exist in favorites (FK requires the row first)
-    return ComponentTransformer.to_detail(created, is_favorite=False)
+    return ComponentTransformer.to_detail(created, is_favorite=False, current_user=current_user)
 
 
 @router.post(
@@ -157,7 +157,7 @@ async def package(
     # a new version shares its lineage's name with prior versions, so it may already be
     # favorited (by this or any other user) - not guaranteed False like a brand-new lineage
     favorited_names = await _favorited_names(favorites_service, current_user)
-    return ComponentTransformer.to_detail(component, component.name in favorited_names)
+    return ComponentTransformer.to_detail(component, component.name in favorited_names, current_user)
 
 
 @router.post(
@@ -197,7 +197,7 @@ async def add_version(
     logger.info(f"Added version {component.version} to component '{parent.name}' ({component.id})")
     # shares the parent's name/lineage, so it may already be favorited
     favorited_names = await _favorited_names(favorites_service, current_user)
-    return ComponentTransformer.to_detail(component, component.name in favorited_names)
+    return ComponentTransformer.to_detail(component, component.name in favorited_names, current_user)
 
 
 @router.post(
@@ -230,7 +230,7 @@ async def repackage(
     logger.info(f"Repackaging complete: '{component.name}' v{component.version} ({component.id})")
     # shares the parent's name/lineage, so it may already be favorited
     favorited_names = await _favorited_names(favorites_service, current_user)
-    return ComponentTransformer.to_detail(component, component.name in favorited_names)
+    return ComponentTransformer.to_detail(component, component.name in favorited_names, current_user)
 
 
 @router.get(
@@ -246,7 +246,7 @@ async def get_component(
 ) -> ComponentDetailDto:
     component = await components_service.get_component(component_id)
     favorited_names = await _favorited_names(favorites_service, current_user)
-    return ComponentTransformer.to_detail(component, component.name in favorited_names)
+    return ComponentTransformer.to_detail(component, component.name in favorited_names, current_user)
 
 
 @router.get(
@@ -263,7 +263,7 @@ async def get_versions(
     component = await components_service.get_component(component_id)
     versions = await components_service.get_versions(component)
     favorited_names = await _favorited_names(favorites_service, current_user)
-    return [ComponentTransformer.to_list_item(v, v.name in favorited_names) for v in versions]
+    return [ComponentTransformer.to_list_item(v, v.name in favorited_names, current_user) for v in versions]
 
 
 @router.get(
@@ -311,7 +311,7 @@ async def update(
     saved = await components_service.update_component(updated)
     logger.info(f"Updated component {saved.id}")
     favorited_names = await _favorited_names(favorites_service, current_user)
-    return ComponentTransformer.to_detail(saved, saved.name in favorited_names)
+    return ComponentTransformer.to_detail(saved, saved.name in favorited_names, current_user)
 
 
 @router.delete(

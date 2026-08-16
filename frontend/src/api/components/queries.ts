@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { componentsService } from './service';
 import { componentTransformer } from './transformer';
 import type { AddVersionDto, ComponentDomain, CreateComponentDto, PackageComponentDto, UpdateComponentDto } from './types';
+import type { HateoasLink } from '@/api/types';
 
 export const componentKeys = {
   all: ['components'] as const,
@@ -116,11 +117,10 @@ export const useUpdateComponent = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, dto }: { id: string; dto: UpdateComponentDto }) =>
-      componentsService.update(id, dto),
-    onSuccess: (_, variables) => {
+    mutationFn: ({ link, dto }: { link: HateoasLink; dto: UpdateComponentDto }) =>
+      componentsService.update(link, dto),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: componentKeys.all });
-      queryClient.invalidateQueries({ queryKey: componentKeys.detail(variables.id) });
     },
   });
 };
@@ -129,29 +129,18 @@ export const useDeleteComponent = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => componentsService.delete(id),
+    mutationFn: (link: HateoasLink) => componentsService.delete(link),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: componentKeys.all });
     },
   });
 };
 
-export const useFavoriteComponent = () => {
+export const useToggleFavorite = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => componentsService.addFavorite(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: componentKeys.all });
-    },
-  });
-};
-
-export const useUnfavoriteComponent = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (id: string) => componentsService.removeFavorite(id),
+    mutationFn: (link: HateoasLink) => componentsService.toggleFavorite(link),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: componentKeys.all });
     },

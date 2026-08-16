@@ -3,6 +3,7 @@ import { StepMatchStatus, WorkflowStatus } from './types';
 import type { UploadWorkflowFormData } from './schema';
 import { getDomainLabel } from '@/api/components';
 import { formatDate, getCreatorDisplay } from '@/api/transformer';
+import type { WithHateoasLinks } from '@/api/types';
 
 const MATCH_STATUS_LABELS: Record<StepMatchStatus, string> = {
   [StepMatchStatus.SUGGESTED]: 'Suggested match — please confirm',
@@ -15,7 +16,7 @@ const WORKFLOW_STATUS_LABELS: Record<WorkflowStatus, string> = {
   [WorkflowStatus.VALIDATED]: 'Validated',
 };
 
-export interface WorkflowStepDisplayModel {
+export interface WorkflowStepDisplayModel extends WithHateoasLinks {
   id: string;
   stepId: string;
   runReference: string;
@@ -28,7 +29,7 @@ export interface WorkflowStepDisplayModel {
   matchScore: number | null;
 }
 
-export interface WorkflowDisplayModel {
+export interface WorkflowDisplayModel extends WithHateoasLinks {
   id: string;
   name: string;
   description: string | null;
@@ -69,6 +70,7 @@ export const workflowTransformer = {
       matchStatus: dto.matchStatus,
       matchStatusDisplay: isManualPick ? 'Selected — please confirm' : MATCH_STATUS_LABELS[dto.matchStatus],
       matchScore: dto.matchScore,
+      _links: dto._links,
     };
   },
 
@@ -85,6 +87,7 @@ export const workflowTransformer = {
       statusDisplay: WORKFLOW_STATUS_LABELS[dto.status],
       createdAt,
       createdAtDisplay: formatDate(createdAt),
+      _links: dto._links,
     };
   },
 

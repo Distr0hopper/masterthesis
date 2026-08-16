@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { workflowsService } from './service';
 import { workflowTransformer } from './transformer';
 import type { CreateWorkflowDto } from './types';
+import type { HateoasLink } from '@/api/types';
 
 export const workflowKeys = {
   all: ['workflows'] as const,
@@ -59,8 +60,8 @@ export const useUpdateWorkflowStepComponent = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ stepId, componentId }: { stepId: string; componentId: string | null; workflowId: string }) =>
-      workflowsService.updateStepComponent(stepId, componentId),
+    mutationFn: ({ link, componentId }: { link: HateoasLink; componentId: string | null }) =>
+      workflowsService.updateStepComponent(link, componentId),
     onSuccess: () => {
       // a step change can un-confirm the workflow and hide it from the browse list again,
       // so invalidate broadly rather than just this workflow's detail view
@@ -73,7 +74,7 @@ export const useConfirmWorkflowStep = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ stepId }: { stepId: string; workflowId: string }) => workflowsService.confirmStep(stepId),
+    mutationFn: (link: HateoasLink) => workflowsService.confirmStep(link),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: workflowKeys.all });
     },
@@ -84,7 +85,7 @@ export const usePublishWorkflow = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => workflowsService.publish(id),
+    mutationFn: (link: HateoasLink) => workflowsService.publish(link),
     onSuccess: () => {
       // publishing makes the workflow appear in the public browse list
       queryClient.invalidateQueries({ queryKey: workflowKeys.all });
@@ -102,7 +103,7 @@ export const useDeleteWorkflow = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => workflowsService.delete(id),
+    mutationFn: (link: HateoasLink) => workflowsService.delete(link),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: workflowKeys.all });
     },

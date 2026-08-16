@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { componentsService, getDomainBadgeStyle, useDomains, type ComponentDetailDisplayModel } from '@/api/components';
 import { FavoriteButton } from '@/components/FavoriteButton';
-import { useAuthStore } from '@/store/auth.store';
+import { canFavorite } from '@/api/permissions';
 import { ROUTES } from '@/lib/routes';
 
 interface ComponentHeaderProps {
@@ -15,7 +15,6 @@ interface ComponentHeaderProps {
 export function ComponentHeader({ model }: ComponentHeaderProps) {
   const { data: domains } = useDomains();
   const domainBadgeStyle = domains ? getDomainBadgeStyle(model.domain, domains) : undefined;
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated());
 
   return (
     <>
@@ -31,7 +30,7 @@ export function ComponentHeader({ model }: ComponentHeaderProps) {
                 {model.domainDisplay}
               </Badge>
 
-              {isAuthenticated && <FavoriteButton componentId={model.id} isFavorite={model.isFavorite} />}
+              {canFavorite(model._links) && <FavoriteButton links={model._links!} isFavorite={model.isFavorite} />}
             </div>
 
             <Button asChild variant="outline" size="sm">

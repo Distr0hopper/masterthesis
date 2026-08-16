@@ -16,6 +16,7 @@ import type {
   UploadComponentFormData,
 } from './schema';
 import { formatDate, getCreatorDisplay } from '@/api/transformer';
+import type { WithHateoasLinks } from '@/api/types';
 
 const SOURCE_LABELS: Record<ComponentSource, string> = {
   [ComponentSource.AUTOMATED_PACKAGING]: 'Packaged from GitHub',
@@ -27,7 +28,7 @@ const DIRECTION_LABELS: Record<ParameterDirection, string> = {
   [ParameterDirection.OUTPUT]: 'Output',
 };
 
-export interface ComponentDisplayModel {
+export interface ComponentDisplayModel extends WithHateoasLinks {
   id: string;
   name: string;
   description: string | null;
@@ -145,6 +146,7 @@ export const componentTransformer = {
       createdAt,
       createdAtDisplay: formatDate(createdAt),
       isFavorite: dto.isFavorite,
+      _links: dto._links,
     };
   },
 

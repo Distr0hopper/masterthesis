@@ -1,4 +1,5 @@
 import { apiClient } from '../client';
+import type { HateoasLink } from '@/api/types';
 import type { CreateWorkflowDto, WorkflowDetailDto, WorkflowListItemDto, WorkflowStepDto } from './types';
 
 const ENDPOINT = '/workflows';
@@ -33,19 +34,19 @@ export const workflowsService = {
     return apiClient.post(ENDPOINT, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
 
-  updateStepComponent(stepId: string, componentId: string | null): Promise<WorkflowStepDto> {
-    return apiClient.patch(`${ENDPOINT}/steps/${stepId}`, { componentId });
+  updateStepComponent(link: HateoasLink, componentId: string | null): Promise<WorkflowStepDto> {
+    return apiClient.request(link, { componentId });
   },
 
-  confirmStep(stepId: string): Promise<WorkflowStepDto> {
-    return apiClient.post(`${ENDPOINT}/steps/${stepId}/confirm`);
+  confirmStep(link: HateoasLink): Promise<WorkflowStepDto> {
+    return apiClient.request(link);
   },
 
-  publish(id: string): Promise<WorkflowDetailDto> {
-    return apiClient.post(`${ENDPOINT}/${id}/publish`);
+  publish(link: HateoasLink): Promise<WorkflowDetailDto> {
+    return apiClient.request(link);
   },
 
-  delete(id: string): Promise<void> {
-    return apiClient.delete(`${ENDPOINT}/${id}`);
+  delete(link: HateoasLink): Promise<void> {
+    return apiClient.request(link);
   },
 };

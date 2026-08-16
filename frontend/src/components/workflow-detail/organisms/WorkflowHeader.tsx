@@ -13,7 +13,7 @@ import {
   WorkflowStatus,
   type WorkflowDetailDisplayModel,
 } from '@/api/workflows';
-import { useAuthStore } from '@/store/auth.store';
+import { canDelete as hasDeleteLink, canPublish as hasPublishLink, getLink } from '@/api/permissions';
 import { getErrorMessage } from '@/lib/errors';
 import { downloadBlob } from '@/lib/download';
 import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
@@ -27,17 +27,18 @@ interface WorkflowHeaderProps {
 
 export function WorkflowHeader({ model, backTo, backLabel, onDeleted }: WorkflowHeaderProps) {
   const { data: domains } = useDomains();
-  const currentUser = useAuthStore((state) => state.user);
   const { mutate: publishWorkflow, isPending: isPublishing } = usePublishWorkflow();
   const { mutate: downloadWorkflow, isPending: isDownloading } = useDownloadWorkflow();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  const canDelete = currentUser?.id === model.createdById;
+  const canDelete = hasDeleteLink(model._links);
   const allStepsConfirmed = model.steps.every((step) => step.matchStatus === StepMatchStatus.CONFIRMED);
-  const canPublish = canDelete && model.status === WorkflowStatus.PENDING_VALIDATION;
+  // publish is permission-only on the backend (offered regardless of status, same as
+  // mark-read/mark-unread) - the status check must stay client-side
+  const canPublish = hasPublishLink(model._links) && model.status === WorkflowStatus.PENDING_VALIDATION;
 
   const handlePublish = () => {
-    publishWorkflow(model.id, {
+    publishWorkflow(getLink(model._links, 'publish')!, {
       onSuccess: () => toast.success('Workflow published'),
       onError: (error) => toast.error(getErrorMessage(error)),
     });

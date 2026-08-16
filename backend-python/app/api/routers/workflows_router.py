@@ -9,8 +9,10 @@ from app.api.dto.common import ErrorResponse
 from app.api.dto.workflow import (
     CreateWorkflowRequestDto,
     UpdateWorkflowStepRequestDto,
+    WorkflowCommandExecuteRequestDto,
     WorkflowDetailDto,
     WorkflowListItemDto,
+    WorkflowStepCommandExecuteRequestDto,
     WorkflowStepDto,
 )
 from app.api.exception.exceptions import ForbiddenException
@@ -152,57 +154,63 @@ async def update_step(
 
 
 @router.post(
-    "/steps/{step_id}/confirm",
+    "/steps/{step_id}/commands",
     response_model=WorkflowStepDto,
     responses={
         status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse, "description": "Step has no matched component to confirm"},
         status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
-        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Not the creator of this workflow"},
+        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Insufficient permission for this command"},
         status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Step not found"},
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErrorResponse, "description": "Unknown command"},
     },
 )
-async def confirm_step(
+async def execute_step_command(
     step_id: uuid.UUID,
+    dto: WorkflowStepCommandExecuteRequestDto,
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
     workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
 ) -> WorkflowStepDto:
-    _step, workflow = await workflows_service.get_step_with_workflow(step_id)
+    step, workflow = await workflows_service.get_step_with_workflow(step_id)
+    command = WorkflowTransformer.to_domain_step_command(dto)
 
     validator = WorkflowPermissionValidator(current_user)
-    if not validator.can_update(workflow):
-        logger.warning(f"User {current_user.id} not permitted to confirm step {step_id}")
-        raise ForbiddenException("Insufficient permission to confirm this workflow's step")
+    if not validator.can_execute_step(workflow, command.type):
+        logger.warning(f"User {current_user.id} not permitted to execute {command.type} on step {step_id}")
+        raise ForbiddenException(f"Insufficient permission to execute {command.type} on this step")
 
-    confirmed = await workflows_service.confirm_step(step_id)
-    logger.info(f"Confirmed step {step_id}")
-    return WorkflowTransformer.to_step(confirmed, current_user)
+    updated = await workflows_service.execute_step_command(step, command)
+    logger.info(f"Executed command {command.type} on step {step_id}")
+    return WorkflowTransformer.to_step(updated, current_user)
 
 
 @router.post(
-    "/{workflow_id}/publish",
+    "/{workflow_id}/commands",
     response_model=WorkflowDetailDto,
     responses={
         status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse, "description": "Not every step is confirmed yet"},
         status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
-        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Not the creator of this workflow"},
+        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Insufficient permission for this command"},
         status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Workflow not found"},
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErrorResponse, "description": "Unknown command"},
     },
 )
-async def publish(
+async def execute_command(
     workflow_id: uuid.UUID,
+    dto: WorkflowCommandExecuteRequestDto,
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
     workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
 ) -> WorkflowDetailDto:
     workflow = await workflows_service.get_workflow(workflow_id)
+    command = WorkflowTransformer.to_domain_command(dto)
 
     validator = WorkflowPermissionValidator(current_user)
-    if not validator.can_update(workflow):
-        logger.warning(f"User {current_user.id} not permitted to publish workflow {workflow_id}")
-        raise ForbiddenException("Insufficient permission to publish this workflow")
+    if not validator.can_execute(workflow, command.type):
+        logger.warning(f"User {current_user.id} not permitted to execute {command.type} on workflow {workflow_id}")
+        raise ForbiddenException(f"Insufficient permission to execute {command.type} on this workflow")
 
-    published = await workflows_service.publish(workflow)
-    logger.info(f"Published workflow {workflow_id}")
-    return WorkflowTransformer.to_detail(published, current_user)
+    updated = await workflows_service.execute_command(workflow, command)
+    logger.info(f"Executed command {command.type} on workflow {workflow_id}")
+    return WorkflowTransformer.to_detail(updated, current_user)
 
 
 @router.delete(

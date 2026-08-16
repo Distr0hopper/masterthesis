@@ -1,4 +1,5 @@
 from app.api.permission.base import PermissionValidator
+from app.application.commands.commands import ComponentCommandType
 from app.domain.models.component import Component
 from app.domain.models.user import User
 
@@ -22,3 +23,17 @@ class ComponentPermissionValidator(PermissionValidator[Component]):
 
     def can_favorite(self) -> bool:
         return self.user is not None
+
+    def can_execute(self, component: Component, action: str | ComponentCommandType) -> bool:
+        try:
+            command = ComponentCommandType.from_string(str(action))
+        except (ValueError, TypeError):
+            return False
+
+        match command:
+            case ComponentCommandType.ADD_FAVORITE | ComponentCommandType.REMOVE_FAVORITE:
+                return self.can_favorite()
+            case ComponentCommandType.REPACKAGE:
+                return self.can_update(component)
+            case _:
+                return False

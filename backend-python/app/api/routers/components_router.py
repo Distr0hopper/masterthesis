@@ -8,6 +8,7 @@ from fastapi.responses import Response
 from app.api.dto.common import ErrorResponse
 from app.api.dto.component import (
     AddVersionRequestDto,
+    ComponentCommandExecuteRequestDto,
     ComponentDetailDto,
     ComponentListItemDto,
     CreateComponentRequestDto,
@@ -200,39 +201,6 @@ async def add_version(
     return ComponentTransformer.to_detail(component, component.name in favorited_names, current_user)
 
 
-@router.post(
-    "/{component_id}/versions/package",
-    response_model=ComponentDetailDto,
-    status_code=status.HTTP_201_CREATED,
-    responses={
-        status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse, "description": "Component has no repoUrl or packaging failed"},
-        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
-        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Not the creator of this component"},
-        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Component not found"},
-        status.HTTP_409_CONFLICT: {"model": ErrorResponse, "description": "This exact commit is already packaged"},
-    },
-)
-async def repackage(
-    component_id: uuid.UUID,
-    current_user: Annotated[User, Depends(AuthService.get_current_user)],
-    components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
-    favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
-) -> ComponentDetailDto:
-    parent = await components_service.get_component(component_id)
-
-    validator = ComponentPermissionValidator(current_user)
-    if not validator.can_update(parent):
-        logger.warning(f"User {current_user.id} not permitted to repackage component {component_id}")
-        raise ForbiddenException("Insufficient permission to repackage this component")
-
-    logger.info(f"Repackaging component {component_id} from {parent.repo_url}")
-    component = await components_service.repackage_component(parent)
-    logger.info(f"Repackaging complete: '{component.name}' v{component.version} ({component.id})")
-    # shares the parent's name/lineage, so it may already be favorited
-    favorited_names = await _favorited_names(favorites_service, current_user)
-    return ComponentTransformer.to_detail(component, component.name in favorited_names, current_user)
-
-
 @router.get(
     "/{component_id}",
     response_model=ComponentDetailDto,
@@ -314,6 +282,37 @@ async def update(
     return ComponentTransformer.to_detail(saved, saved.name in favorited_names, current_user)
 
 
+@router.post(
+    "/{component_id}/commands",
+    response_model=ComponentDetailDto,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
+        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Insufficient permission for this command"},
+        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Component not found"},
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErrorResponse, "description": "Unknown command"},
+    },
+)
+async def execute_command(
+    component_id: uuid.UUID,
+    dto: ComponentCommandExecuteRequestDto,
+    current_user: Annotated[User, Depends(AuthService.get_current_user)],
+    components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
+    favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
+) -> ComponentDetailDto:
+    component = await components_service.get_component(component_id)
+    command = ComponentTransformer.to_domain_command(dto)
+
+    validator = ComponentPermissionValidator(current_user)
+    if not validator.can_execute(component, command.type):
+        logger.warning(f"User {current_user.id} not permitted to execute {command.type} on component {component_id}")
+        raise ForbiddenException(f"Insufficient permission to execute {command.type} on this component")
+
+    updated = await components_service.execute_command(component, command, current_user.id, favorites_service)
+    logger.info(f"Executed command {command.type} on component {component_id}")
+    favorited_names = await _favorited_names(favorites_service, current_user)
+    return ComponentTransformer.to_detail(updated, updated.name in favorited_names, current_user)
+
+
 @router.delete(
     "/{component_id}",
     responses={
@@ -343,40 +342,6 @@ async def remove(
         # last version of this lineage is gone - sweep any leftover favorites so they
         # don't become permanently orphaned (see FavoritesRepository.delete_by_component_name)
         await favorites_service.remove_all_favorites(component.name)
-
-
-@router.post(
-    "/{component_id}/favorite",
-    status_code=status.HTTP_204_NO_CONTENT,
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
-        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Component not found"},
-    },
-)
-async def add_favorite(
-    component_id: uuid.UUID,
-    current_user: Annotated[User, Depends(AuthService.get_current_user)],
-    favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
-) -> None:
-    await favorites_service.add_favorite(current_user.id, component_id)
-    logger.info(f"User {current_user.id} favorited component {component_id}")
-
-
-@router.delete(
-    "/{component_id}/favorite",
-    status_code=status.HTTP_204_NO_CONTENT,
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
-        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Component not found"},
-    },
-)
-async def remove_favorite(
-    component_id: uuid.UUID,
-    current_user: Annotated[User, Depends(AuthService.get_current_user)],
-    favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
-) -> None:
-    await favorites_service.remove_favorite(current_user.id, component_id)
-    logger.info(f"User {current_user.id} unfavorited component {component_id}")
 
 
 @router.get(

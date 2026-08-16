@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from enum import StrEnum
 
 from fastapi import UploadFile
 from pydantic import Field, field_validator
@@ -85,3 +86,21 @@ class CreateWorkflowRequestDto(WorkflowDomainsValidatorMixin, EmptyWorkflowDescr
 class UpdateWorkflowStepRequestDto(CamelModel):
     # explicit null clears the match back to unmatched
     component_id: uuid.UUID | None
+
+
+class WorkflowCommandTypesApiV1(StrEnum):
+    PUBLISH = "PUBLISH"
+
+
+class WorkflowCommandExecuteRequestDto(CamelModel):
+    command: WorkflowCommandTypesApiV1 = Field(..., description="The specific action to perform on the workflow")
+    note: str | None = Field(default=None, description="Optional note for the command execution")
+
+
+class WorkflowStepCommandTypesApiV1(StrEnum):
+    CONFIRM = "CONFIRM"
+
+
+class WorkflowStepCommandExecuteRequestDto(CamelModel):
+    command: WorkflowStepCommandTypesApiV1 = Field(..., description="The specific action to perform on the step")
+    note: str | None = Field(default=None, description="Optional note for the command execution")

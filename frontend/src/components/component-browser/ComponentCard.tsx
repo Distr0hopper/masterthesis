@@ -25,7 +25,7 @@ export function ComponentCard({ component, actions }: ComponentCardProps) {
             {component.domainDisplay}
           </Badge>
 
-          {canFavorite(component._links) && <FavoriteButton componentId={component.id} isFavorite={component.isFavorite} />}
+          {canFavorite(component._links) && <FavoriteButton links={component._links!} isFavorite={component.isFavorite} />}
         </div>
 
         <h3 className="font-mono text-lg font-bold text-slate-900">{component.name}</h3>

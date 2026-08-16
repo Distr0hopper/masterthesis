@@ -12,6 +12,7 @@ import {
   type ComponentDisplayModel,
   type UpdateComponentFormData,
 } from '@/api/components';
+import { getLink } from '@/api/permissions';
 import { getErrorMessage } from '@/lib/errors';
 import { DomainSelect } from '@/components/component-upload/common/DomainSelect';
 
@@ -37,7 +38,7 @@ export function EditComponentDialog({ component, open, onOpenChange }: EditCompo
   const onSubmit = (data: UpdateComponentFormData) => {
     const dto = componentTransformer.formToUpdateDto(data);
     mutate(
-      { id: component.id, dto },
+      { link: getLink(component._links, 'update')!, dto },
       {
         onSuccess: () => {
           toast.success(`${component.name} updated`);

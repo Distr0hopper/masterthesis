@@ -1,6 +1,7 @@
 import axios, { type AxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/store/auth.store';
 import { ROUTES } from '@/lib/routes';
+import type { HateoasLink } from '@/api/types';
 
 const axiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
@@ -42,6 +43,22 @@ export const apiClient = {
     axiosInstance.patch<T>(url, data, config).then((res) => res.data),
   delete: <T>(url: string, config?: AxiosRequestConfig) =>
     axiosInstance.delete<T>(url, config).then((res) => res.data),
+  // follows a HATEOAS link from an API response instead of a hand-built URL - the link
+  // carries both the target and the HTTP method, so callers no longer duplicate either
+  request: <T>(link: HateoasLink, data?: unknown, config?: AxiosRequestConfig): Promise<T> => {
+    switch (link.method) {
+      case 'GET':
+        return axiosInstance.get<T>(link.href, config).then((res) => res.data);
+      case 'POST':
+        return axiosInstance.post<T>(link.href, data, config).then((res) => res.data);
+      case 'PUT':
+        return axiosInstance.put<T>(link.href, data, config).then((res) => res.data);
+      case 'PATCH':
+        return axiosInstance.patch<T>(link.href, data, config).then((res) => res.data);
+      case 'DELETE':
+        return axiosInstance.delete<T>(link.href, config).then((res) => res.data);
+    }
+  },
   // for file downloads that need the Authorization header attached (unlike a plain
   // `window.location.href` navigation, which never sends custom headers) - goes through
   // this axios instance's interceptor instead of a raw browser request

@@ -1,6 +1,7 @@
 import { toast } from 'sonner';
 import { ConfirmDeleteDialog } from '@/components/common/ConfirmDeleteDialog';
 import { useDeleteComponent, type ComponentDisplayModel } from '@/api/components';
+import { getLink } from '@/api/permissions';
 import { getErrorMessage } from '@/lib/errors';
 
 interface DeleteComponentDialogProps {
@@ -13,7 +14,7 @@ export function DeleteComponentDialog({ component, open, onOpenChange }: DeleteC
   const { mutate, isPending } = useDeleteComponent();
 
   const handleDelete = () => {
-    mutate(component.id, {
+    mutate(getLink(component._links, 'delete')!, {
       onSuccess: () => {
         toast.success(`${component.name} v${component.version} deleted`);
         onOpenChange(false);

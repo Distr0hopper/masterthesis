@@ -1,4 +1,5 @@
 import { apiClient } from '../client';
+import type { HateoasLink } from '@/api/types';
 import type {
   AddVersionDto,
   ComponentDetailDto,
@@ -71,23 +72,19 @@ export const componentsService = {
     return apiClient.post(`${ENDPOINT}/${id}/versions/package`);
   },
 
-  update(id: string, dto: UpdateComponentDto): Promise<ComponentDetailDto> {
-    return apiClient.patch(`${ENDPOINT}/${id}`, dto);
+  update(link: HateoasLink, dto: UpdateComponentDto): Promise<ComponentDetailDto> {
+    return apiClient.request(link, dto);
   },
 
-  delete(id: string): Promise<void> {
-    return apiClient.delete(`${ENDPOINT}/${id}`);
+  delete(link: HateoasLink): Promise<void> {
+    return apiClient.request(link);
   },
 
   getDomains(): Promise<DomainDto[]> {
     return apiClient.get('/domains');
   },
 
-  addFavorite(id: string): Promise<void> {
-    return apiClient.post(`${ENDPOINT}/${id}/favorite`);
-  },
-
-  removeFavorite(id: string): Promise<void> {
-    return apiClient.delete(`${ENDPOINT}/${id}/favorite`);
+  toggleFavorite(link: HateoasLink): Promise<void> {
+    return apiClient.request(link);
   },
 };

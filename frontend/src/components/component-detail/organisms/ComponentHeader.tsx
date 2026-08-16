@@ -30,7 +30,7 @@ export function ComponentHeader({ model }: ComponentHeaderProps) {
                 {model.domainDisplay}
               </Badge>
 
-              {canFavorite(model._links) && <FavoriteButton componentId={model.id} isFavorite={model.isFavorite} />}
+              {canFavorite(model._links) && <FavoriteButton links={model._links!} isFavorite={model.isFavorite} />}
             </div>
 
             <Button asChild variant="outline" size="sm">

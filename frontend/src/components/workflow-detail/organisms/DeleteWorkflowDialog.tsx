@@ -1,6 +1,7 @@
 import { toast } from 'sonner';
 import { ConfirmDeleteDialog } from '@/components/common/ConfirmDeleteDialog';
 import { useDeleteWorkflow, type WorkflowDisplayModel } from '@/api/workflows';
+import { getLink } from '@/api/permissions';
 import { getErrorMessage } from '@/lib/errors';
 
 interface DeleteWorkflowDialogProps {
@@ -16,7 +17,7 @@ export function DeleteWorkflowDialog({ workflow, open, onOpenChange, onDeleted }
   const { mutate, isPending } = useDeleteWorkflow();
 
   const handleDelete = () => {
-    mutate(workflow.id, {
+    mutate(getLink(workflow._links, 'delete')!, {
       onSuccess: () => {
         toast.success('Workflow deleted');
         onOpenChange(false);

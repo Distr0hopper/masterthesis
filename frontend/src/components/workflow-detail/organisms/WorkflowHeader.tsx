@@ -13,7 +13,7 @@ import {
   WorkflowStatus,
   type WorkflowDetailDisplayModel,
 } from '@/api/workflows';
-import { canDelete as hasDeleteLink, canPublish as hasPublishLink } from '@/api/permissions';
+import { canDelete as hasDeleteLink, canPublish as hasPublishLink, getLink } from '@/api/permissions';
 import { getErrorMessage } from '@/lib/errors';
 import { downloadBlob } from '@/lib/download';
 import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
@@ -38,7 +38,7 @@ export function WorkflowHeader({ model, backTo, backLabel, onDeleted }: Workflow
   const canPublish = hasPublishLink(model._links) && model.status === WorkflowStatus.PENDING_VALIDATION;
 
   const handlePublish = () => {
-    publishWorkflow(model.id, {
+    publishWorkflow(getLink(model._links, 'publish')!, {
       onSuccess: () => toast.success('Workflow published'),
       onError: (error) => toast.error(getErrorMessage(error)),
     });

@@ -11,7 +11,7 @@ import {
   useUpdateWorkflowStepComponent,
   type WorkflowStepDisplayModel,
 } from '@/api/workflows';
-import { canUpdate as hasUpdateLink, canConfirm as hasConfirmLink } from '@/api/permissions';
+import { canUpdate as hasUpdateLink, canConfirm as hasConfirmLink, getLink } from '@/api/permissions';
 import { getErrorMessage } from '@/lib/errors';
 import { ROUTES } from '@/lib/routes';
 import { ComponentPickerDialog } from './ComponentPickerDialog';
@@ -24,10 +24,9 @@ const STATUS_BADGE_VARIANT: Record<StepMatchStatus, 'secondary' | 'default' | 'd
 
 interface StepMatchCardProps {
   step: WorkflowStepDisplayModel;
-  workflowId: string;
 }
 
-export function StepMatchCard({ step, workflowId }: StepMatchCardProps) {
+export function StepMatchCard({ step }: StepMatchCardProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const { mutate: updateComponent, isPending: isUpdating } = useUpdateWorkflowStepComponent();
   const { mutate: confirmStep, isPending: isConfirming } = useConfirmWorkflowStep();
@@ -36,7 +35,7 @@ export function StepMatchCard({ step, workflowId }: StepMatchCardProps) {
 
   const handleChange = (componentId: string | null) => {
     updateComponent(
-      { stepId: step.id, componentId, workflowId },
+      { link: getLink(step._links, 'update')!, componentId },
       {
         onSuccess: () => toast.success('Step updated'),
         onError: (error) => toast.error(getErrorMessage(error)),
@@ -45,13 +44,10 @@ export function StepMatchCard({ step, workflowId }: StepMatchCardProps) {
   };
 
   const handleConfirm = () => {
-    confirmStep(
-      { stepId: step.id, workflowId },
-      {
-        onSuccess: () => toast.success('Step confirmed'),
-        onError: (error) => toast.error(getErrorMessage(error)),
-      },
-    );
+    confirmStep(getLink(step._links, 'confirm')!, {
+      onSuccess: () => toast.success('Step confirmed'),
+      onError: (error) => toast.error(getErrorMessage(error)),
+    });
   };
 
   const isPending = isUpdating || isConfirming;

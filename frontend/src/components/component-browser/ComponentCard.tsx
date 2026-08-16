@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { FavoriteButton } from '@/components/FavoriteButton';
 import { getDomainBadgeStyle, useDomains, type ComponentDisplayModel } from '@/api/components';
-import { useAuthStore } from '@/store/auth.store';
+import { canFavorite } from '@/api/permissions';
 import { ROUTES } from '@/lib/routes';
 
 interface ComponentCardProps {
@@ -16,7 +16,6 @@ interface ComponentCardProps {
 export function ComponentCard({ component, actions }: ComponentCardProps) {
   const { data: domains } = useDomains();
   const domainBadgeStyle = domains ? getDomainBadgeStyle(component.domain, domains) : undefined;
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated());
 
   return (
     <Card>
@@ -26,7 +25,7 @@ export function ComponentCard({ component, actions }: ComponentCardProps) {
             {component.domainDisplay}
           </Badge>
 
-          {isAuthenticated && <FavoriteButton componentId={component.id} isFavorite={component.isFavorite} />}
+          {canFavorite(component._links) && <FavoriteButton componentId={component.id} isFavorite={component.isFavorite} />}
         </div>
 
         <h3 className="font-mono text-lg font-bold text-slate-900">{component.name}</h3>

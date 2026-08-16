@@ -1,3 +1,5 @@
+import type { WithHateoasLinks } from '@/api/types';
+
 export const StepMatchStatus = {
   SUGGESTED: 'suggested',
   CONFIRMED: 'confirmed',
@@ -18,7 +20,7 @@ export interface ComponentSummaryDto {
   domain: string;
 }
 
-export interface WorkflowStepDto {
+export interface WorkflowStepDto extends WithHateoasLinks {
   id: string;
   stepId: string;
   runReference: string;
@@ -35,7 +37,7 @@ export interface WorkflowCreatorDto {
   lastName: string | null;
 }
 
-export interface WorkflowListItemDto {
+export interface WorkflowListItemDto extends WithHateoasLinks {
   id: string;
   name: string;
   description: string | null;
@@ -45,7 +47,7 @@ export interface WorkflowListItemDto {
   createdAt: string;
 }
 
-export interface WorkflowDetailDto {
+export interface WorkflowDetailDto extends WithHateoasLinks {
   id: string;
   name: string;
   description: string | null;

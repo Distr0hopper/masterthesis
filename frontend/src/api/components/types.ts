@@ -1,3 +1,5 @@
+import type { WithHateoasLinks } from '@/api/types';
+
 export type ComponentDomain = string;
 
 export interface DomainDto {
@@ -28,7 +30,7 @@ export interface ParameterDto {
   direction: ParameterDirection;
 }
 
-export interface ComponentListItemDto {
+export interface ComponentListItemDto extends WithHateoasLinks {
   id: string;
   name: string;
   description: string | null;
@@ -47,7 +49,7 @@ export interface ComponentCreatorDto {
   lastName: string | null;
 }
 
-export interface ComponentDetailDto {
+export interface ComponentDetailDto extends WithHateoasLinks {
   id: string;
   name: string;
   authorName: string | null;

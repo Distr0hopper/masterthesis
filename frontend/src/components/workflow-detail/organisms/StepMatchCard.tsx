@@ -11,6 +11,7 @@ import {
   useUpdateWorkflowStepComponent,
   type WorkflowStepDisplayModel,
 } from '@/api/workflows';
+import { canUpdate as hasUpdateLink, canConfirm as hasConfirmLink } from '@/api/permissions';
 import { getErrorMessage } from '@/lib/errors';
 import { ROUTES } from '@/lib/routes';
 import { ComponentPickerDialog } from './ComponentPickerDialog';
@@ -24,13 +25,14 @@ const STATUS_BADGE_VARIANT: Record<StepMatchStatus, 'secondary' | 'default' | 'd
 interface StepMatchCardProps {
   step: WorkflowStepDisplayModel;
   workflowId: string;
-  canEdit: boolean;
 }
 
-export function StepMatchCard({ step, workflowId, canEdit }: StepMatchCardProps) {
+export function StepMatchCard({ step, workflowId }: StepMatchCardProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const { mutate: updateComponent, isPending: isUpdating } = useUpdateWorkflowStepComponent();
   const { mutate: confirmStep, isPending: isConfirming } = useConfirmWorkflowStep();
+  const canUpdate = hasUpdateLink(step._links);
+  const canConfirm = hasConfirmLink(step._links);
 
   const handleChange = (componentId: string | null) => {
     updateComponent(
@@ -82,13 +84,13 @@ export function StepMatchCard({ step, workflowId, canEdit }: StepMatchCardProps)
                 <span className="font-mono text-sm font-semibold text-slate-900">{step.componentName}</span>
                 <span className="text-xs text-slate-500">v{step.componentVersion}</span>
               </a>
-              {canEdit && (
+              {canUpdate && (
                 <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={() => setPickerOpen(true)}>
                   Change
                 </Button>
               )}
             </div>
-          ) : canEdit ? (
+          ) : canUpdate ? (
             <Button type="button" variant="outline" disabled={isPending} onClick={() => setPickerOpen(true)}>
               <Search className="mr-1 h-4 w-4" /> Browse Components
             </Button>
@@ -97,19 +99,19 @@ export function StepMatchCard({ step, workflowId, canEdit }: StepMatchCardProps)
           )}
         </div>
 
-        {canEdit && (
-          <>
-            <ComponentPickerDialog open={pickerOpen} onOpenChange={setPickerOpen} value={step.componentId} onSelect={handleChange} />
+        {canUpdate && (
+          <ComponentPickerDialog open={pickerOpen} onOpenChange={setPickerOpen} value={step.componentId} onSelect={handleChange} />
+        )}
 
-            <Button
-              size="sm"
-              className="self-start"
-              disabled={isPending || step.componentId === null || step.matchStatus === StepMatchStatus.CONFIRMED}
-              onClick={handleConfirm}
-            >
-              {step.matchStatus === StepMatchStatus.CONFIRMED ? 'Confirmed' : 'Confirm'}
-            </Button>
-          </>
+        {canConfirm && (
+          <Button
+            size="sm"
+            className="self-start"
+            disabled={isPending || step.componentId === null || step.matchStatus === StepMatchStatus.CONFIRMED}
+            onClick={handleConfirm}
+          >
+            {step.matchStatus === StepMatchStatus.CONFIRMED ? 'Confirmed' : 'Confirm'}
+          </Button>
         )}
       </CardContent>
     </Card>

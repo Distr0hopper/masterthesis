@@ -101,18 +101,6 @@ export const usePackageComponent = () => {
   });
 };
 
-export const useAddPackagedVersion = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (id: string) => componentsService.addPackagedVersion(id),
-    onSuccess: (_, id) => {
-      queryClient.invalidateQueries({ queryKey: componentKeys.all });
-      queryClient.invalidateQueries({ queryKey: componentKeys.versions(id) });
-    },
-  });
-};
-
 export const useUpdateComponent = () => {
   const queryClient = useQueryClient();
 
@@ -140,7 +128,8 @@ export const useToggleFavorite = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (link: HateoasLink) => componentsService.toggleFavorite(link),
+    mutationFn: ({ link, isFavorite }: { link: HateoasLink; isFavorite: boolean }) =>
+      componentsService.toggleFavorite(link, isFavorite),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: componentKeys.all });
     },

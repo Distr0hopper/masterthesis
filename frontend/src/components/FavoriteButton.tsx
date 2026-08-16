@@ -21,7 +21,7 @@ export function FavoriteButton({ links, isFavorite, className }: FavoriteButtonP
     e.preventDefault();
     e.stopPropagation();
     const link = getLink(links, isFavorite ? 'unfavorite' : 'favorite')!;
-    toggleFavorite(link, { onError: (error) => toast.error(getErrorMessage(error)) });
+    toggleFavorite({ link, isFavorite }, { onError: (error) => toast.error(getErrorMessage(error)) });
   };
 
   return (

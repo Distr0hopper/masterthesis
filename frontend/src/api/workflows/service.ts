@@ -39,11 +39,11 @@ export const workflowsService = {
   },
 
   confirmStep(link: HateoasLink): Promise<WorkflowStepDto> {
-    return apiClient.request(link);
+    return apiClient.request(link, { command: 'CONFIRM' });
   },
 
   publish(link: HateoasLink): Promise<WorkflowDetailDto> {
-    return apiClient.request(link);
+    return apiClient.request(link, { command: 'PUBLISH' });
   },
 
   delete(link: HateoasLink): Promise<void> {

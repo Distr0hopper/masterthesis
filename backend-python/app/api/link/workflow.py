@@ -1,5 +1,5 @@
 from app.api.link.base import BaseLinkBuilder
-from app.api.link.model import Link, LinkModel
+from app.api.link.model import Link
 from app.api.permission.workflow_permission_validator import WorkflowPermissionValidator
 from app.api.util.endpoint import Endpoints
 from app.api.util.http_method import HttpMethod
@@ -7,7 +7,7 @@ from app.application.commands.commands import WorkflowCommandType
 from app.domain.models.workflow import Workflow
 
 
-class WorkflowLinkBuilder(BaseLinkBuilder[Workflow, LinkModel, WorkflowPermissionValidator]):
+class WorkflowLinkBuilder(BaseLinkBuilder[Workflow, WorkflowPermissionValidator]):
     def _create_validator(self) -> WorkflowPermissionValidator:
         return WorkflowPermissionValidator(self.current_user)
 

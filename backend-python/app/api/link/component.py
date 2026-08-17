@@ -1,5 +1,5 @@
 from app.api.link.base import BaseLinkBuilder
-from app.api.link.model import Link, LinkModel
+from app.api.link.model import Link
 from app.api.permission.component_permission_validator import ComponentPermissionValidator
 from app.api.util.endpoint import Endpoints
 from app.api.util.http_method import HttpMethod
@@ -7,7 +7,7 @@ from app.application.commands.commands import ComponentCommandType
 from app.domain.models.component import Component
 
 
-class ComponentLinkBuilder(BaseLinkBuilder[Component, LinkModel, ComponentPermissionValidator]):
+class ComponentLinkBuilder(BaseLinkBuilder[Component, ComponentPermissionValidator]):
 
     def _create_validator(self) -> ComponentPermissionValidator:
         return ComponentPermissionValidator(self.current_user)

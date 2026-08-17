@@ -1,18 +1,37 @@
 from app.api.dto.component import ComponentCreatorDto
 from app.api.dto.workflow import (
     ComponentSummaryDto,
+    WorkflowCommandExecuteRequestDto,
+    WorkflowCommandTypesApiV1,
     WorkflowDetailDto,
     WorkflowListItemDto,
+    WorkflowStepCommandExecuteRequestDto,
+    WorkflowStepCommandTypesApiV1,
     WorkflowStepDto,
 )
 from app.api.link.workflow import WorkflowLinkBuilder
 from app.api.link.workflow_step import WorkflowStepLinkBuilder
+from app.application.commands.commands import WorkflowCommand, WorkflowCommandType, WorkflowStepCommand, WorkflowStepCommandType
 from app.domain.models.user import User
 from app.domain.models.workflow import Workflow
 from app.domain.models.workflow_step import WorkflowStep
 
 
 class WorkflowTransformer:
+    @staticmethod
+    def to_domain_command(dto: WorkflowCommandExecuteRequestDto) -> WorkflowCommand:
+        mapping = {
+            WorkflowCommandTypesApiV1.PUBLISH: WorkflowCommandType.PUBLISH,
+        }
+        return WorkflowCommand(type=mapping[dto.command], note=dto.note)
+
+    @staticmethod
+    def to_domain_step_command(dto: WorkflowStepCommandExecuteRequestDto) -> WorkflowStepCommand:
+        mapping = {
+            WorkflowStepCommandTypesApiV1.CONFIRM: WorkflowStepCommandType.CONFIRM,
+        }
+        return WorkflowStepCommand(type=mapping[dto.command], note=dto.note)
+
     @staticmethod
     def to_list_item(workflow: Workflow, current_user: User | None) -> WorkflowListItemDto:
         dto = WorkflowListItemDto(

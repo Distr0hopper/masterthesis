@@ -4,10 +4,11 @@ import tempfile
 import uuid
 import zipfile
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import Depends
 
+from app.application.commands.commands import ComponentCommand, ComponentCommandType
 from app.application.exception.component_exceptions import (
     AlreadyPackagedError,
     ComponentNameAlreadyExistsError,
@@ -28,6 +29,11 @@ from app.infrastructure.cwl.cwl_parser import (
     inject_description,
 )
 from app.infrastructure.packaging.packaging_cli import read_packaging_output, run_packaging_cli
+
+if TYPE_CHECKING:
+    # deferred import - favorites_service.py imports ComponentsService, so importing
+    # FavoritesService here at module load time would create a circular import
+    from app.application.service.favorites_service import FavoritesService
 
 
 class ComponentsService:
@@ -186,6 +192,23 @@ class ComponentsService:
             domain=parent.domain,
         )
         return await self.add_manual_version(component)
+
+    async def execute_command(
+        self,
+        component: Component,
+        command: ComponentCommand,
+        current_user_id: uuid.UUID,
+        favorites_service: "FavoritesService",
+    ) -> Component:
+        match command.type:
+            case ComponentCommandType.ADD_FAVORITE:
+                await favorites_service.add_favorite(current_user_id, component.id)
+                return component
+            case ComponentCommandType.REMOVE_FAVORITE:
+                await favorites_service.remove_favorite(current_user_id, component.id)
+                return component
+            case ComponentCommandType.REPACKAGE:
+                return await self.repackage_component(component)
 
     async def _run_packaging(self, repo_url: str) -> tuple[str, str, str | None, str | None, str | None]:
         repo_name = repo_url.rstrip("/").split("/")[-1]

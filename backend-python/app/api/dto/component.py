@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from enum import StrEnum
 from urllib.parse import urlparse
 
 from fastapi import UploadFile
@@ -152,3 +153,14 @@ class PackageComponentRequestDto(DomainValidatorMixin, RepoUrlValidatorMixin, Ca
     repo_url: str
     domain: str = Field(json_schema_extra={"enum": VALID_DOMAINS})
     description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
+
+
+class ComponentCommandTypesApiV1(StrEnum):
+    ADD_FAVORITE = "ADD_FAVORITE"
+    REMOVE_FAVORITE = "REMOVE_FAVORITE"
+    REPACKAGE = "REPACKAGE"
+
+
+class ComponentCommandExecuteRequestDto(CamelModel):
+    command: ComponentCommandTypesApiV1 = Field(..., description="The specific action to perform on the component")
+    note: str | None = Field(default=None, description="Optional note for the command execution")

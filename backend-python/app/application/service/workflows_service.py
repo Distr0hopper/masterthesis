@@ -5,6 +5,7 @@ from typing import Annotated
 
 from fastapi import Depends
 
+from app.application.commands.commands import WorkflowCommand, WorkflowCommandType, WorkflowStepCommand, WorkflowStepCommandType
 from app.application.exception.component_exceptions import ComponentNotFoundError
 from app.application.exception.workflow_exceptions import (
     InvalidWorkflowArchiveError,
@@ -178,6 +179,16 @@ class WorkflowsService:
             raise WorkflowNotReadyToPublishError(workflow.id)
         workflow.status = WorkflowStatus.VALIDATED
         return await self.workflows_repository.save(workflow)
+
+    async def execute_command(self, workflow: Workflow, command: WorkflowCommand) -> Workflow:
+        match command.type:
+            case WorkflowCommandType.PUBLISH:
+                return await self.publish(workflow)
+
+    async def execute_step_command(self, step: WorkflowStep, command: WorkflowStepCommand) -> WorkflowStep:
+        match command.type:
+            case WorkflowStepCommandType.CONFIRM:
+                return await self.confirm_step(step.id)
 
     async def remove(self, workflow: Workflow) -> None:
         await self.workflows_repository.delete(workflow)

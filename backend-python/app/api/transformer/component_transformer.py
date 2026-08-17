@@ -2,6 +2,8 @@ import uuid
 
 from app.api.dto.component import (
     AddVersionRequestDto,
+    ComponentCommandExecuteRequestDto,
+    ComponentCommandTypesApiV1,
     ComponentCreatorDto,
     ComponentDetailDto,
     ComponentListItemDto,
@@ -10,6 +12,7 @@ from app.api.dto.component import (
     UpdateComponentRequestDto,
 )
 from app.api.link.component import ComponentLinkBuilder
+from app.application.commands.commands import ComponentCommand, ComponentCommandType
 from app.domain.models.component import Component, ComponentSource
 from app.domain.models.parameter import Parameter
 from app.domain.models.user import User
@@ -17,6 +20,15 @@ from app.infrastructure.cwl.cwl_parser import inject_description
 
 
 class ComponentTransformer:
+    @staticmethod
+    def to_domain_command(dto: ComponentCommandExecuteRequestDto) -> ComponentCommand:
+        mapping = {
+            ComponentCommandTypesApiV1.ADD_FAVORITE: ComponentCommandType.ADD_FAVORITE,
+            ComponentCommandTypesApiV1.REMOVE_FAVORITE: ComponentCommandType.REMOVE_FAVORITE,
+            ComponentCommandTypesApiV1.REPACKAGE: ComponentCommandType.REPACKAGE,
+        }
+        return ComponentCommand(type=mapping[dto.command], note=dto.note)
+
     @staticmethod
     def from_create_dto(dto: CreateComponentRequestDto, cwl_content: str, created_by_id: uuid.UUID) -> Component:
         return Component(

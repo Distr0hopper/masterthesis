@@ -68,10 +68,6 @@ export const componentsService = {
     return apiClient.post(`${ENDPOINT}/package`, dto);
   },
 
-  addPackagedVersion(id: string): Promise<ComponentDetailDto> {
-    return apiClient.post(`${ENDPOINT}/${id}/versions/package`);
-  },
-
   update(link: HateoasLink, dto: UpdateComponentDto): Promise<ComponentDetailDto> {
     return apiClient.request(link, dto);
   },
@@ -84,7 +80,7 @@ export const componentsService = {
     return apiClient.get('/domains');
   },
 
-  toggleFavorite(link: HateoasLink): Promise<void> {
-    return apiClient.request(link);
+  toggleFavorite(link: HateoasLink, isFavorite: boolean): Promise<void> {
+    return apiClient.request(link, { command: isFavorite ? 'REMOVE_FAVORITE' : 'ADD_FAVORITE' });
   },
 };

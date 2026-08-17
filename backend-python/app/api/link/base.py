@@ -4,7 +4,7 @@ from app.api.link.model import Link, LinkModel
 from app.domain.models.user import User
 
 
-class BaseLinkBuilder[TEntity, TDto: LinkModel, TValidator](ABC):
+class BaseLinkBuilder[TEntity, TValidator](ABC):
     def __init__(self, current_user: User | None) -> None:
         self.current_user = current_user
         self._validator = self._create_validator()
@@ -18,7 +18,10 @@ class BaseLinkBuilder[TEntity, TDto: LinkModel, TValidator](ABC):
     @abstractmethod
     def _is_link_allowed(self, rel: str, entity: TEntity) -> bool: ...
 
-    def attach_links(self, dto: TDto, entity: TEntity) -> TDto:
+    # generic on the method, not the class - a single builder is shared across an
+    # entity's list/detail DTOs (e.g. ComponentListItemDto and ComponentDetailDto),
+    # so the DTO type must be inferred per call site instead of pinned on the class
+    def attach_links[TDto: LinkModel](self, dto: TDto, entity: TEntity) -> TDto:
         dto.links = self._filter_links(entity)
         return dto
 

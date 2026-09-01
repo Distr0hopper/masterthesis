@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs.t
 import { componentsService } from '@/api/components';
 import type { ComponentDetailDisplayModel } from '@/api/components';
 import { cn } from '@/lib/utils';
-import { CodeBlock } from '../common/CodeBlock';
+import { CodeBlock } from '@/components/common/CodeBlock';
 import { ParameterTable } from '../common/ParameterTable';
 import { ComponentOverview } from './ComponentOverview';
 

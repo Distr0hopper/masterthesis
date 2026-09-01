@@ -55,6 +55,7 @@ export interface WorkflowDetailDto extends WithHateoasLinks {
   createdBy: WorkflowCreatorDto | null;
   steps: WorkflowStepDto[];
   status: WorkflowStatus;
+  cwlContent: string;
   createdAt: string;
   updatedAt: string;
 }

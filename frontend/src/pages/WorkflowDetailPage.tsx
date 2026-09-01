@@ -3,6 +3,7 @@ import { isAxiosError } from 'axios';
 import { ChevronLeft } from 'lucide-react';
 import { useWorkflow } from '@/api/workflows';
 import { WorkflowHeader } from '@/components/workflow-detail/organisms/WorkflowHeader';
+import { WorkflowDefinition } from '@/components/workflow-detail/organisms/WorkflowDefinition';
 import { WorkflowSteps } from '@/components/workflow-detail/organisms/WorkflowSteps';
 import { ROUTES } from '@/lib/routes';
 
@@ -36,6 +37,7 @@ export default function WorkflowDetailPage() {
   return (
     <div>
       <WorkflowHeader model={model} backTo={backTo} backLabel={backLabel} onDeleted={() => navigate(backTo)} />
+      <WorkflowDefinition model={model} />
       <WorkflowSteps model={model} />
     </div>
   );

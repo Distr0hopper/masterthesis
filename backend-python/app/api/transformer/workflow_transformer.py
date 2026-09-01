@@ -83,6 +83,7 @@ class WorkflowTransformer:
             else None,
             steps=[WorkflowTransformer.to_step(s, current_user) for s in workflow.steps],
             status=workflow.status,
+            cwl_content=workflow.cwl_content,
             created_at=workflow.created_at,
             updated_at=workflow.updated_at,
         )

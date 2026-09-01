@@ -72,6 +72,7 @@ class WorkflowDetailDto(CamelModel, LinkModel):
     created_by: ComponentCreatorDto | None
     steps: list[WorkflowStepDto]
     status: WorkflowStatus
+    cwl_content: str
     created_at: datetime
     updated_at: datetime
 

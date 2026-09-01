@@ -46,6 +46,7 @@ export interface WorkflowDetailDisplayModel extends WorkflowDisplayModel {
   createdById: string | null;
   createdByDisplay: string;
   steps: WorkflowStepDisplayModel[];
+  cwlContent: string;
   updatedAt: Date;
   updatedAtDisplay: string;
 }
@@ -106,6 +107,7 @@ export const workflowTransformer = {
       createdById: dto.createdBy?.id ?? null,
       createdByDisplay: getCreatorDisplay(dto.createdBy),
       steps: dto.steps.map(this.toStepDisplayModel),
+      cwlContent: dto.cwlContent,
       updatedAt,
       updatedAtDisplay: formatDate(updatedAt),
     };

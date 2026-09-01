@@ -16,6 +16,7 @@ class WorkflowLinkBuilder(BaseLinkBuilder[Workflow, WorkflowPermissionValidator]
             "self": Link(href=Endpoints.workflow_by_id(entity.id), method=HttpMethod.GET),
             "delete": Link(href=Endpoints.workflow_by_id(entity.id), method=HttpMethod.DELETE),
             "publish": Link(href=Endpoints.workflow_commands_by_id(entity.id), method=HttpMethod.POST),
+            "updateDescription": Link(href=Endpoints.workflow_commands_by_id(entity.id), method=HttpMethod.POST),
         }
 
     def _is_link_allowed(self, rel: str, entity: Workflow) -> bool:
@@ -26,5 +27,7 @@ class WorkflowLinkBuilder(BaseLinkBuilder[Workflow, WorkflowPermissionValidator]
                 return self._validator.can_delete(entity)
             case "publish":
                 return self._validator.can_execute(entity, WorkflowCommandType.PUBLISH)
+            case "updateDescription":
+                return self._validator.can_execute(entity, WorkflowCommandType.UPDATE_DESCRIPTION)
             case _:
                 return False

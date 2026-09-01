@@ -46,6 +46,10 @@ export const workflowsService = {
     return apiClient.request(link, { command: 'PUBLISH' });
   },
 
+  updateDescription(link: HateoasLink, description: string | null): Promise<WorkflowDetailDto> {
+    return apiClient.request(link, { command: 'UPDATE_DESCRIPTION', description });
+  },
+
   delete(link: HateoasLink): Promise<void> {
     return apiClient.request(link);
   },

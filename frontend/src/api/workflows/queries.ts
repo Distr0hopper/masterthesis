@@ -93,6 +93,18 @@ export const usePublishWorkflow = () => {
   });
 };
 
+export const useUpdateWorkflowDescription = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ link, description }: { link: HateoasLink; description: string | null }) =>
+      workflowsService.updateDescription(link, description),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: workflowKeys.all });
+    },
+  });
+};
+
 export const useDownloadWorkflow = () => {
   return useMutation({
     mutationFn: (id: string) => workflowsService.download(id),

@@ -22,8 +22,9 @@ class WorkflowTransformer:
     def to_domain_command(dto: WorkflowCommandExecuteRequestDto) -> WorkflowCommand:
         mapping = {
             WorkflowCommandTypesApiV1.PUBLISH: WorkflowCommandType.PUBLISH,
+            WorkflowCommandTypesApiV1.UPDATE_DESCRIPTION: WorkflowCommandType.UPDATE_DESCRIPTION,
         }
-        return WorkflowCommand(type=mapping[dto.command], note=dto.note)
+        return WorkflowCommand(type=mapping[dto.command], note=dto.note, description=dto.description)
 
     @staticmethod
     def to_domain_step_command(dto: WorkflowStepCommandExecuteRequestDto) -> WorkflowStepCommand:

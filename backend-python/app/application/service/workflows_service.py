@@ -180,10 +180,18 @@ class WorkflowsService:
         workflow.status = WorkflowStatus.VALIDATED
         return await self.workflows_repository.save(workflow)
 
+    async def update_description(self, workflow: Workflow, description: str | None) -> Workflow:
+        # a plain metadata edit - never touches step matches or status, so no publish/revert
+        # bookkeeping is needed (unlike update_step_component)
+        workflow.description = description
+        return await self.workflows_repository.save(workflow)
+
     async def execute_command(self, workflow: Workflow, command: WorkflowCommand) -> Workflow:
         match command.type:
             case WorkflowCommandType.PUBLISH:
                 return await self.publish(workflow)
+            case WorkflowCommandType.UPDATE_DESCRIPTION:
+                return await self.update_description(workflow, command.description)
 
     async def execute_step_command(self, step: WorkflowStep, command: WorkflowStepCommand) -> WorkflowStep:
         match command.type:

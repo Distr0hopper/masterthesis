@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, Download, Globe, Trash2 } from 'lucide-react';
+import { ChevronLeft, Download, Globe, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
@@ -13,10 +13,16 @@ import {
   WorkflowStatus,
   type WorkflowDetailDisplayModel,
 } from '@/api/workflows';
-import { canDelete as hasDeleteLink, canPublish as hasPublishLink, getLink } from '@/api/permissions';
+import {
+  canDelete as hasDeleteLink,
+  canPublish as hasPublishLink,
+  canUpdateDescription as hasUpdateDescriptionLink,
+  getLink,
+} from '@/api/permissions';
 import { getErrorMessage } from '@/lib/errors';
 import { downloadBlob } from '@/lib/download';
 import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
+import { EditWorkflowDescriptionDialog } from './EditWorkflowDescriptionDialog';
 
 interface WorkflowHeaderProps {
   model: WorkflowDetailDisplayModel;
@@ -30,8 +36,10 @@ export function WorkflowHeader({ model, backTo, backLabel, onDeleted }: Workflow
   const { mutate: publishWorkflow, isPending: isPublishing } = usePublishWorkflow();
   const { mutate: downloadWorkflow, isPending: isDownloading } = useDownloadWorkflow();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [editDescriptionDialogOpen, setEditDescriptionDialogOpen] = useState(false);
 
   const canDelete = hasDeleteLink(model._links);
+  const canUpdateDescription = hasUpdateDescriptionLink(model._links);
   const allStepsConfirmed = model.steps.every((step) => step.matchStatus === StepMatchStatus.CONFIRMED);
   // publish is permission-only on the backend (offered regardless of status, same as
   // mark-read/mark-unread) - the status check must stay client-side
@@ -107,7 +115,16 @@ export function WorkflowHeader({ model, backTo, backLabel, onDeleted }: Workflow
 
           <h1 className="font-mono text-2xl font-bold text-slate-900">{model.name}</h1>
 
-          {model.description && <p className="text-slate-600">{model.description}</p>}
+          {(model.description || canUpdateDescription) && (
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-slate-600">{model.description || 'No description'}</p>
+              {canUpdateDescription && (
+                <Button variant="ghost" size="sm" className="shrink-0" onClick={() => setEditDescriptionDialogOpen(true)}>
+                  <Pencil className="mr-1 h-4 w-4" /> Edit
+                </Button>
+              )}
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t pt-3 text-sm text-slate-500">
             <span>{model.createdByDisplay}</span>
@@ -118,6 +135,11 @@ export function WorkflowHeader({ model, backTo, backLabel, onDeleted }: Workflow
       </Card>
 
       <DeleteWorkflowDialog workflow={model} open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen} onDeleted={onDeleted} />
+      <EditWorkflowDescriptionDialog
+        workflow={model}
+        open={editDescriptionDialogOpen}
+        onOpenChange={setEditDescriptionDialogOpen}
+      />
     </>
   );
 }

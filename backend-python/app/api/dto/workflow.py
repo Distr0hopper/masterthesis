@@ -90,11 +90,18 @@ class UpdateWorkflowStepRequestDto(CamelModel):
 
 class WorkflowCommandTypesApiV1(StrEnum):
     PUBLISH = "PUBLISH"
+    UPDATE_DESCRIPTION = "UPDATE_DESCRIPTION"
 
 
-class WorkflowCommandExecuteRequestDto(CamelModel):
+class WorkflowCommandExecuteRequestDto(EmptyWorkflowDescriptionToNoneMixin, CamelModel):
     command: WorkflowCommandTypesApiV1 = Field(..., description="The specific action to perform on the workflow")
     note: str | None = Field(default=None, description="Optional note for the command execution")
+    # only read by UPDATE_DESCRIPTION - the new description to store (blank/omitted clears it)
+    description: str | None = Field(
+        default=None,
+        max_length=MAX_DESCRIPTION_LENGTH,
+        description="New description; only used by the UPDATE_DESCRIPTION command",
+    )
 
 
 class WorkflowStepCommandTypesApiV1(StrEnum):

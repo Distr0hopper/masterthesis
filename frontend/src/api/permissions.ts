@@ -40,6 +40,9 @@ export const canUnfavorite = (links: HateoasLinks | undefined | null): boolean =
 
 export const canPublish = (links: HateoasLinks | undefined | null): boolean => hasLink(links, 'publish');
 
+export const canUpdateDescription = (links: HateoasLinks | undefined | null): boolean =>
+  hasLink(links, 'updateDescription');
+
 export const canConfirm = (links: HateoasLinks | undefined | null): boolean => hasLink(links, 'confirm');
 
 export const canRepackage = (links: HateoasLinks | undefined | null): boolean => hasLink(links, 'repackage');

@@ -9,3 +9,9 @@ export const uploadWorkflowFormSchema = z.object({
 });
 
 export type UploadWorkflowFormData = z.infer<typeof uploadWorkflowFormSchema>;
+
+export const updateWorkflowDescriptionFormSchema = z.object({
+  description: descriptionSchema,
+});
+
+export type UpdateWorkflowDescriptionFormData = z.infer<typeof updateWorkflowDescriptionFormSchema>;

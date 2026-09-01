@@ -29,6 +29,7 @@ class ComponentCommand:
 
 class WorkflowCommandType(StrEnum):
     PUBLISH = "PUBLISH"
+    UPDATE_DESCRIPTION = "UPDATE_DESCRIPTION"
 
     def __str__(self) -> str:
         return self.value
@@ -48,6 +49,8 @@ class WorkflowCommandType(StrEnum):
 class WorkflowCommand:
     type: WorkflowCommandType
     note: str | None = None
+    # payload for UPDATE_DESCRIPTION - the new description (None clears it); ignored by other commands
+    description: str | None = None
 
 
 class WorkflowStepCommandType(StrEnum):

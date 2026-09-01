@@ -62,6 +62,7 @@ export interface ComponentDetailDto extends WithHateoasLinks {
   cwlContent: string;
   cwlType: string | null;
   dockerfileContent: string | null;
+  dockerPullReference: string | null;
   domain: ComponentDomain;
   source: ComponentSource;
   parameters: ParameterDto[];

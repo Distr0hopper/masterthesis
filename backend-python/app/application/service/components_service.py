@@ -23,6 +23,7 @@ from app.domain.repository.components_repository import ComponentsRepository
 from app.infrastructure.cwl.cwl_parser import (
     extract_cwl_type,
     extract_description,
+    extract_docker_pull,
     extract_dockerfile_content,
     extract_parameters,
     generate_inputs_yaml,
@@ -103,6 +104,7 @@ class ComponentsService:
         component.parameters = self._parse_parameters(component.cwl_content, context, component.source)
         component.cwl_type = extract_cwl_type(component.cwl_content)
         component.dockerfile_content = extract_dockerfile_content(component.cwl_content)
+        component.docker_pull_reference = extract_docker_pull(component.cwl_content)
         if component.description is None:
             component.description = extract_description(component.cwl_content)
         component.description = self._truncate_description(component.description)
@@ -117,6 +119,7 @@ class ComponentsService:
         component.parameters = self._parse_parameters(component.cwl_content, f"v{next_version}", component.source)
         component.cwl_type = extract_cwl_type(component.cwl_content)
         component.dockerfile_content = extract_dockerfile_content(component.cwl_content)
+        component.docker_pull_reference = extract_docker_pull(component.cwl_content)
         if component.description is None:
             component.description = extract_description(component.cwl_content)
         component.description = self._truncate_description(component.description)

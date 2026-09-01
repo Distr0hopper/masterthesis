@@ -61,6 +61,15 @@ export function ComponentTabs({ model }: ComponentTabsProps) {
           <TabsContent value="dockerfile" className="pt-4">
             {model.dockerfileContent ? (
               <CodeBlock title="Dockerfile" content={model.dockerfileContent} downloadFilename="Dockerfile" />
+            ) : model.dockerPullReference ? (
+              <a
+                href={model.dockerPullUrl ?? undefined}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-baseline gap-2 hover:underline"
+              >
+                <span className="font-mono text-sm font-semibold text-slate-900">{model.dockerPullReference}</span>
+              </a>
             ) : (
               <p className="text-sm text-slate-500">No Dockerfile available for this component.</p>
             )}

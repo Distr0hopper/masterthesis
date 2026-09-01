@@ -17,6 +17,7 @@ import type {
 } from './schema';
 import { formatDate, getCreatorDisplay } from '@/api/transformer';
 import type { WithHateoasLinks } from '@/api/types';
+import { buildDockerPullUrl } from '@/lib/dockerImage';
 
 const SOURCE_LABELS: Record<ComponentSource, string> = {
   [ComponentSource.AUTOMATED_PACKAGING]: 'Packaged from GitHub',
@@ -63,6 +64,8 @@ export interface ComponentDetailDisplayModel extends ComponentDisplayModel {
   cwlContent: string;
   cwlType: string | null;
   dockerfileContent: string | null;
+  dockerPullReference: string | null;
+  dockerPullUrl: string | null;
   updatedAt: Date;
   updatedAtDisplay: string;
   parameters: ParameterDisplayModel[];
@@ -168,6 +171,8 @@ export const componentTransformer = {
       cwlContent: dto.cwlContent,
       cwlType: dto.cwlType,
       dockerfileContent: dto.dockerfileContent,
+      dockerPullReference: dto.dockerPullReference,
+      dockerPullUrl: dto.dockerPullReference ? buildDockerPullUrl(dto.dockerPullReference) : null,
       updatedAt,
       updatedAtDisplay: formatDate(updatedAt),
       parameters,

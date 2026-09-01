@@ -47,6 +47,11 @@ class Component(SQLModel, table=True):
     # DockerRequirement legitimately have no Dockerfile
     cwl_type: str | None = None
     dockerfile_content: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    # also derived from cwl_content (see cwl_parser.extract_docker_pull) - mutually exclusive
+    # with dockerfile_content per the CWL spec (DockerRequirement has either dockerFile or
+    # dockerPull); short reference string, not Text like dockerfile_content, matching repo_url's
+    # plain-str -> AutoString mapping
+    docker_pull_reference: str | None = None
     # explicit String column: SQLModel would otherwise infer a native Postgres
     # enum type from the Python Enum, which was avoided (see the
     # hand-written migration - VARCHAR only, no CREATE TYPE)

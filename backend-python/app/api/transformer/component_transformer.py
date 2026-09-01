@@ -121,6 +121,7 @@ class ComponentTransformer:
             cwl_content=inject_description(component.cwl_content, component.description),
             cwl_type=component.cwl_type,
             dockerfile_content=component.dockerfile_content,
+            docker_pull_reference=component.docker_pull_reference,
             domain=component.domain,
             source=component.source,
             parameters=[ComponentTransformer.to_parameter(p) for p in component.parameters],

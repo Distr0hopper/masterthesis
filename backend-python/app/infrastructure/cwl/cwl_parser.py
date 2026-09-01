@@ -84,6 +84,18 @@ def extract_dockerfile_content(cwl_content: str) -> str | None:
     return docker_requirement.get("dockerFile")
 
 
+def extract_docker_pull(cwl_content: str) -> str | None:
+    try:
+        doc: Any = yaml.safe_load(cwl_content)
+    except yaml.YAMLError:
+        return None
+    if not isinstance(doc, dict):
+        return None
+    requirements = doc.get("requirements") or {}
+    docker_requirement = requirements.get("DockerRequirement") or {}
+    return docker_requirement.get("dockerPull")
+
+
 def _resolve_format(format_value: Any, namespaces: dict[str, str]) -> str | None:
     # format is a (possibly namespaced) ontology identifier, e.g. "edam:format_2572"
     # with $namespaces: {edam: "http://edamontology.org/"} - expand to the full,

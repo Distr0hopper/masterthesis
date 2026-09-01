@@ -101,6 +101,7 @@ class ComponentDetailDto(CamelModel, LinkModel):
     cwl_content: str
     cwl_type: str | None
     dockerfile_content: str | None
+    docker_pull_reference: str | None
     domain: str
     source: ComponentSource
     parameters: list[ParameterDto]

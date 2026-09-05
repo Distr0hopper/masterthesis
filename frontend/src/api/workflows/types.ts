@@ -1,4 +1,4 @@
-import type { WithHateoasLinks } from '@/api/types';
+import type { PageParams, PageResponse, WithHateoasLinks } from '@/api/types';
 
 export const StepMatchStatus = {
   SUGGESTED: 'suggested',
@@ -66,6 +66,18 @@ export interface CreateWorkflowDto {
   description?: string | null;
 }
 
-export interface WorkflowListQueryParams {
+export interface WorkflowListQueryParams extends PageParams<WorkflowListItemDto> {
   domain?: string;
+  search?: string;
+}
+
+export interface MyWorkflowsResponseDto {
+  published: PageResponse<WorkflowListItemDto>;
+  pending: PageResponse<WorkflowListItemDto>;
+}
+
+export interface MyWorkflowsQueryParams {
+  limit?: number;
+  publishedOffset?: number;
+  pendingOffset?: number;
 }

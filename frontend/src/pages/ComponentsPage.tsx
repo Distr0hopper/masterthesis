@@ -1,30 +1,46 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { Upload } from 'lucide-react';
 import { useComponents, useDomains } from '@/api/components';
 import { ComponentCard } from '@/components/component-browser/ComponentCard';
 import { ComponentFilters } from '@/components/component-browser/ComponentFilters';
+import { Pagination } from '@/components/common/Pagination';
 import { Button } from '@/components/ui/button.tsx';
 import { useAuthStore } from '@/store/auth.store';
+import { usePageParams } from '@/lib/usePageParams';
 import { ROUTES } from '@/lib/routes';
 
 export default function ComponentsPage() {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedDomain, setSelectedDomain] = useState('');
-  const [hideMine, setHideMine] = useState(false);
-  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const { limit, offset, setOffset, getFilter, setFilter } = usePageParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated());
 
-  const { data: domains } = useDomains();
-  const { data: components, isLoading } = useComponents(
-    selectedDomain || undefined,
-    isAuthenticated && hideMine,
-    isAuthenticated && favoritesOnly,
-  );
+  const searchTerm = getFilter('search');
+  const selectedDomain = getFilter('domain');
+  const hideMine = searchParams.get('hideMine') === 'true';
+  const favoritesOnly = searchParams.get('favoritesOnly') === 'true';
 
-  const models = components ?? [];
-  const term = searchTerm.trim().toLowerCase();
-  const displayModels = term ? models.filter((c) => c.name.toLowerCase().includes(term)) : models;
+  const setBooleanFilter = (key: string, value: boolean) => {
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      if (value) params.set(key, 'true');
+      else params.delete(key);
+      params.set('offset', '0');
+      return params;
+    });
+  };
+
+  const { data: domains } = useDomains();
+  const { data, isLoading } = useComponents({
+    domain: selectedDomain || undefined,
+    excludeMine: isAuthenticated && hideMine,
+    favoritesOnly: isAuthenticated && favoritesOnly,
+    search: searchTerm || undefined,
+    limit,
+    offset,
+  });
+
+  const displayModels = data?.items ?? [];
+  const total = data?.total ?? 0;
 
   return (
     <div>
@@ -45,21 +61,21 @@ export default function ComponentsPage() {
         searchTerm={searchTerm}
         selectedDomain={selectedDomain}
         domains={domains ?? []}
-        onSearchTermChange={setSearchTerm}
-        onDomainChange={setSelectedDomain}
+        onSearchTermChange={(value) => setFilter('search', value)}
+        onDomainChange={(value) => setFilter('domain', value)}
         showHideMineToggle={isAuthenticated}
         hideMine={hideMine}
-        onHideMineChange={setHideMine}
+        onHideMineChange={(value) => setBooleanFilter('hideMine', value)}
         showFavoritesToggle={isAuthenticated}
         favoritesOnly={favoritesOnly}
-        onFavoritesOnlyChange={setFavoritesOnly}
+        onFavoritesOnlyChange={(value) => setBooleanFilter('favoritesOnly', value)}
       />
 
       {isLoading ? (
         <p className="mt-8 text-slate-500">Loading components...</p>
       ) : (
         <>
-          <p className="mt-6 text-sm text-slate-500">{displayModels.length} results</p>
+          <p className="mt-6 text-sm text-slate-500">{total} results</p>
 
           {displayModels.length === 0 ? (
             <p className="mt-8 text-slate-500">No components found.</p>
@@ -70,6 +86,13 @@ export default function ComponentsPage() {
               ))}
             </div>
           )}
+
+          <Pagination
+            totalItems={total}
+            itemsPerPage={limit}
+            currentPage={Math.floor(offset / limit) + 1}
+            onPageChange={(page) => setOffset((page - 1) * limit)}
+          />
         </>
       )}
     </div>

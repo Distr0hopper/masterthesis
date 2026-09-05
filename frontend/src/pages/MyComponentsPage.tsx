@@ -2,12 +2,16 @@ import { Link } from 'react-router-dom';
 import { useMyComponents } from '@/api/components';
 import { ComponentCard } from '@/components/component-browser/ComponentCard';
 import { MyComponentCardActions } from '@/components/component-mine/organisms/MyComponentCardActions';
+import { Pagination } from '@/components/common/Pagination';
+import { usePageParams } from '@/lib/usePageParams';
 import { ROUTES } from '@/lib/routes';
 
 export default function MyComponentsPage() {
-  const { data: components, isLoading } = useMyComponents();
+  const { limit, offset, setOffset } = usePageParams();
+  const { data, isLoading } = useMyComponents({ limit, offset });
 
-  const displayModels = components ?? [];
+  const displayModels = data?.items ?? [];
+  const total = data?.total ?? 0;
 
   return (
     <div>
@@ -18,7 +22,7 @@ export default function MyComponentsPage() {
         <p className="mt-8 text-slate-500">Loading components...</p>
       ) : (
         <>
-          <p className="mt-6 text-sm text-slate-500">{displayModels.length} results</p>
+          <p className="mt-6 text-sm text-slate-500">{total} results</p>
 
           {displayModels.length === 0 ? (
             <p className="mt-8 text-slate-500">
@@ -35,6 +39,13 @@ export default function MyComponentsPage() {
               ))}
             </div>
           )}
+
+          <Pagination
+            totalItems={total}
+            itemsPerPage={limit}
+            currentPage={Math.floor(offset / limit) + 1}
+            onPageChange={(page) => setOffset((page - 1) * limit)}
+          />
         </>
       )}
     </div>

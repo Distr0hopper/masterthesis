@@ -154,7 +154,9 @@ export const componentTransformer = {
   },
 
   toListDisplayModels(dtos: ComponentListItemDto[]): ComponentDisplayModel[] {
-    return dtos.map((dto) => this.toDisplayModel(dto));
+    // self-reference by name, not `this` - toListDisplayModel() passes this method
+    // around as a bare function reference, which would drop a `this` binding
+    return dtos.map((dto) => componentTransformer.toDisplayModel(dto));
   },
 
   toDetailDisplayModel(dto: ComponentDetailDto): ComponentDetailDisplayModel {

@@ -7,6 +7,7 @@ from pydantic import Field, field_validator
 
 from app.api.dto.base import CamelModel
 from app.api.dto.component import ComponentCreatorDto
+from app.api.dto.pagination import PaginatedResponseDtoV1
 from app.api.link.model import LinkModel
 from app.domain.models.component_domain import VALID_DOMAINS
 from app.domain.models.workflow import MAX_DESCRIPTION_LENGTH, WorkflowStatus
@@ -62,6 +63,11 @@ class WorkflowListItemDto(CamelModel, LinkModel):
     step_count: int
     status: WorkflowStatus
     created_at: datetime
+
+
+class MyWorkflowsResponseDtoV1(CamelModel):
+    published: PaginatedResponseDtoV1[WorkflowListItemDto]
+    pending: PaginatedResponseDtoV1[WorkflowListItemDto]
 
 
 class WorkflowDetailDto(CamelModel, LinkModel):

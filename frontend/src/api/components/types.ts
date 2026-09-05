@@ -1,4 +1,4 @@
-import type { WithHateoasLinks } from '@/api/types';
+import type { PageParams, WithHateoasLinks } from '@/api/types';
 
 export type ComponentDomain = string;
 
@@ -96,6 +96,9 @@ export interface AddVersionDto {
   description?: string;
 }
 
-export interface ComponentListQueryParams {
+export interface ComponentListQueryParams extends PageParams<ComponentListItemDto> {
   domain?: ComponentDomain;
+  excludeMine?: boolean;
+  favoritesOnly?: boolean;
+  search?: string;
 }

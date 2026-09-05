@@ -97,7 +97,9 @@ export const workflowTransformer = {
   },
 
   toListDisplayModels(dtos: WorkflowListItemDto[]): WorkflowDisplayModel[] {
-    return dtos.map((dto) => this.toDisplayModel(dto));
+    // self-reference by name, not `this` - toListDisplayModel() passes this method
+    // around as a bare function reference, which would drop a `this` binding
+    return dtos.map((dto) => workflowTransformer.toDisplayModel(dto));
   },
 
   toDetailDisplayModel(dto: WorkflowDetailDto): WorkflowDetailDisplayModel {

@@ -19,7 +19,8 @@ from app.application.exception.component_exceptions import (
 )
 from app.domain.models.component import MAX_DESCRIPTION_LENGTH, Component, ComponentSource
 from app.domain.models.parameter import Parameter
-from app.domain.repository.components_repository import ComponentsRepository
+from app.domain.pagination.pagination import PaginatedList
+from app.domain.repository.components_repository import ComponentListFilter, ComponentsRepository
 from app.infrastructure.cwl.cwl_parser import (
     extract_cwl_type,
     extract_description,
@@ -47,11 +48,15 @@ class ComponentsService:
     ) -> "ComponentsService":
         return ComponentsService(components_repository)
 
-    async def list_components(self, domain: str | None = None, exclude_created_by: uuid.UUID | None = None) -> list[Component]:
-        return await self.components_repository.find_all(domain, exclude_created_by)
+    async def list_components(
+        self, filter: ComponentListFilter, pagination: PaginatedList
+    ) -> tuple[list[Component], int]:
+        return await self.components_repository.find_paginated(filter, pagination)
 
-    async def list_my_components(self, created_by_id: uuid.UUID) -> list[Component]:
-        return await self.components_repository.find_by_created_by(created_by_id)
+    async def list_my_components(
+        self, created_by_id: uuid.UUID, pagination: PaginatedList
+    ) -> tuple[list[Component], int]:
+        return await self.components_repository.find_paginated_by_created_by(created_by_id, pagination)
 
     async def get_latest_components(self, limit: int) -> list[Component]:
         # reuses the already-deduped (latest-version-per-lineage) list find_all returns -

@@ -1,10 +1,10 @@
 import { apiClient } from '../client';
-import type { HateoasLink } from '@/api/types';
+import type { HateoasLink, PageParams, PageResponse } from '@/api/types';
 import type {
   AddVersionDto,
   ComponentDetailDto,
-  ComponentDomain,
   ComponentListItemDto,
+  ComponentListQueryParams,
   CreateComponentDto,
   DomainDto,
   PackageComponentDto,
@@ -14,14 +14,21 @@ import type {
 const ENDPOINT = '/components';
 
 export const componentsService = {
-  getAll(domain?: ComponentDomain, excludeMine?: boolean, favoritesOnly?: boolean): Promise<ComponentListItemDto[]> {
+  getAll(params: ComponentListQueryParams): Promise<PageResponse<ComponentListItemDto>> {
     return apiClient.get(ENDPOINT, {
-      params: { domain, excludeMine: excludeMine || undefined, favoritesOnly: favoritesOnly || undefined },
+      params: {
+        domain: params.domain,
+        excludeMine: params.excludeMine || undefined,
+        favoritesOnly: params.favoritesOnly || undefined,
+        search: params.search || undefined,
+        limit: params.limit,
+        offset: params.offset,
+      },
     });
   },
 
-  getMine(): Promise<ComponentListItemDto[]> {
-    return apiClient.get(`${ENDPOINT}/mine`);
+  getMine(params: PageParams<ComponentListItemDto>): Promise<PageResponse<ComponentListItemDto>> {
+    return apiClient.get(`${ENDPOINT}/mine`, { params: { limit: params.limit, offset: params.offset } });
   },
 
   getLatest(limit?: number): Promise<ComponentListItemDto[]> {

@@ -1,25 +1,32 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Upload } from 'lucide-react';
 import { useDomains } from '@/api/components';
 import { useWorkflows } from '@/api/workflows';
 import { WorkflowCard } from '@/components/workflow-browse/WorkflowCard';
 import { WorkflowFilters } from '@/components/workflow-browse/WorkflowFilters';
+import { Pagination } from '@/components/common/Pagination';
 import { Button } from '@/components/ui/button.tsx';
 import { useAuthStore } from '@/store/auth.store';
+import { usePageParams } from '@/lib/usePageParams';
 import { ROUTES } from '@/lib/routes';
 
 export default function WorkflowsPage() {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedDomain, setSelectedDomain] = useState('');
+  const { limit, offset, setOffset, getFilter, setFilter } = usePageParams();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated());
 
-  const { data: domains } = useDomains();
-  const { data: workflows, isLoading } = useWorkflows(selectedDomain || undefined);
+  const searchTerm = getFilter('search');
+  const selectedDomain = getFilter('domain');
 
-  const models = workflows ?? [];
-  const term = searchTerm.trim().toLowerCase();
-  const displayModels = term ? models.filter((w) => w.name.toLowerCase().includes(term)) : models;
+  const { data: domains } = useDomains();
+  const { data, isLoading } = useWorkflows({
+    domain: selectedDomain || undefined,
+    search: searchTerm || undefined,
+    limit,
+    offset,
+  });
+
+  const displayModels = data?.items ?? [];
+  const total = data?.total ?? 0;
 
   return (
     <div>
@@ -43,15 +50,15 @@ export default function WorkflowsPage() {
         searchTerm={searchTerm}
         selectedDomain={selectedDomain}
         domains={domains ?? []}
-        onSearchTermChange={setSearchTerm}
-        onDomainChange={setSelectedDomain}
+        onSearchTermChange={(value) => setFilter('search', value)}
+        onDomainChange={(value) => setFilter('domain', value)}
       />
 
       {isLoading ? (
         <p className="mt-8 text-slate-500">Loading workflows...</p>
       ) : (
         <>
-          <p className="mt-6 text-sm text-slate-500">{displayModels.length} results</p>
+          <p className="mt-6 text-sm text-slate-500">{total} results</p>
 
           {displayModels.length === 0 ? (
             <p className="mt-8 text-slate-500">No workflows found.</p>
@@ -62,6 +69,13 @@ export default function WorkflowsPage() {
               ))}
             </div>
           )}
+
+          <Pagination
+            totalItems={total}
+            itemsPerPage={limit}
+            currentPage={Math.floor(offset / limit) + 1}
+            onPageChange={(page) => setOffset((page - 1) * limit)}
+          />
         </>
       )}
     </div>

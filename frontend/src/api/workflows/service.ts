@@ -1,20 +1,32 @@
 import { apiClient } from '../client';
-import type { HateoasLink } from '@/api/types';
-import type { CreateWorkflowDto, WorkflowDetailDto, WorkflowListItemDto, WorkflowStepDto } from './types';
+import type { HateoasLink, PageResponse } from '@/api/types';
+import type {
+  CreateWorkflowDto,
+  MyWorkflowsQueryParams,
+  MyWorkflowsResponseDto,
+  WorkflowDetailDto,
+  WorkflowListItemDto,
+  WorkflowListQueryParams,
+  WorkflowStepDto,
+} from './types';
 
 const ENDPOINT = '/workflows';
 
 export const workflowsService = {
-  getAll(domain?: string): Promise<WorkflowListItemDto[]> {
-    return apiClient.get(ENDPOINT, { params: { domain } });
+  getAll(params: WorkflowListQueryParams): Promise<PageResponse<WorkflowListItemDto>> {
+    return apiClient.get(ENDPOINT, {
+      params: { domain: params.domain, search: params.search || undefined, limit: params.limit, offset: params.offset },
+    });
   },
 
   getById(id: string): Promise<WorkflowDetailDto> {
     return apiClient.get(`${ENDPOINT}/${id}`);
   },
 
-  getMine(): Promise<WorkflowListItemDto[]> {
-    return apiClient.get(`${ENDPOINT}/mine`);
+  getMine(params: MyWorkflowsQueryParams): Promise<MyWorkflowsResponseDto> {
+    return apiClient.get(`${ENDPOINT}/mine`, {
+      params: { limit: params.limit, publishedOffset: params.publishedOffset, pendingOffset: params.pendingOffset },
+    });
   },
 
   getLatest(limit?: number): Promise<WorkflowListItemDto[]> {

@@ -1,5 +1,6 @@
 import uuid
 import zipfile
+from dataclasses import replace
 from io import BytesIO
 from typing import Annotated
 
@@ -18,8 +19,9 @@ from app.domain.models.user import User
 from app.domain.models.workflow import Workflow, WorkflowStatus
 from app.domain.models.workflow_domain import WorkflowDomain
 from app.domain.models.workflow_step import StepMatchStatus, WorkflowStep
+from app.domain.pagination.pagination import PaginatedList
 from app.domain.repository.components_repository import ComponentsRepository
-from app.domain.repository.workflows_repository import WorkflowsRepository
+from app.domain.repository.workflows_repository import WorkflowListFilter, WorkflowsRepository
 from app.infrastructure.cwl.cwl_matcher import best_match
 from app.infrastructure.cwl.workflow_parser import extract_workflow_steps, find_workflow_file
 
@@ -36,11 +38,20 @@ class WorkflowsService:
     ) -> "WorkflowsService":
         return WorkflowsService(workflows_repository, components_repository)
 
-    async def list_workflows(self, domain: str | None = None) -> list[Workflow]:
-        return await self.workflows_repository.find_all(domain)
+    async def list_workflows(
+        self, filter: WorkflowListFilter, pagination: PaginatedList
+    ) -> tuple[list[Workflow], int]:
+        # browse-list callers always see only VALIDATED workflows - enforced here rather
+        # than trusted from an arbitrary caller-supplied filter, so a public browse
+        # request can never leak pending workflows regardless of what the router builds
+        filter = replace(filter, status=WorkflowStatus.VALIDATED, created_by=None)
+        return await self.workflows_repository.find_paginated(filter, pagination)
 
-    async def list_my_workflows(self, created_by_id: uuid.UUID) -> list[Workflow]:
-        return await self.workflows_repository.find_by_created_by(created_by_id)
+    async def list_my_workflows_by_status(
+        self, created_by_id: uuid.UUID, status: WorkflowStatus, pagination: PaginatedList
+    ) -> tuple[list[Workflow], int]:
+        filter = WorkflowListFilter(created_by=created_by_id, status=status)
+        return await self.workflows_repository.find_paginated(filter, pagination)
 
     async def get_latest_workflows(self, limit: int) -> list[Workflow]:
         # mirrors ComponentsService.get_latest_components - sort/slice in Python over the

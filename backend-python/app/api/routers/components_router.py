@@ -15,6 +15,7 @@ from app.api.dto.component import (
     PackageComponentRequestDto,
     UpdateComponentRequestDto,
 )
+from app.api.dto.pagination import ListQueryPaginationDtoV1, PaginatedResponseDtoV1, build_paginated_response
 from app.api.exception.exceptions import ForbiddenException
 from app.api.permission.component_permission_validator import ComponentPermissionValidator
 from app.api.transformer.component_transformer import ComponentTransformer
@@ -24,6 +25,7 @@ from app.application.service.components_service import ComponentsService
 from app.application.service.favorites_service import FavoritesService
 from app.domain.models.component_domain import VALID_DOMAINS
 from app.domain.models.user import User
+from app.domain.repository.components_repository import ComponentListFilter
 
 router = APIRouter(prefix="/components", tags=["components"])
 logger = logging.getLogger("app.api.routers.components_router")
@@ -35,40 +37,48 @@ async def _favorited_names(favorites_service: FavoritesService, user: User | Non
     return await favorites_service.get_favorited_component_names(user.id) if user is not None else set()
 
 
-@router.get("", response_model=list[ComponentListItemDto])
+@router.get("", response_model=PaginatedResponseDtoV1[ComponentListItemDto])
 async def list_components(
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
     favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
     current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
+    pagination_dto: Annotated[ListQueryPaginationDtoV1, Depends()],
     # json_schema_extra adds the enum purely so Swagger UI renders a dropdown
     domain: Annotated[str | None, Query(json_schema_extra={"enum": VALID_DOMAINS})] = None,
     favorites_only: Annotated[bool, Query(alias="favoritesOnly")] = False,
     exclude_mine: Annotated[bool, Query(alias="excludeMine")] = False,
-) -> list[ComponentListItemDto]:
+    search: Annotated[str | None, Query()] = None,
+) -> PaginatedResponseDtoV1[ComponentListItemDto]:
     if favorites_only and current_user is None:
         raise FavoritesRequireAuthError()
 
     # unlike favoritesOnly, excludeMine has a sensible no-op meaning for anonymous
     # visitors (there's no "mine" to exclude), so no auth error here
     exclude_created_by = current_user.id if exclude_mine and current_user is not None else None
-    components = await components_service.list_components(domain, exclude_created_by)
+    favorited_by = current_user.id if favorites_only and current_user is not None else None
+    pagination = pagination_dto.to_domain()
+    filter = ComponentListFilter(
+        domain=domain, exclude_created_by=exclude_created_by, favorited_by=favorited_by, search=search
+    )
+    components, total = await components_service.list_components(filter, pagination)
     favorited_names = await _favorited_names(favorites_service, current_user)
 
-    if favorites_only:
-        components = [c for c in components if c.name in favorited_names]
-
-    return [ComponentTransformer.to_list_item(c, c.name in favorited_names, current_user) for c in components]
+    items = [ComponentTransformer.to_list_item(c, c.name in favorited_names, current_user) for c in components]
+    return build_paginated_response(items, total, pagination)
 
 
-@router.get("/mine", response_model=list[ComponentListItemDto])
+@router.get("/mine", response_model=PaginatedResponseDtoV1[ComponentListItemDto])
 async def list_my_components(
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
     favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
-) -> list[ComponentListItemDto]:
-    components = await components_service.list_my_components(current_user.id)
+    pagination_dto: Annotated[ListQueryPaginationDtoV1, Depends()],
+) -> PaginatedResponseDtoV1[ComponentListItemDto]:
+    pagination = pagination_dto.to_domain()
+    components, total = await components_service.list_my_components(current_user.id, pagination)
     favorited_names = await _favorited_names(favorites_service, current_user)
-    return [ComponentTransformer.to_list_item(c, c.name in favorited_names, current_user) for c in components]
+    items = [ComponentTransformer.to_list_item(c, c.name in favorited_names, current_user) for c in components]
+    return build_paginated_response(items, total, pagination)
 
 
 @router.get("/latest", response_model=list[ComponentListItemDto])

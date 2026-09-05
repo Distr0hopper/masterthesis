@@ -20,11 +20,13 @@ interface ComponentPickerDialogProps {
 export function ComponentPickerDialog({ open, onOpenChange, value, onSelect }: ComponentPickerDialogProps) {
   const [mode, setMode] = useState<'browse' | 'upload'>('browse');
   const [search, setSearch] = useState('');
-  const { data: components } = useComponents();
+  const term = search.trim();
+  // 50 matches the backend's MAX_LIMIT - this picker has no pagination UI of its own,
+  // so it asks for as many matches as the API allows in one page
+  const { data } = useComponents({ search: term || undefined, limit: 50 });
   const { data: domains } = useDomains();
 
-  const term = search.trim().toLowerCase();
-  const filtered = (components ?? []).filter((c) => c.name.toLowerCase().includes(term));
+  const filtered = data?.items ?? [];
 
   const handleSelect = (componentId: string | null) => {
     onSelect(componentId);

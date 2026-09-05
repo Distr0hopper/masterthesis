@@ -1,30 +1,34 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toListDisplayModel } from '@/api/helpers';
 import { workflowsService } from './service';
 import { workflowTransformer } from './transformer';
-import type { CreateWorkflowDto } from './types';
+import type { CreateWorkflowDto, MyWorkflowsQueryParams, WorkflowListQueryParams } from './types';
 import type { HateoasLink } from '@/api/types';
 
 export const workflowKeys = {
   all: ['workflows'] as const,
-  lists: (domain?: string) => [...workflowKeys.all, 'list', domain] as const,
-  mine: () => [...workflowKeys.all, 'mine'] as const,
+  lists: (params: WorkflowListQueryParams) => [...workflowKeys.all, 'list', params] as const,
+  mine: (params: MyWorkflowsQueryParams) => [...workflowKeys.all, 'mine', params] as const,
   latest: (limit?: number) => [...workflowKeys.all, 'latest', limit] as const,
   detail: (id: string) => [...workflowKeys.all, 'detail', id] as const,
 };
 
-export const useWorkflows = (domain?: string) => {
+export const useWorkflows = (params: WorkflowListQueryParams) => {
   return useQuery({
-    queryKey: workflowKeys.lists(domain),
-    queryFn: () => workflowsService.getAll(domain),
-    select: (dtos) => workflowTransformer.toListDisplayModels(dtos),
+    queryKey: workflowKeys.lists(params),
+    queryFn: () => workflowsService.getAll(params),
+    select: (response) => toListDisplayModel(response, workflowTransformer.toListDisplayModels),
   });
 };
 
-export const useMyWorkflows = () => {
+export const useMyWorkflows = (params: MyWorkflowsQueryParams) => {
   return useQuery({
-    queryKey: workflowKeys.mine(),
-    queryFn: () => workflowsService.getMine(),
-    select: (dtos) => workflowTransformer.toListDisplayModels(dtos),
+    queryKey: workflowKeys.mine(params),
+    queryFn: () => workflowsService.getMine(params),
+    select: (response) => ({
+      published: toListDisplayModel(response.published, workflowTransformer.toListDisplayModels),
+      pending: toListDisplayModel(response.pending, workflowTransformer.toListDisplayModels),
+    }),
   });
 };
 

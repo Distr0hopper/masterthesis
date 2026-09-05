@@ -1,33 +1,40 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toListDisplayModel } from '@/api/helpers';
 import { componentsService } from './service';
 import { componentTransformer } from './transformer';
-import type { AddVersionDto, ComponentDomain, CreateComponentDto, PackageComponentDto, UpdateComponentDto } from './types';
-import type { HateoasLink } from '@/api/types';
+import type {
+  AddVersionDto,
+  ComponentListItemDto,
+  ComponentListQueryParams,
+  CreateComponentDto,
+  PackageComponentDto,
+  UpdateComponentDto,
+} from './types';
+import type { HateoasLink, PageParams } from '@/api/types';
 
 export const componentKeys = {
   all: ['components'] as const,
-  lists: (domain?: ComponentDomain, excludeMine?: boolean, favoritesOnly?: boolean) =>
-    [...componentKeys.all, 'list', domain, excludeMine, favoritesOnly] as const,
-  mine: () => [...componentKeys.all, 'mine'] as const,
+  lists: (params: ComponentListQueryParams) => [...componentKeys.all, 'list', params] as const,
+  mine: (params: PageParams<ComponentListItemDto>) => [...componentKeys.all, 'mine', params] as const,
   latest: (limit?: number) => [...componentKeys.all, 'latest', limit] as const,
   detail: (id: string) => [...componentKeys.all, 'detail', id] as const,
   versions: (id: string) => [...componentKeys.all, 'versions', id] as const,
   domains: () => ['domains'] as const,
 };
 
-export const useComponents = (domain?: ComponentDomain, excludeMine?: boolean, favoritesOnly?: boolean) => {
+export const useComponents = (params: ComponentListQueryParams) => {
   return useQuery({
-    queryKey: componentKeys.lists(domain, excludeMine, favoritesOnly),
-    queryFn: () => componentsService.getAll(domain, excludeMine, favoritesOnly),
-    select: (dtos) => componentTransformer.toListDisplayModels(dtos),
+    queryKey: componentKeys.lists(params),
+    queryFn: () => componentsService.getAll(params),
+    select: (response) => toListDisplayModel(response, componentTransformer.toListDisplayModels),
   });
 };
 
-export const useMyComponents = () => {
+export const useMyComponents = (params: PageParams<ComponentListItemDto>) => {
   return useQuery({
-    queryKey: componentKeys.mine(),
-    queryFn: () => componentsService.getMine(),
-    select: (dtos) => componentTransformer.toListDisplayModels(dtos),
+    queryKey: componentKeys.mine(params),
+    queryFn: () => componentsService.getMine(params),
+    select: (response) => toListDisplayModel(response, componentTransformer.toListDisplayModels),
   });
 };
 

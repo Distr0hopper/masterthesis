@@ -1,5 +1,6 @@
 import { apiClient } from '../client';
 import type {
+  PublishedWorkflowDto,
   WorkflowDraftDetailDto,
   WorkflowDraftListItemDto,
   WriteWorkflowDraftDto,
@@ -27,5 +28,16 @@ export const workflowDraftsService = {
 
   delete(id: string): Promise<void> {
     return apiClient.delete(`${ENDPOINT}/${id}`);
+  },
+
+  // getBlob, not a window.location navigation: the endpoint needs the Authorization
+  // header, and this keeps the JWT out of the URL (and so out of history and access logs)
+  exportZip(id: string): Promise<{ blob: Blob; filename: string }> {
+    return apiClient.getBlob(`${ENDPOINT}/${id}/export`, 'workflow.zip');
+  },
+
+  // separate from export: this is the call that creates a Workflow row
+  publish(id: string): Promise<PublishedWorkflowDto> {
+    return apiClient.post(`${ENDPOINT}/${id}/publish`);
   },
 };

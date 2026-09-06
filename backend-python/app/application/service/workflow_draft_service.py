@@ -1,25 +1,57 @@
+import io
+import json
+import logging
 import uuid
+import zipfile
 from typing import Annotated
 
 from fastapi import Depends
 
 from app.application.exception.workflow_draft_exceptions import (
+    ExportValidationError,
     WorkflowDraftForbiddenError,
     WorkflowDraftNotFoundError,
 )
+from app.domain.models.component import Component
+from app.domain.models.parameter import ParameterDirection
+from app.domain.models.workflow import Workflow
 from app.domain.models.workflow_draft import WorkflowDraft
+from app.domain.repository.components_repository import ComponentsRepository
+from app.application.service.workflows_service import WorkflowsService
 from app.domain.repository.workflow_draft_repository import WorkflowDraftRepository
+from app.infrastructure.cwl.canvas_graph import CanvasCycleError, topological_sort
+from app.infrastructure.cwl.workflow_generator import (
+    PortSpec,
+    cwl_filename_for,
+    generate_workflow_cwl,
+    safe_workflow_slug,
+)
+
+logger = logging.getLogger("app.application.service.workflow_draft_service")
+
+
+def _is_file_type(cwl_type: str) -> bool:
+    return cwl_type.strip().lower().startswith("file")
 
 
 class WorkflowDraftService:
-    def __init__(self, repository: WorkflowDraftRepository):
+    def __init__(
+        self,
+        repository: WorkflowDraftRepository,
+        components_repository: ComponentsRepository,
+        workflows_service: WorkflowsService,
+    ):
         self.repository = repository
+        self.components_repository = components_repository
+        self.workflows_service = workflows_service
 
     @staticmethod
     def get_service(
         repository: Annotated[WorkflowDraftRepository, Depends(WorkflowDraftRepository.get_repository)],
+        components_repository: Annotated[ComponentsRepository, Depends(ComponentsRepository.get_repository)],
+        workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
     ) -> "WorkflowDraftService":
-        return WorkflowDraftService(repository)
+        return WorkflowDraftService(repository, components_repository, workflows_service)
 
     async def list_my_drafts(self, user_id: uuid.UUID) -> list[WorkflowDraft]:
         return await self.repository.find_all_by_user(user_id)
@@ -63,3 +95,118 @@ class WorkflowDraftService:
 
     async def delete_draft(self, draft: WorkflowDraft) -> None:
         await self.repository.delete(draft)
+
+    async def _fetch_components(self, component_ids: list[str]) -> dict[str, Component]:
+        """{component_id: Component} for every id on the canvas.
+
+        Raises ExportValidationError naming the ids that no longer resolve - a component
+        deleted since the draft was saved must fail loudly, not export a broken archive.
+        """
+        components: dict[str, Component] = {}
+        missing: list[str] = []
+
+        for raw_id in dict.fromkeys(component_ids):
+            try:
+                component_id = uuid.UUID(raw_id)
+            except (ValueError, AttributeError, TypeError):
+                missing.append(str(raw_id))
+                continue
+            component = await self.components_repository.find_by_id(component_id)
+            if component is None:
+                missing.append(str(raw_id))
+            else:
+                components[raw_id] = component
+
+        if missing:
+            raise ExportValidationError(
+                f"{len(missing)} component(s) on the canvas no longer exist in the repository"
+            )
+        return components
+
+    @staticmethod
+    def _to_port_spec(component: Component) -> PortSpec:
+        spec = PortSpec(name=component.name)
+        for parameter in component.parameters:
+            if parameter.direction == ParameterDirection.OUTPUT:
+                if _is_file_type(parameter.cwl_type):
+                    spec.file_outputs[parameter.name] = parameter.cwl_type
+            elif _is_file_type(parameter.cwl_type):
+                spec.file_inputs[parameter.name] = parameter.cwl_type
+            else:
+                spec.config_inputs[parameter.name] = parameter.cwl_type
+        return spec
+
+    async def export_to_zip(self, draft: WorkflowDraft) -> tuple[str, bytes]:
+        """Generate the main Workflow CWL plus one file per step, zipped.
+
+        Returns (filename, zip_bytes). Raises ExportValidationError for anything that
+        makes the canvas unexportable.
+        """
+        try:
+            canvas = json.loads(draft.canvas_state)
+        except json.JSONDecodeError as err:
+            raise ExportValidationError("The saved canvas could not be read") from err
+
+        nodes = canvas.get("nodes") or []
+        edges = canvas.get("edges") or []
+        if not nodes:
+            raise ExportValidationError("Canvas is empty")
+
+        component_ids = [n.get("data", {}).get("componentId") for n in nodes]
+        if not all(component_ids):
+            raise ExportValidationError("One or more nodes have no linked component")
+
+        components = await self._fetch_components(component_ids)
+        ports = {cid: self._to_port_spec(component) for cid, component in components.items()}
+
+        try:
+            ordered_nodes = topological_sort(nodes, edges)
+        except CanvasCycleError as err:
+            raise ExportValidationError(str(err)) from err
+
+        main_cwl = generate_workflow_cwl(
+            workflow_name=draft.name,
+            ordered_nodes=ordered_nodes,
+            edges=edges,
+            ports=ports,
+        )
+
+        slug = safe_workflow_slug(draft.name)
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+            # the main document must not collide with a step file named after a component
+            # that happens to share the workflow's slug
+            step_filenames = {cwl_filename_for(spec.name) for spec in ports.values()}
+            main_filename = f"{slug}.cwl"
+            if main_filename in step_filenames:
+                main_filename = f"{slug}-workflow.cwl"
+            archive.writestr(main_filename, main_cwl)
+
+            for component_id, spec in ports.items():
+                archive.writestr(cwl_filename_for(spec.name), components[component_id].cwl_content)
+
+        zip_bytes = buffer.getvalue()
+        logger.info(f"Generated archive for draft {draft.id}: {len(ports)} step file(s)")
+        return f"{slug}.zip", zip_bytes
+
+    async def publish(self, draft: WorkflowDraft, user_id: uuid.UUID) -> Workflow:
+        """Record the draft's generated archive as a Workflow entity.
+
+        Deliberately separate from export: downloading a file should not create rows, and
+        exporting repeatedly used to leave a near-duplicate Workflow behind every time.
+        Errors are *not* swallowed here - publishing is the explicit point of the request,
+        so a failure has to reach the user rather than being logged away.
+        """
+        _filename, zip_bytes = await self.export_to_zip(draft)
+
+        workflow = await self.workflows_service.create_from_zip(
+            zip_bytes=zip_bytes,
+            name=draft.name,
+            description=None,
+            # left empty deliberately - a draft carries no domain of its own; it is set
+            # afterwards via the workflow's own update endpoint
+            domains=[],
+            created_by_id=user_id,
+        )
+        logger.info(f"Published draft {draft.id} as workflow {workflow.id}")
+        return workflow

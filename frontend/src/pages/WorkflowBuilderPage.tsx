@@ -11,6 +11,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { toast } from 'sonner';
 import { WorkflowCanvas } from '@/components/workflow-builder/WorkflowCanvas';
+import { CanvasValidationDialog } from '@/components/workflow-builder/CanvasValidationDialog';
 import { WorkflowInspector } from '@/components/workflow-builder/WorkflowInspector';
 import { WorkflowSidebar } from '@/components/workflow-builder/WorkflowSidebar';
 import { WorkflowTopBar } from '@/components/workflow-builder/WorkflowTopBar';
@@ -24,7 +25,18 @@ import {
   parseCanvasState,
   serializeCanvasState,
 } from '@/components/workflow-builder/lib/canvasState';
-import { useCreateDraft, useUpdateDraft, useWorkflowDraft } from '@/api/workflow-drafts';
+import {
+  validateCanvas,
+  type ValidationError,
+} from '@/components/workflow-builder/lib/canvasValidation';
+import { downloadBlob } from '@/lib/download';
+import {
+  useCreateDraft,
+  useExportDraft,
+  usePublishDraft,
+  useUpdateDraft,
+  useWorkflowDraft,
+} from '@/api/workflow-drafts';
 import type { ComponentFlowNode } from '@/components/workflow-builder/types';
 import { getErrorMessage } from '@/lib/errors';
 import { ROUTES } from '@/lib/routes';
@@ -42,8 +54,15 @@ export default function WorkflowBuilderPage() {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   const { data: draft, isLoading } = useWorkflowDraft(draftId, !isNew);
-  const { mutate: createDraft, isPending: isCreating } = useCreateDraft();
-  const { mutate: updateDraft, isPending: isUpdating } = useUpdateDraft(draftId);
+  const { mutateAsync: createDraft, isPending: isCreating } = useCreateDraft();
+  const { mutateAsync: updateDraft, isPending: isUpdating } = useUpdateDraft(draftId);
+  const { mutateAsync: exportDraft, isPending: isExporting } = useExportDraft();
+  const { mutateAsync: publishDraft, isPending: isPublishing } = usePublishDraft();
+
+  const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
+  const [validationOpen, setValidationOpen] = useState(false);
+  // which action the validation dialog is gating, so it can label its own button
+  const [pendingAction, setPendingAction] = useState<'export' | 'publish'>('export');
 
   // restore once per draft - the query is staleTime: Infinity, but a re-render must not
   // stomp on canvas edits the user has made since the fetch resolved
@@ -132,7 +151,13 @@ export default function WorkflowBuilderPage() {
     [setNodes],
   );
 
-  const handleSave = useCallback(() => {
+  /**
+   * Write the current canvas to the server and resolve with the draft id it now lives
+   * under. Export and publish both read the draft back from the DB, so they have to go
+   * through this first - otherwise an edited-but-unsaved name or canvas is silently
+   * exported at its last-saved value.
+   */
+  const persist = useCallback(async (): Promise<string> => {
     const name = workflowName.trim() || DEFAULT_WORKFLOW_NAME;
     setWorkflowName(name);
 
@@ -142,27 +167,79 @@ export default function WorkflowBuilderPage() {
       nodeCount: nodes.length,
     };
 
-    const onError = (error: unknown) =>
-      toast.error(getErrorMessage(error, 'Could not save this workflow.'));
-
     if (isNew) {
-      createDraft(dto, {
-        onSuccess: (created) => {
-          // replace, so Back does not return to /builder/new and create a second draft
-          restoredId.current = created.id;
-          navigate(ROUTES.builderWorkflow(created.id), { replace: true });
-          toast.success('Workflow saved.');
-        },
-        onError,
-      });
-      return;
+      const created = await createDraft(dto);
+      // guard the restore effect against re-running for the id we just created
+      restoredId.current = created.id;
+      // replace, so Back does not return to /builder/new and create a second draft
+      navigate(ROUTES.builderWorkflow(created.id), { replace: true });
+      return created.id;
     }
 
-    updateDraft(dto, {
-      onSuccess: () => toast.success('Workflow saved.'),
-      onError,
-    });
-  }, [isNew, workflowName, nodes, edges, createDraft, updateDraft, navigate]);
+    await updateDraft(dto);
+    return draftId;
+  }, [isNew, draftId, workflowName, nodes, edges, createDraft, updateDraft, navigate]);
+
+  const handleSave = useCallback(async () => {
+    try {
+      await persist();
+      toast.success('Workflow saved.');
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Could not save this workflow.'));
+    }
+  }, [persist]);
+
+  const runExport = useCallback(async () => {
+    try {
+      // saving first guarantees the archive reflects the name and canvas on screen
+      const id = await persist();
+      const { blob, filename } = await exportDraft(id);
+      downloadBlob(filename, blob);
+      toast.success('Workflow exported.');
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Could not export this workflow.'));
+    }
+  }, [persist, exportDraft]);
+
+  const runPublish = useCallback(async () => {
+    try {
+      // same reason as export: publish reads the draft back from the DB
+      const id = await persist();
+      const published = await publishDraft(id);
+      toast.success(`Published "${published.name}" with ${published.stepCount} step(s).`, {
+        action: {
+          label: 'View',
+          onClick: () => navigate(ROUTES.workflowDetail(published.workflowId)),
+        },
+      });
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Could not publish this workflow.'));
+    }
+  }, [persist, publishDraft, navigate]);
+
+  // both actions gate on the same canvas validation; only the wording differs
+  const guard = useCallback(
+    (action: 'export' | 'publish', run: () => void) => {
+      const errors = validateCanvas(nodes, edges, workflowName);
+      if (errors.length === 0) {
+        run();
+        return;
+      }
+      setValidationErrors(errors);
+      setPendingAction(action);
+      setValidationOpen(true);
+    },
+    [nodes, edges, workflowName],
+  );
+
+  const handleExport = useCallback(() => guard('export', () => void runExport()), [guard, runExport]);
+  const handlePublish = useCallback(() => guard('publish', () => void runPublish()), [guard, runPublish]);
+
+  const handleProceedAnyway = useCallback(() => {
+    setValidationOpen(false);
+    if (pendingAction === 'publish') void runPublish();
+    else void runExport();
+  }, [pendingAction, runExport, runPublish]);
 
   return (
     // required for WorkflowCanvas's useReactFlow()/screenToFlowPosition call
@@ -173,6 +250,10 @@ export default function WorkflowBuilderPage() {
           onWorkflowNameChange={setWorkflowName}
           onSave={handleSave}
           isSaving={isCreating || isUpdating}
+          onExport={handleExport}
+          isExporting={isExporting}
+          onPublish={handlePublish}
+          isPublishing={isPublishing}
           updatedAt={draft?.updatedAt ?? null}
         />
         {/* min-h-0: without it the flex child refuses to shrink and the canvas
@@ -200,6 +281,14 @@ export default function WorkflowBuilderPage() {
           )}
         </div>
       </div>
+
+      <CanvasValidationDialog
+        open={validationOpen}
+        onOpenChange={setValidationOpen}
+        errors={validationErrors}
+        action={pendingAction}
+        onProceed={handleProceedAnyway}
+      />
     </ReactFlowProvider>
   );
 }

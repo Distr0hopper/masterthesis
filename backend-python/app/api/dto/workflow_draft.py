@@ -35,3 +35,11 @@ class WorkflowDraftWriteRequestDto(CamelModel):
     name: str = Field(min_length=1, max_length=MAX_NAME_LENGTH)
     canvas_state: str = Field(max_length=MAX_CANVAS_STATE_LENGTH)
     node_count: int = Field(ge=0)
+
+
+class PublishedWorkflowDto(CamelModel):
+    """Minimal handle on the Workflow a publish created, enough to link to it."""
+
+    workflow_id: uuid.UUID
+    name: str
+    step_count: int

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth.store';
+import { workflowKeys } from '@/api/workflows';
 import { workflowDraftsService } from './service';
 import type { WriteWorkflowDraftDto } from './types';
 
@@ -53,6 +54,23 @@ export const useUpdateDraft = (id: string) => {
       queryClient.setQueryData(draftKeys.detail(id), updated);
       queryClient.invalidateQueries({ queryKey: draftKeys.lists() });
     },
+  });
+};
+
+export const useExportDraft = () => {
+  // downloading has no server-side effect, so nothing to invalidate
+  return useMutation({
+    mutationFn: (id: string) => workflowDraftsService.exportZip(id),
+  });
+};
+
+export const usePublishDraft = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => workflowDraftsService.publish(id),
+    // a new Workflow now exists, so any cached workflow list is stale
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: workflowKeys.all }),
   });
 };
 

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Response, status
 
 from app.api.dto.common import ErrorResponse
 from app.api.dto.workflow_draft import (
+    PublishedWorkflowDto,
     WorkflowDraftDetailDto,
     WorkflowDraftListItemDto,
     WorkflowDraftWriteRequestDto,
@@ -99,3 +100,64 @@ async def delete_draft(
     await service.delete_draft(draft)
     logger.info(f"Deleted workflow draft {draft_id}")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/{draft_id}/export",
+    response_class=Response,
+    responses={
+        **_OWNED_RESPONSES,
+        status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse, "description": "Canvas cannot be exported"},
+        status.HTTP_200_OK: {"content": {"application/zip": {}}, "description": "CWL archive"},
+    },
+)
+async def export_draft(
+    draft_id: uuid.UUID,
+    current_user: Annotated[User, Depends(AuthService.get_current_user)],
+    service: Annotated[WorkflowDraftService, Depends(WorkflowDraftService.get_service)],
+) -> Response:
+    """Main Workflow CWL plus one file per step, as a zip.
+
+    Not-found/forbidden/export-validation all surface through the registered exception
+    handlers, matching every other endpoint here.
+    """
+    draft = await service.get_draft(draft_id, current_user.id)
+    filename, zip_bytes = await service.export_to_zip(draft)
+
+    logger.info(f"Exported workflow draft {draft_id} as '{filename}'")
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            # the browser fetch reads the filename off this header, which is not exposed
+            # cross-origin by default (the SPA runs on a different port than the API)
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
+    )
+
+
+@router.post(
+    "/{draft_id}/publish",
+    response_model=PublishedWorkflowDto,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        **_OWNED_RESPONSES,
+        status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse, "description": "Canvas cannot be published"},
+    },
+)
+async def publish_draft(
+    draft_id: uuid.UUID,
+    current_user: Annotated[User, Depends(AuthService.get_current_user)],
+    service: Annotated[WorkflowDraftService, Depends(WorkflowDraftService.get_service)],
+) -> PublishedWorkflowDto:
+    """Record the draft as a Workflow. Separate from export, which only downloads."""
+    draft = await service.get_draft(draft_id, current_user.id)
+    workflow = await service.publish(draft, current_user.id)
+
+    logger.info(f"Published workflow draft {draft_id} as workflow {workflow.id}")
+    return PublishedWorkflowDto(
+        workflow_id=workflow.id,
+        name=workflow.name,
+        step_count=len(workflow.steps),
+    )

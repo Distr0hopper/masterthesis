@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Download, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button.tsx';
 import { Input } from '@/components/ui/input.tsx';
 import { ROUTES } from '@/lib/routes';
@@ -11,6 +11,10 @@ interface WorkflowTopBarProps {
   onWorkflowNameChange: (name: string) => void;
   onSave: () => void;
   isSaving: boolean;
+  onExport: () => void;
+  isExporting: boolean;
+  onPublish: () => void;
+  isPublishing: boolean;
   /** ISO timestamp from the API, or null for a draft that has never been saved */
   updatedAt: string | null;
 }
@@ -39,6 +43,10 @@ export function WorkflowTopBar({
   onWorkflowNameChange,
   onSave,
   isSaving,
+  onExport,
+  isExporting,
+  onPublish,
+  isPublishing,
   updatedAt,
 }: WorkflowTopBarProps) {
   const savedLabel = useRelativeTime(updatedAt);
@@ -69,9 +77,18 @@ export function WorkflowTopBar({
           <Button variant="outline" onClick={onSave} disabled={isSaving}>
             {isSaving ? 'Saving...' : 'Save'}
           </Button>
-          {/* wired up in AP 4 (CWL generation) */}
-          <Button disabled className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90">
-            Export CWL
+          {/* both actions persist first, so neither may start while a save is in flight */}
+          <Button variant="outline" onClick={onPublish} disabled={isPublishing || isSaving}>
+            <Upload className="h-4 w-4" />
+            {isPublishing ? 'Publishing...' : 'Publish'}
+          </Button>
+          <Button
+            onClick={onExport}
+            disabled={isExporting || isSaving}
+            className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90"
+          >
+            <Download className="h-4 w-4" />
+            {isExporting ? 'Exporting...' : 'Export CWL'}
           </Button>
         </div>
       </div>

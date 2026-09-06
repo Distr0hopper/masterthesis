@@ -21,3 +21,9 @@ export interface WriteWorkflowDraftDto {
   canvasState: string;
   nodeCount: number;
 }
+
+export interface PublishedWorkflowDto {
+  workflowId: string;
+  name: string;
+  stepCount: number;
+}

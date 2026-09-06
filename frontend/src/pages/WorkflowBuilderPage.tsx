@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   ReactFlowProvider,
   addEdge,
@@ -19,43 +19,53 @@ import {
 } from '@/components/workflow-builder/lib/typeChecking';
 import {
   DEFAULT_WORKFLOW_NAME,
-  useWorkflowPersistence,
-  type PersistedWorkflow,
-} from '@/components/workflow-builder/lib/useWorkflowPersistence';
+  parseCanvasState,
+  serializeCanvasState,
+} from '@/components/workflow-builder/lib/canvasState';
+import { useCreateDraft, useUpdateDraft, useWorkflowDraft } from '@/api/workflow-drafts';
 import type { ComponentFlowNode } from '@/components/workflow-builder/types';
+import { getErrorMessage } from '@/lib/errors';
+import { ROUTES } from '@/lib/routes';
 
 export default function WorkflowBuilderPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+
+  // `/builder/new` has no draft behind it yet - the first Save creates one
+  const isNew = id === undefined;
+  const draftId = id ?? '';
+
   const [workflowName, setWorkflowName] = useState(DEFAULT_WORKFLOW_NAME);
   const [nodes, setNodes, onNodesChange] = useNodesState<ComponentFlowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const [savedAt, setSavedAt] = useState<string | null>(null);
 
-  const { load, save } = useWorkflowPersistence();
+  const { data: draft, isLoading } = useWorkflowDraft(draftId, !isNew);
+  const { mutate: createDraft, isPending: isCreating } = useCreateDraft();
+  const { mutate: updateDraft, isPending: isUpdating } = useUpdateDraft(draftId);
 
-  // StrictMode runs effects twice in dev; without this the restore toast fires twice
+  // restore once per draft - the query is staleTime: Infinity, but a re-render must not
+  // stomp on canvas edits the user has made since the fetch resolved
   const restoredId = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!id || restoredId.current === id) return;
-    restoredId.current = id;
+    if (!draft || restoredId.current === draft.id) return;
+    restoredId.current = draft.id;
 
-    const result = load(id);
-    // no record yet - this id was just minted by the overview's "New Workflow"
-    if (!result) return;
+    setWorkflowName(draft.name);
 
-    const { workflow, droppedNodeCount, droppedEdgeCount } = result;
-    setWorkflowName(workflow.workflowName);
-    setNodes(workflow.nodes);
-    setEdges(workflow.edges);
-    setSavedAt(workflow.savedAt);
+    const parsed = parseCanvasState(draft.canvasState);
+    if (!parsed) {
+      toast.error('This workflow’s canvas could not be read.');
+      return;
+    }
 
-    toast.info(`Restored "${workflow.workflowName}".`);
+    setNodes(parsed.nodes);
+    setEdges(parsed.edges);
 
-    if (droppedNodeCount > 0 || droppedEdgeCount > 0) {
+    if (parsed.droppedNodeCount > 0 || parsed.droppedEdgeCount > 0) {
       toast.warning('Some components could not be restored - they may have been removed.');
     }
-  }, [id, load, setNodes, setEdges]);
+  }, [draft, setNodes, setEdges]);
 
   // the sidebar ranks its palette against whatever the canvas can currently produce
   const outputStack = useMemo(() => buildOutputStack(nodes), [nodes]);
@@ -83,26 +93,36 @@ export default function WorkflowBuilderPage() {
   );
 
   const handleSave = useCallback(() => {
-    if (!id) return;
+    const name = workflowName.trim() || DEFAULT_WORKFLOW_NAME;
+    setWorkflowName(name);
 
-    const workflow: PersistedWorkflow = {
-      id,
-      workflowName: workflowName.trim() || DEFAULT_WORKFLOW_NAME,
-      nodes,
-      edges,
+    const dto = {
+      name,
+      canvasState: serializeCanvasState(nodes, edges),
       nodeCount: nodes.length,
-      savedAt: new Date().toISOString(),
     };
 
-    if (!save(workflow)) {
-      toast.error('Could not save - browser storage is full.');
+    const onError = (error: unknown) =>
+      toast.error(getErrorMessage(error, 'Could not save this workflow.'));
+
+    if (isNew) {
+      createDraft(dto, {
+        onSuccess: (created) => {
+          // replace, so Back does not return to /builder/new and create a second draft
+          restoredId.current = created.id;
+          navigate(ROUTES.builderWorkflow(created.id), { replace: true });
+          toast.success('Workflow saved.');
+        },
+        onError,
+      });
       return;
     }
 
-    setWorkflowName(workflow.workflowName);
-    setSavedAt(workflow.savedAt);
-    toast.success('Workflow saved.');
-  }, [id, workflowName, nodes, edges, save]);
+    updateDraft(dto, {
+      onSuccess: () => toast.success('Workflow saved.'),
+      onError,
+    });
+  }, [isNew, workflowName, nodes, edges, createDraft, updateDraft, navigate]);
 
   return (
     // required for WorkflowCanvas's useReactFlow()/screenToFlowPosition call
@@ -112,20 +132,27 @@ export default function WorkflowBuilderPage() {
           workflowName={workflowName}
           onWorkflowNameChange={setWorkflowName}
           onSave={handleSave}
-          savedAt={savedAt}
+          isSaving={isCreating || isUpdating}
+          updatedAt={draft?.updatedAt ?? null}
         />
         {/* min-h-0: without it the flex child refuses to shrink and the canvas
             overflows past the bottom of the viewport */}
         <div className="flex min-h-0 flex-1">
           <WorkflowSidebar outputStack={outputStack} />
-          <WorkflowCanvas
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onAddNode={onAddNode}
-          />
+          {isLoading ? (
+            <div className="flex flex-1 items-center justify-center text-slate-500">
+              Loading workflow...
+            </div>
+          ) : (
+            <WorkflowCanvas
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              onAddNode={onAddNode}
+            />
+          )}
         </div>
       </div>
     </ReactFlowProvider>

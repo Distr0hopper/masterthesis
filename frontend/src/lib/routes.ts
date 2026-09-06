@@ -9,6 +9,9 @@ export const ROUTES = {
   // the builder's own overview of locally-saved draft workflows; distinct from
   // `workflows` below, which browses published workflows from the backend
   builder: '/builder',
+  // literal 'new' must be declared before the :id route in App.tsx, or the dynamic
+  // segment swallows it; the editor creates the draft on first Save
+  builderNew: '/builder/new',
   builderWorkflow: (id: string) => `/builder/${id}`,
   profile: '/profile',
   login: '/login',

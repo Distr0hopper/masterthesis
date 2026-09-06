@@ -49,6 +49,8 @@ export default function App() {
           </Route>
 
           <Route element={<FullBleedLayout />}>
+            {/* the literal route must precede the dynamic one */}
+            <Route path={ROUTES.builderNew} element={<WorkflowBuilderPage />} />
             <Route path={ROUTES.builderWorkflow(':id')} element={<WorkflowBuilderPage />} />
           </Route>
         </Routes>

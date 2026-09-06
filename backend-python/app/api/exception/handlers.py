@@ -14,6 +14,10 @@ from app.application.exception.component_exceptions import (
 )
 from app.application.exception.favorites_exceptions import FavoritesRequireAuthError
 from app.application.exception.otp_exceptions import OtpRequestRateLimitedError
+from app.application.exception.workflow_draft_exceptions import (
+    WorkflowDraftForbiddenError,
+    WorkflowDraftNotFoundError,
+)
 from app.application.exception.workflow_exceptions import (
     InvalidWorkflowArchiveError,
     WorkflowNotFoundError,
@@ -104,6 +108,14 @@ async def _workflow_not_ready_to_publish_handler(request: Request, exc: Workflow
     return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
+async def _workflow_draft_not_found_handler(request: Request, exc: WorkflowDraftNotFoundError) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content=ErrorResponse(detail=str(exc)).model_dump())
+
+
+async def _workflow_draft_forbidden_handler(request: Request, exc: WorkflowDraftForbiddenError) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_403_FORBIDDEN, content=ErrorResponse(detail=str(exc)).model_dump())
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(InvalidTokenError, _invalid_token_handler)
     app.add_exception_handler(InvalidOtpCodeError, _invalid_otp_code_handler)
@@ -123,3 +135,5 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(InvalidWorkflowArchiveError, _invalid_workflow_archive_handler)
     app.add_exception_handler(WorkflowStepNotMatchedError, _workflow_step_not_matched_handler)
     app.add_exception_handler(WorkflowNotReadyToPublishError, _workflow_not_ready_to_publish_handler)
+    app.add_exception_handler(WorkflowDraftNotFoundError, _workflow_draft_not_found_handler)
+    app.add_exception_handler(WorkflowDraftForbiddenError, _workflow_draft_forbidden_handler)

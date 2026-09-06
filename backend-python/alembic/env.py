@@ -15,6 +15,7 @@ from app.domain.models.parameter import Parameter  # noqa: F401 - registers the 
 from app.domain.models.user import User  # noqa: F401 - registers the table with SQLModel.metadata
 from app.domain.models.workflow import Workflow  # noqa: F401 - registers the table with SQLModel.metadata
 from app.domain.models.workflow_domain import WorkflowDomain  # noqa: F401 - registers the table with SQLModel.metadata
+from app.domain.models.workflow_draft import WorkflowDraft  # noqa: F401 - registers the table with SQLModel.metadata
 from app.domain.models.workflow_step import WorkflowStep  # noqa: F401 - registers the table with SQLModel.metadata
 
 # this is the Alembic Config object, which provides

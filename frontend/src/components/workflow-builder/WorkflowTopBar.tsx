@@ -4,14 +4,15 @@ import { ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button.tsx';
 import { Input } from '@/components/ui/input.tsx';
 import { ROUTES } from '@/lib/routes';
-import { formatRelativeTime } from './lib/useWorkflowPersistence';
+import { formatRelativeTime } from './lib/canvasState';
 
 interface WorkflowTopBarProps {
   workflowName: string;
   onWorkflowNameChange: (name: string) => void;
   onSave: () => void;
-  /** ISO timestamp of the last successful save, or null if never saved */
-  savedAt: string | null;
+  isSaving: boolean;
+  /** ISO timestamp from the API, or null for a draft that has never been saved */
+  updatedAt: string | null;
 }
 
 /** Live "Saved 5m ago" label. Only used here, so it stays local to this file. */
@@ -37,9 +38,10 @@ export function WorkflowTopBar({
   workflowName,
   onWorkflowNameChange,
   onSave,
-  savedAt,
+  isSaving,
+  updatedAt,
 }: WorkflowTopBarProps) {
-  const savedLabel = useRelativeTime(savedAt);
+  const savedLabel = useRelativeTime(updatedAt);
 
   return (
     <div className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white px-4">
@@ -64,8 +66,8 @@ export function WorkflowTopBar({
         {savedLabel && <span className="shrink-0 text-xs text-slate-400">{savedLabel}</span>}
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={onSave}>
-            Save
+          <Button variant="outline" onClick={onSave} disabled={isSaving}>
+            {isSaving ? 'Saving...' : 'Save'}
           </Button>
           {/* wired up in AP 4 (CWL generation) */}
           <Button disabled className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90">

@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
-import { Star } from 'lucide-react';
+import { ExternalLink, Star } from 'lucide-react';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Input } from '@/components/ui/input.tsx';
 import { getDomainBadgeStyle, getDomainLabel, useComponents, useDomains } from '@/api/components';
 import { useAuthStore } from '@/store/auth.store';
 import { cn } from '@/lib/utils';
+import { ROUTES } from '@/lib/routes';
 import {
   NO_DATA_INPUTS_SCORE,
   compareByRank,
@@ -126,13 +127,29 @@ export function WorkflowSidebar({ outputStack }: WorkflowSidebarProps) {
                 <span className="break-all font-mono text-sm font-semibold text-slate-900">
                   {component.name}
                 </span>
-                {/* makes the favourites-first ordering legible, rather than looking arbitrary */}
-                {component.isFavorite && (
-                  <Star
-                    className="mt-0.5 h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400"
-                    aria-label="Favorite"
-                  />
-                )}
+                <div className="flex shrink-0 items-center gap-1">
+                  {/* makes the favourites-first ordering legible, rather than looking arbitrary */}
+                  {component.isFavorite && (
+                    <Star
+                      className="mt-0.5 h-3.5 w-3.5 fill-amber-400 text-amber-400"
+                      aria-label="Favorite"
+                    />
+                  )}
+                  <a
+                    href={ROUTES.componentDetail(component.id)}
+                    target="_blank"
+                    rel="noreferrer"
+                    // the card is the drag source; without this the browser would start
+                    // its own link drag from the anchor and clobber the JSON payload
+                    draggable={false}
+                    onClick={(e) => e.stopPropagation()}
+                    className="rounded p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-jmu-blue-800"
+                    aria-label={`Open ${component.name} details in a new tab`}
+                    title="Open details in a new tab"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                </div>
               </div>
 
               {match.frame && (

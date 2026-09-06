@@ -1,10 +1,11 @@
 import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react';
-import { Trash2 } from 'lucide-react';
+import { ExternalLink, Trash2 } from 'lucide-react';
 import type { ParameterDisplayModel } from '@/api/components';
 import { Badge } from '@/components/ui/badge.tsx';
 import { getDomainBadgeStyle, getDomainLabel, useDomains } from '@/api/components';
 import { configParameters, dataInputs, dataOutputs } from './lib/typeChecking';
 import { formatPortType } from './lib/ports';
+import { ROUTES } from '@/lib/routes';
 import type { ComponentFlowNode } from './types';
 
 // Handles are absolutely positioned against their containing block's padding box, so each
@@ -66,17 +67,32 @@ export function ComponentNode({ id, data, selected }: NodeProps<ComponentFlowNod
     >
       <div className="flex items-center justify-between gap-2 rounded-t-lg bg-jmu-blue-800 py-2 pl-3 pr-2">
         <span className="break-all font-mono text-sm font-semibold text-white">{data.label}</span>
-        <button
-          type="button"
-          // `nodrag` stops React Flow from starting a node drag on mousedown, which would
-          // otherwise swallow the click; deleteElements also removes the node's edges
-          className="nodrag shrink-0 rounded p-1 text-white/60 transition-colors hover:bg-white/20 hover:text-white"
-          aria-label={`Remove ${data.label}`}
-          title="Remove from canvas"
-          onClick={() => deleteElements({ nodes: [{ id }] })}
-        >
-          <Trash2 size={14} />
-        </button>
+        <div className="flex shrink-0 items-center">
+          <a
+            href={ROUTES.componentDetail(data.componentId)}
+            target="_blank"
+            rel="noreferrer"
+            // `nodrag` keeps React Flow from starting a node drag on mousedown, which
+            // would otherwise swallow the click; draggable={false} stops the browser's
+            // own link drag; stopPropagation keeps the click from selecting the node
+            draggable={false}
+            className="nodrag rounded p-1 text-white/60 transition-colors hover:bg-white/20 hover:text-white"
+            aria-label={`Open ${data.label} details in a new tab`}
+            title="Open details in a new tab"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ExternalLink size={14} />
+          </a>
+          <button
+            type="button"
+            className="nodrag rounded p-1 text-white/60 transition-colors hover:bg-white/20 hover:text-white"
+            aria-label={`Remove ${data.label}`}
+            title="Remove from canvas"
+            onClick={() => deleteElements({ nodes: [{ id }] })}
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
       </div>
 
       <div className="px-3 py-2">

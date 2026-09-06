@@ -2,7 +2,9 @@ import { useCallback } from 'react';
 import {
   Background,
   BackgroundVariant,
+  ConnectionLineType,
   Controls,
+  MarkerType,
   MiniMap,
   ReactFlow,
   useReactFlow,
@@ -15,11 +17,24 @@ import { ComponentNode } from './ComponentNode';
 import { DRAG_MIME, type ComponentDragPayload, type ComponentFlowNode } from './types';
 
 const nodeTypes = { componentNode: ComponentNode };
+
+// jmu-blue-800. Inline `style` resolves CSS vars, but the arrow marker's colour lands on
+// an SVG presentation attribute, where var() is not reliably resolved - hence the literal
+// here, kept in sync with --jmu-blue-800 in index.css.
+const EDGE_COLOR = '#093d79';
+
 const defaultEdgeOptions = {
   type: 'smoothstep',
-  style: { stroke: 'var(--jmu-blue-800)', strokeWidth: 1.5 },
+  style: { stroke: EDGE_COLOR, strokeWidth: 2 },
+  // an arrowhead is what makes a connection read as directional (output -> input)
+  // rather than as an undirected line between two cards
+  markerEnd: { type: MarkerType.ArrowClosed, color: EDGE_COLOR, width: 18, height: 18 },
   animated: false,
 };
+
+// the line that follows the cursor while dragging from a handle - the library default is
+// a thin black stroke that reads as unrelated to the edges it creates
+const connectionLineStyle = { stroke: EDGE_COLOR, strokeWidth: 2, strokeDasharray: '6 4' };
 
 interface WorkflowCanvasProps {
   nodes: ComponentFlowNode[];
@@ -83,6 +98,10 @@ export function WorkflowCanvas({
         onConnect={onConnect}
         nodeTypes={nodeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
+        connectionLineType={ConnectionLineType.SmoothStep}
+        connectionLineStyle={connectionLineStyle}
+        // widens the grab area around each handle without drawing a bigger dot
+        connectionRadius={30}
         fitView
         deleteKeyCode={['Delete', 'Backspace']}
       >

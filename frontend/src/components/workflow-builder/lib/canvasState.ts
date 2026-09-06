@@ -51,9 +51,34 @@ function isValidNode(value: unknown): value is ComponentFlowNode {
   );
 }
 
+/**
+ * Edges must name the concrete ports they join. Canvases saved before per-port handles
+ * existed carry `source`/`target` only, which no longer identifies a connection: a node
+ * has several File outputs, so there is no honest way to infer which one was meant.
+ * Those edges are dropped rather than guessed at - a wrong guess would silently produce
+ * the wrong CWL on export.
+ */
 function isValidEdge(value: unknown): value is Edge {
   if (!isRecord(value)) return false;
-  return typeof value.id === 'string' && typeof value.source === 'string' && typeof value.target === 'string';
+  return (
+    typeof value.id === 'string' &&
+    typeof value.source === 'string' &&
+    typeof value.target === 'string' &&
+    typeof value.sourceHandle === 'string' &&
+    typeof value.targetHandle === 'string'
+  );
+}
+
+/** Fill in fields added after a canvas may have been saved. */
+function normalizeNode(node: ComponentFlowNode): ComponentFlowNode {
+  const raw = (node.data as Record<string, unknown>).parameterValues;
+  const parameterValues: Record<string, string> = {};
+  if (isRecord(raw)) {
+    for (const [key, value] of Object.entries(raw)) {
+      if (typeof value === 'string') parameterValues[key] = value;
+    }
+  }
+  return { ...node, data: { ...node.data, parameterValues } };
 }
 
 /** What the editor sends to the API: the whole canvas as one JSON string. */
@@ -78,7 +103,7 @@ export function parseCanvasState(raw: string): ParsedCanvasState | null {
   const rawNodes = Array.isArray(parsed.nodes) ? parsed.nodes : [];
   const rawEdges = Array.isArray(parsed.edges) ? parsed.edges : [];
 
-  const nodes = rawNodes.filter(isValidNode);
+  const nodes = rawNodes.filter(isValidNode).map(normalizeNode);
   const nodeIds = new Set(nodes.map((n) => n.id));
   // an edge pointing at a dropped node would render as a dangling connection, so
   // surviving edges must have both endpoints still on the canvas

@@ -1,21 +1,51 @@
 import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react';
 import { Trash2 } from 'lucide-react';
+import type { ParameterDisplayModel } from '@/api/components';
 import { Badge } from '@/components/ui/badge.tsx';
 import { getDomainBadgeStyle, getDomainLabel, useDomains } from '@/api/components';
-import { dataInputTypes, dataOutputTypes } from './lib/typeChecking';
+import { configParameters, dataInputs, dataOutputs } from './lib/typeChecking';
+import { formatPortType } from './lib/ports';
 import type { ComponentFlowNode } from './types';
 
-// Handles are absolutely positioned against the nearest positioned ancestor, so they must
-// be direct children of the `relative` card root - nested inside the body they anchor to
-// the body's padding box instead of the node's edges. The card therefore cannot use
-// `overflow-hidden` (it would clip the handles, which straddle the border): the header
-// rounds its own top corners instead.
+// Handles are absolutely positioned against their containing block's padding box, so each
+// one lands on the card's edge as long as its row spans the full card width - horizontal
+// padding inside the row does not push it in. The card therefore cannot use
+// `overflow-hidden` (it would clip handles straddling the border); the header rounds its
+// own top corners instead.
+//
 // Hover feedback is a box-shadow halo, deliberately not a scale/transform: React Flow
-// centres each handle on the card edge with `transform: translate(-50%, -50%)`, and
-// Tailwind's transform utilities emit `!important`, which would clobber that and make the
-// dot jump inward on hover.
+// centres each handle with `transform: translate(-50%, -50%)`, and Tailwind's transform
+// utilities emit `!important`, which would clobber that and make the dot jump on hover.
 const HANDLE_BASE =
-  '!h-3.5 !w-3.5 !rounded-full !border-2 !border-white !transition-shadow hover:!shadow-[0_0_0_4px_rgba(9,61,121,0.2)]';
+  '!h-3 !w-3 !rounded-full !border-2 !border-white !transition-shadow hover:!shadow-[0_0_0_4px_rgba(9,61,121,0.2)]';
+
+interface PortRowProps {
+  parameter: ParameterDisplayModel;
+  side: 'input' | 'output';
+}
+
+function PortRow({ parameter, side }: PortRowProps) {
+  const isInput = side === 'input';
+
+  return (
+    // `relative` + full width: the handle anchors to this row, landing on the card edge
+    // at the row's vertical centre
+    <div className={`relative px-3 py-1 ${isInput ? 'text-left' : 'text-right'}`}>
+      <Handle
+        type={isInput ? 'target' : 'source'}
+        position={isInput ? Position.Left : Position.Right}
+        // handle id === parameter name: this is what makes an edge name its real ports
+        id={parameter.name}
+        className={`${HANDLE_BASE} ${isInput ? '!bg-slate-400' : '!bg-jmu-blue-800'}`}
+        title={parameter.description ?? parameter.name}
+      />
+      <div className="truncate font-mono text-xs font-semibold text-slate-900">
+        {parameter.name}
+      </div>
+      <div className="truncate text-[11px] text-slate-400">{formatPortType(parameter)}</div>
+    </div>
+  );
+}
 
 export function ComponentNode({ id, data, selected }: NodeProps<ComponentFlowNode>) {
   // safe to call per node - useDomains() has a 1h staleTime, so every node reads the
@@ -23,23 +53,17 @@ export function ComponentNode({ id, data, selected }: NodeProps<ComponentFlowNod
   const { data: domains } = useDomains();
   const { deleteElements } = useReactFlow();
 
-  const inputCount = dataInputTypes(data.parameters).length;
-  const outputCount = dataOutputTypes(data.parameters).length;
+  const inputs = dataInputs(data.parameters);
+  const outputs = dataOutputs(data.parameters);
+  const configs = configParameters(data.parameters);
+  const setCount = configs.filter((p) => data.parameterValues[p.name] !== undefined).length;
 
   return (
     <div
-      className={`relative min-w-[220px] rounded-lg border bg-white shadow-sm transition-shadow ${
+      className={`relative min-w-[260px] rounded-lg border bg-white shadow-sm transition-shadow ${
         selected ? 'border-jmu-blue-800 shadow-md' : 'border-slate-200'
       }`}
     >
-      <Handle
-        type="target"
-        position={Position.Left}
-        // slate: an input port, distinct from the blue output
-        className={`${HANDLE_BASE} !bg-slate-400`}
-        title={inputCount > 0 ? `${inputCount} file input(s)` : 'No file inputs'}
-      />
-
       <div className="flex items-center justify-between gap-2 rounded-t-lg bg-jmu-blue-800 py-2 pl-3 pr-2">
         <span className="break-all font-mono text-sm font-semibold text-white">{data.label}</span>
         <button
@@ -55,7 +79,7 @@ export function ComponentNode({ id, data, selected }: NodeProps<ComponentFlowNod
         </button>
       </div>
 
-      <div className="flex flex-col gap-2 px-3 py-3">
+      <div className="px-3 py-2">
         <Badge
           variant="outline"
           className="w-fit"
@@ -63,21 +87,29 @@ export function ComponentNode({ id, data, selected }: NodeProps<ComponentFlowNod
         >
           {getDomainLabel(data.domain)}
         </Badge>
-
-        {/* port labels sit flush with the card edges so each reads as belonging to the
-            handle on its own side */}
-        <div className="flex items-center justify-between text-xs text-slate-500">
-          <span className={inputCount === 0 ? 'text-slate-300' : undefined}>data</span>
-          <span className={outputCount === 0 ? 'text-slate-300' : undefined}>output</span>
-        </div>
       </div>
 
-      <Handle
-        type="source"
-        position={Position.Right}
-        className={`${HANDLE_BASE} !bg-jmu-blue-800`}
-        title={outputCount > 0 ? `${outputCount} file output(s)` : 'No file outputs'}
-      />
+      {inputs.length > 0 && (
+        <div className="border-t border-slate-100 py-1">
+          {inputs.map((parameter) => (
+            <PortRow key={parameter.id} parameter={parameter} side="input" />
+          ))}
+        </div>
+      )}
+
+      {outputs.length > 0 && (
+        <div className="border-t border-slate-100 py-1">
+          {outputs.map((parameter) => (
+            <PortRow key={parameter.id} parameter={parameter} side="output" />
+          ))}
+        </div>
+      )}
+
+      {configs.length > 0 && (
+        <div className="rounded-b-lg border-t border-slate-100 px-3 py-1.5 text-[11px] text-slate-400">
+          {setCount} of {configs.length} parameter{configs.length === 1 ? '' : 's'} set
+        </div>
+      )}
     </div>
   );
 }

@@ -79,6 +79,8 @@ export function WorkflowCanvas({
           label: payload.componentName,
           domain: payload.domain,
           parameters: payload.parameters,
+          // no overrides yet - every config parameter starts on its component default
+          parameterValues: {},
         },
       });
     },

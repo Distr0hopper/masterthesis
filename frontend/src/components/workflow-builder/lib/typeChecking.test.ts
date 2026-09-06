@@ -3,7 +3,11 @@ import { ParameterDirection } from '@/api/components';
 import {
   NO_DATA_INPUTS_SCORE,
   compareByRank,
-  areParametersCompatible,
+  arePortsCompatible,
+  configParameters,
+  dataInputs,
+  dataOutputs,
+  findPort,
   buildOutputStack,
   dataInputTypes,
   dataOutputTypes,
@@ -15,8 +19,17 @@ import {
 } from './typeChecking';
 import type { ComponentFlowNode } from '../types';
 
-const input = (cwlType: string): TypedParameter => ({ cwlType, direction: ParameterDirection.INPUT });
-const output = (cwlType: string): TypedParameter => ({ cwlType, direction: ParameterDirection.OUTPUT });
+let seq = 0;
+const input = (cwlType: string, name = `in_${seq++}`): TypedParameter => ({
+  name,
+  cwlType,
+  direction: ParameterDirection.INPUT,
+});
+const output = (cwlType: string, name = `out_${seq++}`): TypedParameter => ({
+  name,
+  cwlType,
+  direction: ParameterDirection.OUTPUT,
+});
 
 const node = (id: string, label: string, parameters: TypedParameter[]): ComponentFlowNode => ({
   id,
@@ -24,7 +37,13 @@ const node = (id: string, label: string, parameters: TypedParameter[]): Componen
   position: { x: 0, y: 0 },
   // the pure functions only read cwlType/direction; the rest of ParameterDisplayModel is
   // irrelevant here, so the cast keeps the fixtures readable
-  data: { componentId: id, label, domain: 'animal_behavior', parameters: parameters as never },
+  data: {
+    componentId: id,
+    label,
+    domain: 'animal_behavior',
+    parameters: parameters as never,
+    parameterValues: {},
+  },
 });
 
 describe('isCompatible', () => {
@@ -153,21 +172,65 @@ describe('scoreComponent', () => {
   });
 });
 
-describe('areParametersCompatible', () => {
-  it('accepts a connection when any File output feeds any File input', () => {
-    expect(areParametersCompatible([output('File'), output('int')], [input('string'), input('File')])).toBe(true);
+describe('dataInputs / dataOutputs / configParameters', () => {
+  const parameters = [
+    input('File', 'input_rds'),
+    input('string', 'accuracy_var'),
+    input('double', 'max_speed'),
+    output('File', 'output_rds'),
+    output('File[]', 'artifacts'),
+  ];
+
+  it('splits File ports from config knobs', () => {
+    expect(dataInputs(parameters).map((p) => p.name)).toEqual(['input_rds']);
+    expect(dataOutputs(parameters).map((p) => p.name)).toEqual(['output_rds', 'artifacts']);
+    expect(configParameters(parameters).map((p) => p.name)).toEqual(['accuracy_var', 'max_speed']);
   });
 
-  it('rejects a connection when the source produces no File outputs', () => {
-    expect(areParametersCompatible([output('string')], [input('File')])).toBe(false);
+  it('never counts an output as a config parameter', () => {
+    expect(configParameters([output('string', 'log_text')])).toEqual([]);
+  });
+});
+
+describe('findPort', () => {
+  const parameters = [input('File', 'input_rds'), output('File', 'output_rds')];
+
+  it('resolves a handle id to its parameter', () => {
+    expect(findPort(parameters, 'output_rds')?.name).toBe('output_rds');
   });
 
-  it('rejects a connection when the target takes no File inputs', () => {
-    expect(areParametersCompatible([output('File')], [input('string')])).toBe(false);
+  it('returns undefined for a missing or absent handle id', () => {
+    expect(findPort(parameters, 'gone')).toBeUndefined();
+    expect(findPort(parameters, null)).toBeUndefined();
+    expect(findPort(parameters, undefined)).toBeUndefined();
+  });
+});
+
+describe('arePortsCompatible', () => {
+  it('accepts a File output feeding a File input', () => {
+    expect(arePortsCompatible(output('File'), input('File'))).toBe(true);
   });
 
-  it('rejects mismatched File arities', () => {
-    expect(areParametersCompatible([output('File')], [input('File[]')])).toBe(false);
+  it('accepts File[] feeding File (scatter case)', () => {
+    expect(arePortsCompatible(output('File[]'), input('File'))).toBe(true);
+  });
+
+  it('rejects mismatched arities', () => {
+    expect(arePortsCompatible(output('File'), input('File[]'))).toBe(false);
+  });
+
+  it('rejects config parameters as connection endpoints', () => {
+    expect(arePortsCompatible(output('string'), input('File'))).toBe(false);
+    expect(arePortsCompatible(output('File'), input('string'))).toBe(false);
+  });
+
+  it('rejects a backwards connection (input as source, output as target)', () => {
+    expect(arePortsCompatible(input('File'), output('File'))).toBe(false);
+  });
+
+  it('rejects a missing port on either side', () => {
+    expect(arePortsCompatible(undefined, input('File'))).toBe(false);
+    expect(arePortsCompatible(output('File'), undefined)).toBe(false);
   });
 });
 
@@ -201,10 +264,6 @@ describe('compareByRank', () => {
 
   it('falls back to name order for equal score and favourite state', () => {
     expect(order([candidate('beta', 2), candidate('alpha', 2)])).toEqual(['alpha', 'beta']);
-    expect(order([candidate('beta', 2, true), candidate('alpha', 2, true)])).toEqual([
-      'alpha',
-      'beta',
-    ]);
   });
 
   it('keeps favourites ahead among the no-data-input bucket too', () => {

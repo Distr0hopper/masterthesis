@@ -11,10 +11,23 @@ const node = (id: string) => ({
   id,
   type: 'componentNode',
   position: { x: 10, y: 20 },
-  data: { componentId: 'c1', label: 'remove-outliers', domain: 'animal_behavior', parameters: [] },
+  data: {
+    componentId: 'c1',
+    label: 'remove-outliers',
+    domain: 'animal_behavior',
+    parameters: [],
+    parameterValues: {},
+  },
 });
 
-const edge = (id: string, source: string, target: string) => ({ id, source, target });
+// handle ids are parameter names - an edge is only meaningful once it names its ports
+const edge = (id: string, source: string, target: string) => ({
+  id,
+  source,
+  target,
+  sourceHandle: 'output_rds',
+  targetHandle: 'input_rds',
+});
 
 const canvas = (overrides: Record<string, unknown> = {}) =>
   JSON.stringify({ nodes: [node('a'), node('b')], edges: [edge('a-b', 'a', 'b')], ...overrides });
@@ -137,6 +150,49 @@ describe('parseCanvasState', () => {
     )!;
     expect(parsed.edges.map((e) => e.id)).toEqual(['a-b', 'b-c']);
     expect(parsed.droppedEdgeCount).toBe(0);
+  });
+
+  it('drops legacy edges that do not name their ports', () => {
+    // saved before per-port handles existed: source/target only. A node has several File
+    // outputs, so which one was meant is unknowable - guessing would produce wrong CWL.
+    const parsed = parseCanvasState(
+      canvas({ edges: [{ id: 'a-b', source: 'a', target: 'b' }] }),
+    )!;
+    expect(parsed.edges).toHaveLength(0);
+    expect(parsed.droppedEdgeCount).toBe(1);
+  });
+
+  it('drops an edge that names only one of its two ports', () => {
+    const parsed = parseCanvasState(
+      canvas({ edges: [{ id: 'a-b', source: 'a', target: 'b', sourceHandle: 'output_rds' }] }),
+    )!;
+    expect(parsed.edges).toHaveLength(0);
+    expect(parsed.droppedEdgeCount).toBe(1);
+  });
+
+  it('preserves the handle ids of a well-formed edge', () => {
+    const parsed = parseCanvasState(canvas())!;
+    expect(parsed.edges[0].sourceHandle).toBe('output_rds');
+    expect(parsed.edges[0].targetHandle).toBe('input_rds');
+  });
+
+  it('defaults parameterValues on a node saved before they existed', () => {
+    const legacy = {
+      ...node('a'),
+      data: { componentId: 'c1', label: 'x', domain: 'y', parameters: [] },
+    };
+    const parsed = parseCanvasState(JSON.stringify({ nodes: [legacy], edges: [] }))!;
+    expect(parsed.nodes).toHaveLength(1);
+    expect(parsed.nodes[0].data.parameterValues).toEqual({});
+  });
+
+  it('keeps stored parameter values and discards non-string entries', () => {
+    const configured = {
+      ...node('a'),
+      data: { ...node('a').data, parameterValues: { max_speed: '25', bad: 42 } },
+    };
+    const parsed = parseCanvasState(JSON.stringify({ nodes: [configured], edges: [] }))!;
+    expect(parsed.nodes[0].data.parameterValues).toEqual({ max_speed: '25' });
   });
 
   it('tolerates a canvas with missing nodes/edges keys', () => {

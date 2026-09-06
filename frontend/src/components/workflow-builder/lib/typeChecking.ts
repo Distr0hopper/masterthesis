@@ -8,6 +8,7 @@ import type { ComponentFlowNode } from '../types';
 
 /** Structural minimum a parameter has to satisfy - fits both ParameterDto and ParameterDisplayModel. */
 export interface TypedParameter {
+  name: string;
   cwlType: string;
   direction: ParameterDirection;
 }
@@ -38,16 +39,34 @@ export function isDataParameter(parameter: TypedParameter): boolean {
   return FILE_TYPE.test(parameter.cwlType);
 }
 
-function typesFor(parameters: TypedParameter[], direction: ParameterDirection): string[] {
-  return parameters.filter((p) => p.direction === direction && isDataParameter(p)).map((p) => p.cwlType);
+function portsFor<T extends TypedParameter>(parameters: T[], direction: ParameterDirection): T[] {
+  return parameters.filter((p) => p.direction === direction && isDataParameter(p));
+}
+
+/** File-typed inputs - the connectable target ports of a node. */
+export function dataInputs<T extends TypedParameter>(parameters: T[]): T[] {
+  return portsFor(parameters, ParameterDirection.INPUT);
+}
+
+/** File-typed outputs - the connectable source ports of a node. */
+export function dataOutputs<T extends TypedParameter>(parameters: T[]): T[] {
+  return portsFor(parameters, ParameterDirection.OUTPUT);
+}
+
+/**
+ * Non-File inputs: string/int/double/boolean knobs. These are never connected, they are
+ * given a value in the inspector panel.
+ */
+export function configParameters<T extends TypedParameter>(parameters: T[]): T[] {
+  return parameters.filter((p) => p.direction === ParameterDirection.INPUT && !isDataParameter(p));
 }
 
 export function dataInputTypes(parameters: TypedParameter[]): string[] {
-  return typesFor(parameters, ParameterDirection.INPUT);
+  return dataInputs(parameters).map((p) => p.cwlType);
 }
 
 export function dataOutputTypes(parameters: TypedParameter[]): string[] {
-  return typesFor(parameters, ParameterDirection.OUTPUT);
+  return dataOutputs(parameters).map((p) => p.cwlType);
 }
 
 /**
@@ -69,14 +88,29 @@ export function isCompatible(outputType: string, inputType: string): boolean {
   return false;
 }
 
-/** True if any File output of the source can feed any File input of the target. */
-export function areParametersCompatible(
-  sourceParameters: TypedParameter[],
-  targetParameters: TypedParameter[],
+/** Look one port up by the handle id carried on an edge (handle id === parameter name). */
+export function findPort<T extends TypedParameter>(
+  parameters: T[],
+  handleId: string | null | undefined,
+): T | undefined {
+  if (!handleId) return undefined;
+  return parameters.find((p) => p.name === handleId);
+}
+
+/**
+ * Whether one concrete output port may feed one concrete input port. This is the real
+ * connection rule now that every port has its own handle - the node-level "any output to
+ * any input" check was only ever a stand-in for it.
+ */
+export function arePortsCompatible(
+  sourcePort: TypedParameter | undefined,
+  targetPort: TypedParameter | undefined,
 ): boolean {
-  const outputs = dataOutputTypes(sourceParameters);
-  const inputs = dataInputTypes(targetParameters);
-  return outputs.some((out) => inputs.some((inp) => isCompatible(out, inp)));
+  if (!sourcePort || !targetPort) return false;
+  if (!isDataParameter(sourcePort) || !isDataParameter(targetPort)) return false;
+  if (sourcePort.direction !== ParameterDirection.OUTPUT) return false;
+  if (targetPort.direction !== ParameterDirection.INPUT) return false;
+  return isCompatible(sourcePort.cwlType, targetPort.cwlType);
 }
 
 /**

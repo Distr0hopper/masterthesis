@@ -24,6 +24,12 @@ export type ComponentNodeData = {
   domain: string;
   /** drives the sidebar ranking and edge validation in lib/typeChecking.ts */
   parameters: ParameterDisplayModel[];
+  /**
+   * Values for the component's config parameters, keyed by parameter name and always
+   * stored as strings (booleans as "true"/"false") to match ParameterDto.defaultValue.
+   * A missing key means "unset" - the component's own default applies.
+   */
+  parameterValues: Record<string, string>;
 };
 
 export type ComponentFlowNode = Node<ComponentNodeData, 'componentNode'>;

@@ -54,7 +54,10 @@ export default function Header() {
           >
             Workflows
           </Link>
-          <Link to={ROUTES.builder} className={navLinkClass(pathname === ROUTES.builder)}>
+          <Link
+            to={ROUTES.builder}
+            className={navLinkClass(pathname === ROUTES.builder || pathname.startsWith(`${ROUTES.builder}/`))}
+          >
             Workflow Builder
           </Link>
           <Link to={ROUTES.about} className={navLinkClass(pathname === ROUTES.about)}>

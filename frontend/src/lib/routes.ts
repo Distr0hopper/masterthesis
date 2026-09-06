@@ -6,7 +6,10 @@ export const ROUTES = {
   home: '/',
   browse: '/browse',
   about: '/about',
+  // the builder's own overview of locally-saved draft workflows; distinct from
+  // `workflows` below, which browses published workflows from the backend
   builder: '/builder',
+  builderWorkflow: (id: string) => `/builder/${id}`,
   profile: '/profile',
   login: '/login',
   myComponents: '/my-components',

@@ -15,6 +15,7 @@ import LoginPage from '@/pages/LoginPage';
 import HomePage from "@/pages/HomePage.tsx";
 import AboutPage from "@/pages/AboutPage.tsx";
 import WorkflowBuilderPage from "@/pages/WorkflowBuilderPage.tsx";
+import WorkflowBuilderOverviewPage from "@/pages/WorkflowBuilderOverviewPage.tsx";
 import ProfilePage from "@/pages/ProfilePage.tsx";
 import ProtectedRoute from "@/pages/ProtectedRoutes.tsx";
 import { Toaster } from "@/components/ui/sonner.tsx";
@@ -44,10 +45,11 @@ export default function App() {
             <Route path={ROUTES.workflowDetail(':id')} element={<WorkflowDetailPage />} />
             <Route path={ROUTES.myWorkflows} element={<ProtectedRoute> <MyWorkflowsPage /> </ProtectedRoute>} />
             <Route path={ROUTES.login} element={<LoginPage />} />
+            <Route path={ROUTES.builder} element={<WorkflowBuilderOverviewPage />} />
           </Route>
 
           <Route element={<FullBleedLayout />}>
-            <Route path={ROUTES.builder} element={<WorkflowBuilderPage />} />
+            <Route path={ROUTES.builderWorkflow(':id')} element={<WorkflowBuilderPage />} />
           </Route>
         </Routes>
       </Router>

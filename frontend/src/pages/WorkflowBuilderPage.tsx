@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import {
   ReactFlowProvider,
   addEdge,
@@ -17,43 +18,44 @@ import {
   buildOutputStack,
 } from '@/components/workflow-builder/lib/typeChecking';
 import {
-  formatRelativeTime,
+  DEFAULT_WORKFLOW_NAME,
   useWorkflowPersistence,
-  type PersistedWorkflowState,
+  type PersistedWorkflow,
 } from '@/components/workflow-builder/lib/useWorkflowPersistence';
 import type { ComponentFlowNode } from '@/components/workflow-builder/types';
 
 export default function WorkflowBuilderPage() {
-  const [workflowName, setWorkflowName] = useState('');
+  const { id } = useParams<{ id: string }>();
+  const [workflowName, setWorkflowName] = useState(DEFAULT_WORKFLOW_NAME);
   const [nodes, setNodes, onNodesChange] = useNodesState<ComponentFlowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [savedAt, setSavedAt] = useState<string | null>(null);
 
-  const { load, save, clear } = useWorkflowPersistence();
+  const { load, save } = useWorkflowPersistence();
 
   // StrictMode runs effects twice in dev; without this the restore toast fires twice
-  const restored = useRef(false);
+  const restoredId = useRef<string | null>(null);
 
   useEffect(() => {
-    if (restored.current) return;
-    restored.current = true;
+    if (!id || restoredId.current === id) return;
+    restoredId.current = id;
 
-    const result = load();
+    const result = load(id);
+    // no record yet - this id was just minted by the overview's "New Workflow"
     if (!result) return;
 
-    const { state, droppedNodeCount, droppedEdgeCount } = result;
-    setWorkflowName(state.workflowName);
-    setNodes(state.nodes);
-    setEdges(state.edges);
-    setSavedAt(state.savedAt);
+    const { workflow, droppedNodeCount, droppedEdgeCount } = result;
+    setWorkflowName(workflow.workflowName);
+    setNodes(workflow.nodes);
+    setEdges(workflow.edges);
+    setSavedAt(workflow.savedAt);
 
-    const label = state.workflowName || 'untitled-workflow';
-    toast.info(`Restored "${label}" - last saved ${formatRelativeTime(state.savedAt)}.`);
+    toast.info(`Restored "${workflow.workflowName}".`);
 
     if (droppedNodeCount > 0 || droppedEdgeCount > 0) {
       toast.warning('Some components could not be restored - they may have been removed.');
     }
-  }, [load, setNodes, setEdges]);
+  }, [id, load, setNodes, setEdges]);
 
   // the sidebar ranks its palette against whatever the canvas can currently produce
   const outputStack = useMemo(() => buildOutputStack(nodes), [nodes]);
@@ -81,29 +83,26 @@ export default function WorkflowBuilderPage() {
   );
 
   const handleSave = useCallback(() => {
-    const state: PersistedWorkflowState = {
-      workflowName,
+    if (!id) return;
+
+    const workflow: PersistedWorkflow = {
+      id,
+      workflowName: workflowName.trim() || DEFAULT_WORKFLOW_NAME,
       nodes,
       edges,
+      nodeCount: nodes.length,
       savedAt: new Date().toISOString(),
     };
 
-    if (!save(state)) {
+    if (!save(workflow)) {
       toast.error('Could not save - browser storage is full.');
       return;
     }
 
-    setSavedAt(state.savedAt);
+    setWorkflowName(workflow.workflowName);
+    setSavedAt(workflow.savedAt);
     toast.success('Workflow saved.');
-  }, [workflowName, nodes, edges, save]);
-
-  const handleClear = useCallback(() => {
-    clear();
-    setWorkflowName('');
-    setNodes([]);
-    setEdges([]);
-    setSavedAt(null);
-  }, [clear, setNodes, setEdges]);
+  }, [id, workflowName, nodes, edges, save]);
 
   return (
     // required for WorkflowCanvas's useReactFlow()/screenToFlowPosition call
@@ -114,7 +113,6 @@ export default function WorkflowBuilderPage() {
           onWorkflowNameChange={setWorkflowName}
           onSave={handleSave}
           savedAt={savedAt}
-          onClear={handleClear}
         />
         {/* min-h-0: without it the flex child refuses to shrink and the canvas
             overflows past the bottom of the viewport */}

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Star } from 'lucide-react';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Input } from '@/components/ui/input.tsx';
-import { getDomainBadgeStyle, useComponents, useDomains } from '@/api/components';
+import { getDomainBadgeStyle, getDomainLabel, useComponents, useDomains } from '@/api/components';
 import { useAuthStore } from '@/store/auth.store';
 import { cn } from '@/lib/utils';
 import {
@@ -20,6 +20,7 @@ interface WorkflowSidebarProps {
 
 export function WorkflowSidebar({ outputStack }: WorkflowSidebarProps) {
   const [search, setSearch] = useState('');
+  const [selectedDomain, setSelectedDomain] = useState('');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated());
   const term = search.trim();
@@ -30,6 +31,7 @@ export function WorkflowSidebar({ outputStack }: WorkflowSidebarProps) {
   // endpoint otherwise omits.
   const { data, isLoading } = useComponents({
     search: term || undefined,
+    domain: selectedDomain || undefined,
     limit: 50,
     includeParameters: true,
     // the endpoint 401s on favoritesOnly for anonymous visitors, so the flag is gated on
@@ -37,6 +39,10 @@ export function WorkflowSidebar({ outputStack }: WorkflowSidebarProps) {
     favoritesOnly: isAuthenticated && favoritesOnly,
   });
   const { data: domains } = useDomains();
+
+  // drives the empty-state wording: "nothing here" reads as broken when the user has
+  // actually filtered everything out
+  const hasActiveFilter = Boolean(term) || Boolean(selectedDomain) || favoritesOnly;
 
   const ranked = useMemo(() => {
     const components = data?.items ?? [];
@@ -54,6 +60,22 @@ export function WorkflowSidebar({ outputStack }: WorkflowSidebarProps) {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
+
+        {/* same native select as ComponentFilters on /browse - the project has no Radix
+            select primitive installed, so the markup is shared by convention, not import */}
+        <select
+          aria-label="Filter by domain"
+          value={selectedDomain}
+          onChange={(e) => setSelectedDomain(e.target.value)}
+          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          <option value="">All Domains</option>
+          {(domains ?? []).map((domain) => (
+            <option key={domain.id} value={domain.id}>
+              {getDomainLabel(domain.id)}
+            </option>
+          ))}
+        </select>
 
         {isAuthenticated && (
           <label
@@ -77,7 +99,7 @@ export function WorkflowSidebar({ outputStack }: WorkflowSidebarProps) {
           <p className="text-sm text-slate-500">Loading components...</p>
         ) : ranked.length === 0 ? (
           <p className="text-sm text-slate-500">
-            {favoritesOnly ? 'No favorite components found.' : 'No components found.'}
+            {hasActiveFilter ? 'No components match these filters.' : 'No components found.'}
           </p>
         ) : (
           ranked.map(({ component, match }) => (

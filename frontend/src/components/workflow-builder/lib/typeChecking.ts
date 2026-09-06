@@ -117,6 +117,32 @@ export function matchComponent(
   return { score: 0, frame: null };
 }
 
+/** The fields the palette ordering reads off a candidate. */
+export interface RankableComponent {
+  name: string;
+  isFavorite: boolean;
+}
+
+export interface RankedCandidate {
+  component: RankableComponent;
+  match: CompatibilityMatch;
+}
+
+/**
+ * Palette ordering: compatibility score first, then favourites, then name.
+ *
+ * Favourites deliberately only break a tie *within* a score bucket - a favourite must
+ * never outrank a component that fits the canvas better, or the ranking stops meaning
+ * anything.
+ */
+export function compareByRank(a: RankedCandidate, b: RankedCandidate): number {
+  return (
+    b.match.score - a.match.score ||
+    Number(b.component.isFavorite) - Number(a.component.isFavorite) ||
+    a.component.name.localeCompare(b.component.name)
+  );
+}
+
 /** Score-only view of {@link matchComponent}. */
 export function scoreComponent(candidateParameters: TypedParameter[], outputStack: OutputFrame[]): number {
   return matchComponent(candidateParameters, outputStack).score;

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ParameterDirection } from '@/api/components';
 import {
   NO_DATA_INPUTS_SCORE,
+  compareByRank,
   areParametersCompatible,
   buildOutputStack,
   dataInputTypes,
@@ -167,5 +168,69 @@ describe('areParametersCompatible', () => {
 
   it('rejects mismatched File arities', () => {
     expect(areParametersCompatible([output('File')], [input('File[]')])).toBe(false);
+  });
+});
+
+describe('compareByRank', () => {
+  const candidate = (name: string, score: number, isFavorite = false) => ({
+    component: { name, isFavorite },
+    match: { score, frame: null },
+  });
+
+  const order = (items: ReturnType<typeof candidate>[]) =>
+    [...items].sort(compareByRank).map((c) => c.component.name);
+
+  it('ranks a higher compatibility score first', () => {
+    expect(order([candidate('low', 1), candidate('high', 3)])).toEqual(['high', 'low']);
+  });
+
+  it('puts favourites first within the same score bucket', () => {
+    expect(order([candidate('plain', 2), candidate('starred', 2, true)])).toEqual([
+      'starred',
+      'plain',
+    ]);
+  });
+
+  it('never lets a favourite outrank a better-matching component', () => {
+    // the whole point of the tie-break: favourites order within a bucket, not across
+    expect(order([candidate('starred-but-worse', 1, true), candidate('better', 3)])).toEqual([
+      'better',
+      'starred-but-worse',
+    ]);
+  });
+
+  it('falls back to name order for equal score and favourite state', () => {
+    expect(order([candidate('beta', 2), candidate('alpha', 2)])).toEqual(['alpha', 'beta']);
+    expect(order([candidate('beta', 2, true), candidate('alpha', 2, true)])).toEqual([
+      'alpha',
+      'beta',
+    ]);
+  });
+
+  it('keeps favourites ahead among the no-data-input bucket too', () => {
+    expect(
+      order([
+        candidate('plain', NO_DATA_INPUTS_SCORE),
+        candidate('starred', NO_DATA_INPUTS_SCORE, true),
+      ]),
+    ).toEqual(['starred', 'plain']);
+  });
+
+  it('orders a full mixed palette correctly', () => {
+    expect(
+      order([
+        candidate('zeta-no-match', 0),
+        candidate('alpha-no-inputs', NO_DATA_INPUTS_SCORE),
+        candidate('beta-best', 2),
+        candidate('alpha-best-fav', 2, true),
+        candidate('gamma-no-match-fav', 0, true),
+      ]),
+    ).toEqual([
+      'alpha-best-fav',
+      'beta-best',
+      'gamma-no-match-fav',
+      'zeta-no-match',
+      'alpha-no-inputs',
+    ]);
   });
 });

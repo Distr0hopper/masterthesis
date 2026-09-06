@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -7,6 +7,7 @@ import {
   MarkerType,
   MiniMap,
   ReactFlow,
+  useNodesInitialized,
   useReactFlow,
   type Edge,
   type OnConnect,
@@ -40,6 +41,10 @@ const defaultEdgeOptions = {
 // a thin black stroke that reads as unrelated to the edges it creates
 const connectionLineStyle = { stroke: EDGE_COLOR, strokeWidth: 2, strokeDasharray: '6 4' };
 
+// a little breathing room around the graph, and a ceiling so a single small node does
+// not get blown up to fill the viewport
+const FIT_VIEW_OPTIONS = { padding: 0.2, maxZoom: 1.2 };
+
 interface WorkflowCanvasProps {
   nodes: ComponentFlowNode[];
   edges: Edge[];
@@ -47,6 +52,11 @@ interface WorkflowCanvasProps {
   onEdgesChange: OnEdgesChange<Edge>;
   onConnect: OnConnect;
   onAddNode: (node: ComponentFlowNode) => void;
+  /**
+   * Identifies the workflow currently open. Changing it re-fits the view once, after the
+   * restored nodes have been measured.
+   */
+  fitViewKey: string;
 }
 
 export function WorkflowCanvas({
@@ -56,8 +66,27 @@ export function WorkflowCanvas({
   onEdgesChange,
   onConnect,
   onAddNode,
+  fitViewKey,
 }: WorkflowCanvasProps) {
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, fitView } = useReactFlow();
+
+  // The `fitView` prop only fits on mount, and a saved workflow's nodes arrive later -
+  // the draft query resolves after the canvas is already up, so that initial fit runs
+  // against an empty canvas and the restored graph lands at whatever zoom it left behind.
+  // useNodesInitialized goes true only once nodes have measured dimensions, which is what
+  // fitView needs to compute a correct zoom.
+  const nodesInitialized = useNodesInitialized();
+  const fittedFor = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!nodesInitialized || nodes.length === 0) return;
+    if (fittedFor.current === fitViewKey) return;
+
+    // once per opened workflow - re-fitting on every later node drop would yank the
+    // viewport around while the user is building
+    fittedFor.current = fitViewKey;
+    fitView(FIT_VIEW_OPTIONS);
+  }, [nodesInitialized, nodes.length, fitViewKey, fitView]);
 
   const onDrop = useCallback(
     (event: React.DragEvent) => {
@@ -110,6 +139,7 @@ export function WorkflowCanvas({
         // widens the grab area around each handle without drawing a bigger dot
         connectionRadius={30}
         fitView
+        fitViewOptions={FIT_VIEW_OPTIONS}
         deleteKeyCode={['Delete', 'Backspace']}
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#e2e8f0" />

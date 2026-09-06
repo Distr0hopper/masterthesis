@@ -191,6 +191,8 @@ export default function WorkflowBuilderPage() {
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
               onAddNode={onAddNode}
+              // re-fits once per opened workflow, after its nodes are measured
+              fitViewKey={draft?.id ?? 'new'}
             />
           )}
           {selectedNode && (

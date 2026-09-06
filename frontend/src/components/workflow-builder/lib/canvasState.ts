@@ -1,4 +1,5 @@
 import type { Edge } from '@xyflow/react';
+import { COMPONENT_EDGE_TYPE } from '../types';
 import type { ComponentFlowNode } from '../types';
 
 export const DEFAULT_WORKFLOW_NAME = 'untitled-workflow';
@@ -81,9 +82,11 @@ export function parseCanvasState(raw: string): ParsedCanvasState | null {
   const nodeIds = new Set(nodes.map((n) => n.id));
   // an edge pointing at a dropped node would render as a dangling connection, so
   // surviving edges must have both endpoints still on the canvas
-  const edges = rawEdges.filter(
-    (edge) => isValidEdge(edge) && nodeIds.has(edge.source) && nodeIds.has(edge.target),
-  );
+  const edges = rawEdges
+    .filter((edge) => isValidEdge(edge) && nodeIds.has(edge.source) && nodeIds.has(edge.target))
+    // force the custom edge type: a canvas saved before it existed carries the built-in
+    // 'smoothstep', which renders fine but has no delete button
+    .map((edge) => ({ ...edge, type: COMPONENT_EDGE_TYPE }));
 
   return {
     nodes,

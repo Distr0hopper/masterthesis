@@ -13,10 +13,12 @@ import {
   type OnEdgesChange,
   type OnNodesChange,
 } from '@xyflow/react';
+import { ComponentEdge } from './ComponentEdge';
 import { ComponentNode } from './ComponentNode';
-import { DRAG_MIME, type ComponentDragPayload, type ComponentFlowNode } from './types';
+import { COMPONENT_EDGE_TYPE, DRAG_MIME, type ComponentDragPayload, type ComponentFlowNode } from './types';
 
 const nodeTypes = { componentNode: ComponentNode };
+const edgeTypes = { componentEdge: ComponentEdge };
 
 // jmu-blue-800. Inline `style` resolves CSS vars, but the arrow marker's colour lands on
 // an SVG presentation attribute, where var() is not reliably resolved - hence the literal
@@ -24,7 +26,9 @@ const nodeTypes = { componentNode: ComponentNode };
 const EDGE_COLOR = '#093d79';
 
 const defaultEdgeOptions = {
-  type: 'smoothstep',
+  // COMPONENT_EDGE_TYPE, not the built-in 'smoothstep' - the custom edge is what carries
+  // the delete button. parseCanvasState normalises restored edges onto it too.
+  type: COMPONENT_EDGE_TYPE,
   style: { stroke: EDGE_COLOR, strokeWidth: 2 },
   // an arrowhead is what makes a connection read as directional (output -> input)
   // rather than as an undirected line between two cards
@@ -97,6 +101,7 @@ export function WorkflowCanvas({
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
         connectionLineType={ConnectionLineType.SmoothStep}
         connectionLineStyle={connectionLineStyle}

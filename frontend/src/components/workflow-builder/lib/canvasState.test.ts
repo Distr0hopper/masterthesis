@@ -4,6 +4,7 @@ import {
   parseCanvasState,
   serializeCanvasState,
 } from './canvasState';
+import { COMPONENT_EDGE_TYPE } from '../types';
 import type { ComponentFlowNode } from '../types';
 
 const node = (id: string) => ({
@@ -111,6 +112,20 @@ describe('parseCanvasState', () => {
     expect(parsed.droppedNodeCount).toBe(0);
     expect(parsed.edges).toHaveLength(0);
     expect(parsed.droppedEdgeCount).toBe(1);
+  });
+
+  it('normalises restored edges onto the custom edge type', () => {
+    // a canvas saved before ComponentEdge existed carries the built-in 'smoothstep',
+    // which renders but has no delete button
+    const parsed = parseCanvasState(
+      canvas({ edges: [{ ...edge('a-b', 'a', 'b'), type: 'smoothstep' }] }),
+    )!;
+    expect(parsed.edges[0].type).toBe(COMPONENT_EDGE_TYPE);
+  });
+
+  it('gives type-less restored edges the custom edge type', () => {
+    const parsed = parseCanvasState(canvas())!;
+    expect(parsed.edges.every((e) => e.type === COMPONENT_EDGE_TYPE)).toBe(true);
   });
 
   it('keeps edges whose endpoints both survive', () => {

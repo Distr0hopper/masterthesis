@@ -15,6 +15,9 @@ export type ComponentDragPayload = {
 
 export const DRAG_MIME = 'application/json';
 
+/** Registered name of the custom edge that carries the delete button. */
+export const COMPONENT_EDGE_TYPE = 'componentEdge';
+
 export type ComponentNodeData = {
   componentId: string;
   label: string;

@@ -11,10 +11,6 @@ import {
   type OnEdgesChange,
   type OnNodesChange,
 } from '@xyflow/react';
-import { useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
-import { componentKeys, componentTransformer, componentsService } from '@/api/components';
-import { getErrorMessage } from '@/lib/errors';
 import { ComponentNode } from './ComponentNode';
 import { DRAG_MIME, type ComponentDragPayload, type ComponentFlowNode } from './types';
 
@@ -43,46 +39,31 @@ export function WorkflowCanvas({
   onAddNode,
 }: WorkflowCanvasProps) {
   const { screenToFlowPosition } = useReactFlow();
-  const queryClient = useQueryClient();
 
   const onDrop = useCallback(
-    async (event: React.DragEvent) => {
+    (event: React.DragEvent) => {
       event.preventDefault();
 
       const raw = event.dataTransfer.getData(DRAG_MIME);
       if (!raw) return;
 
+      // the sidebar's list query opts into `includeParameters`, so the drag payload
+      // already carries the component's ports - no request needed to place a node
       const payload = JSON.parse(raw) as ComponentDragPayload;
-      const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
 
-      try {
-        // TODO: Remove endpoint call and use parameters inside ComponentListItemDto directly
-        // the list endpoint carries no parameters (ComponentListItemDTO), so they are fetched per component here.
-        // fetchQuery (not useComponent) because this is imperative, and it fills the very
-        // same cache entry the detail page reads - a later navigation is already warm
-        const detail = await queryClient.fetchQuery({
-          queryKey: componentKeys.detail(payload.componentId),
-          queryFn: () => componentsService.getById(payload.componentId),
-        });
-
-        onAddNode({
-          id: `${payload.componentId}-${Date.now()}`,
-          type: 'componentNode',
-          position,
-          data: {
-            componentId: payload.componentId,
-            label: payload.componentName,
-            domain: payload.domain,
-            // fetchQuery returns the raw DTO - a query's `select` does not apply to
-            // imperative fetches, so the transform is applied by hand
-            parameters: detail.parameters.map(componentTransformer.toParameterDisplayModel),
-          },
-        });
-      } catch (error) {
-        toast.error(getErrorMessage(error, 'Could not load this component.'));
-      }
+      onAddNode({
+        id: `${payload.componentId}-${Date.now()}`,
+        type: 'componentNode',
+        position: screenToFlowPosition({ x: event.clientX, y: event.clientY }),
+        data: {
+          componentId: payload.componentId,
+          label: payload.componentName,
+          domain: payload.domain,
+          parameters: payload.parameters,
+        },
+      });
     },
-    [screenToFlowPosition, queryClient, onAddNode],
+    [screenToFlowPosition, onAddNode],
   );
 
   return (

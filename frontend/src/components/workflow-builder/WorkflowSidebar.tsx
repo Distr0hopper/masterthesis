@@ -62,6 +62,7 @@ export function WorkflowSidebar({ outputStack }: WorkflowSidebarProps) {
                   componentId: component.id,
                   componentName: component.name,
                   domain: component.domain,
+                  parameters: component.parameters,
                 };
                 e.dataTransfer.setData(DRAG_MIME, JSON.stringify(payload));
                 e.dataTransfer.effectAllowed = 'copy';

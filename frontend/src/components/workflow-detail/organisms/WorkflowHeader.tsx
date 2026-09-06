@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, Download, Globe, Pencil, Trash2 } from 'lucide-react';
+import { ChevronLeft, Download, Globe, Pencil, Trash2, Workflow as WorkflowIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
@@ -10,6 +10,7 @@ import {
   StepMatchStatus,
   useDownloadWorkflow,
   usePublishWorkflow,
+  WorkflowSource,
   WorkflowStatus,
   type WorkflowDetailDisplayModel,
 } from '@/api/workflows';
@@ -86,6 +87,15 @@ export function WorkflowHeader({ model, backTo, backLabel, onDeleted }: Workflow
                   {model.domainsDisplay[index]}
                 </Badge>
               ))}
+
+              {/* provenance sits with the domain badges; the icon distinguishes it at a
+                  glance from the coloured domain chips next to it */}
+              <Badge variant="secondary" className="w-fit gap-1">
+                {model.source === WorkflowSource.WORKFLOW_BUILDER && (
+                  <WorkflowIcon className="h-3 w-3" aria-hidden />
+                )}
+                {model.sourceDisplay}
+              </Badge>
             </div>
 
             <div className="flex items-center gap-2">

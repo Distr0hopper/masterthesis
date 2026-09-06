@@ -22,15 +22,22 @@ export default function MyWorkflowsPage() {
   return (
     <div>
       <h1 className="text-2xl font-semibold text-slate-900">My Workflows</h1>
-      <p className="mt-1 text-slate-500">Workflows you've uploaded, including those still pending validation.</p>
+      <p className="mt-1 text-slate-500">
+        Workflows you've uploaded or published from the Workflow Builder, including those still pending
+        validation.
+      </p>
 
       {isLoading ? (
         <p className="mt-8 text-slate-500">Loading workflows...</p>
       ) : isEmpty ? (
         <p className="mt-8 text-slate-500">
-          You haven't uploaded any workflows yet.{' '}
+          You don't have any workflows yet.{' '}
           <Link to={ROUTES.workflowUpload} className="font-semibold text-jmu-blue-800 hover:underline">
             Upload one
+          </Link>{' '}
+          or{' '}
+          <Link to={ROUTES.builder} className="font-semibold text-jmu-blue-800 hover:underline">
+            build one in the Workflow Builder
           </Link>
           .
         </p>

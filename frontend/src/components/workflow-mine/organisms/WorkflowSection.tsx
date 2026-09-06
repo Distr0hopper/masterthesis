@@ -1,5 +1,6 @@
 import { WorkflowCard } from '@/components/workflow-browse/WorkflowCard';
 import type { WorkflowDisplayModel } from '@/api/workflows';
+import { ROUTES } from '@/lib/routes';
 
 interface WorkflowSectionProps {
   title: string;
@@ -19,7 +20,12 @@ export function WorkflowSection({ title, workflows, total }: WorkflowSectionProp
       </h2>
       <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         {workflows.map((workflow) => (
-          <WorkflowCard key={workflow.id} workflow={workflow} backTo="/my-workflows" />
+          <WorkflowCard
+            key={workflow.id}
+            workflow={workflow}
+            backTo={ROUTES.myWorkflows}
+            showBuilderLink
+          />
         ))}
       </div>
     </section>

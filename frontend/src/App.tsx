@@ -1,6 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Header from '@/components/layout/Header';
+import { ContainerLayout } from '@/components/layout/ContainerLayout';
+import { FullBleedLayout } from '@/components/layout/FullBleedLayout';
 import ComponentsPage from '@/pages/ComponentsPage';
 import ComponentDetailPage from '@/pages/ComponentDetailPage';
 import UploadPage from '@/pages/UploadPage';
@@ -26,12 +28,13 @@ export default function App() {
       <Router>
         <Toaster />
         <Header />
-        <main className="container mx-auto mt-14 max-w-6xl px-4 py-8">
-          <Routes>
+        <Routes>
+          {/* Layout routes rather than one hardcoded <main>: the builder needs the full
+              viewport, every other page keeps the centred max-w-6xl container. */}
+          <Route element={<ContainerLayout />}>
             <Route path={ROUTES.home} element={<HomePage />} />
             <Route path={ROUTES.browse} element={<ComponentsPage />} />
             <Route path={ROUTES.about} element={<AboutPage />} />
-            <Route path={ROUTES.builder} element={<WorkflowBuilderPage />} />
             <Route path={ROUTES.profile} element={<ProtectedRoute> <ProfilePage /> </ProtectedRoute>} />
             <Route path={ROUTES.componentDetail(':id')} element={<ComponentDetailPage />} />
             <Route path={ROUTES.componentUpload} element={<ProtectedRoute> <UploadPage /> </ProtectedRoute>} />
@@ -41,8 +44,12 @@ export default function App() {
             <Route path={ROUTES.workflowDetail(':id')} element={<WorkflowDetailPage />} />
             <Route path={ROUTES.myWorkflows} element={<ProtectedRoute> <MyWorkflowsPage /> </ProtectedRoute>} />
             <Route path={ROUTES.login} element={<LoginPage />} />
-          </Routes>
-        </main>
+          </Route>
+
+          <Route element={<FullBleedLayout />}>
+            <Route path={ROUTES.builder} element={<WorkflowBuilderPage />} />
+          </Route>
+        </Routes>
       </Router>
     </QueryClientProvider>
   );

@@ -18,8 +18,6 @@ import { getErrorMessage } from '@/lib/errors';
 import { ComponentNode } from './ComponentNode';
 import { DRAG_MIME, type ComponentDragPayload, type ComponentFlowNode } from './types';
 
-// module-level constants: re-creating either object on every render makes React Flow
-// warn about a changed nodeTypes/edge config and re-mount every node
 const nodeTypes = { componentNode: ComponentNode };
 const defaultEdgeOptions = {
   type: 'smoothstep',
@@ -55,11 +53,11 @@ export function WorkflowCanvas({
       if (!raw) return;
 
       const payload = JSON.parse(raw) as ComponentDragPayload;
-      // resolved before the await - the event's clientX/Y are only valid synchronously
       const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
 
       try {
-        // the list endpoint carries no parameters, so they are fetched per component here.
+        // TODO: Remove endpoint call and use parameters inside ComponentListItemDto directly
+        // the list endpoint carries no parameters (ComponentListItemDTO), so they are fetched per component here.
         // fetchQuery (not useComponent) because this is imperative, and it fills the very
         // same cache entry the detail page reads - a later navigation is already warm
         const detail = await queryClient.fetchQuery({
@@ -105,8 +103,6 @@ export function WorkflowCanvas({
         nodeTypes={nodeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
         fitView
-        // Backspace included deliberately: on Mac keyboards the Delete key emits
-        // Backspace, so "Delete" alone would make nodes undeletable there
         deleteKeyCode={['Delete', 'Backspace']}
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#e2e8f0" />

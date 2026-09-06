@@ -21,6 +21,7 @@ export const componentsService = {
         excludeMine: params.excludeMine || undefined,
         favoritesOnly: params.favoritesOnly || undefined,
         search: params.search || undefined,
+        includeParameters: params.includeParameters || undefined,
         limit: params.limit,
         offset: params.offset,
       },

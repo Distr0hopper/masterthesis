@@ -1,17 +1,28 @@
-import { Handle, Position, type NodeProps } from '@xyflow/react';
+import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react';
+import { Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge.tsx';
 import { getDomainBadgeStyle, getDomainLabel, useDomains } from '@/api/components';
 import type { ComponentFlowNode } from './types';
 
-export function ComponentNode({ data }: NodeProps<ComponentFlowNode>) {
-  // safe to call per node - useDomains() has a 1h staleTime, so every node reads the
-  // same cached entry rather than triggering a request of its own
+export function ComponentNode({ id, data }: NodeProps<ComponentFlowNode>) {
   const { data: domains } = useDomains();
+  const { deleteElements } = useReactFlow();
 
   return (
     <div className="min-w-[200px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-      <div className="bg-jmu-blue-800 px-3 py-2">
+      <div className="flex items-center justify-between gap-2 bg-jmu-blue-800 py-2 pl-3 pr-2">
         <span className="break-all font-mono text-sm font-semibold text-white">{data.label}</span>
+        <button
+          type="button"
+          // `nodrag` stops React Flow from starting a node drag on mousedown, which would
+          // otherwise swallow the click; deleteElements also removes the node's edges
+          className="nodrag shrink-0 rounded p-1 text-white/60 transition-colors hover:bg-white/20 hover:text-white"
+          aria-label={`Remove ${data.label}`}
+          title="Remove from canvas"
+          onClick={() => deleteElements({ nodes: [{ id }] })}
+        >
+          <Trash2 size={14} />
+        </button>
       </div>
 
       <div className="flex flex-col gap-2 px-3 py-3">

@@ -41,6 +41,8 @@ export interface ComponentDisplayModel extends WithHateoasLinks {
   createdAt: Date;
   createdAtDisplay: string;
   isFavorite: boolean;
+  /** empty unless the list request opted in via `includeParameters` (always populated on detail) */
+  parameters: ParameterDisplayModel[];
 }
 
 export interface ParameterDisplayModel {
@@ -149,6 +151,7 @@ export const componentTransformer = {
       createdAt,
       createdAtDisplay: formatDate(createdAt),
       isFavorite: dto.isFavorite,
+      parameters: dto.parameters?.map(componentTransformer.toParameterDisplayModel) ?? [],
       _links: dto._links,
     };
   },

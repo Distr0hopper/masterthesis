@@ -86,6 +86,11 @@ class ComponentListItemDto(CamelModel, LinkModel):
     domain: str
     created_at: datetime
     is_favorite: bool
+    # opt-in only (`?includeParameters=true`), hence None rather than []: browse/home/mine
+    # never read it and shouldn't pay for it, while the workflow builder needs the ports of
+    # every listed component at once to rank its palette. Costs no extra query - the
+    # relationship is already lazy="selectin", so these rows are loaded either way.
+    parameters: list[ParameterDto] | None = None
 
 
 class ComponentDetailDto(CamelModel, LinkModel):

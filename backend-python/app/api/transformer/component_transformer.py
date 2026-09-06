@@ -72,7 +72,12 @@ class ComponentTransformer:
         return component
 
     @staticmethod
-    def to_list_item(component: Component, is_favorite: bool, current_user: User | None) -> ComponentListItemDto:
+    def to_list_item(
+        component: Component,
+        is_favorite: bool,
+        current_user: User | None,
+        include_parameters: bool = False,
+    ) -> ComponentListItemDto:
         dto = ComponentListItemDto(
             id=component.id,
             name=component.name,
@@ -83,6 +88,9 @@ class ComponentTransformer:
             domain=component.domain,
             created_at=component.created_at,
             is_favorite=is_favorite,
+            parameters=(
+                [ComponentTransformer.to_parameter(p) for p in component.parameters] if include_parameters else None
+            ),
         )
         return ComponentLinkBuilder(current_user).attach_links(dto, component)
 

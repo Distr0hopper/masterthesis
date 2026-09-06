@@ -40,6 +40,8 @@ export interface ComponentListItemDto extends WithHateoasLinks {
   domain: ComponentDomain;
   createdAt: string;
   isFavorite: boolean;
+  /** only present when the request passed `includeParameters: true` - null otherwise */
+  parameters: ParameterDto[] | null;
 }
 
 export interface ComponentCreatorDto {
@@ -101,4 +103,6 @@ export interface ComponentListQueryParams extends PageParams<ComponentListItemDt
   excludeMine?: boolean;
   favoritesOnly?: boolean;
   search?: string;
+  /** opt into the per-item parameter list; only the workflow builder needs it */
+  includeParameters?: boolean;
 }

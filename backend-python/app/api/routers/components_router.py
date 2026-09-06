@@ -48,6 +48,9 @@ async def list_components(
     favorites_only: Annotated[bool, Query(alias="favoritesOnly")] = False,
     exclude_mine: Annotated[bool, Query(alias="excludeMine")] = False,
     search: Annotated[str | None, Query()] = None,
+    # off by default so the browse grid keeps its slim payload - only the workflow
+    # builder, which type-checks every listed component's ports, asks for these
+    include_parameters: Annotated[bool, Query(alias="includeParameters")] = False,
 ) -> PaginatedResponseDtoV1[ComponentListItemDto]:
     if favorites_only and current_user is None:
         raise FavoritesRequireAuthError()
@@ -63,7 +66,10 @@ async def list_components(
     components, total = await components_service.list_components(filter, pagination)
     favorited_names = await _favorited_names(favorites_service, current_user)
 
-    items = [ComponentTransformer.to_list_item(c, c.name in favorited_names, current_user) for c in components]
+    items = [
+        ComponentTransformer.to_list_item(c, c.name in favorited_names, current_user, include_parameters)
+        for c in components
+    ]
     return build_paginated_response(items, total, pagination)
 
 

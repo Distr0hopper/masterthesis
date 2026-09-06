@@ -16,7 +16,7 @@ from app.application.exception.workflow_exceptions import (
     WorkflowStepNotMatchedError,
 )
 from app.domain.models.user import User
-from app.domain.models.workflow import Workflow, WorkflowStatus
+from app.domain.models.workflow import Workflow, WorkflowSource, WorkflowStatus
 from app.domain.models.workflow_domain import WorkflowDomain
 from app.domain.models.workflow_step import StepMatchStatus, WorkflowStep
 from app.domain.pagination.pagination import PaginatedList
@@ -80,6 +80,8 @@ class WorkflowsService:
         description: str | None,
         domains: list[str],
         created_by_id: uuid.UUID,
+        source: WorkflowSource = WorkflowSource.MANUAL_UPLOAD,
+        draft_id: uuid.UUID | None = None,
     ) -> Workflow:
         files = self._extract_zip_files(zip_bytes)
 
@@ -134,6 +136,8 @@ class WorkflowsService:
             cwl_content=pipeline_content,
             steps=steps,
             domains=[WorkflowDomain(domain=d) for d in domains],
+            source=source,
+            draft_id=draft_id,
         )
         return await self._save_and_reload(workflow)
 

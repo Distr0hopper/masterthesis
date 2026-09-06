@@ -1,5 +1,5 @@
 import type { WorkflowDetailDto, WorkflowListItemDto, WorkflowStepDto } from './types';
-import { StepMatchStatus, WorkflowStatus } from './types';
+import { StepMatchStatus, WorkflowSource, WorkflowStatus } from './types';
 import type { UpdateWorkflowDescriptionFormData, UploadWorkflowFormData } from './schema';
 import { getDomainLabel } from '@/api/components';
 import { formatDate, getCreatorDisplay } from '@/api/transformer';
@@ -9,6 +9,11 @@ const MATCH_STATUS_LABELS: Record<StepMatchStatus, string> = {
   [StepMatchStatus.SUGGESTED]: 'Suggested match — please confirm',
   [StepMatchStatus.CONFIRMED]: 'Confirmed',
   [StepMatchStatus.UNMATCHED]: 'Not matched',
+};
+
+const WORKFLOW_SOURCE_LABELS: Record<WorkflowSource, string> = {
+  [WorkflowSource.WORKFLOW_BUILDER]: 'Built in Workflow Builder',
+  [WorkflowSource.MANUAL_UPLOAD]: 'Uploaded archive',
 };
 
 const WORKFLOW_STATUS_LABELS: Record<WorkflowStatus, string> = {
@@ -38,6 +43,10 @@ export interface WorkflowDisplayModel extends WithHateoasLinks {
   stepCount: number;
   status: WorkflowStatus;
   statusDisplay: string;
+  source: WorkflowSource;
+  sourceDisplay: string;
+  /** the builder draft this came from, when it is still available */
+  draftId: string | null;
   createdAt: Date;
   createdAtDisplay: string;
 }
@@ -90,6 +99,9 @@ export const workflowTransformer = {
       stepCount: dto.stepCount,
       status: dto.status,
       statusDisplay: WORKFLOW_STATUS_LABELS[dto.status],
+      source: dto.source,
+      sourceDisplay: WORKFLOW_SOURCE_LABELS[dto.source],
+      draftId: dto.draftId,
       createdAt,
       createdAtDisplay: formatDate(createdAt),
       _links: dto._links,

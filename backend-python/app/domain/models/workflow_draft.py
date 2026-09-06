@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Column, DateTime, ForeignKey, Text, func
+from sqlalchemy import Column, DateTime, ForeignKey, Index, Text, func
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
@@ -17,6 +17,9 @@ class WorkflowDraft(SQLModel, table=True):
     """
 
     __tablename__ = "workflow_drafts"
+    # every read of this table is "my drafts, newest first"; declared here rather than
+    # only in the migration so autogenerate does not keep proposing to drop it
+    __table_args__ = (Index("ix_workflow_drafts_created_by_id", "created_by_id", "updated_at"),)
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     name: str

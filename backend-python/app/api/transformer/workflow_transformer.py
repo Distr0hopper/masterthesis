@@ -42,6 +42,8 @@ class WorkflowTransformer:
             domains=[d.domain for d in workflow.domains],
             step_count=len(workflow.steps),
             status=workflow.status,
+            source=workflow.source,
+            draft_id=workflow.draft_id,
             created_at=workflow.created_at,
         )
         return WorkflowLinkBuilder(current_user).attach_links(dto, workflow)
@@ -83,6 +85,8 @@ class WorkflowTransformer:
             else None,
             steps=[WorkflowTransformer.to_step(s, current_user) for s in workflow.steps],
             status=workflow.status,
+            source=workflow.source,
+            draft_id=workflow.draft_id,
             cwl_content=workflow.cwl_content,
             created_at=workflow.created_at,
             updated_at=workflow.updated_at,

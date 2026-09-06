@@ -10,7 +10,7 @@ from app.api.dto.component import ComponentCreatorDto
 from app.api.dto.pagination import PaginatedResponseDtoV1
 from app.api.link.model import LinkModel
 from app.domain.models.component_domain import VALID_DOMAINS
-from app.domain.models.workflow import MAX_DESCRIPTION_LENGTH, WorkflowStatus
+from app.domain.models.workflow import MAX_DESCRIPTION_LENGTH, WorkflowSource, WorkflowStatus
 from app.domain.models.workflow_step import StepMatchStatus
 
 
@@ -62,6 +62,9 @@ class WorkflowListItemDto(CamelModel, LinkModel):
     domains: list[str]
     step_count: int
     status: WorkflowStatus
+    source: WorkflowSource
+    #: set only for source=workflow_builder, and cleared if that draft is deleted
+    draft_id: uuid.UUID | None
     created_at: datetime
 
 
@@ -78,6 +81,9 @@ class WorkflowDetailDto(CamelModel, LinkModel):
     created_by: ComponentCreatorDto | None
     steps: list[WorkflowStepDto]
     status: WorkflowStatus
+    source: WorkflowSource
+    #: set only for source=workflow_builder, and cleared if that draft is deleted
+    draft_id: uuid.UUID | None
     cwl_content: str
     created_at: datetime
     updated_at: datetime

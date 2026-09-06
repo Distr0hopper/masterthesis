@@ -7,6 +7,12 @@ export const StepMatchStatus = {
 } as const;
 export type StepMatchStatus = (typeof StepMatchStatus)[keyof typeof StepMatchStatus];
 
+export const WorkflowSource = {
+  WORKFLOW_BUILDER: 'workflow_builder',
+  MANUAL_UPLOAD: 'manual_upload',
+} as const;
+export type WorkflowSource = (typeof WorkflowSource)[keyof typeof WorkflowSource];
+
 export const WorkflowStatus = {
   PENDING_VALIDATION: 'pending_validation',
   VALIDATED: 'validated',
@@ -44,6 +50,9 @@ export interface WorkflowListItemDto extends WithHateoasLinks {
   domains: string[];
   stepCount: number;
   status: WorkflowStatus;
+  source: WorkflowSource;
+  /** set only for source=workflow_builder, and cleared if that draft is deleted */
+  draftId: string | null;
   createdAt: string;
 }
 
@@ -55,6 +64,9 @@ export interface WorkflowDetailDto extends WithHateoasLinks {
   createdBy: WorkflowCreatorDto | null;
   steps: WorkflowStepDto[];
   status: WorkflowStatus;
+  source: WorkflowSource;
+  /** set only for source=workflow_builder, and cleared if that draft is deleted */
+  draftId: string | null;
   cwlContent: string;
   createdAt: string;
   updatedAt: string;

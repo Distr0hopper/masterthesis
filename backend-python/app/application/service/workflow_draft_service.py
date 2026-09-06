@@ -14,7 +14,7 @@ from app.application.exception.workflow_draft_exceptions import (
 )
 from app.domain.models.component import Component
 from app.domain.models.parameter import ParameterDirection
-from app.domain.models.workflow import Workflow
+from app.domain.models.workflow import Workflow, WorkflowSource
 from app.domain.models.workflow_draft import WorkflowDraft
 from app.domain.repository.components_repository import ComponentsRepository
 from app.application.service.workflows_service import WorkflowsService
@@ -207,6 +207,9 @@ class WorkflowDraftService:
             # afterwards via the workflow's own update endpoint
             domains=[],
             created_by_id=user_id,
+            source=WorkflowSource.WORKFLOW_BUILDER,
+            # the link the UI follows back into the builder
+            draft_id=draft.id,
         )
         logger.info(f"Published draft {draft.id} as workflow {workflow.id}")
         return workflow

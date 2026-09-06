@@ -20,6 +20,13 @@ class WorkflowStatus(str, Enum):
     VALIDATED = "validated"
 
 
+class WorkflowSource(str, Enum):
+    """How the workflow got here - mirrors ComponentSource."""
+
+    WORKFLOW_BUILDER = "workflow_builder"
+    MANUAL_UPLOAD = "manual_upload"
+
+
 class Workflow(SQLModel, table=True):
     __tablename__ = "workflows"
 
@@ -34,6 +41,17 @@ class Workflow(SQLModel, table=True):
     # WorkflowsRepository.find_all / WorkflowsService.get_visible_workflow) - a workflow
     # flips to VALIDATED only once every one of its steps is explicitly CONFIRMED.
     status: WorkflowStatus = Field(default=WorkflowStatus.PENDING_VALIDATION, sa_column=Column(String, nullable=False))
+    # explicit String column, same convention as status/Component.source - never a native
+    # PG enum. Everything that predates the builder was uploaded as an archive, hence the
+    # MANUAL_UPLOAD default (and the matching server_default in the migration).
+    source: WorkflowSource = Field(default=WorkflowSource.MANUAL_UPLOAD, sa_column=Column(String, nullable=False))
+    # the builder draft this was published from, so the UI can offer "edit in builder".
+    # ON DELETE SET NULL, not CASCADE: deleting the draft must not delete the published
+    # workflow - it just stops being editable in the builder.
+    draft_id: uuid.UUID | None = Field(
+        default=None,
+        sa_column=Column(ForeignKey("workflow_drafts.id", ondelete="SET NULL"), nullable=True),
+    )
     created_at: datetime = Field(sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False))
     updated_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

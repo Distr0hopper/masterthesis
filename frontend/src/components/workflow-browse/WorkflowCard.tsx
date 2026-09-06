@@ -1,9 +1,11 @@
 import { Link } from 'react-router-dom';
+import { PenLine } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { getDomainBadgeStyle, useDomains } from '@/api/components';
-import { WorkflowStatus, type WorkflowDisplayModel } from '@/api/workflows';
+import { WorkflowSource, WorkflowStatus, type WorkflowDisplayModel } from '@/api/workflows';
+import { canDelete } from '@/api/permissions';
 import { ROUTES } from '@/lib/routes';
 
 interface WorkflowCardProps {
@@ -14,6 +16,16 @@ interface WorkflowCardProps {
 
 export function WorkflowCard({ workflow, backTo = ROUTES.workflows }: WorkflowCardProps) {
   const { data: domains } = useDomains();
+
+  // Only the owner can open the draft - it is owner-scoped, so the link would 403 for
+  // anyone else. `canDelete` is this codebase's ownership signal (the API only emits the
+  // delete link for the owner), the same way ComponentCard gates its favourite button.
+  // draftId is null once the draft has been deleted, which leaves the workflow intact but
+  // no longer editable in the builder.
+  const canEditInBuilder =
+    workflow.source === WorkflowSource.WORKFLOW_BUILDER &&
+    workflow.draftId !== null &&
+    canDelete(workflow._links);
 
   return (
     <Card>
@@ -45,11 +57,22 @@ export function WorkflowCard({ workflow, backTo = ROUTES.workflows }: WorkflowCa
           <span>{workflow.createdAtDisplay}</span>
         </div>
 
-        <Button asChild className="w-full bg-jmu-blue-800 hover:bg-jmu-blue-800/90">
-          <Link to={ROUTES.workflowDetail(workflow.id)} state={{ from: backTo }}>
-            View
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button asChild className="flex-1 bg-jmu-blue-800 hover:bg-jmu-blue-800/90">
+            <Link to={ROUTES.workflowDetail(workflow.id)} state={{ from: backTo }}>
+              View
+            </Link>
+          </Button>
+
+          {canEditInBuilder && (
+            <Button asChild variant="outline" title="Open the draft this was published from">
+              <Link to={ROUTES.builderWorkflow(workflow.draftId!)}>
+                <PenLine className="h-4 w-4" />
+                Edit
+              </Link>
+            </Button>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

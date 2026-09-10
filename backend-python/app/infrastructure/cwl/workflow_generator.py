@@ -4,7 +4,9 @@ Framework-free: it takes plain canvas dicts plus a {component_id: PortSpec} map,
 directly unit-testable and has no dependency on the ORM or the request cycle.
 """
 
+import io
 import re
+import zipfile
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -73,6 +75,41 @@ def cwl_filename_for(component_name: str) -> str:
 def safe_workflow_slug(name: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
     return slug or "workflow"
+
+
+def assemble_cwl_zip(
+    workflow_name: str,
+    pipeline_cwl: str,
+    step_files: list[tuple[str, str]],
+) -> tuple[str, bytes]:
+    """Zip a pipeline CWL together with its step CWLs, one consistent layout.
+
+    Shared by the builder's "Export CWL" and the published-workflow "Download" so both
+    archives are named and laid out identically:
+      - archive:   ``{slug}.zip``
+      - main doc:  ``{slug}.cwl`` (``{slug}-workflow.cwl`` if a step file already claims
+                   that name)
+      - step docs: written under the names the caller passes. The builder passes
+                   ``cwl_filename_for(component_name)``; the download passes each step's
+                   stored ``run_reference`` (it has to - that is what the pipeline's
+                   ``run:`` lines point at).
+
+    Returns ``(archive_filename, zip_bytes)``.
+    """
+    slug = safe_workflow_slug(workflow_name)
+
+    step_names = {name for name, _ in step_files}
+    main_filename = f"{slug}.cwl"
+    if main_filename in step_names:
+        main_filename = f"{slug}-workflow.cwl"
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(main_filename, pipeline_cwl)
+        for name, content in step_files:
+            archive.writestr(name, content)
+
+    return f"{slug}.zip", buffer.getvalue()
 
 
 def _workflow_input_id(step_id: str, port_name: str) -> str:

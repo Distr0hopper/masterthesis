@@ -23,6 +23,7 @@ from app.domain.pagination.pagination import PaginatedList
 from app.domain.repository.components_repository import ComponentsRepository
 from app.domain.repository.workflows_repository import WorkflowListFilter, WorkflowsRepository
 from app.infrastructure.cwl.cwl_matcher import best_match
+from app.infrastructure.cwl.workflow_generator import assemble_cwl_zip
 from app.infrastructure.cwl.workflow_parser import extract_workflow_steps, find_workflow_file
 
 
@@ -259,16 +260,15 @@ class WorkflowsService:
         await self.workflows_repository.delete(workflow)
 
     async def get_download(self, workflow: Workflow) -> tuple[str, bytes]:
-        # rebuilds the zip: the pipeline CWL plus each matched step's Component CWL,
-        # written under its original run_reference filename - unmatched steps are
-        # skipped, resolving that gap is out of scope for this feature
-        buffer = BytesIO()
-        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-            zf.writestr("pipeline.cwl", workflow.cwl_content)
-            for step in workflow.steps:
-                if step.component is not None:
-                    zf.writestr(step.run_reference, step.component.cwl_content)
-        return f"{workflow.name}.zip", buffer.getvalue()
+        # same archive layout and naming as the builder's "Export CWL" (assemble_cwl_zip).
+        # Step files keep their stored run_reference - that is what the pipeline's `run:`
+        # lines point at, so they cannot be renamed here.
+        step_files = [
+            (step.run_reference, step.component.cwl_content)
+            for step in workflow.steps
+            if step.component is not None
+        ]
+        return assemble_cwl_zip(workflow.name, workflow.cwl_content, step_files)
 
     def _extract_zip_files(self, zip_bytes: bytes) -> dict[str, str]:
         try:

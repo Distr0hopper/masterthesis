@@ -1,8 +1,6 @@
-import io
 import json
 import logging
 import uuid
-import zipfile
 from typing import Annotated
 
 from fastapi import Depends
@@ -22,9 +20,9 @@ from app.domain.repository.workflow_draft_repository import WorkflowDraftReposit
 from app.infrastructure.cwl.canvas_graph import CanvasCycleError, topological_sort
 from app.infrastructure.cwl.workflow_generator import (
     PortSpec,
+    assemble_cwl_zip,
     cwl_filename_for,
     generate_workflow_cwl,
-    safe_workflow_slug,
 )
 
 logger = logging.getLogger("app.application.service.workflow_draft_service")
@@ -171,23 +169,12 @@ class WorkflowDraftService:
             ports=ports,
         )
 
-        slug = safe_workflow_slug(draft.name)
-        buffer = io.BytesIO()
-        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
-            # the main document must not collide with a step file named after a component
-            # that happens to share the workflow's slug
-            step_filenames = {cwl_filename_for(spec.name) for spec in ports.values()}
-            main_filename = f"{slug}.cwl"
-            if main_filename in step_filenames:
-                main_filename = f"{slug}-workflow.cwl"
-            archive.writestr(main_filename, main_cwl)
-
-            for component_id, spec in ports.items():
-                archive.writestr(cwl_filename_for(spec.name), components[component_id].cwl_content)
-
-        zip_bytes = buffer.getvalue()
-        logger.info(f"Generated archive for draft {draft.id}: {len(ports)} step file(s)")
-        return f"{slug}.zip", zip_bytes
+        step_files = [
+            (cwl_filename_for(spec.name), components[cid].cwl_content) for cid, spec in ports.items()
+        ]
+        filename, zip_bytes = assemble_cwl_zip(draft.name, main_cwl, step_files)
+        logger.info(f"Generated archive for draft {draft.id}: {len(step_files)} step file(s)")
+        return filename, zip_bytes
 
     async def sync_to_my_workflows(self, draft: WorkflowDraft, user_id: uuid.UUID) -> Workflow:
         """Mirror the draft's generated archive into the user's My Workflows list.

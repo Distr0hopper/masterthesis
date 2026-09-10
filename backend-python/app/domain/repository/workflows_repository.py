@@ -70,6 +70,14 @@ class WorkflowsRepository:
         result = await self.db.exec(query)
         return result.first()
 
+    async def find_all_by_draft_ids(self, draft_ids: set[uuid.UUID]) -> list[Workflow]:
+        """Every Workflow whose draft_id is in the set - at most one per draft."""
+        if not draft_ids:
+            return []
+        query = select(Workflow).where(Workflow.draft_id.in_(draft_ids))
+        result = await self.db.exec(query)
+        return list(result.all())
+
     async def save(self, workflow: Workflow) -> Workflow:
         self.db.add(workflow)
         await self.db.commit()

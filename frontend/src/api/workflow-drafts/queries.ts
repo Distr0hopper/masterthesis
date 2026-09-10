@@ -72,10 +72,15 @@ export const useDeleteDraft = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => workflowDraftsService.delete(id),
-    onSuccess: (_result, id) => {
+    mutationFn: ({ id, deleteLinkedWorkflow = false }: { id: string; deleteLinkedWorkflow?: boolean }) =>
+      workflowDraftsService.delete(id, deleteLinkedWorkflow),
+    onSuccess: (_result, { id, deleteLinkedWorkflow }) => {
       queryClient.removeQueries({ queryKey: draftKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: draftKeys.lists() });
+      // the My Workflows lists change when the linked workflow is dropped too
+      if (deleteLinkedWorkflow) {
+        queryClient.invalidateQueries({ queryKey: workflowKeys.all });
+      }
     },
   });
 };

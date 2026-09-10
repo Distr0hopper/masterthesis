@@ -188,6 +188,23 @@ class WorkflowsService:
         existing.status = WorkflowStatus.PENDING_VALIDATION
         return await self._save_and_reload(existing)
 
+    async def linked_workflow_ids(self, draft_ids: set[uuid.UUID]) -> dict[uuid.UUID, uuid.UUID]:
+        """{draft_id: workflow_id} for the drafts that have a synced Workflow in My Workflows."""
+        workflows = await self.workflows_repository.find_all_by_draft_ids(draft_ids)
+        return {w.draft_id: w.id for w in workflows if w.draft_id is not None}
+
+    async def delete_by_draft_id(self, draft_id: uuid.UUID, owner_id: uuid.UUID) -> bool:
+        """Delete the Workflow synced from this draft, if one exists and the user owns it.
+
+        Returns whether a row was removed. Used by the draft-delete flow when the user
+        opts to also drop the My Workflows copy.
+        """
+        workflow = await self.workflows_repository.find_by_draft_id(draft_id)
+        if workflow is None or workflow.created_by_id != owner_id:
+            return False
+        await self.workflows_repository.delete(workflow)
+        return True
+
     async def get_step_with_workflow(self, step_id: uuid.UUID) -> tuple[WorkflowStep, Workflow]:
         step = await self.workflows_repository.find_step_by_id(step_id)
         if step is None:

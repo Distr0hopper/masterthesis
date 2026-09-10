@@ -54,6 +54,10 @@ class WorkflowDraftService:
     async def list_my_drafts(self, user_id: uuid.UUID) -> list[WorkflowDraft]:
         return await self.repository.find_all_by_user(user_id)
 
+    async def linked_workflow_ids(self, draft_ids: set[uuid.UUID]) -> dict[uuid.UUID, uuid.UUID]:
+        """{draft_id: workflow_id} for the drafts synced to a My Workflows entry."""
+        return await self.workflows_service.linked_workflow_ids(draft_ids)
+
     async def get_draft(self, draft_id: uuid.UUID, user_id: uuid.UUID) -> WorkflowDraft:
         """Fetch one draft, enforcing ownership. Every mutating path goes through this."""
         draft = await self.repository.find_by_id(draft_id)
@@ -91,7 +95,13 @@ class WorkflowDraftService:
         draft.node_count = node_count
         return await self.repository.save(draft)
 
-    async def delete_draft(self, draft: WorkflowDraft) -> None:
+    async def delete_draft(
+        self, draft: WorkflowDraft, user_id: uuid.UUID, delete_linked_workflow: bool = False
+    ) -> None:
+        # by default the FK is ON DELETE SET NULL, so the synced My Workflows copy just
+        # loses its "edit in builder" link and stays. The user can opt to drop it too.
+        if delete_linked_workflow:
+            await self.workflows_service.delete_by_draft_id(draft.id, user_id)
         await self.repository.delete(draft)
 
     async def _fetch_components(self, component_ids: list[str]) -> dict[str, Component]:

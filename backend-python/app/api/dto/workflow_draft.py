@@ -16,6 +16,9 @@ class WorkflowDraftListItemDto(CamelModel):
     name: str
     node_count: int
     updated_at: datetime
+    # the Workflow this draft has been synced to in My Workflows, if any - drives the
+    # "also delete the My Workflows copy?" prompt on delete
+    linked_workflow_id: uuid.UUID | None = None
 
 
 class WorkflowDraftDetailDto(CamelModel):
@@ -27,6 +30,7 @@ class WorkflowDraftDetailDto(CamelModel):
     node_count: int
     updated_at: datetime
     created_at: datetime
+    linked_workflow_id: uuid.UUID | None = None
 
 
 class WorkflowDraftWriteRequestDto(CamelModel):

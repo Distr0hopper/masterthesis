@@ -2,7 +2,7 @@ import logging
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Query, Response, status
 
 from app.api.dto.common import ErrorResponse
 from app.api.dto.workflow_draft import (
@@ -32,7 +32,8 @@ async def list_my_drafts(
     service: Annotated[WorkflowDraftService, Depends(WorkflowDraftService.get_service)],
 ) -> list[WorkflowDraftListItemDto]:
     drafts = await service.list_my_drafts(current_user.id)
-    return [WorkflowDraftTransformer.to_list_item(d) for d in drafts]
+    linked = await service.linked_workflow_ids({d.id for d in drafts})
+    return [WorkflowDraftTransformer.to_list_item(d, linked.get(d.id)) for d in drafts]
 
 
 @router.post(
@@ -66,7 +67,8 @@ async def get_draft(
     service: Annotated[WorkflowDraftService, Depends(WorkflowDraftService.get_service)],
 ) -> WorkflowDraftDetailDto:
     draft = await service.get_draft(draft_id, current_user.id)
-    return WorkflowDraftTransformer.to_detail(draft)
+    linked = await service.linked_workflow_ids({draft.id})
+    return WorkflowDraftTransformer.to_detail(draft, linked.get(draft.id))
 
 
 @router.put("/{draft_id}", response_model=WorkflowDraftDetailDto, responses=_OWNED_RESPONSES)
@@ -92,10 +94,15 @@ async def delete_draft(
     draft_id: uuid.UUID,
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
     service: Annotated[WorkflowDraftService, Depends(WorkflowDraftService.get_service)],
+    # opt-in: also delete the Workflow this draft was synced to in My Workflows
+    delete_linked_workflow: Annotated[bool, Query(alias="deleteLinkedWorkflow")] = False,
 ) -> Response:
     draft = await service.get_draft(draft_id, current_user.id)
-    await service.delete_draft(draft)
-    logger.info(f"Deleted workflow draft {draft_id}")
+    await service.delete_draft(draft, current_user.id, delete_linked_workflow)
+    logger.info(
+        f"Deleted workflow draft {draft_id}"
+        f"{' and its linked workflow' if delete_linked_workflow else ''}"
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

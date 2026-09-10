@@ -26,8 +26,10 @@ export const workflowDraftsService = {
     return apiClient.put(`${ENDPOINT}/${id}`, dto);
   },
 
-  delete(id: string): Promise<void> {
-    return apiClient.delete(`${ENDPOINT}/${id}`);
+  // deleteLinkedWorkflow: also drop the Workflow this draft was synced to in My Workflows
+  delete(id: string, deleteLinkedWorkflow = false): Promise<void> {
+    const query = deleteLinkedWorkflow ? '?deleteLinkedWorkflow=true' : '';
+    return apiClient.delete(`${ENDPOINT}/${id}${query}`);
   },
 
   // getBlob, not a window.location navigation: the endpoint needs the Authorization

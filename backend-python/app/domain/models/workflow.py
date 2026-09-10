@@ -48,9 +48,12 @@ class Workflow(SQLModel, table=True):
     # the builder draft this was published from, so the UI can offer "edit in builder".
     # ON DELETE SET NULL, not CASCADE: deleting the draft must not delete the published
     # workflow - it just stops being editable in the builder.
+    # index: WorkflowsRepository.find_by_draft_id / find_all_by_draft_ids look up by it.
     draft_id: uuid.UUID | None = Field(
         default=None,
-        sa_column=Column(ForeignKey("workflow_drafts.id", ondelete="SET NULL"), nullable=True),
+        sa_column=Column(
+            ForeignKey("workflow_drafts.id", ondelete="SET NULL"), nullable=True, index=True
+        ),
     )
     created_at: datetime = Field(sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False))
     updated_at: datetime = Field(

@@ -33,14 +33,21 @@ export default function WorkflowBuilderOverviewPage() {
   const { mutate: deleteDraft } = useDeleteDraft();
 
   const [pendingDelete, setPendingDelete] = useState<WorkflowDraftListItemDto | null>(null);
+  const [alsoDeleteWorkflow, setAlsoDeleteWorkflow] = useState(false);
 
   const handleNew = () => navigate(ROUTES.builderNew);
 
+  const askDelete = (draft: WorkflowDraftListItemDto) => {
+    setAlsoDeleteWorkflow(false);
+    setPendingDelete(draft);
+  };
+
   const handleDelete = () => {
     if (!pendingDelete) return;
-    deleteDraft(pendingDelete.id, {
-      onError: (error) => toast.error(getErrorMessage(error, 'Could not delete this workflow.')),
-    });
+    deleteDraft(
+      { id: pendingDelete.id, deleteLinkedWorkflow: alsoDeleteWorkflow },
+      { onError: (error) => toast.error(getErrorMessage(error, 'Could not delete this workflow.')) },
+    );
     setPendingDelete(null);
   };
 
@@ -119,7 +126,7 @@ export default function WorkflowBuilderOverviewPage() {
                     // the card itself navigates, so the delete click must not bubble
                     onClick={(e) => {
                       e.stopPropagation();
-                      setPendingDelete(draft);
+                      askDelete(draft);
                     }}
                   >
                     <Trash2 size={14} />
@@ -144,13 +151,30 @@ export default function WorkflowBuilderOverviewPage() {
               workflows.
             </AlertDialogDescription>
           </AlertDialogHeader>
+
+          {pendingDelete?.linkedWorkflowId && (
+            <label className="flex items-start gap-2 rounded-md border border-slate-200 p-3 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={alsoDeleteWorkflow}
+                onChange={(e) => setAlsoDeleteWorkflow(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-input accent-jmu-blue-800"
+              />
+              <span>
+                Also delete its copy in{' '}
+                <span className="font-medium">My Workflows</span>. Leave unchecked to keep that
+                copy (including if it has been published).
+              </span>
+            </label>
+          )}
+
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className={cn(buttonVariants({ variant: 'destructive' }))}
               onClick={handleDelete}
             >
-              Delete
+              {alsoDeleteWorkflow ? 'Delete both' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

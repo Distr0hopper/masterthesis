@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ReactFlowProvider,
@@ -53,7 +53,7 @@ export default function WorkflowBuilderPage() {
   const [nodes, setNodes, onNodesChange] = useNodesState<ComponentFlowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
-  const { data: draft, isLoading } = useWorkflowDraft(draftId, !isNew);
+  const { data: draft, isLoading, isError } = useWorkflowDraft(draftId, !isNew);
   const { mutateAsync: createDraft, isPending: isCreating } = useCreateDraft();
   const { mutateAsync: updateDraft, isPending: isUpdating } = useUpdateDraft(draftId);
   const { mutateAsync: exportDraft, isPending: isExporting } = useExportDraft();
@@ -64,13 +64,16 @@ export default function WorkflowBuilderPage() {
   // which action the validation dialog is gating, so it can label its own button
   const [pendingAction, setPendingAction] = useState<'export' | 'publish'>('export');
 
-  // restore once per draft - the query is staleTime: Infinity, but a re-render must not
-  // stomp on canvas edits the user has made since the fetch resolved
-  const restoredId = useRef<string | null>(null);
+  // Restore once per draft. The query is staleTime: Infinity, but a re-render must not
+  // stomp canvas edits made since the fetch resolved. This id also gates the canvas mount
+  // (`restored` below): the canvas only renders once the restored graph is in state, so
+  // React Flow's own fitView frames it on first paint and no manual re-fit is needed.
+  const [restoredDraftId, setRestoredDraftId] = useState<string | null>(null);
+  const restored = isNew || restoredDraftId === draftId;
 
   useEffect(() => {
-    if (!draft || restoredId.current === draft.id) return;
-    restoredId.current = draft.id;
+    if (!draft || restoredDraftId === draft.id) return;
+    setRestoredDraftId(draft.id);
 
     setWorkflowName(draft.name);
 
@@ -86,7 +89,7 @@ export default function WorkflowBuilderPage() {
     if (parsed.droppedNodeCount > 0 || parsed.droppedEdgeCount > 0) {
       toast.warning('Some components or connections could not be restored - they may have been removed.');
     }
-  }, [draft, setNodes, setEdges]);
+  }, [draft, restoredDraftId, setNodes, setEdges]);
 
   // the sidebar ranks its palette against whatever the canvas can currently produce
   const outputStack = useMemo(() => buildOutputStack(nodes), [nodes]);
@@ -169,8 +172,10 @@ export default function WorkflowBuilderPage() {
 
     if (isNew) {
       const created = await createDraft(dto);
-      // guard the restore effect against re-running for the id we just created
-      restoredId.current = created.id;
+      // mark this id restored: keeps the canvas mounted (no loader flash) and stops the
+      // restore effect from stomping the graph the user just built, once the URL flips to
+      // /builder/:id below
+      setRestoredDraftId(created.id);
       // replace, so Back does not return to /builder/new and create a second draft
       navigate(ROUTES.builderWorkflow(created.id), { replace: true });
       return created.id;
@@ -260,7 +265,11 @@ export default function WorkflowBuilderPage() {
             overflows past the bottom of the viewport */}
         <div className="flex min-h-0 flex-1">
           <WorkflowSidebar outputStack={outputStack} />
-          {isLoading ? (
+          {isError ? (
+            <div className="flex flex-1 items-center justify-center text-slate-500">
+              This workflow could not be loaded.
+            </div>
+          ) : isLoading || !restored ? (
             <div className="flex flex-1 items-center justify-center text-slate-500">
               Loading workflow...
             </div>
@@ -272,8 +281,6 @@ export default function WorkflowBuilderPage() {
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
               onAddNode={onAddNode}
-              // re-fits once per opened workflow, after its nodes are measured
-              fitViewKey={draft?.id ?? 'new'}
             />
           )}
           {selectedNode && (

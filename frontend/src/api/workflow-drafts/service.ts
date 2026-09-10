@@ -1,6 +1,6 @@
 import { apiClient } from '../client';
 import type {
-  PublishedWorkflowDto,
+  SyncedWorkflowDto,
   WorkflowDraftDetailDto,
   WorkflowDraftListItemDto,
   WriteWorkflowDraftDto,
@@ -36,8 +36,8 @@ export const workflowDraftsService = {
     return apiClient.getBlob(`${ENDPOINT}/${id}/export`, 'workflow.zip');
   },
 
-  // separate from export: this is the call that creates a Workflow row
-  publish(id: string): Promise<PublishedWorkflowDto> {
-    return apiClient.post(`${ENDPOINT}/${id}/publish`);
+  // materialises the canvas as a Workflow row in My Workflows (idempotent per draft).
+  syncToMyWorkflows(id: string): Promise<SyncedWorkflowDto> {
+    return apiClient.post(`${ENDPOINT}/${id}/sync`);
   },
 };

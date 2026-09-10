@@ -15,9 +15,6 @@ interface CanvasValidationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   errors: ValidationError[];
-  /** lower-case verb for the action that was blocked, e.g. "export" or "publish" */
-  action: string;
-  /** offered only when every finding is advisory, so the user can proceed anyway */
   onProceed: () => void;
 }
 
@@ -25,7 +22,6 @@ export function CanvasValidationDialog({
   open,
   onOpenChange,
   errors,
-  action,
   onProceed,
 }: CanvasValidationDialogProps) {
   const blocking = errors.filter(isBlocking);
@@ -37,12 +33,12 @@ export function CanvasValidationDialog({
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>
-            {canProceed ? `${action === 'publish' ? 'Publish' : 'Export'} this workflow?` : `Cannot ${action} workflow`}
+            {canProceed ? 'Export this workflow?' : 'Cannot export workflow'}
           </AlertDialogTitle>
           <AlertDialogDescription>
             {canProceed
-              ? `The workflow is valid, but check the following before you ${action}:`
-              : `Fix the following issues before you ${action}:`}
+              ? 'The workflow is valid, but check the following before you export:'
+              : 'Fix the following issues before you export:'}
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -65,9 +61,7 @@ export function CanvasValidationDialog({
           {canProceed ? (
             <>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={onProceed}>
-                {action === 'publish' ? 'Publish' : 'Export'} anyway
-              </AlertDialogAction>
+              <AlertDialogAction onClick={onProceed}>Export anyway</AlertDialogAction>
             </>
           ) : (
             <AlertDialogAction>Close</AlertDialogAction>

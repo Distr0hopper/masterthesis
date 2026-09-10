@@ -37,8 +37,7 @@ class WorkflowDraftWriteRequestDto(CamelModel):
     node_count: int = Field(ge=0)
 
 
-class PublishedWorkflowDto(CamelModel):
-    """Minimal handle on the Workflow a publish created, enough to link to it."""
+class SyncedWorkflowDto(CamelModel):
 
     workflow_id: uuid.UUID
     name: str

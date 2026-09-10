@@ -59,11 +59,11 @@ export const useExportDraft = () => {
   });
 };
 
-export const usePublishDraft = () => {
+export const useSyncDraftToMyWorkflows = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => workflowDraftsService.publish(id),
+    mutationFn: (id: string) => workflowDraftsService.syncToMyWorkflows(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: workflowKeys.all }),
   });
 };

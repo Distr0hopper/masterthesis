@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Response, status
 
 from app.api.dto.common import ErrorResponse
 from app.api.dto.workflow_draft import (
-    PublishedWorkflowDto,
+    SyncedWorkflowDto,
     WorkflowDraftDetailDto,
     WorkflowDraftListItemDto,
     WorkflowDraftWriteRequestDto,
@@ -130,25 +130,25 @@ async def export_draft(
 
 
 @router.post(
-    "/{draft_id}/publish",
-    response_model=PublishedWorkflowDto,
+    "/{draft_id}/sync",
+    response_model=SyncedWorkflowDto,
     status_code=status.HTTP_201_CREATED,
     responses={
         **_OWNED_RESPONSES,
-        status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse, "description": "Canvas cannot be published"},
+        status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse, "description": "Canvas cannot be synced"},
     },
 )
-async def publish_draft(
+async def sync_draft_to_my_workflows(
     draft_id: uuid.UUID,
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
     service: Annotated[WorkflowDraftService, Depends(WorkflowDraftService.get_service)],
-) -> PublishedWorkflowDto:
-    """Record the draft as a Workflow. Separate from export, which only downloads."""
+) -> SyncedWorkflowDto:
+    """Mirror the draft into My Workflows as a Workflow row. Idempotent per draft."""
     draft = await service.get_draft(draft_id, current_user.id)
-    workflow = await service.publish(draft, current_user.id)
+    workflow = await service.sync_to_my_workflows(draft, current_user.id)
 
-    logger.info(f"Published workflow draft {draft_id} as workflow {workflow.id}")
-    return PublishedWorkflowDto(
+    logger.info(f"Synced workflow draft {draft_id} into My Workflows as workflow {workflow.id}")
+    return SyncedWorkflowDto(
         workflow_id=workflow.id,
         name=workflow.name,
         step_count=len(workflow.steps),

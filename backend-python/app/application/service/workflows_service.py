@@ -73,16 +73,12 @@ class WorkflowsService:
             raise WorkflowNotFoundError(workflow_id)
         return workflow
 
-    async def create_from_zip(
-        self,
-        zip_bytes: bytes,
-        name: str,
-        description: str | None,
-        domains: list[str],
-        created_by_id: uuid.UUID,
-        source: WorkflowSource = WorkflowSource.MANUAL_UPLOAD,
-        draft_id: uuid.UUID | None = None,
-    ) -> Workflow:
+    async def _parse_zip_into_steps(self, zip_bytes: bytes) -> tuple[str, list[WorkflowStep]]:
+        """(pipeline CWL, fresh WorkflowStep rows) from an archive.
+
+        Every step is fuzzy-matched against the current component catalogue. The returned
+        steps are unsaved and unattached - the caller owns them into a Workflow.
+        """
         files = self._extract_zip_files(zip_bytes)
 
         try:
@@ -129,6 +125,20 @@ class WorkflowsService:
                     )
                 )
 
+        return pipeline_content, steps
+
+    async def create_from_zip(
+        self,
+        zip_bytes: bytes,
+        name: str,
+        description: str | None,
+        domains: list[str],
+        created_by_id: uuid.UUID,
+        source: WorkflowSource = WorkflowSource.MANUAL_UPLOAD,
+        draft_id: uuid.UUID | None = None,
+    ) -> Workflow:
+        pipeline_content, steps = await self._parse_zip_into_steps(zip_bytes)
+
         workflow = Workflow(
             name=name,
             description=description,
@@ -140,6 +150,42 @@ class WorkflowsService:
             draft_id=draft_id,
         )
         return await self._save_and_reload(workflow)
+
+    async def upsert_from_draft(
+        self,
+        zip_bytes: bytes,
+        name: str,
+        draft_id: uuid.UUID,
+        created_by_id: uuid.UUID,
+    ) -> Workflow:
+        """Keep exactly one Workflow in sync with a Builder draft.
+
+        First publish of a draft creates the row; every later Save re-generates its CWL
+        and steps in place. Re-syncing always drops the workflow back to
+        PENDING_VALIDATION - the content changed, so its confirmed step matches (and any
+        VALIDATED/public status) no longer describe it and it needs re-checking. The
+        existing row is only reused when the caller owns it; anything else falls through
+        to a fresh row.
+        """
+        existing = await self.workflows_repository.find_by_draft_id(draft_id)
+        if existing is None or existing.created_by_id != created_by_id:
+            return await self.create_from_zip(
+                zip_bytes=zip_bytes,
+                name=name,
+                description=None,
+                domains=[],
+                created_by_id=created_by_id,
+                source=WorkflowSource.WORKFLOW_BUILDER,
+                draft_id=draft_id,
+            )
+
+        pipeline_content, steps = await self._parse_zip_into_steps(zip_bytes)
+        existing.name = name
+        existing.cwl_content = pipeline_content
+        # cascade="all, delete-orphan" on Workflow.steps deletes the replaced rows
+        existing.steps = steps
+        existing.status = WorkflowStatus.PENDING_VALIDATION
+        return await self._save_and_reload(existing)
 
     async def get_step_with_workflow(self, step_id: uuid.UUID) -> tuple[WorkflowStep, Workflow]:
         step = await self.workflows_repository.find_step_by_id(step_id)
@@ -183,8 +229,6 @@ class WorkflowsService:
             raise WorkflowStepNotMatchedError(step_id)
 
         step.match_status = StepMatchStatus.CONFIRMED
-        # confirming a step only ever moves it towards "ready to publish" - it can never
-        # invalidate an already-published workflow, so no revert check is needed here
         return await self.workflows_repository.save_step(step)
 
     async def publish(self, workflow: Workflow) -> Workflow:
@@ -196,8 +240,6 @@ class WorkflowsService:
         return await self.workflows_repository.save(workflow)
 
     async def update_description(self, workflow: Workflow, description: str | None) -> Workflow:
-        # a plain metadata edit - never touches step matches or status, so no publish/revert
-        # bookkeeping is needed (unlike update_step_component)
         workflow.description = description
         return await self.workflows_repository.save(workflow)
 
@@ -259,9 +301,7 @@ class WorkflowsService:
     async def _revert_to_pending_if_needed(self, workflow_id: uuid.UUID) -> None:
         # only ever downgrades VALIDATED -> PENDING_VALIDATION when a step edit leaves it
         # no longer fully confirmed - never auto-promotes to VALIDATED, that only happens
-        # via the explicit publish() action. Re-fetch fresh so lazy="selectin" gives an
-        # accurate view of every sibling step's current status after the just-committed
-        # step save, not a possibly-stale in-session copy.
+        # via the explicit publish() action.
         workflow = await self.workflows_repository.find_by_id(workflow_id)
         assert workflow is not None
         if workflow.status != WorkflowStatus.VALIDATED:

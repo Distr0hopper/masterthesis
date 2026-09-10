@@ -33,7 +33,7 @@ import { downloadBlob } from '@/lib/download';
 import {
   useCreateDraft,
   useExportDraft,
-  usePublishDraft,
+  useSyncDraftToMyWorkflows,
   useUpdateDraft,
   useWorkflowDraft,
 } from '@/api/workflow-drafts';
@@ -57,12 +57,10 @@ export default function WorkflowBuilderPage() {
   const { mutateAsync: createDraft, isPending: isCreating } = useCreateDraft();
   const { mutateAsync: updateDraft, isPending: isUpdating } = useUpdateDraft(draftId);
   const { mutateAsync: exportDraft, isPending: isExporting } = useExportDraft();
-  const { mutateAsync: publishDraft, isPending: isPublishing } = usePublishDraft();
+  const { mutateAsync: syncToMyWorkflows } = useSyncDraftToMyWorkflows();
 
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
   const [validationOpen, setValidationOpen] = useState(false);
-  // which action the validation dialog is gating, so it can label its own button
-  const [pendingAction, setPendingAction] = useState<'export' | 'publish'>('export');
 
   // Restore once per draft. The query is staleTime: Infinity, but a re-render must not
   // stomp canvas edits made since the fetch resolved. This id also gates the canvas mount
@@ -90,7 +88,6 @@ export default function WorkflowBuilderPage() {
     }
   }, [draft, restoredDraftId, setNodes, setEdges]);
 
-  // the sidebar ranks its palette against whatever the canvas can currently produce
   const outputStack = useMemo(() => buildOutputStack(nodes), [nodes]);
 
   const onConnect = useCallback(
@@ -99,7 +96,6 @@ export default function WorkflowBuilderPage() {
       const target = nodes.find((n) => n.id === connection.target);
       if (!source || !target) return;
 
-      // handle ids are parameter names, so a connection names the exact ports it joins
       const sourcePort = findPort(source.data.parameters, connection.sourceHandle);
       const targetPort = findPort(target.data.parameters, connection.targetHandle);
 
@@ -110,8 +106,6 @@ export default function WorkflowBuilderPage() {
         return;
       }
 
-      // a CWL step input takes exactly one source, so a second edge into the same input
-      // would be ambiguous on export
       const inputTaken = edges.some(
         (e) => e.target === connection.target && e.targetHandle === connection.targetHandle,
       );
@@ -139,7 +133,6 @@ export default function WorkflowBuilderPage() {
           if (node.id !== nodeId) return node;
 
           const parameterValues = { ...node.data.parameterValues };
-          // undefined clears the override, restoring the component's own default
           if (value === undefined) delete parameterValues[parameterName];
           else parameterValues[parameterName] = value;
 
@@ -152,9 +145,9 @@ export default function WorkflowBuilderPage() {
 
   /**
    * Write the current canvas to the server and resolve with the draft id it now lives
-   * under. Export and publish both read the draft back from the DB, so they have to go
-   * through this first - otherwise an edited-but-unsaved name or canvas is silently
-   * exported at its last-saved value.
+   * under. Export reads the draft back from the DB, so it has to go through this first -
+   * otherwise an edited-but-unsaved name or canvas is silently exported at its last-saved
+   * value.
    */
   const persist = useCallback(async (): Promise<string> => {
     const name = workflowName.trim() || DEFAULT_WORKFLOW_NAME;
@@ -168,11 +161,7 @@ export default function WorkflowBuilderPage() {
 
     if (isNew) {
       const created = await createDraft(dto);
-      // mark this id restored: keeps the canvas mounted (no loader flash) and stops the
-      // restore effect from stomping the graph the user just built, once the URL flips to
-      // /builder/:id below
       setRestoredDraftId(created.id);
-      // replace, so Back does not return to /builder/new and create a second draft
       navigate(ROUTES.builderWorkflow(created.id), { replace: true });
       return created.id;
     }
@@ -182,13 +171,26 @@ export default function WorkflowBuilderPage() {
   }, [isNew, draftId, workflowName, nodes, edges, createDraft, updateDraft, navigate]);
 
   const handleSave = useCallback(async () => {
+    let savedId: string;
     try {
-      await persist();
-      toast.success('Workflow saved.');
+      savedId = await persist();
     } catch (error) {
       toast.error(getErrorMessage(error, 'Could not save this workflow.'));
+      return;
     }
-  }, [persist]);
+
+    try {
+      await syncToMyWorkflows(savedId);
+      toast.success('Saved to My Workflows.', {
+        description: 'Publishing is done from the My Workflows page.',
+        action: { label: 'My Workflows', onClick: () => navigate(ROUTES.myWorkflows) },
+      });
+    } catch (error) {
+      toast.warning('Workflow saved, but not added to My Workflows yet.', {
+        description: getErrorMessage(error, 'Finish the canvas, then save again.'),
+      });
+    }
+  }, [persist, syncToMyWorkflows, navigate]);
 
   const runExport = useCallback(async () => {
     try {
@@ -201,43 +203,25 @@ export default function WorkflowBuilderPage() {
     }
   }, [persist, exportDraft]);
 
-  const runPublish = useCallback(async () => {
-    try {
-      const id = await persist();
-      const published = await publishDraft(id);
-      toast.success(`Published "${published.name}" with ${published.stepCount} step(s).`, {
-        action: {
-          label: 'View',
-          onClick: () => navigate(ROUTES.workflowDetail(published.workflowId)),
-        },
-      });
-    } catch (error) {
-      toast.error(getErrorMessage(error, 'Could not publish this workflow.'));
-    }
-  }, [persist, publishDraft, navigate]);
-
   const guard = useCallback(
-    (action: 'export' | 'publish', run: () => void) => {
+    (run: () => void) => {
       const errors = validateCanvas(nodes, edges, workflowName);
       if (errors.length === 0) {
         run();
         return;
       }
       setValidationErrors(errors);
-      setPendingAction(action);
       setValidationOpen(true);
     },
     [nodes, edges, workflowName],
   );
 
-  const handleExport = useCallback(() => guard('export', () => void runExport()), [guard, runExport]);
-  const handlePublish = useCallback(() => guard('publish', () => void runPublish()), [guard, runPublish]);
+  const handleExport = useCallback(() => guard(() => void runExport()), [guard, runExport]);
 
   const handleProceedAnyway = useCallback(() => {
     setValidationOpen(false);
-    if (pendingAction === 'publish') void runPublish();
-    else void runExport();
-  }, [pendingAction, runExport, runPublish]);
+    void runExport();
+  }, [runExport]);
 
   return (
     <ReactFlowProvider>
@@ -249,8 +233,6 @@ export default function WorkflowBuilderPage() {
           isSaving={isCreating || isUpdating}
           onExport={handleExport}
           isExporting={isExporting}
-          onPublish={handlePublish}
-          isPublishing={isPublishing}
           updatedAt={draft?.updatedAt ?? null}
         />
         <div className="flex min-h-0 flex-1">
@@ -283,7 +265,6 @@ export default function WorkflowBuilderPage() {
         open={validationOpen}
         onOpenChange={setValidationOpen}
         errors={validationErrors}
-        action={pendingAction}
         onProceed={handleProceedAnyway}
       />
     </ReactFlowProvider>

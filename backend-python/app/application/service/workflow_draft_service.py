@@ -14,7 +14,7 @@ from app.application.exception.workflow_draft_exceptions import (
 )
 from app.domain.models.component import Component
 from app.domain.models.parameter import ParameterDirection
-from app.domain.models.workflow import Workflow, WorkflowSource
+from app.domain.models.workflow import Workflow
 from app.domain.models.workflow_draft import WorkflowDraft
 from app.domain.repository.components_repository import ComponentsRepository
 from app.application.service.workflows_service import WorkflowsService
@@ -189,27 +189,26 @@ class WorkflowDraftService:
         logger.info(f"Generated archive for draft {draft.id}: {len(ports)} step file(s)")
         return f"{slug}.zip", zip_bytes
 
-    async def publish(self, draft: WorkflowDraft, user_id: uuid.UUID) -> Workflow:
-        """Record the draft's generated archive as a Workflow entity.
+    async def sync_to_my_workflows(self, draft: WorkflowDraft, user_id: uuid.UUID) -> Workflow:
+        """Mirror the draft's generated archive into the user's My Workflows list.
 
-        Deliberately separate from export: downloading a file should not create rows, and
-        exporting repeatedly used to leave a near-duplicate Workflow behind every time.
-        Errors are *not* swallowed here - publishing is the explicit point of the request,
-        so a failure has to reach the user rather than being logged away.
+        Not the same as making a workflow public - that stays a separate, explicit action
+        on the My Workflows page (WorkflowsService.publish). This only materialises the
+        canvas as a PENDING_VALIDATION Workflow row.
+
+        Deliberately separate from export: downloading a file should not create rows.
+        Idempotent per draft - the Builder calls this on every Save, so the first call
+        creates the Workflow and later ones re-sync it in place (see
+        WorkflowsService.upsert_from_draft) rather than piling up near-duplicates.
         """
         _filename, zip_bytes = await self.export_to_zip(draft)
 
-        workflow = await self.workflows_service.create_from_zip(
+        workflow = await self.workflows_service.upsert_from_draft(
             zip_bytes=zip_bytes,
             name=draft.name,
-            description=None,
-            # left empty deliberately - a draft carries no domain of its own; it is set
-            # afterwards via the workflow's own update endpoint
-            domains=[],
-            created_by_id=user_id,
-            source=WorkflowSource.WORKFLOW_BUILDER,
-            # the link the UI follows back into the builder
+            # the link the UI follows back into the builder, and the key this upsert is on
             draft_id=draft.id,
+            created_by_id=user_id,
         )
-        logger.info(f"Published draft {draft.id} as workflow {workflow.id}")
+        logger.info(f"Synced draft {draft.id} into My Workflows as workflow {workflow.id}")
         return workflow

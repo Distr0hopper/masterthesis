@@ -65,6 +65,11 @@ class WorkflowsRepository:
     async def find_by_id(self, workflow_id: uuid.UUID) -> Workflow | None:
         return await self.db.get(Workflow, workflow_id)
 
+    async def find_by_draft_id(self, draft_id: uuid.UUID) -> Workflow | None:
+        query = select(Workflow).where(Workflow.draft_id == draft_id)
+        result = await self.db.exec(query)
+        return result.first()
+
     async def save(self, workflow: Workflow) -> Workflow:
         self.db.add(workflow)
         await self.db.commit()

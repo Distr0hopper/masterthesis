@@ -14,14 +14,13 @@ export interface WorkflowDraftDetailDto {
   createdAt: string;
 }
 
-/** Create and update share a body: the editor always sends its complete canvas. */
 export interface WriteWorkflowDraftDto {
   name: string;
   canvasState: string;
   nodeCount: number;
 }
 
-export interface PublishedWorkflowDto {
+export interface SyncedWorkflowDto {
   workflowId: string;
   name: string;
   stepCount: number;

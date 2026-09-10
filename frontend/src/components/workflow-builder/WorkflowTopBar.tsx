@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, Download, Upload } from 'lucide-react';
+import { ChevronLeft, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button.tsx';
 import { Input } from '@/components/ui/input.tsx';
 import { ROUTES } from '@/lib/routes';
@@ -13,8 +13,6 @@ interface WorkflowTopBarProps {
   isSaving: boolean;
   onExport: () => void;
   isExporting: boolean;
-  onPublish: () => void;
-  isPublishing: boolean;
   updatedAt: string | null;
 }
 
@@ -43,8 +41,6 @@ export function WorkflowTopBar({
   isSaving,
   onExport,
   isExporting,
-  onPublish,
-  isPublishing,
   updatedAt,
 }: WorkflowTopBarProps) {
   const savedLabel = useRelativeTime(updatedAt);
@@ -72,14 +68,11 @@ export function WorkflowTopBar({
         {savedLabel && <span className="shrink-0 text-xs text-slate-400">{savedLabel}</span>}
 
         <div className="flex items-center gap-2">
+          {/* Save also syncs the workflow into "My Workflows"; publishing happens there */}
           <Button variant="outline" onClick={onSave} disabled={isSaving}>
             {isSaving ? 'Saving...' : 'Save'}
           </Button>
-          {/* both actions persist first, so neither may start while a save is in flight */}
-          <Button variant="outline" onClick={onPublish} disabled={isPublishing || isSaving}>
-            <Upload className="h-4 w-4" />
-            {isPublishing ? 'Publishing...' : 'Publish'}
-          </Button>
+          {/* export persists first, so it may not start while a save is in flight */}
           <Button
             onClick={onExport}
             disabled={isExporting || isSaving}

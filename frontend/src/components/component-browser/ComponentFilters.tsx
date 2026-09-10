@@ -1,6 +1,7 @@
 import { Input } from '@/components/ui/input.tsx';
 import { Label } from '@/components/ui/label.tsx';
-import { getDomainLabel, type DomainDto } from '@/api/components';
+import { DomainSelect } from '@/components/ui/domain-select.tsx';
+import type { DomainDto } from '@/api/components';
 
 interface ComponentFiltersProps {
   searchTerm: string;
@@ -43,19 +44,12 @@ export function ComponentFilters({
 
       <div className="flex flex-col gap-2 sm:w-56">
         <Label htmlFor="domain">Domain</Label>
-        <select
+        <DomainSelect
           id="domain"
           value={selectedDomain}
-          onChange={(e) => onDomainChange(e.target.value)}
-          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:text-sm"
-        >
-          <option value="">All Domains</option>
-          {domains.map((domain) => (
-            <option key={domain.id} value={domain.id}>
-              {getDomainLabel(domain.id)}
-            </option>
-          ))}
-        </select>
+          domains={domains}
+          onValueChange={onDomainChange}
+        />
       </div>
 
       {showFavoritesToggle && (

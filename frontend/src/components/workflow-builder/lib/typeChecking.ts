@@ -35,8 +35,26 @@ export const NO_DATA_INPUTS_SCORE = -1;
  */
 const FILE_TYPE = /^File/i;
 
+/** CWL numeric scalars - the inspector renders these as a number input, not free text. */
+const NUMERIC_CWL_TYPES = new Set(['int', 'long', 'float', 'double']);
+
+/** Drop the CWL optional marker and normalise case/whitespace for comparison. */
+function normalizeCwlType(cwlType: string): string {
+  return cwlType.replace('?', '').trim().toLowerCase();
+}
+
 export function isDataParameter(parameter: TypedParameter): boolean {
   return FILE_TYPE.test(parameter.cwlType);
+}
+
+/** A `boolean` config parameter (an optional `boolean?` counts too). */
+export function isBooleanParameter(parameter: TypedParameter): boolean {
+  return normalizeCwlType(parameter.cwlType) === 'boolean';
+}
+
+/** An `int`/`long`/`float`/`double` config parameter (optional marker tolerated). */
+export function isNumericParameter(parameter: TypedParameter): boolean {
+  return NUMERIC_CWL_TYPES.has(normalizeCwlType(parameter.cwlType));
 }
 
 function portsFor<T extends TypedParameter>(parameters: T[], direction: ParameterDirection): T[] {
@@ -75,9 +93,8 @@ export function dataOutputTypes(parameters: TypedParameter[]): string[] {
  * TODO: Replace this with a real check (format/EDAM ontology aware).
  */
 export function isCompatible(outputType: string, inputType: string): boolean {
-  const normalize = (t: string) => t.replace('?', '').trim().toLowerCase();
-  const out = normalize(outputType);
-  const inp = normalize(inputType);
+  const out = normalizeCwlType(outputType);
+  const inp = normalizeCwlType(inputType);
 
   if (out === inp) return true;
 

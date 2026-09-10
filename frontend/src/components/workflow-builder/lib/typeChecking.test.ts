@@ -11,7 +11,9 @@ import {
   buildOutputStack,
   dataInputTypes,
   dataOutputTypes,
+  isBooleanParameter,
   isCompatible,
+  isNumericParameter,
   matchComponent,
   scoreComponent,
   type OutputFrame,
@@ -72,6 +74,23 @@ describe('isCompatible', () => {
   it('rejects unrelated types', () => {
     expect(isCompatible('string', 'File')).toBe(false);
     expect(isCompatible('File', 'int')).toBe(false);
+  });
+});
+
+describe('isBooleanParameter / isNumericParameter', () => {
+  it('recognises boolean, tolerating the optional marker and casing', () => {
+    expect(isBooleanParameter(input('boolean'))).toBe(true);
+    expect(isBooleanParameter(input('Boolean?'))).toBe(true);
+    expect(isBooleanParameter(input('string'))).toBe(false);
+  });
+
+  it('recognises the CWL numeric scalars', () => {
+    for (const t of ['int', 'long', 'float', 'double']) {
+      expect(isNumericParameter(input(t))).toBe(true);
+    }
+    expect(isNumericParameter(input('double?'))).toBe(true);
+    expect(isNumericParameter(input('string'))).toBe(false);
+    expect(isNumericParameter(input('File'))).toBe(false);
   });
 });
 

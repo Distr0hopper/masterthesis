@@ -3,21 +3,16 @@ import type { ParameterDisplayModel } from '@/api/components';
 import { getDomainBadgeStyle, getDomainLabel, useDomains } from '@/api/components';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Input } from '@/components/ui/input.tsx';
-import { configParameters, dataInputs, dataOutputs } from './lib/typeChecking';
+import {
+  configParameters,
+  dataInputs,
+  dataOutputs,
+  isBooleanParameter,
+  isNumericParameter,
+} from './lib/typeChecking';
 import { formatPortType } from './lib/ports';
 import { ROUTES } from '@/lib/routes';
 import type { ComponentFlowNode } from './types';
-
-/** CWL numeric scalars, which get a number input rather than free text. */
-const NUMERIC_TYPES = new Set(['int', 'long', 'float', 'double']);
-
-function isBoolean(parameter: ParameterDisplayModel): boolean {
-  return parameter.cwlType.replace('?', '').trim().toLowerCase() === 'boolean';
-}
-
-function isNumeric(parameter: ParameterDisplayModel): boolean {
-  return NUMERIC_TYPES.has(parameter.cwlType.replace('?', '').trim().toLowerCase());
-}
 
 interface WorkflowInspectorProps {
   node: ComponentFlowNode;
@@ -108,7 +103,7 @@ export function WorkflowInspector({ node, onParameterChange }: WorkflowInspector
                     </label>
                     <span className="text-[11px] text-slate-400">{parameter.cwlType}</span>
 
-                    {isBoolean(parameter) ? (
+                    {isBooleanParameter(parameter) ? (
                       <label className="flex items-center gap-2 text-sm text-slate-700">
                         <input
                           id={inputId}
@@ -127,7 +122,7 @@ export function WorkflowInspector({ node, onParameterChange }: WorkflowInspector
                     ) : (
                       <Input
                         id={inputId}
-                        type={isNumeric(parameter) ? 'number' : 'text'}
+                        type={isNumericParameter(parameter) ? 'number' : 'text'}
                         value={stored ?? ''}
                         // the placeholder carries the default, so an empty field reads as
                         // "using the default" rather than "empty"

@@ -66,8 +66,7 @@ export default function WorkflowBuilderPage() {
 
   // Restore once per draft. The query is staleTime: Infinity, but a re-render must not
   // stomp canvas edits made since the fetch resolved. This id also gates the canvas mount
-  // (`restored` below): the canvas only renders once the restored graph is in state, so
-  // React Flow's own fitView frames it on first paint and no manual re-fit is needed.
+  // (`restored` below): the canvas only renders once the restored graph is in state.
   const [restoredDraftId, setRestoredDraftId] = useState<string | null>(null);
   const restored = isNew || restoredDraftId === draftId;
 
@@ -121,7 +120,6 @@ export default function WorkflowBuilderPage() {
         return;
       }
 
-      // edge styling comes from the canvas's defaultEdgeOptions, not repeated here
       setEdges((prev) => addEdge(connection, prev));
     },
     [nodes, edges, setEdges],
@@ -132,7 +130,6 @@ export default function WorkflowBuilderPage() {
     [setNodes],
   );
 
-  // React Flow owns selection state, so the inspector reads it off the nodes themselves
   const selectedNode = useMemo(() => nodes.find((n) => n.selected) ?? null, [nodes]);
 
   const onParameterChange = useCallback(
@@ -146,7 +143,6 @@ export default function WorkflowBuilderPage() {
           if (value === undefined) delete parameterValues[parameterName];
           else parameterValues[parameterName] = value;
 
-          // new node and data objects - React Flow diffs by reference
           return { ...node, data: { ...node.data, parameterValues } };
         }),
       );
@@ -196,7 +192,6 @@ export default function WorkflowBuilderPage() {
 
   const runExport = useCallback(async () => {
     try {
-      // saving first guarantees the archive reflects the name and canvas on screen
       const id = await persist();
       const { blob, filename } = await exportDraft(id);
       downloadBlob(filename, blob);
@@ -208,7 +203,6 @@ export default function WorkflowBuilderPage() {
 
   const runPublish = useCallback(async () => {
     try {
-      // same reason as export: publish reads the draft back from the DB
       const id = await persist();
       const published = await publishDraft(id);
       toast.success(`Published "${published.name}" with ${published.stepCount} step(s).`, {
@@ -222,7 +216,6 @@ export default function WorkflowBuilderPage() {
     }
   }, [persist, publishDraft, navigate]);
 
-  // both actions gate on the same canvas validation; only the wording differs
   const guard = useCallback(
     (action: 'export' | 'publish', run: () => void) => {
       const errors = validateCanvas(nodes, edges, workflowName);
@@ -247,7 +240,6 @@ export default function WorkflowBuilderPage() {
   }, [pendingAction, runExport, runPublish]);
 
   return (
-    // required for WorkflowCanvas's useReactFlow()/screenToFlowPosition call
     <ReactFlowProvider>
       <div className="flex h-full flex-col">
         <WorkflowTopBar
@@ -261,8 +253,6 @@ export default function WorkflowBuilderPage() {
           isPublishing={isPublishing}
           updatedAt={draft?.updatedAt ?? null}
         />
-        {/* min-h-0: without it the flex child refuses to shrink and the canvas
-            overflows past the bottom of the viewport */}
         <div className="flex min-h-0 flex-1">
           <WorkflowSidebar outputStack={outputStack} />
           {isError ? (

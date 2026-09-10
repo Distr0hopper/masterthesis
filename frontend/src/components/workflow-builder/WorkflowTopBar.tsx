@@ -15,11 +15,9 @@ interface WorkflowTopBarProps {
   isExporting: boolean;
   onPublish: () => void;
   isPublishing: boolean;
-  /** ISO timestamp from the API, or null for a draft that has never been saved */
   updatedAt: string | null;
 }
 
-/** Live "Saved 5m ago" label. Only used here, so it stays local to this file. */
 function useRelativeTime(isoString: string | null): string | null {
   const [label, setLabel] = useState<string | null>(null);
 

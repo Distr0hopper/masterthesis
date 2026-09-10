@@ -16,7 +16,6 @@ export interface ParsedCanvasState extends CanvasState {
   droppedEdgeCount: number;
 }
 
-/** "just now" / "5m ago" / "2h ago" / "3d ago" - the relative save label. */
 export function formatRelativeTime(isoString: string): string {
   const seconds = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
   if (!Number.isFinite(seconds) || seconds < 60) return 'just now';

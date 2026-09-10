@@ -19,7 +19,6 @@ from app.domain.models.user import User
 router = APIRouter(prefix="/workflow-drafts", tags=["workflow-drafts"])
 logger = logging.getLogger("app.api.routers.workflow_drafts_router")
 
-# every route here is owner-scoped, so 401 is always possible
 _OWNED_RESPONSES = {
     status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
     status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Not the owner of this draft"},
@@ -66,8 +65,6 @@ async def get_draft(
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
     service: Annotated[WorkflowDraftService, Depends(WorkflowDraftService.get_service)],
 ) -> WorkflowDraftDetailDto:
-    # not-found/forbidden surface through the registered exception handlers, matching
-    # every other router here - no try/except at the endpoint
     draft = await service.get_draft(draft_id, current_user.id)
     return WorkflowDraftTransformer.to_detail(draft)
 
@@ -116,11 +113,6 @@ async def export_draft(
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
     service: Annotated[WorkflowDraftService, Depends(WorkflowDraftService.get_service)],
 ) -> Response:
-    """Main Workflow CWL plus one file per step, as a zip.
-
-    Not-found/forbidden/export-validation all surface through the registered exception
-    handlers, matching every other endpoint here.
-    """
     draft = await service.get_draft(draft_id, current_user.id)
     filename, zip_bytes = await service.export_to_zip(draft)
 

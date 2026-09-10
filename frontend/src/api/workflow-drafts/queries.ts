@@ -16,7 +16,6 @@ export const useWorkflowDrafts = () => {
   return useQuery({
     queryKey: draftKeys.lists(),
     queryFn: () => workflowDraftsService.getAll(),
-    // the endpoint is owner-scoped and 401s for anonymous visitors
     enabled: isAuthenticated,
   });
 };
@@ -26,8 +25,6 @@ export const useWorkflowDraft = (id: string, enabled = true) => {
     queryKey: draftKeys.detail(id),
     queryFn: () => workflowDraftsService.getById(id),
     enabled: enabled && !!id,
-    // a draft only changes when the user hits Save, and a background refetch would
-    // otherwise reset the canvas out from under unsaved edits
     staleTime: Infinity,
   });
 };
@@ -38,7 +35,6 @@ export const useCreateDraft = () => {
   return useMutation({
     mutationFn: (dto: WriteWorkflowDraftDto) => workflowDraftsService.create(dto),
     onSuccess: (created) => {
-      // seed the detail cache so the post-save redirect to /builder/:id does not refetch
       queryClient.setQueryData(draftKeys.detail(created.id), created);
       queryClient.invalidateQueries({ queryKey: draftKeys.lists() });
     },
@@ -58,7 +54,6 @@ export const useUpdateDraft = (id: string) => {
 };
 
 export const useExportDraft = () => {
-  // downloading has no server-side effect, so nothing to invalidate
   return useMutation({
     mutationFn: (id: string) => workflowDraftsService.exportZip(id),
   });
@@ -69,7 +64,6 @@ export const usePublishDraft = () => {
 
   return useMutation({
     mutationFn: (id: string) => workflowDraftsService.publish(id),
-    // a new Workflow now exists, so any cached workflow list is stale
     onSuccess: () => queryClient.invalidateQueries({ queryKey: workflowKeys.all }),
   });
 };

@@ -8,7 +8,6 @@ export interface WorkflowDraftListItemDto {
 export interface WorkflowDraftDetailDto {
   id: string;
   name: string;
-  /** raw JSON string holding the React Flow canvas - parse before use */
   canvasState: string;
   nodeCount: number;
   updatedAt: string;

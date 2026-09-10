@@ -1,12 +1,13 @@
 from typing import Any
 
-import yaml
+import yaml  # dump only - reads go through load_cwl (PyYAML rejects valid CWL v1.2 flow scalars)
 
 from app.domain.models.parameter import Parameter, ParameterDirection
+from app.infrastructure.cwl.yaml_io import YAMLError, load_cwl
 
 
 def inject_description(cwl_content: str, description: str | None) -> str:
-    doc: Any = yaml.safe_load(cwl_content)
+    doc: Any = load_cwl(cwl_content)
     if description:
         doc["doc"] = description
     else:
@@ -16,16 +17,16 @@ def inject_description(cwl_content: str, description: str | None) -> str:
 
 def extract_description(cwl_content: str) -> str | None:
     try:
-        doc: Any = yaml.safe_load(cwl_content)
-    except yaml.YAMLError:
+        doc: Any = load_cwl(cwl_content)
+    except YAMLError:
         return None
     return doc.get("doc") if isinstance(doc, dict) else None
 
 
 def extract_parameters(cwl_content: str) -> list[Parameter]:
     try:
-        doc: Any = yaml.safe_load(cwl_content)
-    except yaml.YAMLError as err:
+        doc: Any = load_cwl(cwl_content)
+    except YAMLError as err:
         raise ValueError(f"YAML parse error: {err}") from err
 
     namespaces: dict[str, str] = (doc or {}).get("$namespaces") or {}
@@ -66,16 +67,16 @@ def _extract_parameter_group(
 
 def extract_cwl_type(cwl_content: str) -> str | None:
     try:
-        doc: Any = yaml.safe_load(cwl_content)
-    except yaml.YAMLError:
+        doc: Any = load_cwl(cwl_content)
+    except YAMLError:
         return None
     return doc.get("class") if isinstance(doc, dict) else None
 
 
 def extract_dockerfile_content(cwl_content: str) -> str | None:
     try:
-        doc: Any = yaml.safe_load(cwl_content)
-    except yaml.YAMLError:
+        doc: Any = load_cwl(cwl_content)
+    except YAMLError:
         return None
     if not isinstance(doc, dict):
         return None
@@ -86,8 +87,8 @@ def extract_dockerfile_content(cwl_content: str) -> str | None:
 
 def extract_docker_pull(cwl_content: str) -> str | None:
     try:
-        doc: Any = yaml.safe_load(cwl_content)
-    except yaml.YAMLError:
+        doc: Any = load_cwl(cwl_content)
+    except YAMLError:
         return None
     if not isinstance(doc, dict):
         return None

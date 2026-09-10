@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Any
 
-import yaml
+from app.infrastructure.cwl.yaml_io import YAMLError, load_cwl
 
 
 @dataclass
@@ -13,8 +13,8 @@ class ParsedWorkflowStep:
 
 def is_workflow_cwl(cwl_content: str) -> bool:
     try:
-        doc: Any = yaml.safe_load(cwl_content)
-    except yaml.YAMLError:
+        doc: Any = load_cwl(cwl_content)
+    except YAMLError:
         return False
     return isinstance(doc, dict) and doc.get("class") == "Workflow"
 
@@ -40,8 +40,8 @@ def extract_workflow_steps(cwl_content: str) -> list[ParsedWorkflowStep]:
     step's `run:` isn't a plain filename string (inline embedded tools under `run:` are
     out of scope - the workflow upload must reference separate .cwl files by name)."""
     try:
-        doc: Any = yaml.safe_load(cwl_content)
-    except yaml.YAMLError as err:
+        doc: Any = load_cwl(cwl_content)
+    except YAMLError as err:
         raise ValueError(f"YAML parse error: {err}") from err
 
     if not isinstance(doc, dict):

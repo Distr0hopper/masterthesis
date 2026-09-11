@@ -1,5 +1,8 @@
+import re
 from dataclasses import dataclass
 from typing import Any
+
+import yaml  # dump only - reads go through load_cwl (PyYAML rejects valid CWL v1.2 flow scalars)
 
 from app.infrastructure.cwl.yaml_io import YAMLError, load_cwl
 
@@ -62,3 +65,162 @@ def extract_workflow_steps(cwl_content: str) -> list[ParsedWorkflowStep]:
             raise ValueError(f"Step '{step_id}' has a non-filename 'run:' value (inline tools are not supported)")
         parsed.append(ParsedWorkflowStep(step_id=step_id, run_reference=run_value, order=order))
     return parsed
+
+
+def _normalize_steps(steps: Any) -> list[tuple[str, dict]]:
+    """Accepts CWL `steps:` in either idmap form (`{step_id: {...}}`) or explicit list
+    form (`[{id: step_id, ...}, ...]`) - both are valid CWL v1.2. Returns
+    [(step_id, step_def), ...] in declaration order.
+    """
+    if isinstance(steps, dict) and steps:
+        return list(steps.items())
+    if isinstance(steps, list) and steps:
+        result: list[tuple[str, dict]] = []
+        for entry in steps:
+            if not isinstance(entry, dict) or "id" not in entry:
+                raise ValueError("List-form step is missing an 'id' field")
+            result.append((entry["id"], entry))
+        return result
+    raise ValueError("Workflow has no steps")
+
+
+def _step_id_to_name(step_id: str) -> str:
+    """`step_remove_outliers` -> `remove-outliers`, a starting point for a Component name."""
+    name = step_id.removeprefix("step_").removeprefix("step-")
+    return re.sub(r"[_\s]+", "-", name).lower()
+
+
+@dataclass
+class WorkflowOverview:
+    """Cheap workflow-level facts read alongside inline-component extraction."""
+
+    name: str | None  # from label: or doc:, if present
+    step_count: int
+    external_refs: list[str]  # `run:` values that are plain filenames
+    #: step ids whose `run:` is an inline mapping but not `class: CommandLineTool` (e.g. an
+    #: inline ExpressionTool or sub-Workflow) - not returned by extract_inline_components
+    #: and not a filename either, so callers need this to know step_count still accounts
+    #: for them.
+    unsupported_inline_steps: list[str]
+
+
+@dataclass
+class ExtractedComponent:
+    """An inline CommandLineTool extracted from a self-contained workflow."""
+
+    step_id: str
+    suggested_name: str
+    # the inline tool re-serialised as its own YAML document. NOTE: it has no top-level
+    # cwlVersion of its own (inline tools inherit it from the parent Workflow) - a later
+    # persistence step needs to inject one before this is valid as a standalone CWL file.
+    cwl_content: str
+    description: str | None
+    inputs: list[dict]
+    outputs: list[dict]
+
+
+def is_self_contained(cwl_content: str) -> bool:
+    """True iff the document is a valid `class: Workflow` with at least one step whose
+    `run:` is an inline `{class: CommandLineTool, ...}` mapping rather than a filename.
+    Never raises - any parse or structural problem is just "not self-contained"."""
+    try:
+        doc: Any = load_cwl(cwl_content)
+    except YAMLError:
+        return False
+    if not isinstance(doc, dict) or doc.get("class") != "Workflow":
+        return False
+    try:
+        steps = _normalize_steps(doc.get("steps"))
+    except ValueError:
+        return False
+    return any(
+        isinstance(definition.get("run"), dict) and definition["run"].get("class") == "CommandLineTool"
+        for _step_id, definition in steps
+    )
+
+
+def read_workflow_overview(cwl_content: str) -> WorkflowOverview:
+    """Step count, external step references and the workflow's own name/doc.
+
+    Same validation as extract_workflow_steps (raises ValueError with an equivalent
+    message on the same problems), except this does NOT reject inline `run:` mappings -
+    step_count always comes from an independent len(steps), never derived by summing
+    external_refs/extracted-components counts, since a step whose inline `run:` isn't a
+    CommandLineTool (see unsupported_inline_steps) would otherwise silently vanish from
+    both.
+    """
+    try:
+        doc: Any = load_cwl(cwl_content)
+    except YAMLError as err:
+        raise ValueError(f"YAML parse error: {err}") from err
+
+    if not isinstance(doc, dict):
+        raise ValueError("CWL document must be a mapping")
+    if doc.get("class") != "Workflow":
+        raise ValueError(f"class is '{doc.get('class')}', expected 'Workflow'")
+
+    steps = _normalize_steps(doc.get("steps"))
+
+    external_refs: list[str] = []
+    unsupported_inline_steps: list[str] = []
+    for step_id, definition in steps:
+        if not isinstance(definition, dict) or "run" not in definition:
+            raise ValueError(f"Step '{step_id}' is missing a 'run:' reference")
+        run_value = definition["run"]
+        if isinstance(run_value, str):
+            external_refs.append(run_value)
+        elif isinstance(run_value, dict):
+            if run_value.get("class") != "CommandLineTool":
+                unsupported_inline_steps.append(step_id)
+        else:
+            raise ValueError(f"Step '{step_id}' has an invalid 'run:' value")
+
+    return WorkflowOverview(
+        name=doc.get("label") or doc.get("doc"),
+        step_count=len(steps),
+        external_refs=external_refs,
+        unsupported_inline_steps=unsupported_inline_steps,
+    )
+
+
+def extract_inline_components(cwl_content: str) -> list[ExtractedComponent]:
+    """Extracts every step's inline `run: {class: CommandLineTool, ...}` as a standalone
+    tool document. Steps with an external (filename) `run:`, or an inline `run:` that
+    isn't a CommandLineTool, are silently skipped - callers that need those read
+    read_workflow_overview's external_refs / unsupported_inline_steps instead.
+
+    Raises ValueError if the document is not a valid CWL Workflow.
+    """
+    try:
+        doc: Any = load_cwl(cwl_content)
+    except YAMLError as err:
+        raise ValueError(f"YAML parse error: {err}") from err
+
+    if not isinstance(doc, dict):
+        raise ValueError("CWL document must be a mapping")
+    if doc.get("class") != "Workflow":
+        raise ValueError(f"class is '{doc.get('class')}', expected 'Workflow'")
+
+    steps = _normalize_steps(doc.get("steps"))
+
+    components: list[ExtractedComponent] = []
+    for step_id, definition in steps:
+        run_value = definition.get("run") if isinstance(definition, dict) else None
+        if not isinstance(run_value, dict) or run_value.get("class") != "CommandLineTool":
+            continue
+
+        cwl_text = yaml.dump(run_value, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+        raw_inputs = run_value.get("inputs") or {}
+        raw_outputs = run_value.get("outputs") or {}
+        components.append(
+            ExtractedComponent(
+                step_id=step_id,
+                suggested_name=_step_id_to_name(step_id),
+                cwl_content=cwl_text,
+                description=run_value.get("doc"),
+                inputs=list(raw_inputs.values()) if isinstance(raw_inputs, dict) else list(raw_inputs),
+                outputs=list(raw_outputs.values()) if isinstance(raw_outputs, dict) else list(raw_outputs),
+            )
+        )
+    return components

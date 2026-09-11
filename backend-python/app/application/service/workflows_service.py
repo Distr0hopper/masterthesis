@@ -1,6 +1,6 @@
 import uuid
 import zipfile
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from io import BytesIO
 from typing import Annotated
 
@@ -10,6 +10,7 @@ from app.application.commands.commands import WorkflowCommand, WorkflowCommandTy
 from app.application.exception.component_exceptions import ComponentNotFoundError
 from app.application.exception.workflow_exceptions import (
     InvalidWorkflowArchiveError,
+    InvalidWorkflowCwlError,
     WorkflowNotFoundError,
     WorkflowNotReadyToPublishError,
     WorkflowStepNotFoundError,
@@ -24,7 +25,30 @@ from app.domain.repository.components_repository import ComponentsRepository
 from app.domain.repository.workflows_repository import WorkflowListFilter, WorkflowsRepository
 from app.infrastructure.cwl.cwl_matcher import best_match
 from app.infrastructure.cwl.workflow_generator import assemble_cwl_zip
-from app.infrastructure.cwl.workflow_parser import extract_workflow_steps, find_workflow_file
+from app.infrastructure.cwl.workflow_parser import (
+    ExtractedComponent,
+    extract_inline_components,
+    extract_workflow_steps,
+    find_workflow_file,
+    is_self_contained,
+    read_workflow_overview,
+)
+
+
+@dataclass
+class WorkflowUploadPreview:
+    """Everything WorkflowsService.parse_workflow_upload reports back about one upload,
+    which may be a bare .cwl file or a .zip archive - is_zip/missing_external_refs only
+    apply to the zip case, [] otherwise."""
+
+    is_zip: bool
+    is_self_contained: bool
+    workflow_name: str | None
+    step_count: int
+    extracted_components: list[ExtractedComponent]
+    external_refs: list[str]
+    unsupported_inline_steps: list[str]
+    missing_external_refs: list[str]
 
 
 class WorkflowsService:
@@ -73,6 +97,53 @@ class WorkflowsService:
             # deliberately indistinguishable from "doesn't exist" to non-owners
             raise WorkflowNotFoundError(workflow_id)
         return workflow
+
+    async def parse_workflow_upload(self, content: bytes) -> WorkflowUploadPreview:
+        """Analyse an uploaded workflow file without persisting anything - auto-detects
+        whether `content` is a .zip archive or a bare .cwl file, then classifies it as
+        external-only / self-contained / mixed. For a zip, also cross-references each
+        step's external run: filename against the archive's own .cwl files.
+        """
+        if zipfile.is_zipfile(BytesIO(content)):
+            is_zip = True
+            files = self._extract_zip_files(content)
+            try:
+                _pipeline_filename, cwl_content = find_workflow_file(files)
+            except ValueError as err:
+                raise InvalidWorkflowArchiveError(str(err)) from err
+            available_files: set[str] | None = set(files.keys())
+        else:
+            is_zip = False
+            try:
+                cwl_content = content.decode("utf-8")
+            except UnicodeDecodeError as err:
+                raise InvalidWorkflowCwlError("File is not valid UTF-8 text") from err
+            available_files = None
+
+        try:
+            overview = read_workflow_overview(cwl_content)
+        except ValueError as err:
+            raise InvalidWorkflowCwlError(str(err)) from err
+
+        self_contained = is_self_contained(cwl_content)
+        components = extract_inline_components(cwl_content) if self_contained else []
+
+        missing_external_refs = (
+            sorted(ref for ref in set(overview.external_refs) if ref not in available_files)
+            if available_files is not None
+            else []
+        )
+
+        return WorkflowUploadPreview(
+            is_zip=is_zip,
+            is_self_contained=self_contained,
+            workflow_name=overview.name,
+            step_count=overview.step_count,
+            extracted_components=components,
+            external_refs=overview.external_refs,
+            unsupported_inline_steps=overview.unsupported_inline_steps,
+            missing_external_refs=missing_external_refs,
+        )
 
     async def _parse_zip_into_steps(self, zip_bytes: bytes) -> tuple[str, list[WorkflowStep]]:
         """(pipeline CWL, fresh WorkflowStep rows) from an archive.

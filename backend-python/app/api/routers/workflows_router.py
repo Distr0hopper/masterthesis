@@ -9,7 +9,10 @@ from app.api.dto.common import ErrorResponse
 from app.api.dto.pagination import ListQueryPaginationDtoV1, PaginatedResponseDtoV1, build_paginated_response
 from app.api.dto.workflow import (
     CreateWorkflowRequestDto,
+    ExtractedComponentDto,
     MyWorkflowsResponseDtoV1,
+    ParseWorkflowRequestDto,
+    ParseWorkflowResponseDto,
     UpdateWorkflowStepRequestDto,
     WorkflowCommandExecuteRequestDto,
     WorkflowDetailDto,
@@ -128,6 +131,54 @@ async def create(
     workflow = await workflows_service.create_from_zip(content, dto.name, dto.description, dto.domains, current_user.id)
     logger.info(f"Created workflow {workflow.id} ('{workflow.name}') with {len(workflow.steps)} steps")
     return WorkflowTransformer.to_detail(workflow, current_user)
+
+
+@router.post(
+    "/parse",
+    response_model=ParseWorkflowResponseDto,
+    responses={
+        status.HTTP_400_BAD_REQUEST: {
+            "model": ErrorResponse,
+            "description": "Invalid CWL/zip content or file too large",
+        },
+        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
+    },
+)
+async def parse_workflow(
+    dto: Annotated[ParseWorkflowRequestDto, Form(media_type="multipart/form-data")],
+    current_user: Annotated[User, Depends(AuthService.get_current_user)],
+    workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
+) -> ParseWorkflowResponseDto:
+    content = await dto.file.read()
+    if len(content) > MAX_WORKFLOW_ZIP_SIZE:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Validation failed (expected size to be less than {MAX_WORKFLOW_ZIP_SIZE} bytes)",
+        )
+
+    logger.info(f"Parsing workflow upload '{dto.file.filename}' for user {current_user.id}")
+    preview = await workflows_service.parse_workflow_upload(content)
+
+    return ParseWorkflowResponseDto(
+        is_zip=preview.is_zip,
+        is_self_contained=preview.is_self_contained,
+        workflow_name=preview.workflow_name,
+        step_count=preview.step_count,
+        extracted_components=[
+            ExtractedComponentDto(
+                step_id=c.step_id,
+                suggested_name=c.suggested_name,
+                cwl_content=c.cwl_content,
+                description=c.description,
+                input_count=len(c.inputs),
+                output_count=len(c.outputs),
+            )
+            for c in preview.extracted_components
+        ],
+        external_refs=preview.external_refs,
+        unsupported_inline_steps=preview.unsupported_inline_steps,
+        missing_external_refs=preview.missing_external_refs,
+    )
 
 
 @router.get(

@@ -16,6 +16,11 @@ class InvalidWorkflowArchiveError(Exception):
         super().__init__(f"Invalid workflow archive: {reason}")
 
 
+class InvalidWorkflowCwlError(Exception):
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"Invalid workflow CWL: {reason}")
+
+
 class WorkflowStepNotMatchedError(Exception):
     def __init__(self, step_id: uuid.UUID) -> None:
         super().__init__(f"Workflow step {step_id} has no matched component to confirm")

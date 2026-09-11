@@ -96,6 +96,41 @@ class CreateWorkflowRequestDto(WorkflowDomainsValidatorMixin, EmptyWorkflowDescr
     description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
 
 
+class ParseWorkflowRequestDto(CamelModel):
+    # may be a bare .cwl file or a .zip archive - the endpoint detects which
+    file: UploadFile
+
+
+class ExtractedComponentDto(CamelModel):
+    """One inline CommandLineTool found in a self-contained workflow - preview only."""
+
+    step_id: str
+    suggested_name: str
+    cwl_content: str
+    description: str | None
+    input_count: int
+    output_count: int
+
+
+class ParseWorkflowResponseDto(CamelModel):
+    #: whether the upload was a .zip archive (vs a bare .cwl file)
+    is_zip: bool
+    is_self_contained: bool
+    #: from label: or doc: on the uploaded document, if present
+    workflow_name: str | None
+    step_count: int
+    extracted_components: list[ExtractedComponentDto]
+    #: steps whose run: is a plain filename, e.g. "thindata-bytime.cwl" - the caller must
+    #: still supply these separately, this endpoint only extracts inline tools
+    external_refs: list[str]
+    #: steps whose run: is an inline mapping but not class: CommandLineTool (e.g. an inline
+    #: ExpressionTool or sub-Workflow) - counted in step_count but not otherwise handled yet
+    unsupported_inline_steps: list[str]
+    #: external_refs not found among the zip's own .cwl files - always [] for a bare
+    #: .cwl upload, since there's nothing to cross-check against
+    missing_external_refs: list[str]
+
+
 class UpdateWorkflowStepRequestDto(CamelModel):
     # explicit null clears the match back to unmatched
     component_id: uuid.UUID | None

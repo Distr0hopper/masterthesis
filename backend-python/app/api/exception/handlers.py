@@ -21,6 +21,7 @@ from app.application.exception.workflow_draft_exceptions import (
 )
 from app.application.exception.workflow_exceptions import (
     InvalidWorkflowArchiveError,
+    InvalidWorkflowCwlError,
     WorkflowNotFoundError,
     WorkflowNotReadyToPublishError,
     WorkflowStepNotFoundError,
@@ -101,6 +102,10 @@ async def _invalid_workflow_archive_handler(request: Request, exc: InvalidWorkfl
     return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
+async def _invalid_workflow_cwl_handler(request: Request, exc: InvalidWorkflowCwlError) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
+
+
 async def _workflow_step_not_matched_handler(request: Request, exc: WorkflowStepNotMatchedError) -> JSONResponse:
     return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
 
@@ -138,6 +143,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(WorkflowNotFoundError, _workflow_not_found_handler)
     app.add_exception_handler(WorkflowStepNotFoundError, _workflow_step_not_found_handler)
     app.add_exception_handler(InvalidWorkflowArchiveError, _invalid_workflow_archive_handler)
+    app.add_exception_handler(InvalidWorkflowCwlError, _invalid_workflow_cwl_handler)
     app.add_exception_handler(WorkflowStepNotMatchedError, _workflow_step_not_matched_handler)
     app.add_exception_handler(WorkflowNotReadyToPublishError, _workflow_not_ready_to_publish_handler)
     app.add_exception_handler(WorkflowDraftNotFoundError, _workflow_draft_not_found_handler)

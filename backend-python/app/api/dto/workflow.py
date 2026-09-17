@@ -3,7 +3,7 @@ from datetime import datetime
 from enum import StrEnum
 
 from fastapi import UploadFile
-from pydantic import Field, field_validator
+from pydantic import Field, Json, field_validator
 
 from app.api.dto.base import CamelModel
 from app.api.dto.component import ComponentCreatorDto
@@ -28,6 +28,15 @@ class WorkflowDomainsValidatorMixin:
         # 500 from a constraint violation
         seen: set[str] = set()
         return [d for d in value if not (d in seen or seen.add(d))]
+
+
+class ComponentDomainValidatorMixin:
+    @field_validator("component_domain")
+    @classmethod
+    def validate_component_domain(cls, value: str | None) -> str | None:
+        if value is not None and value not in VALID_DOMAINS:
+            raise ValueError(f"component_domain must be one of {VALID_DOMAINS}, got: {value}")
+        return value
 
 
 class EmptyWorkflowDescriptionToNoneMixin:
@@ -89,11 +98,29 @@ class WorkflowDetailDto(CamelModel, LinkModel):
     updated_at: datetime
 
 
-class CreateWorkflowRequestDto(WorkflowDomainsValidatorMixin, EmptyWorkflowDescriptionToNoneMixin, CamelModel):
+class ComponentOverrideDto(CamelModel):
+    """One user-edited extracted-component name, keyed by ExtractedComponentDto.step_id."""
+
+    step_id: str
+    name: str
+
+
+class CreateWorkflowRequestDto(
+    WorkflowDomainsValidatorMixin, ComponentDomainValidatorMixin, EmptyWorkflowDescriptionToNoneMixin, CamelModel
+):
     name: str
     domains: list[str] = Field(json_schema_extra={"items": {"enum": VALID_DOMAINS}})
-    zip_file: UploadFile
+    # may be a bare .cwl file or a .zip archive - the endpoint detects which
+    file: UploadFile
     description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
+    #: domain for every extracted inline component in this upload (Component.domain is a
+    #: single value, distinct from Workflow.domains above) - required only if the upload
+    #: actually has inline steps to extract, enforced by the service, not here
+    component_domain: str | None = None
+    #: user-edited names for extracted components, keyed by step_id - falls back to each
+    #: component's suggested_name when omitted. One multipart form field carrying a
+    #: JSON-encoded array.
+    component_overrides: Json[list[ComponentOverrideDto]] = Field(default_factory=list)
 
 
 class ParseWorkflowRequestDto(CamelModel):

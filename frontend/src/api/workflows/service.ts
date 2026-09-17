@@ -38,12 +38,16 @@ export const workflowsService = {
     return apiClient.getBlob(`${ENDPOINT}/${id}/download`, 'workflow.zip');
   },
 
-  upload(file: File, dto: CreateWorkflowDto): Promise<WorkflowDetailDto> {
+  create(file: File, dto: CreateWorkflowDto): Promise<WorkflowDetailDto> {
     const formData = new FormData();
-    formData.append('zipFile', file);
+    formData.append('file', file);
     formData.append('name', dto.name);
     dto.domains.forEach((domain) => formData.append('domains', domain));
     if (dto.description) formData.append('description', dto.description);
+    if (dto.componentDomain) formData.append('componentDomain', dto.componentDomain);
+    if (dto.componentOverrides?.length) {
+      formData.append('componentOverrides', JSON.stringify(dto.componentOverrides));
+    }
     return apiClient.post(ENDPOINT, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
 

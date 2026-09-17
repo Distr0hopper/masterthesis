@@ -1,6 +1,6 @@
 import type { WorkflowDetailDto, WorkflowListItemDto, WorkflowStepDto } from './types';
 import { StepMatchStatus, WorkflowSource, WorkflowStatus } from './types';
-import type { UpdateWorkflowDescriptionFormData, UploadWorkflowFormData } from './schema';
+import type { UpdateWorkflowDescriptionFormData } from './schema';
 import { getDomainLabel } from '@/api/components';
 import { formatDate, getCreatorDisplay } from '@/api/transformer';
 import type { WithHateoasLinks } from '@/api/types';
@@ -61,10 +61,6 @@ export interface WorkflowDetailDisplayModel extends WorkflowDisplayModel {
 }
 
 export const workflowTransformer = {
-  getInitialUploadFormValues(): Omit<UploadWorkflowFormData, 'zipFile'> {
-    return { name: '', domains: [], description: '' };
-  },
-
   getInitialUpdateDescriptionFormValues(workflow: WorkflowDetailDisplayModel): UpdateWorkflowDescriptionFormData {
     return { description: workflow.description ?? '' };
   },

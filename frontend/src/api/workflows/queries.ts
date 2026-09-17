@@ -49,11 +49,11 @@ export const useWorkflow = (id: string) => {
   });
 };
 
-export const useUploadWorkflow = () => {
+export const useCreateWorkflow = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ file, dto }: { file: File; dto: CreateWorkflowDto }) => workflowsService.upload(file, dto),
+    mutationFn: ({ file, dto }: { file: File; dto: CreateWorkflowDto }) => workflowsService.create(file, dto),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: workflowKeys.all });
     },

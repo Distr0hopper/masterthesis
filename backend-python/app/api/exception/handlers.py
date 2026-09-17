@@ -20,8 +20,13 @@ from app.application.exception.workflow_draft_exceptions import (
     WorkflowDraftNotFoundError,
 )
 from app.application.exception.workflow_exceptions import (
+    ComponentDomainRequiredError,
+    DuplicateExtractedComponentNameError,
+    ExtractedComponentNameCollisionError,
+    InvalidExtractedComponentNameError,
     InvalidWorkflowArchiveError,
     InvalidWorkflowCwlError,
+    UnsupportedInlineWorkflowStepError,
     WorkflowNotFoundError,
     WorkflowNotReadyToPublishError,
     WorkflowStepNotFoundError,
@@ -126,6 +131,26 @@ async def _export_validation_handler(request: Request, exc: ExportValidationErro
     return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
+async def _component_domain_required_handler(request: Request, exc: ComponentDomainRequiredError) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
+
+
+async def _invalid_extracted_component_name_handler(request: Request, exc: InvalidExtractedComponentNameError) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
+
+
+async def _duplicate_extracted_component_name_handler(request: Request, exc: DuplicateExtractedComponentNameError) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
+
+
+async def _extracted_component_name_collision_handler(request: Request, exc: ExtractedComponentNameCollisionError) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=ErrorResponse(detail=str(exc)).model_dump())
+
+
+async def _unsupported_inline_workflow_step_handler(request: Request, exc: UnsupportedInlineWorkflowStepError) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(InvalidTokenError, _invalid_token_handler)
     app.add_exception_handler(InvalidOtpCodeError, _invalid_otp_code_handler)
@@ -149,3 +174,8 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(WorkflowDraftNotFoundError, _workflow_draft_not_found_handler)
     app.add_exception_handler(WorkflowDraftForbiddenError, _workflow_draft_forbidden_handler)
     app.add_exception_handler(ExportValidationError, _export_validation_handler)
+    app.add_exception_handler(ComponentDomainRequiredError, _component_domain_required_handler)
+    app.add_exception_handler(InvalidExtractedComponentNameError, _invalid_extracted_component_name_handler)
+    app.add_exception_handler(DuplicateExtractedComponentNameError, _duplicate_extracted_component_name_handler)
+    app.add_exception_handler(ExtractedComponentNameCollisionError, _extracted_component_name_collision_handler)
+    app.add_exception_handler(UnsupportedInlineWorkflowStepError, _unsupported_inline_workflow_step_handler)

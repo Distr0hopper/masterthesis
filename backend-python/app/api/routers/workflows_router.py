@@ -106,8 +106,15 @@ async def list_latest_workflows(
     response_model=WorkflowDetailDto,
     status_code=status.HTTP_201_CREATED,
     responses={
-        status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse, "description": "Invalid zip archive or file too large"},
+        status.HTTP_400_BAD_REQUEST: {
+            "model": ErrorResponse,
+            "description": "Invalid workflow file/archive, file too large, or unsupported inline step",
+        },
         status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
+        status.HTTP_409_CONFLICT: {
+            "model": ErrorResponse,
+            "description": "An extracted component's name already exists",
+        },
         status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErrorResponse, "description": "Request validation failed"},
     },
 )
@@ -120,15 +127,25 @@ async def create(
     if not validator.can_create():
         raise ForbiddenException("Insufficient permission to create a workflow")
 
-    content = await dto.zip_file.read()
+    content = await dto.file.read()
     if len(content) > MAX_WORKFLOW_ZIP_SIZE:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             f"Validation failed (expected size to be less than {MAX_WORKFLOW_ZIP_SIZE} bytes)",
         )
 
+    overrides_by_step = {o.step_id: o.name for o in dto.component_overrides}
     logger.info(f"Creating workflow '{dto.name}' for user {current_user.id}")
-    workflow = await workflows_service.create_from_zip(content, dto.name, dto.description, dto.domains, current_user.id)
+    workflow = await workflows_service.create_from_upload(
+        content,
+        dto.file.filename,
+        dto.name,
+        dto.description,
+        dto.domains,
+        dto.component_domain,
+        overrides_by_step,
+        current_user.id,
+    )
     logger.info(f"Created workflow {workflow.id} ('{workflow.name}') with {len(workflow.steps)} steps")
     return WorkflowTransformer.to_detail(workflow, current_user)
 

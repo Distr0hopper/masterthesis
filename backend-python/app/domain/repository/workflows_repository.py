@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import Depends
+from sqlalchemy.orm import selectinload
 from sqlmodel import func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -64,6 +65,24 @@ class WorkflowsRepository:
 
     async def find_by_id(self, workflow_id: uuid.UUID) -> Workflow | None:
         return await self.db.get(Workflow, workflow_id)
+
+    async def find_by_id_with_steps(self, workflow_id: uuid.UUID) -> Workflow | None:
+        """Same as find_by_id, but forces a fresh SELECT with explicit nested eager
+        loading of steps.component - unlike db.get(), which returns straight from the
+        identity map (skipping any query at all) when the workflow is already resident,
+        this guarantees steps.component is populated even right after a request that ran
+        several intermediate commits (e.g. creating new Components mid-request), where
+        those earlier commits leave every attribute expired and a bare identity-map hit
+        would leave step.component unpopulated - accessing it later would then attempt a
+        genuine lazy load outside of any async-safe context and crash with MissingGreenlet.
+        """
+        query = (
+            select(Workflow)
+            .where(Workflow.id == workflow_id)
+            .options(selectinload(Workflow.steps).selectinload(WorkflowStep.component))
+        )
+        result = await self.db.exec(query)
+        return result.first()
 
     async def find_by_draft_id(self, draft_id: uuid.UUID) -> Workflow | None:
         query = select(Workflow).where(Workflow.draft_id == draft_id)

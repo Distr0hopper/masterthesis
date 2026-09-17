@@ -15,6 +15,17 @@ def inject_description(cwl_content: str, description: str | None) -> str:
     return yaml.dump(doc, default_flow_style=False, sort_keys=False, width=float("inf"))
 
 
+def inject_cwl_version(cwl_content: str, cwl_version: str | None) -> str:
+    """Set/overwrite the top-level cwlVersion: on a standalone CWL document - used when
+    persisting an inline-extracted CommandLineTool, which inherited its cwlVersion from
+    the parent Workflow and has none of its own. No-op if cwl_version is None."""
+    if cwl_version is None:
+        return cwl_content
+    doc: Any = load_cwl(cwl_content)
+    doc["cwlVersion"] = cwl_version
+    return yaml.dump(doc, default_flow_style=False, sort_keys=False, width=float("inf"))
+
+
 def extract_description(cwl_content: str) -> str | None:
     try:
         doc: Any = load_cwl(cwl_content)

@@ -67,7 +67,7 @@ def extract_workflow_steps(cwl_content: str) -> list[ParsedWorkflowStep]:
     return parsed
 
 
-def _normalize_steps(steps: Any) -> list[tuple[str, dict]]:
+def normalize_steps(steps: Any) -> list[tuple[str, dict]]:
     """Accepts CWL `steps:` in either idmap form (`{step_id: {...}}`) or explicit list
     form (`[{id: step_id, ...}, ...]`) - both are valid CWL v1.2. Returns
     [(step_id, step_def), ...] in declaration order.
@@ -108,6 +108,10 @@ class WorkflowOverview:
     #: and not a filename either, so callers need this to know step_count still accounts
     #: for them.
     unsupported_inline_steps: list[str]
+    #: the document's own top-level cwlVersion:, if any - inline-extracted tools have none
+    #: of their own (they inherit it from the parent Workflow), so persisting one needs
+    #: this to inject a valid cwlVersion via cwl_parser.inject_cwl_version.
+    cwl_version: str | None
 
 
 @dataclass
@@ -136,7 +140,7 @@ def is_self_contained(cwl_content: str) -> bool:
     if not isinstance(doc, dict) or doc.get("class") != "Workflow":
         return False
     try:
-        steps = _normalize_steps(doc.get("steps"))
+        steps = normalize_steps(doc.get("steps"))
     except ValueError:
         return False
     return any(
@@ -165,7 +169,7 @@ def read_workflow_overview(cwl_content: str) -> WorkflowOverview:
     if doc.get("class") != "Workflow":
         raise ValueError(f"class is '{doc.get('class')}', expected 'Workflow'")
 
-    steps = _normalize_steps(doc.get("steps"))
+    steps = normalize_steps(doc.get("steps"))
 
     external_refs: list[str] = []
     unsupported_inline_steps: list[str] = []
@@ -186,6 +190,7 @@ def read_workflow_overview(cwl_content: str) -> WorkflowOverview:
         step_count=len(steps),
         external_refs=external_refs,
         unsupported_inline_steps=unsupported_inline_steps,
+        cwl_version=doc.get("cwlVersion"),
     )
 
 
@@ -207,7 +212,7 @@ def extract_inline_components(cwl_content: str) -> list[ExtractedComponent]:
     if doc.get("class") != "Workflow":
         raise ValueError(f"class is '{doc.get('class')}', expected 'Workflow'")
 
-    steps = _normalize_steps(doc.get("steps"))
+    steps = normalize_steps(doc.get("steps"))
 
     components: list[ExtractedComponent] = []
     for step_id, definition in steps:
@@ -230,3 +235,38 @@ def extract_inline_components(cwl_content: str) -> list[ExtractedComponent]:
             )
         )
     return components
+
+
+def extract_step_definitions(cwl_content: str) -> list[tuple[str, dict]]:
+    """Steps of a `class: Workflow` document in declaration order, tolerant of inline
+    `run:` mappings (unlike extract_workflow_steps, which is strict-external-only and
+    stays reserved for the zip-upload/Builder-sync path). Callers are expected to have
+    already validated the document is a Workflow (e.g. via read_workflow_overview) -
+    this re-parses independently, matching this module's existing per-function reparse
+    convention, and only raises ValueError for YAML/steps-shape problems.
+    """
+    try:
+        doc: Any = load_cwl(cwl_content)
+    except YAMLError as err:
+        raise ValueError(f"YAML parse error: {err}") from err
+    return normalize_steps(doc.get("steps") if isinstance(doc, dict) else None)
+
+
+def externalize_inline_steps(cwl_content: str, run_references: dict[str, str]) -> str:
+    """Rewrites a self-contained/mixed Workflow document so each inline CommandLineTool
+    step named in `run_references` (step_id -> new filename) points at that filename
+    instead of embedding the tool inline. The tool now lives in its own persisted
+    Component, so the stored pipeline must reference it exactly like every other step
+    (external-ref or Builder-generated) already does - this is what keeps
+    WorkflowStep.run_reference true to "what the pipeline's run: lines point at", the
+    invariant get_download/assemble_cwl_zip already relies on. Steps not present in
+    `run_references` (already-external, or none) are left untouched. normalize_steps
+    returns references to the *same* nested dict objects inside `doc`, not copies, so
+    mutating `definition["run"]` here mutates `doc` directly - no need to rebuild
+    `steps:`.
+    """
+    doc: Any = load_cwl(cwl_content)
+    for step_id, definition in normalize_steps(doc.get("steps")):
+        if step_id in run_references:
+            definition["run"] = run_references[step_id]
+    return yaml.dump(doc, default_flow_style=False, sort_keys=False, allow_unicode=True)

@@ -72,10 +72,20 @@ export interface WorkflowDetailDto extends WithHateoasLinks {
   updatedAt: string;
 }
 
+/** One user-edited extracted-component name, keyed by ExtractedComponentDto.stepId. */
+export interface ComponentOverrideDto {
+  stepId: string;
+  name: string;
+}
+
 export interface CreateWorkflowDto {
   name: string;
   domains: string[];
   description?: string | null;
+  /** domain for every extracted inline component in this upload - required only if the
+   * upload actually has inline steps to extract. */
+  componentDomain?: string | null;
+  componentOverrides?: ComponentOverrideDto[];
 }
 
 export interface WorkflowListQueryParams extends PageParams<WorkflowListItemDto> {

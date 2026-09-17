@@ -16,6 +16,5 @@ export const ROUTES = {
   workflows: '/workflows',
   myWorkflows: '/my-workflows',
   workflowUpload: '/workflows/upload',
-  workflowParsePreview: '/workflows/parse-preview',
   workflowDetail: (id: string) => `/workflows/${id}`,
 } as const;

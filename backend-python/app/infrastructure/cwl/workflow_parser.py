@@ -90,11 +90,17 @@ def _step_id_to_name(step_id: str) -> str:
     return re.sub(r"[_\s]+", "-", name).lower()
 
 
+def strip_cwl_extension(filename: str) -> str:
+    """`remove-outliers.cwl` -> `remove-outliers`."""
+    return filename[:-4] if filename.lower().endswith(".cwl") else filename
+
+
 @dataclass
 class WorkflowOverview:
     """Cheap workflow-level facts read alongside inline-component extraction."""
 
-    name: str | None  # from label: or doc:, if present
+    # from label or filename as fallback
+    name: str | None
     step_count: int
     external_refs: list[str]  # `run:` values that are plain filenames
     #: step ids whose `run:` is an inline mapping but not `class: CommandLineTool` (e.g. an
@@ -176,7 +182,7 @@ def read_workflow_overview(cwl_content: str) -> WorkflowOverview:
             raise ValueError(f"Step '{step_id}' has an invalid 'run:' value")
 
     return WorkflowOverview(
-        name=doc.get("label") or doc.get("doc"),
+        name=doc.get("label"),
         step_count=len(steps),
         external_refs=external_refs,
         unsupported_inline_steps=unsupported_inline_steps,

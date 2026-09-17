@@ -1,6 +1,8 @@
 import uuid
 from difflib import SequenceMatcher
 
+from app.infrastructure.cwl.workflow_parser import strip_cwl_extension
+
 # below this similarity ratio, a step is left unmatched rather than suggested - 0.6 is
 # difflib's own commonly-cited "close match" threshold
 MATCH_THRESHOLD = 0.6
@@ -9,8 +11,7 @@ MATCH_THRESHOLD = 0.6
 def normalize_name(value: str) -> str:
     """Strips a .cwl extension, lowercases, and collapses separators so
     'remove-outliers.cwl' and 'Remove_Outliers' compare equal."""
-    stem = value[:-4] if value.lower().endswith(".cwl") else value
-    normalized = stem.lower().strip()
+    normalized = strip_cwl_extension(value).lower().strip()
     for sep in ("_", " "):
         normalized = normalized.replace(sep, "-")
     return normalized

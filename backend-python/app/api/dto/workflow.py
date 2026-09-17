@@ -116,7 +116,8 @@ class ParseWorkflowResponseDto(CamelModel):
     #: whether the upload was a .zip archive (vs a bare .cwl file)
     is_zip: bool
     is_self_contained: bool
-    #: from label: or doc: on the uploaded document, if present
+    #: from label: on the uploaded document  falling back to the filename of the uploaded file -
+    #: minus its .cwl extension - or, for a zip, the file that actually contains class: Workflow
     workflow_name: str | None
     step_count: int
     extracted_components: list[ExtractedComponentDto]

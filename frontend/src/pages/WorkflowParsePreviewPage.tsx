@@ -79,7 +79,7 @@ export default function WorkflowParsePreviewPage() {
 
               <div className="text-sm text-slate-700">
                 <span className="text-slate-500">Workflow name: </span>
-                {data.workflowName ?? <span className="text-slate-400">(none - no label:/doc: found)</span>}
+                {data.workflowName ?? <span className="text-slate-400">(none - no label:/filename found)</span>}
               </div>
 
               {data.missingExternalRefs.length > 0 && (

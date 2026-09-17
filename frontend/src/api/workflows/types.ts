@@ -108,7 +108,6 @@ export interface ParseWorkflowResponseDto {
   /** whether the upload was a .zip archive (vs a bare .cwl file) */
   isZip: boolean;
   isSelfContained: boolean;
-  /** from label: or doc: on the uploaded document, if present */
   workflowName: string | null;
   stepCount: number;
   extractedComponents: ExtractedComponentDto[];

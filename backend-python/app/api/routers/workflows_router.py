@@ -157,7 +157,7 @@ async def parse_workflow(
         )
 
     logger.info(f"Parsing workflow upload '{dto.file.filename}' for user {current_user.id}")
-    preview = await workflows_service.parse_workflow_upload(content)
+    preview = await workflows_service.parse_workflow_upload(content, dto.file.filename)
 
     return ParseWorkflowResponseDto(
         is_zip=preview.is_zip,

@@ -32,6 +32,7 @@ from app.infrastructure.cwl.workflow_parser import (
     find_workflow_file,
     is_self_contained,
     read_workflow_overview,
+    strip_cwl_extension,
 )
 
 
@@ -98,17 +99,23 @@ class WorkflowsService:
             raise WorkflowNotFoundError(workflow_id)
         return workflow
 
-    async def parse_workflow_upload(self, content: bytes) -> WorkflowUploadPreview:
+    async def parse_workflow_upload(self, content: bytes, filename: str | None = None) -> WorkflowUploadPreview:
         """Analyse an uploaded workflow file without persisting anything - auto-detects
         whether `content` is a .zip archive or a bare .cwl file, then classifies it as
         external-only / self-contained / mixed. For a zip, also cross-references each
         step's external run: filename against the archive's own .cwl files.
+
+        `filename` is the name of the uploaded file itself, used (with its .cwl extension
+        stripped) as a fallback workflow name when the document has no `label:` - for a
+        zip this is overridden by the name of the file that actually contains
+        `class: Workflow`.
         """
+        pipeline_filename = filename
         if zipfile.is_zipfile(BytesIO(content)):
             is_zip = True
             files = self._extract_zip_files(content)
             try:
-                _pipeline_filename, cwl_content = find_workflow_file(files)
+                pipeline_filename, cwl_content = find_workflow_file(files)
             except ValueError as err:
                 raise InvalidWorkflowArchiveError(str(err)) from err
             available_files: set[str] | None = set(files.keys())
@@ -137,7 +144,7 @@ class WorkflowsService:
         return WorkflowUploadPreview(
             is_zip=is_zip,
             is_self_contained=self_contained,
-            workflow_name=overview.name,
+            workflow_name=overview.name or (strip_cwl_extension(pipeline_filename) if pipeline_filename else None),
             step_count=overview.step_count,
             extracted_components=components,
             external_refs=overview.external_refs,

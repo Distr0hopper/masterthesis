@@ -9,8 +9,8 @@ import { Label } from '@/components/ui/label.tsx';
 import { uploadWorkflowFormSchema, useUploadWorkflow, workflowTransformer, type UploadWorkflowFormData } from '@/api/workflows';
 import { getErrorMessage } from '@/lib/errors';
 import { ROUTES } from '@/lib/routes';
+import { FileDropzone } from '@/components/common/FileDropzone';
 import { DomainMultiSelect } from '../common/DomainMultiSelect';
-import { WorkflowZipDropzone } from '../common/WorkflowZipDropzone';
 
 export function WorkflowUploadForm() {
   const navigate = useNavigate();
@@ -49,7 +49,14 @@ export function WorkflowUploadForm() {
         control={control}
         name="zipFile"
         render={({ field }) => (
-          <WorkflowZipDropzone value={field.value ?? null} onChange={field.onChange} error={errors.zipFile?.message} />
+          <FileDropzone
+            value={field.value ?? null}
+            onChange={field.onChange}
+            accept=".zip"
+            label="Workflow Archive (.zip)"
+            helperText="Contains the pipeline CWL file plus its referenced step .cwl files, or click to browse"
+            error={errors.zipFile?.message}
+          />
         )}
       />
 

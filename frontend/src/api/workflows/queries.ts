@@ -115,6 +115,12 @@ export const useDownloadWorkflow = () => {
   });
 };
 
+export const useParseWorkflow = () => {
+  return useMutation({
+    mutationFn: (file: File) => workflowsService.parse(file),
+  });
+};
+
 export const useDeleteWorkflow = () => {
   const queryClient = useQueryClient();
 

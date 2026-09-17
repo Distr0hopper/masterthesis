@@ -3,13 +3,22 @@ import { Upload, X } from 'lucide-react';
 import { Label } from '@/components/ui/label.tsx';
 import { cn } from '@/lib/utils';
 
-interface CwlFileDropzoneProps {
+interface FileDropzoneProps {
   value: File | null;
   onChange: (file: File | null) => void;
+  accept: string;
+  label: string;
+  /** shown under the drag prompt in the empty state - defaults to "or click to browse" */
+  helperText?: string;
   error?: string;
 }
 
-export function CwlFileDropzone({ value, onChange, error }: CwlFileDropzoneProps) {
+/**
+ * Generic drag-and-drop file picker, shared by every file-upload form in the app
+ * (component upload, workflow upload, the workflow parse preview) - parameterised by
+ * accept/label/helperText instead of hardcoding one file type per form.
+ */
+export function FileDropzone({ value, onChange, accept, label, helperText, error }: FileDropzoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -20,7 +29,7 @@ export function CwlFileDropzone({ value, onChange, error }: CwlFileDropzoneProps
 
   return (
     <div className="flex flex-col gap-2">
-      <Label>CWL File</Label>
+      <Label>{label}</Label>
 
       {value ? (
         <div className="flex items-center justify-between rounded-md border border-input bg-background px-4 py-3">
@@ -52,12 +61,18 @@ export function CwlFileDropzone({ value, onChange, error }: CwlFileDropzoneProps
           )}
         >
           <Upload className="h-8 w-8 text-slate-400" />
-          <p className="font-medium text-slate-900">Drag and drop a .cwl file here</p>
-          <p className="text-sm text-slate-500">or click to browse</p>
+          <p className="font-medium text-slate-900">Drag and drop a file here</p>
+          <p className="text-sm text-slate-500">{helperText ?? 'or click to browse'}</p>
         </div>
       )}
 
-      <input ref={inputRef} type="file" accept=".cwl" className="hidden" onChange={(e) => handleFiles(e.target.files)} />
+      <input
+        ref={inputRef}
+        type="file"
+        accept={accept}
+        className="hidden"
+        onChange={(e) => handleFiles(e.target.files)}
+      />
 
       {error && <p className="text-sm text-error-foreground">{error}</p>}
     </div>

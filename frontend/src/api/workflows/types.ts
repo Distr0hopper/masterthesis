@@ -93,3 +93,29 @@ export interface MyWorkflowsQueryParams {
   publishedOffset?: number;
   pendingOffset?: number;
 }
+
+/** One inline CommandLineTool found in a self-contained/mixed upload. */
+export interface ExtractedComponentDto {
+  stepId: string;
+  suggestedName: string;
+  cwlContent: string;
+  description: string | null;
+  inputCount: number;
+  outputCount: number;
+}
+
+export interface ParseWorkflowResponseDto {
+  /** whether the upload was a .zip archive (vs a bare .cwl file) */
+  isZip: boolean;
+  isSelfContained: boolean;
+  /** from label: or doc: on the uploaded document, if present */
+  workflowName: string | null;
+  stepCount: number;
+  extractedComponents: ExtractedComponentDto[];
+  /** steps whose run: is a plain filename - not extracted, the caller must supply these separately */
+  externalRefs: string[];
+  /** steps whose run: is inline but not class: CommandLineTool (e.g. an inline ExpressionTool) */
+  unsupportedInlineSteps: string[];
+  /** external refs not found among the zip's own .cwl files - always [] for a bare .cwl upload */
+  missingExternalRefs: string[];
+}

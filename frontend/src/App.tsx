@@ -10,6 +10,7 @@ import MyComponentsPage from '@/pages/MyComponentsPage';
 import WorkflowsPage from '@/pages/WorkflowsPage';
 import WorkflowDetailPage from '@/pages/WorkflowDetailPage';
 import WorkflowUploadPage from '@/pages/WorkflowUploadPage';
+import WorkflowParsePreviewPage from '@/pages/WorkflowParsePreviewPage';
 import MyWorkflowsPage from '@/pages/MyWorkflowsPage';
 import LoginPage from '@/pages/LoginPage';
 import HomePage from "@/pages/HomePage.tsx";
@@ -42,6 +43,10 @@ export default function App() {
             <Route path={ROUTES.myComponents} element={<ProtectedRoute> <MyComponentsPage /> </ProtectedRoute>} />
             <Route path={ROUTES.workflows} element={<WorkflowsPage />} />
             <Route path={ROUTES.workflowUpload} element={<ProtectedRoute> <WorkflowUploadPage /> </ProtectedRoute>} />
+            <Route
+              path={ROUTES.workflowParsePreview}
+              element={<ProtectedRoute> <WorkflowParsePreviewPage /> </ProtectedRoute>}
+            />
             <Route path={ROUTES.workflowDetail(':id')} element={<WorkflowDetailPage />} />
             <Route path={ROUTES.myWorkflows} element={<ProtectedRoute> <MyWorkflowsPage /> </ProtectedRoute>} />
             <Route path={ROUTES.login} element={<LoginPage />} />

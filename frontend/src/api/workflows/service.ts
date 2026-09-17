@@ -4,6 +4,7 @@ import type {
   CreateWorkflowDto,
   MyWorkflowsQueryParams,
   MyWorkflowsResponseDto,
+  ParseWorkflowResponseDto,
   WorkflowDetailDto,
   WorkflowListItemDto,
   WorkflowListQueryParams,
@@ -44,6 +45,14 @@ export const workflowsService = {
     dto.domains.forEach((domain) => formData.append('domains', domain));
     if (dto.description) formData.append('description', dto.description);
     return apiClient.post(ENDPOINT, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+
+  // detection/classification only - the backend never persists anything from this call.
+  // Accepts either a .zip or a bare .cwl file; the server figures out which.
+  parse(file: File): Promise<ParseWorkflowResponseDto> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiClient.post(`${ENDPOINT}/parse`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
 
   updateStepComponent(link: HateoasLink, componentId: string | null): Promise<WorkflowStepDto> {

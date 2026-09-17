@@ -15,8 +15,8 @@ import {
 } from '@/api/components';
 import { getErrorMessage } from '@/lib/errors';
 import { ROUTES } from '@/lib/routes';
+import { FileDropzone } from '@/components/common/FileDropzone';
 import { DomainSelect } from '../common/DomainSelect';
-import { CwlFileDropzone } from '../common/CwlFileDropzone';
 
 interface ManualUploadFormProps {
   // when provided, replaces the default post-upload navigation - used to embed this form
@@ -67,7 +67,13 @@ export function ManualUploadForm({ onSuccess }: ManualUploadFormProps) {
         control={control}
         name="cwlFile"
         render={({ field }) => (
-          <CwlFileDropzone value={field.value ?? null} onChange={field.onChange} error={errors.cwlFile?.message} />
+          <FileDropzone
+            value={field.value ?? null}
+            onChange={field.onChange}
+            accept=".cwl"
+            label="CWL File"
+            error={errors.cwlFile?.message}
+          />
         )}
       />
 

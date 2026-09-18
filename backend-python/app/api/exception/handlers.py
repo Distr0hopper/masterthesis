@@ -10,6 +10,7 @@ from app.application.exception.component_exceptions import (
     ComponentNotFoundError,
     InvalidCwlError,
     ManualUploadCannotBeRepackagedError,
+    MissingCommandPayloadError,
     PackagingFailedError,
 )
 from app.application.exception.favorites_exceptions import FavoritesRequireAuthError
@@ -131,6 +132,10 @@ async def _export_validation_handler(request: Request, exc: ExportValidationErro
     return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
+async def _missing_command_payload_handler(request: Request, exc: MissingCommandPayloadError) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
+
+
 async def _component_domain_required_handler(request: Request, exc: ComponentDomainRequiredError) -> JSONResponse:
     return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
 
@@ -174,6 +179,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(WorkflowDraftNotFoundError, _workflow_draft_not_found_handler)
     app.add_exception_handler(WorkflowDraftForbiddenError, _workflow_draft_forbidden_handler)
     app.add_exception_handler(ExportValidationError, _export_validation_handler)
+    app.add_exception_handler(MissingCommandPayloadError, _missing_command_payload_handler)
     app.add_exception_handler(ComponentDomainRequiredError, _component_domain_required_handler)
     app.add_exception_handler(InvalidExtractedComponentNameError, _invalid_extracted_component_name_handler)
     app.add_exception_handler(DuplicateExtractedComponentNameError, _duplicate_extracted_component_name_handler)

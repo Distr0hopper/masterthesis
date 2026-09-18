@@ -25,9 +25,6 @@ class DomainValidatorMixin:
 
 
 class RepoUrlValidatorMixin:
-    # value: str | None works for both optional and required repo_url fields - on a
-    # required field pydantic's own type validation already guarantees non-None by the
-    # time this runs, so the `is not None` check is simply always-true there
     @field_validator("repo_url")
     @classmethod
     def validate_repo_url(cls, value: str | None) -> str | None:
@@ -142,21 +139,6 @@ class AddVersionRequestDto(EmptyRepoCommitShaToNoneMixin, EmptyDescriptionToNone
     description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
 
 
-class UpdateComponentRequestDto(CamelModel):
-    # domain omitted -> None -> "no change" (Component.domain can never be cleared to null,
-    # so None is unambiguous here - unlike description below, no presence-tracking needed).
-    # Domain is optional here (unlike Create/Package), so this can't reuse DomainValidatorMixin.
-    domain: str | None = Field(default=None, json_schema_extra={"enum": VALID_DOMAINS})
-    description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
-
-    @field_validator("domain")
-    @classmethod
-    def validate_domain(cls, value: str | None) -> str | None:
-        if value is not None and value not in VALID_DOMAINS:
-            raise ValueError(f"domain must be one of {VALID_DOMAINS}")
-        return value
-
-
 class PackageComponentRequestDto(DomainValidatorMixin, RepoUrlValidatorMixin, CamelModel):
     repo_url: str
     domain: str = Field(json_schema_extra={"enum": VALID_DOMAINS})
@@ -168,8 +150,27 @@ class ComponentCommandTypesApiV1(StrEnum):
     REMOVE_FAVORITE = "REMOVE_FAVORITE"
     REPACKAGE = "REPACKAGE"
     PUBLISH = "PUBLISH"
+    UPDATE_DESCRIPTION = "UPDATE_DESCRIPTION"
+    UPDATE_DOMAIN = "UPDATE_DOMAIN"
 
 
-class ComponentCommandExecuteRequestDto(CamelModel):
+class ComponentCommandExecuteRequestDto(EmptyDescriptionToNoneMixin, CamelModel):
     command: ComponentCommandTypesApiV1 = Field(..., description="The specific action to perform on the component")
     note: str | None = Field(default=None, description="Optional note for the command execution")
+    description: str | None = Field(
+        default=None,
+        max_length=MAX_DESCRIPTION_LENGTH,
+        description="New description; only used by the UPDATE_DESCRIPTION command",
+    )
+    domain: str | None = Field(
+        default=None,
+        json_schema_extra={"enum": VALID_DOMAINS},
+        description="New domain; only used by the UPDATE_DOMAIN command",
+    )
+
+    @field_validator("domain")
+    @classmethod
+    def validate_domain(cls, value: str | None) -> str | None:
+        if value is not None and value not in VALID_DOMAINS:
+            raise ValueError(f"domain must be one of {VALID_DOMAINS}")
+        return value

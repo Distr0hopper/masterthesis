@@ -29,3 +29,14 @@ class ManualUploadCannotBeRepackagedError(Exception):
 class ComponentNameAlreadyExistsError(Exception):
     def __init__(self, name: str) -> None:
         super().__init__(f"A component named '{name}' already exists - add a new version instead of creating a new component")
+
+
+class MissingCommandPayloadError(Exception):
+    """A command was sent without the payload field it needs (e.g. UPDATE_DOMAIN with no domain).
+
+    The request DTO can't enforce this: one model serves every component command, so each
+    payload field has to stay optional there and the per-command requirement lands here.
+    """
+
+    def __init__(self, command: str, field: str) -> None:
+        super().__init__(f"Command {command} requires a '{field}'")

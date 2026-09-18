@@ -16,6 +16,7 @@ from app.application.exception.component_exceptions import (
     ComponentNotFoundError,
     InvalidCwlError,
     ManualUploadCannotBeRepackagedError,
+    MissingCommandPayloadError,
     PackagingFailedError,
 )
 from app.domain.models.component import MAX_DESCRIPTION_LENGTH, Component, ComponentSource, ComponentStatus
@@ -239,6 +240,10 @@ class ComponentsService:
                 return await self.repackage_component(component)
             case ComponentCommandType.PUBLISH:
                 return await self.publish(component)
+            case ComponentCommandType.UPDATE_DESCRIPTION:
+                return await self.update_description(component, command.description)
+            case ComponentCommandType.UPDATE_DOMAIN:
+                return await self.update_domain(component, command.domain)
 
     async def _run_packaging(self, repo_url: str) -> tuple[str, str, str | None, str | None, str | None]:
         repo_name = repo_url.rstrip("/").split("/")[-1]
@@ -252,7 +257,14 @@ class ComponentsService:
             cwl_content, commit_sha, description, author = read_packaging_output(output_dir, repo_name)
         return repo_name, cwl_content, commit_sha, description, author
 
-    async def update_component(self, component: Component) -> Component:
+    async def update_description(self, component: Component, description: str | None) -> Component:
+        component.description = description
+        return await self._save_and_reload(component)
+
+    async def update_domain(self, component: Component, domain: str | None) -> Component:
+        if domain is None:
+            raise MissingCommandPayloadError(ComponentCommandType.UPDATE_DOMAIN, "domain")
+        component.domain = domain
         return await self._save_and_reload(component)
 
     async def remove(self, component: Component) -> None:

@@ -15,8 +15,9 @@ class ComponentLinkBuilder(BaseLinkBuilder[Component, ComponentPermissionValidat
     def _get_available_links(self, entity: Component) -> dict[str, Link]:
         return {
             "self": Link(href=Endpoints.component_by_id(entity.id), method=HttpMethod.GET),
-            "update": Link(href=Endpoints.component_by_id(entity.id), method=HttpMethod.PATCH),
             "delete": Link(href=Endpoints.component_by_id(entity.id), method=HttpMethod.DELETE),
+            "updateDescription": Link(href=Endpoints.component_commands_by_id(entity.id), method=HttpMethod.POST),
+            "updateDomain": Link(href=Endpoints.component_commands_by_id(entity.id), method=HttpMethod.POST),
             "favorite": Link(href=Endpoints.component_commands_by_id(entity.id), method=HttpMethod.POST),
             "unfavorite": Link(href=Endpoints.component_commands_by_id(entity.id), method=HttpMethod.POST),
             "repackage": Link(href=Endpoints.component_commands_by_id(entity.id), method=HttpMethod.POST),
@@ -27,10 +28,12 @@ class ComponentLinkBuilder(BaseLinkBuilder[Component, ComponentPermissionValidat
         match rel:
             case "self":
                 return self._validator.can_read(entity)
-            case "update":
-                return self._validator.can_update(entity)
             case "delete":
                 return self._validator.can_delete(entity)
+            case "updateDescription":
+                return self._validator.can_execute(entity, ComponentCommandType.UPDATE_DESCRIPTION)
+            case "updateDomain":
+                return self._validator.can_execute(entity, ComponentCommandType.UPDATE_DOMAIN)
             case "favorite":
                 return self._validator.can_execute(entity, ComponentCommandType.ADD_FAVORITE)
             case "unfavorite":

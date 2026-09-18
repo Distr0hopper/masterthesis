@@ -7,6 +7,8 @@ class ComponentCommandType(StrEnum):
     REMOVE_FAVORITE = "REMOVE_FAVORITE"
     REPACKAGE = "REPACKAGE"
     PUBLISH = "PUBLISH"
+    UPDATE_DESCRIPTION = "UPDATE_DESCRIPTION"
+    UPDATE_DOMAIN = "UPDATE_DOMAIN"
 
     def __str__(self) -> str:
         return self.value
@@ -26,6 +28,8 @@ class ComponentCommandType(StrEnum):
 class ComponentCommand:
     type: ComponentCommandType
     note: str | None = None
+    description: str | None = None
+    domain: str | None = None
 
 
 class WorkflowCommandType(StrEnum):

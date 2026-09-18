@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label.tsx';
 import {
   componentTransformer,
   updateComponentFormSchema,
-  useUpdateComponent,
+  useUpdateComponentDescription,
+  useUpdateComponentDomain,
   type ComponentDisplayModel,
   type UpdateComponentFormData,
 } from '@/api/components';
@@ -23,32 +24,40 @@ interface EditComponentDialogProps {
 }
 
 export function EditComponentDialog({ component, open, onOpenChange }: EditComponentDialogProps) {
-  const { mutate, isPending } = useUpdateComponent();
+  const { mutateAsync: updateDescription } = useUpdateComponentDescription();
+  const { mutateAsync: updateDomain } = useUpdateComponentDomain();
   const {
     control,
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, dirtyFields, isSubmitting },
     setError,
   } = useForm<UpdateComponentFormData>({
     resolver: zodResolver(updateComponentFormSchema),
     values: componentTransformer.getInitialUpdateFormValues(component),
   });
 
-  const onSubmit = (data: UpdateComponentFormData) => {
-    const dto = componentTransformer.formToUpdateDto(data);
-    mutate(
-      { link: getLink(component._links, 'update')!, dto },
-      {
-        onSuccess: () => {
-          toast.success(`${component.name} updated`);
-          onOpenChange(false);
-        },
-        onError: (error) => {
-          setError('root', { message: getErrorMessage(error) });
-        },
-      },
-    );
+  const onSubmit = async (data: UpdateComponentFormData) => {
+    if (!dirtyFields.description && !dirtyFields.domain) {
+      onOpenChange(false);
+      return;
+    }
+
+    try {
+      if (dirtyFields.description) {
+        await updateDescription({
+          link: getLink(component._links, 'updateDescription')!,
+          description: data.description || null,
+        });
+      }
+      if (dirtyFields.domain && data.domain) {
+        await updateDomain({ link: getLink(component._links, 'updateDomain')!, domain: data.domain });
+      }
+      toast.success(`${component.name} updated`);
+      onOpenChange(false);
+    } catch (error) {
+      setError('root', { message: getErrorMessage(error) });
+    }
   };
 
   return (
@@ -81,8 +90,8 @@ export function EditComponentDialog({ component, open, onOpenChange }: EditCompo
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90" disabled={isPending}>
-              {isPending ? 'Saving...' : 'Save Changes'}
+            <Button type="submit" className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90" disabled={isSubmitting}>
+              {isSubmitting ? 'Saving...' : 'Save Changes'}
             </Button>
           </DialogFooter>
         </form>

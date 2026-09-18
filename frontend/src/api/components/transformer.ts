@@ -7,7 +7,6 @@ import type {
   DomainDto,
   PackageComponentDto,
   ParameterDto,
-  UpdateComponentDto,
 } from './types';
 import { ComponentSource, ComponentStatus, ParameterDirection } from './types';
 import type {
@@ -124,13 +123,6 @@ export const componentTransformer = {
       domain: form.domain,
       description: form.description || null,
     };
-  },
-
-  formToUpdateDto(form: Partial<UpdateComponentFormData>): UpdateComponentDto {
-    const dto: UpdateComponentDto = {};
-    if (form.description !== undefined) dto.description = form.description;
-    if (form.domain !== undefined) dto.domain = form.domain;
-    return dto;
   },
 
   getInitialUpdateFormValues(component: ComponentDisplayModel): UpdateComponentFormData {

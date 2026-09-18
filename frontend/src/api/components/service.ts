@@ -10,7 +10,6 @@ import type {
   DomainDto,
   MyComponentsResponseDto,
   PackageComponentDto,
-  UpdateComponentDto,
 } from './types';
 
 const ENDPOINT = '/components';
@@ -82,10 +81,6 @@ export const componentsService = {
 
   package(dto: PackageComponentDto): Promise<ComponentDetailDto> {
     return apiClient.post(`${ENDPOINT}/package`, dto);
-  },
-
-  update(link: HateoasLink, dto: UpdateComponentDto): Promise<ComponentDetailDto> {
-    return apiClient.request(link, dto);
   },
 
   delete(link: HateoasLink): Promise<void> {

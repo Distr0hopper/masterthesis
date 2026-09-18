@@ -39,5 +39,7 @@ class ComponentPermissionValidator(PermissionValidator[Component]):
                 return self.can_update(component)
             case ComponentCommandType.PUBLISH:
                 return self.can_update(component)
+            case ComponentCommandType.UPDATE_DESCRIPTION | ComponentCommandType.UPDATE_DOMAIN:
+                return self.can_update(component)
             case _:
                 return False

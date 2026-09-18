@@ -13,7 +13,6 @@ from app.api.dto.component import (
     ComponentListItemDto,
     CreateComponentRequestDto,
     PackageComponentRequestDto,
-    UpdateComponentRequestDto,
 )
 from app.api.dto.pagination import ListQueryPaginationDtoV1, PaginatedResponseDtoV1, build_paginated_response
 from app.api.exception.exceptions import ForbiddenException
@@ -285,41 +284,14 @@ async def download(
     )
 
 
-@router.patch(
-    "/{component_id}",
-    response_model=ComponentDetailDto,
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
-        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Not the creator of this component"},
-        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Component not found"},
-        status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErrorResponse, "description": "Request validation failed"},
-    },
-)
-async def update(
-    component_id: uuid.UUID,
-    dto: UpdateComponentRequestDto,
-    current_user: Annotated[User, Depends(AuthService.get_current_user)],
-    components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
-    favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
-) -> ComponentDetailDto:
-    existing = await components_service.get_component(component_id)
-
-    validator = ComponentPermissionValidator(current_user)
-    if not validator.can_update(existing):
-        logger.warning(f"User {current_user.id} not permitted to update component {component_id}")
-        raise ForbiddenException("Insufficient permission to update this component")
-
-    updated = ComponentTransformer.apply_update_dto(existing, dto)
-    saved = await components_service.update_component(updated)
-    logger.info(f"Updated component {saved.id}")
-    favorited_names = await _favorited_names(favorites_service, current_user)
-    return ComponentTransformer.to_detail(saved, saved.name in favorited_names, current_user)
-
-
 @router.post(
     "/{component_id}/commands",
     response_model=ComponentDetailDto,
     responses={
+        status.HTTP_400_BAD_REQUEST: {
+            "model": ErrorResponse,
+            "description": "Command is missing a payload field it requires (e.g. UPDATE_DOMAIN without a domain)",
+        },
         status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
         status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Insufficient permission for this command"},
         status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Component not found"},

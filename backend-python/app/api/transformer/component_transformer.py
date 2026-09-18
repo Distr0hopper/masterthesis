@@ -9,7 +9,6 @@ from app.api.dto.component import (
     ComponentListItemDto,
     CreateComponentRequestDto,
     ParameterDto,
-    UpdateComponentRequestDto,
 )
 from app.api.link.component import ComponentLinkBuilder
 from app.application.commands.commands import ComponentCommand, ComponentCommandType
@@ -27,8 +26,12 @@ class ComponentTransformer:
             ComponentCommandTypesApiV1.REMOVE_FAVORITE: ComponentCommandType.REMOVE_FAVORITE,
             ComponentCommandTypesApiV1.REPACKAGE: ComponentCommandType.REPACKAGE,
             ComponentCommandTypesApiV1.PUBLISH: ComponentCommandType.PUBLISH,
+            ComponentCommandTypesApiV1.UPDATE_DESCRIPTION: ComponentCommandType.UPDATE_DESCRIPTION,
+            ComponentCommandTypesApiV1.UPDATE_DOMAIN: ComponentCommandType.UPDATE_DOMAIN,
         }
-        return ComponentCommand(type=mapping[dto.command], note=dto.note)
+        return ComponentCommand(
+            type=mapping[dto.command], note=dto.note, description=dto.description, domain=dto.domain
+        )
 
     @staticmethod
     def from_create_dto(dto: CreateComponentRequestDto, cwl_content: str, created_by_id: uuid.UUID) -> Component:
@@ -47,8 +50,6 @@ class ComponentTransformer:
 
     @staticmethod
     def from_add_version_dto(parent: Component, dto: AddVersionRequestDto, cwl_content: str) -> Component:
-        # version is intentionally left unset here (defaults to 1) - computing the real
-        # next-in-lineage number needs a repository query, which stays out of the transformer
         return Component(
             name=parent.name,
             author_name=parent.author_name,
@@ -60,17 +61,6 @@ class ComponentTransformer:
             source=parent.source,
             domain=parent.domain,
         )
-
-    @staticmethod
-    def apply_update_dto(component: Component, dto: UpdateComponentRequestDto) -> Component:
-        # domain omitted -> None -> "no change" (Component.domain can never be cleared to
-        # null, so None is unambiguous here); description needs presence-tracking since an
-        # explicit null must clear it, distinct from the field being omitted entirely
-        if dto.domain is not None:
-            component.domain = dto.domain
-        if "description" in dto.model_fields_set:
-            component.description = dto.description
-        return component
 
     @staticmethod
     def to_list_item(

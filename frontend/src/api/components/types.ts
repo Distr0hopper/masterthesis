@@ -13,7 +13,6 @@ export const ComponentSource = {
 } as const;
 export type ComponentSource = (typeof ComponentSource)[keyof typeof ComponentSource];
 
-/** Mirrors WorkflowStatus: a component is staged privately until its creator publishes it. */
 export const ComponentStatus = {
   DRAFT: 'draft',
   PUBLISHED: 'published',
@@ -37,19 +36,27 @@ export interface ParameterDto {
   direction: ParameterDirection;
 }
 
-/** Mirrors the backend's ComponentCommandTypesApiV1 - the commands POST /components/{id}/commands accepts. */
 export const ComponentCommand = {
   ADD_FAVORITE: 'ADD_FAVORITE',
   REMOVE_FAVORITE: 'REMOVE_FAVORITE',
   REPACKAGE: 'REPACKAGE',
   PUBLISH: 'PUBLISH',
+  UPDATE_DESCRIPTION: 'UPDATE_DESCRIPTION',
+  UPDATE_DOMAIN: 'UPDATE_DOMAIN',
 } as const;
 export type ComponentCommand = (typeof ComponentCommand)[keyof typeof ComponentCommand];
 
-export interface ComponentCommandExecuteRequest {
-  command: ComponentCommand;
-  note?: string;
-}
+export type ComponentCommandExecuteRequest =
+  | {
+      command:
+        | typeof ComponentCommand.ADD_FAVORITE
+        | typeof ComponentCommand.REMOVE_FAVORITE
+        | typeof ComponentCommand.REPACKAGE
+        | typeof ComponentCommand.PUBLISH;
+      note?: string;
+    }
+  | { command: typeof ComponentCommand.UPDATE_DESCRIPTION; note?: string; description: string | null }
+  | { command: typeof ComponentCommand.UPDATE_DOMAIN; note?: string; domain: ComponentDomain };
 
 export interface ComponentListItemDto extends WithHateoasLinks {
   id: string;
@@ -103,11 +110,6 @@ export interface CreateComponentDto {
   repoUrl?: string;
   repoCommitSha?: string;
   description?: string | null;
-}
-
-export interface UpdateComponentDto {
-  description?: string | null;
-  domain?: string;
 }
 
 export interface PackageComponentDto {

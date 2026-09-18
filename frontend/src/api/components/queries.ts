@@ -8,7 +8,6 @@ import type {
   ComponentListQueryParams,
   CreateComponentDto,
   PackageComponentDto,
-  UpdateComponentDto,
 } from './types';
 import { useCommandMutation } from '@/api/useCommandMutation';
 import type { HateoasLink, MineQueryParams } from '@/api/types';
@@ -109,18 +108,6 @@ export const usePackageComponent = () => {
   });
 };
 
-export const useUpdateComponent = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ link, dto }: { link: HateoasLink; dto: UpdateComponentDto }) =>
-      componentsService.update(link, dto),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: componentKeys.all });
-    },
-  });
-};
-
 export const useDeleteComponent = () => {
   const queryClient = useQueryClient();
 
@@ -136,6 +123,16 @@ export const useDeleteComponent = () => {
 export const usePublishComponent = () =>
   useCommandMutation(componentKeys.all, (link: HateoasLink) =>
     componentsService.executeCommand(link, { command: ComponentCommand.PUBLISH }),
+  );
+
+export const useUpdateComponentDescription = () =>
+  useCommandMutation(componentKeys.all, ({ link, description }: { link: HateoasLink; description: string | null }) =>
+    componentsService.executeCommand(link, { command: ComponentCommand.UPDATE_DESCRIPTION, description }),
+  );
+
+export const useUpdateComponentDomain = () =>
+  useCommandMutation(componentKeys.all, ({ link, domain }: { link: HateoasLink; domain: string }) =>
+    componentsService.executeCommand(link, { command: ComponentCommand.UPDATE_DOMAIN, domain }),
   );
 
 export const useToggleFavorite = () =>

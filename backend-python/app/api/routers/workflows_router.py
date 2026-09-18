@@ -5,12 +5,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, status
 from fastapi.responses import Response
 
-from app.api.dto.common import ErrorResponse
+from app.api.dto.common import ErrorResponse, MyItemsResponseDtoV1, build_my_items_response
 from app.api.dto.pagination import ListQueryPaginationDtoV1, PaginatedResponseDtoV1, build_paginated_response
 from app.api.dto.workflow import (
     CreateWorkflowRequestDto,
     ExtractedComponentDto,
-    MyWorkflowsResponseDtoV1,
     ParseWorkflowRequestDto,
     ParseWorkflowResponseDto,
     UpdateWorkflowStepRequestDto,
@@ -54,7 +53,7 @@ async def list_workflows(
 
 @router.get(
     "/mine",
-    response_model=MyWorkflowsResponseDtoV1,
+    response_model=MyItemsResponseDtoV1[WorkflowListItemDto],
     responses={status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"}},
 )
 async def list_my_workflows(
@@ -62,32 +61,23 @@ async def list_my_workflows(
     workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
     limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
     published_offset: Annotated[int, Query(alias="publishedOffset", ge=0)] = 0,
-    pending_offset: Annotated[int, Query(alias="pendingOffset", ge=0)] = 0,
-) -> MyWorkflowsResponseDtoV1:
-    # two independent paginated queries, not one combined list split client-side - a
-    # single page of mixed-status rows can't be split into two correct sections once
-    # pagination is involved (one status could be starved while the other overflows)
+    unpublished_offset: Annotated[int, Query(alias="unpublishedOffset", ge=0)] = 0,
+) -> MyItemsResponseDtoV1[WorkflowListItemDto]:
     published_pagination = PaginatedList(limit=limit, offset=published_offset)
-    pending_pagination = PaginatedList(limit=limit, offset=pending_offset)
+    unpublished_pagination = PaginatedList(limit=limit, offset=unpublished_offset)
 
     published_workflows, published_total = await workflows_service.list_my_workflows_by_status(
         current_user.id, WorkflowStatus.VALIDATED, published_pagination
     )
-    pending_workflows, pending_total = await workflows_service.list_my_workflows_by_status(
-        current_user.id, WorkflowStatus.PENDING_VALIDATION, pending_pagination
+    unpublished_workflows, unpublished_total = await workflows_service.list_my_workflows_by_status(
+        current_user.id, WorkflowStatus.PENDING_VALIDATION, unpublished_pagination
     )
 
-    return MyWorkflowsResponseDtoV1(
-        published=build_paginated_response(
-            [WorkflowTransformer.to_list_item(w, current_user) for w in published_workflows],
-            published_total,
-            published_pagination,
-        ),
-        pending=build_paginated_response(
-            [WorkflowTransformer.to_list_item(w, current_user) for w in pending_workflows],
-            pending_total,
-            pending_pagination,
-        ),
+    return build_my_items_response(
+        ([WorkflowTransformer.to_list_item(w, current_user) for w in published_workflows], published_total),
+        published_pagination,
+        ([WorkflowTransformer.to_list_item(w, current_user) for w in unpublished_workflows], unpublished_total),
+        unpublished_pagination,
     )
 
 

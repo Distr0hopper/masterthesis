@@ -26,6 +26,7 @@ class ComponentTransformer:
             ComponentCommandTypesApiV1.ADD_FAVORITE: ComponentCommandType.ADD_FAVORITE,
             ComponentCommandTypesApiV1.REMOVE_FAVORITE: ComponentCommandType.REMOVE_FAVORITE,
             ComponentCommandTypesApiV1.REPACKAGE: ComponentCommandType.REPACKAGE,
+            ComponentCommandTypesApiV1.PUBLISH: ComponentCommandType.PUBLISH,
         }
         return ComponentCommand(type=mapping[dto.command], note=dto.note)
 
@@ -86,6 +87,7 @@ class ComponentTransformer:
             repo_url=component.repo_url,
             version=component.version,
             domain=component.domain,
+            status=component.status,
             created_at=component.created_at,
             is_favorite=is_favorite,
             parameters=(
@@ -132,6 +134,7 @@ class ComponentTransformer:
             docker_pull_reference=component.docker_pull_reference,
             domain=component.domain,
             source=component.source,
+            status=component.status,
             parameters=[ComponentTransformer.to_parameter(p) for p in component.parameters],
             created_at=component.created_at,
             updated_at=component.updated_at,

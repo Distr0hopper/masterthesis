@@ -1,4 +1,4 @@
-import type { PageParams, WithHateoasLinks } from '@/api/types';
+import type { PageParams, SplitPageResponse, WithHateoasLinks } from '@/api/types';
 
 export type ComponentDomain = string;
 
@@ -12,6 +12,13 @@ export const ComponentSource = {
   MANUAL_UPLOAD: 'manual_upload',
 } as const;
 export type ComponentSource = (typeof ComponentSource)[keyof typeof ComponentSource];
+
+/** Mirrors WorkflowStatus: a component is staged privately until its creator publishes it. */
+export const ComponentStatus = {
+  DRAFT: 'draft',
+  PUBLISHED: 'published',
+} as const;
+export type ComponentStatus = (typeof ComponentStatus)[keyof typeof ComponentStatus];
 
 export const ParameterDirection = {
   INPUT: 'input',
@@ -38,6 +45,7 @@ export interface ComponentListItemDto extends WithHateoasLinks {
   repoUrl: string | null;
   version: number;
   domain: ComponentDomain;
+  status: ComponentStatus;
   createdAt: string;
   isFavorite: boolean;
   /** only present when the request passed `includeParameters: true` - null otherwise */
@@ -67,6 +75,7 @@ export interface ComponentDetailDto extends WithHateoasLinks {
   dockerPullReference: string | null;
   domain: ComponentDomain;
   source: ComponentSource;
+  status: ComponentStatus;
   parameters: ParameterDto[];
   createdAt: string;
   updatedAt: string;
@@ -106,3 +115,4 @@ export interface ComponentListQueryParams extends PageParams<ComponentListItemDt
   /** opt into the per-item parameter list; only the workflow builder needs it */
   includeParameters?: boolean;
 }
+export type MyComponentsResponseDto = SplitPageResponse<ComponentListItemDto>;

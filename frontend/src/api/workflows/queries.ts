@@ -1,14 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { toListDisplayModel } from '@/api/helpers';
+import { toListDisplayModel, toSplitDisplayModel } from '@/api/helpers';
 import { workflowsService } from './service';
 import { workflowTransformer } from './transformer';
-import type { CreateWorkflowDto, MyWorkflowsQueryParams, WorkflowListQueryParams } from './types';
-import type { HateoasLink } from '@/api/types';
+import type { CreateWorkflowDto, WorkflowListQueryParams } from './types';
+import type { HateoasLink, MineQueryParams } from '@/api/types';
 
 export const workflowKeys = {
   all: ['workflows'] as const,
   lists: (params: WorkflowListQueryParams) => [...workflowKeys.all, 'list', params] as const,
-  mine: (params: MyWorkflowsQueryParams) => [...workflowKeys.all, 'mine', params] as const,
+  mine: (params: MineQueryParams) => [...workflowKeys.all, 'mine', params] as const,
   latest: (limit?: number) => [...workflowKeys.all, 'latest', limit] as const,
   detail: (id: string) => [...workflowKeys.all, 'detail', id] as const,
 };
@@ -21,14 +21,11 @@ export const useWorkflows = (params: WorkflowListQueryParams) => {
   });
 };
 
-export const useMyWorkflows = (params: MyWorkflowsQueryParams) => {
+export const useMyWorkflows = (params: MineQueryParams) => {
   return useQuery({
     queryKey: workflowKeys.mine(params),
     queryFn: () => workflowsService.getMine(params),
-    select: (response) => ({
-      published: toListDisplayModel(response.published, workflowTransformer.toListDisplayModels),
-      pending: toListDisplayModel(response.pending, workflowTransformer.toListDisplayModels),
-    }),
+    select: (response) => toSplitDisplayModel(response, workflowTransformer.toListDisplayModels),
   });
 };
 

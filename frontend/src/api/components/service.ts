@@ -1,5 +1,5 @@
 import { apiClient } from '../client';
-import type { HateoasLink, PageParams, PageResponse } from '@/api/types';
+import type { HateoasLink, MineQueryParams, PageResponse } from '@/api/types';
 import type {
   AddVersionDto,
   ComponentDetailDto,
@@ -7,6 +7,7 @@ import type {
   ComponentListQueryParams,
   CreateComponentDto,
   DomainDto,
+  MyComponentsResponseDto,
   PackageComponentDto,
   UpdateComponentDto,
 } from './types';
@@ -28,8 +29,14 @@ export const componentsService = {
     });
   },
 
-  getMine(params: PageParams<ComponentListItemDto>): Promise<PageResponse<ComponentListItemDto>> {
-    return apiClient.get(`${ENDPOINT}/mine`, { params: { limit: params.limit, offset: params.offset } });
+  getMine(params: MineQueryParams): Promise<MyComponentsResponseDto> {
+    return apiClient.get(`${ENDPOINT}/mine`, {
+      params: {
+        limit: params.limit,
+        publishedOffset: params.publishedOffset,
+        unpublishedOffset: params.unpublishedOffset,
+      },
+    });
   },
 
   getLatest(limit?: number): Promise<ComponentListItemDto[]> {
@@ -90,5 +97,9 @@ export const componentsService = {
 
   toggleFavorite(link: HateoasLink, isFavorite: boolean): Promise<void> {
     return apiClient.request(link, { command: isFavorite ? 'REMOVE_FAVORITE' : 'ADD_FAVORITE' });
+  },
+
+  publish(link: HateoasLink): Promise<ComponentDetailDto> {
+    return apiClient.request(link, { command: 'PUBLISH' });
   },
 };

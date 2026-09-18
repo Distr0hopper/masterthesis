@@ -9,7 +9,7 @@ import type {
   ParameterDto,
   UpdateComponentDto,
 } from './types';
-import { ComponentSource, ParameterDirection } from './types';
+import { ComponentSource, ComponentStatus, ParameterDirection } from './types';
 import type {
   PackageComponentFormData,
   UpdateComponentFormData,
@@ -22,6 +22,11 @@ import { buildDockerPullUrl } from '@/lib/dockerImage';
 const SOURCE_LABELS: Record<ComponentSource, string> = {
   [ComponentSource.AUTOMATED_PACKAGING]: 'Packaged from GitHub',
   [ComponentSource.MANUAL_UPLOAD]: 'Manual upload',
+};
+
+const COMPONENT_STATUS_LABELS: Record<ComponentStatus, string> = {
+  [ComponentStatus.DRAFT]: 'Draft',
+  [ComponentStatus.PUBLISHED]: 'Published',
 };
 
 const DIRECTION_LABELS: Record<ParameterDirection, string> = {
@@ -38,6 +43,8 @@ export interface ComponentDisplayModel extends WithHateoasLinks {
   version: number;
   domain: string;
   domainDisplay: string;
+  status: ComponentStatus;
+  statusDisplay: string;
   createdAt: Date;
   createdAtDisplay: string;
   isFavorite: boolean;
@@ -148,6 +155,8 @@ export const componentTransformer = {
       version: dto.version,
       domain: dto.domain,
       domainDisplay: getDomainLabel(dto.domain),
+      status: dto.status,
+      statusDisplay: COMPONENT_STATUS_LABELS[dto.status],
       createdAt,
       createdAtDisplay: formatDate(createdAt),
       isFavorite: dto.isFavorite,

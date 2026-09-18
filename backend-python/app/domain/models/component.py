@@ -16,6 +16,13 @@ class ComponentSource(str, Enum):
     MANUAL_UPLOAD = "manual_upload"
 
 
+class ComponentStatus(str, Enum):
+    """Mirrors WorkflowStatus - a component is staged privately until its creator publishes it."""
+
+    DRAFT = "draft"
+    PUBLISHED = "published"
+
+
 MAX_DESCRIPTION_LENGTH = 2000
 
 
@@ -49,13 +56,15 @@ class Component(SQLModel, table=True):
     dockerfile_content: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
     # also derived from cwl_content (see cwl_parser.extract_docker_pull) - mutually exclusive
     # with dockerfile_content per the CWL spec (DockerRequirement has either dockerFile or
-    # dockerPull); short reference string, not Text like dockerfile_content, matching repo_url's
-    # plain-str -> AutoString mapping
+    # dockerPull);
     docker_pull_reference: str | None = None
     # explicit String column: SQLModel would otherwise infer a native Postgres
-    # enum type from the Python Enum, which was avoided (see the
-    # hand-written migration - VARCHAR only, no CREATE TYPE)
+    # enum type from the Python Enum
     source: ComponentSource = Field(default=ComponentSource.MANUAL_UPLOAD, sa_column=Column(String, nullable=False))
+    # Per *version row*, not per lineage: only PUBLISHED rows are publicly visible/listed (see
+    # ComponentsService.list_components / get_visible_component), so a still-draft v2 never
+    # hides an already-published v1 from the browse list.
+    status: ComponentStatus = Field(default=ComponentStatus.DRAFT, sa_column=Column(String, nullable=False))
     domain: str
     created_at: datetime = Field(sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False))
     updated_at: datetime = Field(

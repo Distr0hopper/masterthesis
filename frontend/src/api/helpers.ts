@@ -1,4 +1,4 @@
-import type { ListDisplayModel, PageResponse } from '@/api/types';
+import type { ListDisplayModel, PageResponse, SplitDisplayModel, SplitPageResponse } from '@/api/types';
 
 export function toListDisplayModel<TDto, TDisplay>(
   response: PageResponse<TDto>,
@@ -10,5 +10,16 @@ export function toListDisplayModel<TDto, TDisplay>(
     totalPages: response.totalPages,
     limit: response.limit,
     offset: response.offset,
+  };
+}
+
+/** toListDisplayModel applied to both buckets of a SplitPageResponse. */
+export function toSplitDisplayModel<TDto, TDisplay>(
+  response: SplitPageResponse<TDto>,
+  dtoListToDisplayModels: (dtos: TDto[]) => TDisplay[],
+): SplitDisplayModel<TDisplay> {
+  return {
+    published: toListDisplayModel(response.published, dtoListToDisplayModels),
+    unpublished: toListDisplayModel(response.unpublished, dtoListToDisplayModels),
   };
 }

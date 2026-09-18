@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { FavoriteButton } from '@/components/FavoriteButton';
-import { getDomainBadgeStyle, useDomains, type ComponentDisplayModel } from '@/api/components';
+import { ComponentStatus, getDomainBadgeStyle, useDomains, type ComponentDisplayModel } from '@/api/components';
 import { canFavorite } from '@/api/permissions';
 import { ROUTES } from '@/lib/routes';
 
@@ -21,9 +21,16 @@ export function ComponentCard({ component, actions }: ComponentCardProps) {
     <Card>
       <CardContent className="flex flex-col gap-3 pt-6">
         <div className="flex items-center justify-between">
-          <Badge variant="outline" className="w-fit" style={domainBadgeStyle}>
-            {component.domainDisplay}
-          </Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            {component.status !== ComponentStatus.PUBLISHED && (
+              <Badge variant="secondary" className="w-fit">
+                {component.statusDisplay}
+              </Badge>
+            )}
+            <Badge variant="outline" className="w-fit" style={domainBadgeStyle}>
+              {component.domainDisplay}
+            </Badge>
+          </div>
 
           {canFavorite(component._links) && <FavoriteButton links={component._links!} isFavorite={component.isFavorite} />}
         </div>

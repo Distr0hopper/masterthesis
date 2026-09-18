@@ -1,21 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { toListDisplayModel } from '@/api/helpers';
+import { toListDisplayModel, toSplitDisplayModel } from '@/api/helpers';
 import { componentsService } from './service';
 import { componentTransformer } from './transformer';
 import type {
   AddVersionDto,
-  ComponentListItemDto,
   ComponentListQueryParams,
   CreateComponentDto,
   PackageComponentDto,
   UpdateComponentDto,
 } from './types';
-import type { HateoasLink, PageParams } from '@/api/types';
+import type { HateoasLink, MineQueryParams } from '@/api/types';
 
 export const componentKeys = {
   all: ['components'] as const,
   lists: (params: ComponentListQueryParams) => [...componentKeys.all, 'list', params] as const,
-  mine: (params: PageParams<ComponentListItemDto>) => [...componentKeys.all, 'mine', params] as const,
+  mine: (params: MineQueryParams) => [...componentKeys.all, 'mine', params] as const,
   latest: (limit?: number) => [...componentKeys.all, 'latest', limit] as const,
   detail: (id: string) => [...componentKeys.all, 'detail', id] as const,
   versions: (id: string) => [...componentKeys.all, 'versions', id] as const,
@@ -30,11 +29,11 @@ export const useComponents = (params: ComponentListQueryParams) => {
   });
 };
 
-export const useMyComponents = (params: PageParams<ComponentListItemDto>) => {
+export const useMyComponents = (params: MineQueryParams) => {
   return useQuery({
     queryKey: componentKeys.mine(params),
     queryFn: () => componentsService.getMine(params),
-    select: (response) => toListDisplayModel(response, componentTransformer.toListDisplayModels),
+    select: (response) => toSplitDisplayModel(response, componentTransformer.toListDisplayModels),
   });
 };
 
@@ -126,6 +125,18 @@ export const useDeleteComponent = () => {
   return useMutation({
     mutationFn: (link: HateoasLink) => componentsService.delete(link),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: componentKeys.all });
+    },
+  });
+};
+
+export const usePublishComponent = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (link: HateoasLink) => componentsService.publish(link),
+    onSuccess: () => {
+      // publishing makes the component appear in the public browse list and the builder palette
       queryClient.invalidateQueries({ queryKey: componentKeys.all });
     },
   });

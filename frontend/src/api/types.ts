@@ -29,6 +29,26 @@ export interface PageResponse<T> {
   totalElements: number;
 }
 
+/**
+ * The "my <entity>" response shape shared by GET /workflows/mine and GET /components/mine -
+ * two independently paginated buckets the server splits by publication status.
+ */
+export interface SplitPageResponse<T> {
+  published: PageResponse<T>;
+  unpublished: PageResponse<T>;
+}
+
+export interface SplitDisplayModel<T> {
+  published: ListDisplayModel<T>;
+  unpublished: ListDisplayModel<T>;
+}
+
+export interface MineQueryParams {
+  limit?: number;
+  publishedOffset?: number;
+  unpublishedOffset?: number;
+}
+
 export interface ListDisplayModel<T> {
   items: T[];
   total: number;

@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, status
 from fastapi.responses import Response
 
-from app.api.dto.common import ErrorResponse
+from app.api.dto.common import ErrorResponse, MyItemsResponseDtoV1, build_my_items_response
 from app.api.dto.component import (
     AddVersionRequestDto,
     ComponentCommandExecuteRequestDto,
@@ -23,8 +23,10 @@ from app.application.exception.favorites_exceptions import FavoritesRequireAuthE
 from app.application.service.auth_service import AuthService
 from app.application.service.components_service import ComponentsService
 from app.application.service.favorites_service import FavoritesService
+from app.domain.models.component import ComponentStatus
 from app.domain.models.component_domain import VALID_DOMAINS
 from app.domain.models.user import User
+from app.domain.pagination.pagination import DEFAULT_LIMIT, MAX_LIMIT, PaginatedList
 from app.domain.repository.components_repository import ComponentListFilter
 
 router = APIRouter(prefix="/components", tags=["components"])
@@ -55,8 +57,6 @@ async def list_components(
     if favorites_only and current_user is None:
         raise FavoritesRequireAuthError()
 
-    # unlike favoritesOnly, excludeMine has a sensible no-op meaning for anonymous
-    # visitors (there's no "mine" to exclude), so no auth error here
     exclude_created_by = current_user.id if exclude_mine and current_user is not None else None
     favorited_by = current_user.id if favorites_only and current_user is not None else None
     pagination = pagination_dto.to_domain()
@@ -73,18 +73,39 @@ async def list_components(
     return build_paginated_response(items, total, pagination)
 
 
-@router.get("/mine", response_model=PaginatedResponseDtoV1[ComponentListItemDto])
+@router.get(
+    "/mine",
+    response_model=MyItemsResponseDtoV1[ComponentListItemDto],
+    responses={status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"}},
+)
 async def list_my_components(
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
     favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
-    pagination_dto: Annotated[ListQueryPaginationDtoV1, Depends()],
-) -> PaginatedResponseDtoV1[ComponentListItemDto]:
-    pagination = pagination_dto.to_domain()
-    components, total = await components_service.list_my_components(current_user.id, pagination)
+    limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
+    published_offset: Annotated[int, Query(alias="publishedOffset", ge=0)] = 0,
+    unpublished_offset: Annotated[int, Query(alias="unpublishedOffset", ge=0)] = 0,
+) -> MyItemsResponseDtoV1[ComponentListItemDto]:
+    published_pagination = PaginatedList(limit=limit, offset=published_offset)
+    unpublished_pagination = PaginatedList(limit=limit, offset=unpublished_offset)
+
+    published_components, published_total = await components_service.list_my_components_by_status(
+        current_user.id, ComponentStatus.PUBLISHED, published_pagination
+    )
+    unpublished_components, unpublished_total = await components_service.list_my_components_by_status(
+        current_user.id, ComponentStatus.DRAFT, unpublished_pagination
+    )
     favorited_names = await _favorited_names(favorites_service, current_user)
-    items = [ComponentTransformer.to_list_item(c, c.name in favorited_names, current_user) for c in components]
-    return build_paginated_response(items, total, pagination)
+
+    def to_items(components: list) -> list[ComponentListItemDto]:
+        return [ComponentTransformer.to_list_item(c, c.name in favorited_names, current_user) for c in components]
+
+    return build_my_items_response(
+        (to_items(published_components), published_total),
+        published_pagination,
+        (to_items(unpublished_components), unpublished_total),
+        unpublished_pagination,
+    )
 
 
 @router.get("/latest", response_model=list[ComponentListItemDto])
@@ -130,7 +151,6 @@ async def create(
     component = ComponentTransformer.from_create_dto(dto, content.decode("utf-8"), current_user.id)
     created = await components_service.create_manual(component)
     logger.info(f"Created component {created.id} ('{created.name}' v{created.version})")
-    # brand-new component row, cannot already exist in favorites (FK requires the row first)
     return ComponentTransformer.to_detail(created, is_favorite=False, current_user=current_user)
 
 
@@ -171,8 +191,6 @@ async def package(
         component = await components_service.create_from_url(dto.repo_url, dto.domain, dto.description, current_user.id)
 
     logger.info(f"Packaging complete: '{component.name}' v{component.version} ({component.id})")
-    # a new version shares its lineage's name with prior versions, so it may already be
-    # favorited (by this or any other user) - not guaranteed False like a brand-new lineage
     favorited_names = await _favorited_names(favorites_service, current_user)
     return ComponentTransformer.to_detail(component, component.name in favorited_names, current_user)
 
@@ -212,7 +230,6 @@ async def add_version(
     draft = ComponentTransformer.from_add_version_dto(parent, dto, content.decode("utf-8"))
     component = await components_service.add_manual_version(draft)
     logger.info(f"Added version {component.version} to component '{parent.name}' ({component.id})")
-    # shares the parent's name/lineage, so it may already be favorited
     favorited_names = await _favorited_names(favorites_service, current_user)
     return ComponentTransformer.to_detail(component, component.name in favorited_names, current_user)
 
@@ -228,7 +245,7 @@ async def get_component(
     favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
     current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
 ) -> ComponentDetailDto:
-    component = await components_service.get_component(component_id)
+    component = await components_service.get_visible_component(component_id, current_user)
     favorited_names = await _favorited_names(favorites_service, current_user)
     return ComponentTransformer.to_detail(component, component.name in favorited_names, current_user)
 
@@ -244,8 +261,8 @@ async def get_versions(
     favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
     current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
 ) -> list[ComponentListItemDto]:
-    component = await components_service.get_component(component_id)
-    versions = await components_service.get_versions(component)
+    component = await components_service.get_visible_component(component_id, current_user)
+    versions = await components_service.get_visible_versions(component, current_user)
     favorited_names = await _favorited_names(favorites_service, current_user)
     return [ComponentTransformer.to_list_item(v, v.name in favorited_names, current_user) for v in versions]
 
@@ -257,8 +274,9 @@ async def get_versions(
 async def download(
     component_id: uuid.UUID,
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
+    current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
 ) -> Response:
-    component = await components_service.get_component(component_id)
+    component = await components_service.get_visible_component(component_id, current_user)
     filename, content = await components_service.get_cwl_download(component)
     return Response(
         content=content,
@@ -315,7 +333,7 @@ async def execute_command(
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
     favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
 ) -> ComponentDetailDto:
-    component = await components_service.get_component(component_id)
+    component = await components_service.get_visible_component(component_id, current_user)
     command = ComponentTransformer.to_domain_command(dto)
 
     validator = ComponentPermissionValidator(current_user)
@@ -355,8 +373,6 @@ async def remove(
     logger.info(f"Deleted component {component_id}")
 
     if len(versions) == 1:
-        # last version of this lineage is gone - sweep any leftover favorites so they
-        # don't become permanently orphaned (see FavoritesRepository.delete_by_component_name)
         await favorites_service.remove_all_favorites(component.name)
 
 
@@ -367,8 +383,9 @@ async def remove(
 async def bundle(
     component_id: uuid.UUID,
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
+    current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
 ) -> Response:
-    component = await components_service.get_component(component_id)
+    component = await components_service.get_visible_component(component_id, current_user)
     filename, content = await components_service.get_bundle(component)
     return Response(
         content=content,

@@ -1,51 +1,73 @@
 import { Link } from 'react-router-dom';
 import { useMyComponents } from '@/api/components';
-import { ComponentCard } from '@/components/component-browser/ComponentCard';
-import { MyComponentCardActions } from '@/components/component-mine/organisms/MyComponentCardActions';
+import { ComponentSection } from '@/components/component-mine/organisms/ComponentSection';
 import { Pagination } from '@/components/common/Pagination';
-import { usePageParams } from '@/lib/usePageParams';
+import { useSplitPageParams } from '@/lib/useSplitPageParams';
 import { ROUTES } from '@/lib/routes';
 
 export default function MyComponentsPage() {
-  const { limit, offset, setOffset } = usePageParams();
-  const { data, isLoading } = useMyComponents({ limit, offset });
+  const { limit, published, unpublished } = useSplitPageParams();
 
-  const displayModels = data?.items ?? [];
-  const total = data?.total ?? 0;
+  const { data, isLoading } = useMyComponents({
+    limit,
+    publishedOffset: published.offset,
+    unpublishedOffset: unpublished.offset,
+  });
+
+  const publishedTotal = data?.published.total ?? 0;
+  const unpublishedTotal = data?.unpublished.total ?? 0;
+  const isEmpty = publishedTotal === 0 && unpublishedTotal === 0;
 
   return (
     <div>
       <h1 className="text-2xl font-semibold text-slate-900">My Components</h1>
-      <p className="mt-1 text-slate-500">Components you've uploaded or packaged.</p>
+      <p className="mt-1 text-slate-500">
+        Components you've uploaded or packaged, including drafts that are still only visible to you.
+      </p>
 
       {isLoading ? (
         <p className="mt-8 text-slate-500">Loading components...</p>
+      ) : isEmpty ? (
+        <p className="mt-8 text-slate-500">
+          You haven't uploaded any components yet.{' '}
+          <Link to={ROUTES.componentUpload} className="font-semibold text-jmu-blue-800 hover:underline">
+            Upload one
+          </Link>
+          .
+        </p>
       ) : (
         <>
-          <p className="mt-6 text-sm text-slate-500">{total} results</p>
-
-          {displayModels.length === 0 ? (
-            <p className="mt-8 text-slate-500">
-              You haven't uploaded any components yet.{' '}
-              <Link to={ROUTES.componentUpload} className="font-semibold text-jmu-blue-800 hover:underline">
-                Upload one
-              </Link>
-              .
-            </p>
-          ) : (
-            <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {displayModels.map((component) => (
-                <ComponentCard key={component.id} component={component} actions={<MyComponentCardActions component={component} />} />
-              ))}
-            </div>
+          {unpublishedTotal > 0 && (
+            <>
+              <ComponentSection
+                title="Unpublished Components"
+                components={data?.unpublished.items ?? []}
+                total={unpublishedTotal}
+              />
+              <Pagination
+                totalItems={unpublishedTotal}
+                itemsPerPage={limit}
+                currentPage={unpublished.page}
+                onPageChange={unpublished.goToPage}
+              />
+            </>
           )}
 
-          <Pagination
-            totalItems={total}
-            itemsPerPage={limit}
-            currentPage={Math.floor(offset / limit) + 1}
-            onPageChange={(page) => setOffset((page - 1) * limit)}
-          />
+          {publishedTotal > 0 && (
+            <>
+              <ComponentSection
+                title="Published Components"
+                components={data?.published.items ?? []}
+                total={publishedTotal}
+              />
+              <Pagination
+                totalItems={publishedTotal}
+                itemsPerPage={limit}
+                currentPage={published.page}
+                onPageChange={published.goToPage}
+              />
+            </>
+          )}
         </>
       )}
     </div>

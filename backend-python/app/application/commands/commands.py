@@ -6,6 +6,7 @@ class ComponentCommandType(StrEnum):
     ADD_FAVORITE = "ADD_FAVORITE"
     REMOVE_FAVORITE = "REMOVE_FAVORITE"
     REPACKAGE = "REPACKAGE"
+    PUBLISH = "PUBLISH"
 
     def __str__(self) -> str:
         return self.value

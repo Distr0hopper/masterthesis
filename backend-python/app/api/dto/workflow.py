@@ -7,7 +7,6 @@ from pydantic import Field, Json, field_validator
 
 from app.api.dto.base import CamelModel
 from app.api.dto.component import ComponentCreatorDto
-from app.api.dto.pagination import PaginatedResponseDtoV1
 from app.api.link.model import LinkModel
 from app.domain.models.component_domain import VALID_DOMAINS
 from app.domain.models.workflow import MAX_DESCRIPTION_LENGTH, WorkflowSource, WorkflowStatus
@@ -23,9 +22,6 @@ class WorkflowDomainsValidatorMixin:
         invalid = [d for d in value if d not in VALID_DOMAINS]
         if invalid:
             raise ValueError(f"domains must each be one of {VALID_DOMAINS}, got invalid: {invalid}")
-        # de-duplicate while preserving order - the DB layer would reject exact dupes via
-        # the composite PK anyway, but failing fast here gives a clearer 422 instead of a
-        # 500 from a constraint violation
         seen: set[str] = set()
         return [d for d in value if not (d in seen or seen.add(d))]
 
@@ -40,7 +36,6 @@ class ComponentDomainValidatorMixin:
 
 
 class EmptyWorkflowDescriptionToNoneMixin:
-    # same blank-Swagger/form-field issue as Component's EmptyDescriptionToNoneMixin
     @field_validator("description", mode="before")
     @classmethod
     def empty_description_to_none(cls, value: str | None) -> str | None:
@@ -75,11 +70,6 @@ class WorkflowListItemDto(CamelModel, LinkModel):
     #: set only for source=workflow_builder, and cleared if that draft is deleted
     draft_id: uuid.UUID | None
     created_at: datetime
-
-
-class MyWorkflowsResponseDtoV1(CamelModel):
-    published: PaginatedResponseDtoV1[WorkflowListItemDto]
-    pending: PaginatedResponseDtoV1[WorkflowListItemDto]
 
 
 class WorkflowDetailDto(CamelModel, LinkModel):

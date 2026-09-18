@@ -8,7 +8,7 @@ from pydantic import Field, field_validator
 
 from app.api.dto.base import CamelModel
 from app.api.link.model import LinkModel
-from app.domain.models.component import MAX_DESCRIPTION_LENGTH, ComponentSource
+from app.domain.models.component import MAX_DESCRIPTION_LENGTH, ComponentSource, ComponentStatus
 from app.domain.models.component_domain import VALID_DOMAINS
 from app.domain.models.parameter import ParameterDirection
 
@@ -84,6 +84,7 @@ class ComponentListItemDto(CamelModel, LinkModel):
     repo_url: str | None
     version: int
     domain: str
+    status: ComponentStatus
     created_at: datetime
     is_favorite: bool
     # opt-in only (`?includeParameters=true`), hence None rather than []: browse/home/mine
@@ -109,6 +110,7 @@ class ComponentDetailDto(CamelModel, LinkModel):
     docker_pull_reference: str | None
     domain: str
     source: ComponentSource
+    status: ComponentStatus
     parameters: list[ParameterDto]
     created_at: datetime
     updated_at: datetime
@@ -165,6 +167,7 @@ class ComponentCommandTypesApiV1(StrEnum):
     ADD_FAVORITE = "ADD_FAVORITE"
     REMOVE_FAVORITE = "REMOVE_FAVORITE"
     REPACKAGE = "REPACKAGE"
+    PUBLISH = "PUBLISH"
 
 
 class ComponentCommandExecuteRequestDto(CamelModel):

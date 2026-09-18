@@ -1,4 +1,4 @@
-import type { PageParams, PageResponse, WithHateoasLinks } from '@/api/types';
+import type { PageParams, SplitPageResponse, WithHateoasLinks } from '@/api/types';
 
 export const StepMatchStatus = {
   SUGGESTED: 'suggested',
@@ -93,16 +93,7 @@ export interface WorkflowListQueryParams extends PageParams<WorkflowListItemDto>
   search?: string;
 }
 
-export interface MyWorkflowsResponseDto {
-  published: PageResponse<WorkflowListItemDto>;
-  pending: PageResponse<WorkflowListItemDto>;
-}
-
-export interface MyWorkflowsQueryParams {
-  limit?: number;
-  publishedOffset?: number;
-  pendingOffset?: number;
-}
+export type MyWorkflowsResponseDto = SplitPageResponse<WorkflowListItemDto>;
 
 /** One inline CommandLineTool found in a self-contained/mixed upload. */
 export interface ExtractedComponentDto {

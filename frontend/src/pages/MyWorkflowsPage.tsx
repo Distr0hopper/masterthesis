@@ -2,22 +2,21 @@ import { Link } from 'react-router-dom';
 import { useMyWorkflows } from '@/api/workflows';
 import { WorkflowSection } from '@/components/workflow-mine/organisms/WorkflowSection';
 import { Pagination } from '@/components/common/Pagination';
-import { usePageParams } from '@/lib/usePageParams';
+import { useSplitPageParams } from '@/lib/useSplitPageParams';
 import { ROUTES } from '@/lib/routes';
 
 export default function MyWorkflowsPage() {
-  const pending = usePageParams({ offsetKey: 'pendingOffset' });
-  const published = usePageParams({ offsetKey: 'publishedOffset' });
+  const { limit, published, unpublished } = useSplitPageParams();
 
   const { data, isLoading } = useMyWorkflows({
-    limit: published.limit, // both instances read the same shared `limit` key
+    limit,
     publishedOffset: published.offset,
-    pendingOffset: pending.offset,
+    unpublishedOffset: unpublished.offset,
   });
 
   const publishedTotal = data?.published.total ?? 0;
-  const pendingTotal = data?.pending.total ?? 0;
-  const isEmpty = publishedTotal === 0 && pendingTotal === 0;
+  const unpublishedTotal = data?.unpublished.total ?? 0;
+  const isEmpty = publishedTotal === 0 && unpublishedTotal === 0;
 
   return (
     <div>
@@ -43,26 +42,34 @@ export default function MyWorkflowsPage() {
         </p>
       ) : (
         <>
-          {pendingTotal > 0 && (
+          {unpublishedTotal > 0 && (
             <>
-              <WorkflowSection title="Unpublished Workflows" workflows={data?.pending.items ?? []} total={pendingTotal} />
+              <WorkflowSection
+                title="Unpublished Workflows"
+                workflows={data?.unpublished.items ?? []}
+                total={unpublishedTotal}
+              />
               <Pagination
-                totalItems={pendingTotal}
-                itemsPerPage={pending.limit}
-                currentPage={Math.floor(pending.offset / pending.limit) + 1}
-                onPageChange={(page) => pending.setOffset((page - 1) * pending.limit)}
+                totalItems={unpublishedTotal}
+                itemsPerPage={limit}
+                currentPage={unpublished.page}
+                onPageChange={unpublished.goToPage}
               />
             </>
           )}
 
           {publishedTotal > 0 && (
             <>
-              <WorkflowSection title="Published Workflows" workflows={data?.published.items ?? []} total={publishedTotal} />
+              <WorkflowSection
+                title="Published Workflows"
+                workflows={data?.published.items ?? []}
+                total={publishedTotal}
+              />
               <Pagination
                 totalItems={publishedTotal}
-                itemsPerPage={published.limit}
-                currentPage={Math.floor(published.offset / published.limit) + 1}
-                onPageChange={(page) => published.setOffset((page - 1) * published.limit)}
+                itemsPerPage={limit}
+                currentPage={published.page}
+                onPageChange={published.goToPage}
               />
             </>
           )}

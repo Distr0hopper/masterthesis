@@ -1,8 +1,7 @@
 import { apiClient } from '../client';
-import type { HateoasLink, PageResponse } from '@/api/types';
+import type { HateoasLink, MineQueryParams, PageResponse } from '@/api/types';
 import type {
   CreateWorkflowDto,
-  MyWorkflowsQueryParams,
   MyWorkflowsResponseDto,
   ParseWorkflowResponseDto,
   WorkflowDetailDto,
@@ -24,9 +23,13 @@ export const workflowsService = {
     return apiClient.get(`${ENDPOINT}/${id}`);
   },
 
-  getMine(params: MyWorkflowsQueryParams): Promise<MyWorkflowsResponseDto> {
+  getMine(params: MineQueryParams): Promise<MyWorkflowsResponseDto> {
     return apiClient.get(`${ENDPOINT}/mine`, {
-      params: { limit: params.limit, publishedOffset: params.publishedOffset, pendingOffset: params.pendingOffset },
+      params: {
+        limit: params.limit,
+        publishedOffset: params.publishedOffset,
+        unpublishedOffset: params.unpublishedOffset,
+      },
     });
   },
 

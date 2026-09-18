@@ -20,6 +20,7 @@ class ComponentLinkBuilder(BaseLinkBuilder[Component, ComponentPermissionValidat
             "favorite": Link(href=Endpoints.component_commands_by_id(entity.id), method=HttpMethod.POST),
             "unfavorite": Link(href=Endpoints.component_commands_by_id(entity.id), method=HttpMethod.POST),
             "repackage": Link(href=Endpoints.component_commands_by_id(entity.id), method=HttpMethod.POST),
+            "publish": Link(href=Endpoints.component_commands_by_id(entity.id), method=HttpMethod.POST),
         }
 
     def _is_link_allowed(self, rel: str, entity: Component) -> bool:
@@ -36,5 +37,7 @@ class ComponentLinkBuilder(BaseLinkBuilder[Component, ComponentPermissionValidat
                 return self._validator.can_execute(entity, ComponentCommandType.REMOVE_FAVORITE)
             case "repackage":
                 return self._validator.can_execute(entity, ComponentCommandType.REPACKAGE)
+            case "publish":
+                return self._validator.can_execute(entity, ComponentCommandType.PUBLISH)
             case _:
                 return False

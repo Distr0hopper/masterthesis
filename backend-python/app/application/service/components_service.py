@@ -3,6 +3,7 @@ import subprocess
 import tempfile
 import uuid
 import zipfile
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
@@ -17,8 +18,9 @@ from app.application.exception.component_exceptions import (
     ManualUploadCannotBeRepackagedError,
     PackagingFailedError,
 )
-from app.domain.models.component import MAX_DESCRIPTION_LENGTH, Component, ComponentSource
+from app.domain.models.component import MAX_DESCRIPTION_LENGTH, Component, ComponentSource, ComponentStatus
 from app.domain.models.parameter import Parameter
+from app.domain.models.user import User
 from app.domain.pagination.pagination import PaginatedList
 from app.domain.repository.components_repository import ComponentListFilter, ComponentsRepository
 from app.infrastructure.cwl.cwl_parser import (
@@ -51,25 +53,24 @@ class ComponentsService:
     async def list_components(
         self, filter: ComponentListFilter, pagination: PaginatedList
     ) -> tuple[list[Component], int]:
+        # browse-list callers always see only PUBLISHED components
+        filter = replace(filter, status=ComponentStatus.PUBLISHED, created_by=None)
         return await self.components_repository.find_paginated(filter, pagination)
 
-    async def list_my_components(
-        self, created_by_id: uuid.UUID, pagination: PaginatedList
+    async def list_my_components_by_status(
+        self, created_by_id: uuid.UUID, status: ComponentStatus, pagination: PaginatedList
     ) -> tuple[list[Component], int]:
-        return await self.components_repository.find_paginated_by_created_by(created_by_id, pagination)
+        filter = ComponentListFilter(created_by=created_by_id, status=status)
+        return await self.components_repository.find_paginated(filter, pagination)
 
     async def get_latest_components(self, limit: int) -> list[Component]:
-        # reuses the already-deduped (latest-version-per-lineage) list find_all returns -
-        # sorting/slicing in Python instead of a SQL ORDER BY + LIMIT on top of the
-        # existing DISTINCT ON query, which would need a subquery; fine at this project's
-        # realistic data scale
-        components = await self.components_repository.find_all()
+        components = await self.components_repository.find_all(ComponentStatus.PUBLISHED)
         return sorted(components, key=lambda c: c.created_at, reverse=True)[:limit]
 
     async def get_stats(self) -> tuple[int, int]:
         return (
-            await self.components_repository.count_distinct_names(),
-            await self.components_repository.count_distinct_contributors(),
+            await self.components_repository.count_distinct_names(ComponentStatus.PUBLISHED),
+            await self.components_repository.count_distinct_contributors(ComponentStatus.PUBLISHED),
         )
 
     async def get_component(self, component_id: uuid.UUID) -> Component:
@@ -78,8 +79,24 @@ class ComponentsService:
             raise ComponentNotFoundError(component_id)
         return component
 
+    async def get_visible_component(self, component_id: uuid.UUID, current_user: User | None) -> Component:
+        component = await self.get_component(component_id)
+        if not self._is_visible(component, current_user):
+            raise ComponentNotFoundError(component_id)
+        return component
+
     async def get_versions(self, component: Component) -> list[Component]:
         return await self.components_repository.find_versions_by_name(component.name)
+
+    async def get_visible_versions(self, component: Component, current_user: User | None) -> list[Component]:
+        versions = await self.get_versions(component)
+        return [v for v in versions if self._is_visible(v, current_user)]
+
+    @staticmethod
+    def _is_visible(component: Component, current_user: User | None) -> bool:
+        if component.status == ComponentStatus.PUBLISHED:
+            return True
+        return current_user is not None and component.created_by_id == current_user.id
 
     async def get_cwl_download(self, component: Component) -> tuple[str, str]:
         filename = f"{component.name}-v{component.version}.cwl"
@@ -99,9 +116,6 @@ class ComponentsService:
         return f"{base_name}.zip", buffer.getvalue()
 
     async def create_manual(self, component: Component, context: str = "Uploaded") -> Component:
-        # a brand new component always starts at version 1 - if a component with this name
-        # already exists (at any version), that insert would otherwise fail on the DB's
-        # unique (name, version) constraint instead of a handled error
         existing_versions = await self.components_repository.find_versions_by_name(component.name)
         if existing_versions:
             raise ComponentNameAlreadyExistsError(component.name)
@@ -201,6 +215,12 @@ class ComponentsService:
         )
         return await self.add_manual_version(component)
 
+    async def publish(self, component: Component) -> Component:
+        if component.status == ComponentStatus.PUBLISHED:
+            return component
+        component.status = ComponentStatus.PUBLISHED
+        return await self.components_repository.save(component)
+
     async def execute_command(
         self,
         component: Component,
@@ -217,6 +237,8 @@ class ComponentsService:
                 return component
             case ComponentCommandType.REPACKAGE:
                 return await self.repackage_component(component)
+            case ComponentCommandType.PUBLISH:
+                return await self.publish(component)
 
     async def _run_packaging(self, repo_url: str) -> tuple[str, str, str | None, str | None, str | None]:
         repo_name = repo_url.rstrip("/").split("/")[-1]
@@ -238,8 +260,6 @@ class ComponentsService:
 
     async def _save_and_reload(self, component: Component) -> Component:
         saved = await self.components_repository.save(component)
-        # re-fetch: created_by is only guaranteed to be safely (selectin) loaded
-        # via a fresh query, not by touching the just-inserted in-memory object
         reloaded = await self.components_repository.find_by_id(saved.id)
         assert reloaded is not None
         return reloaded
@@ -257,8 +277,6 @@ class ComponentsService:
         except ValueError as err:
             raise InvalidCwlError(context, str(err)) from err
 
-        # format is an ontology identifier requiring a resolution step we don't run yet -
-        # only trust/store it for manually uploaded components for now
         if source != ComponentSource.MANUAL_UPLOAD:
             for parameter in parameters:
                 parameter.format = None

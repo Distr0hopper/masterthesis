@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toListDisplayModel, toSplitDisplayModel } from '@/api/helpers';
 import { componentsService } from './service';
 import { componentTransformer } from './transformer';
+import { ComponentCommand } from './types';
 import type {
   AddVersionDto,
   ComponentListQueryParams,
@@ -9,6 +10,7 @@ import type {
   PackageComponentDto,
   UpdateComponentDto,
 } from './types';
+import { useCommandMutation } from '@/api/useCommandMutation';
 import type { HateoasLink, MineQueryParams } from '@/api/types';
 
 export const componentKeys = {
@@ -130,26 +132,15 @@ export const useDeleteComponent = () => {
   });
 };
 
-export const usePublishComponent = () => {
-  const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: (link: HateoasLink) => componentsService.publish(link),
-    onSuccess: () => {
-      // publishing makes the component appear in the public browse list and the builder palette
-      queryClient.invalidateQueries({ queryKey: componentKeys.all });
-    },
-  });
-};
+export const usePublishComponent = () =>
+  useCommandMutation(componentKeys.all, (link: HateoasLink) =>
+    componentsService.executeCommand(link, { command: ComponentCommand.PUBLISH }),
+  );
 
-export const useToggleFavorite = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ link, isFavorite }: { link: HateoasLink; isFavorite: boolean }) =>
-      componentsService.toggleFavorite(link, isFavorite),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: componentKeys.all });
-    },
-  });
-};
+export const useToggleFavorite = () =>
+  useCommandMutation(componentKeys.all, ({ link, isFavorite }: { link: HateoasLink; isFavorite: boolean }) =>
+    componentsService.executeCommand(link, {
+      command: isFavorite ? ComponentCommand.REMOVE_FAVORITE : ComponentCommand.ADD_FAVORITE,
+    }),
+  );

@@ -7,6 +7,8 @@ import type {
   WorkflowDetailDto,
   WorkflowListItemDto,
   WorkflowListQueryParams,
+  WorkflowCommandExecuteRequest,
+  WorkflowStepCommandExecuteRequest,
   WorkflowStepDto,
 } from './types';
 
@@ -66,16 +68,12 @@ export const workflowsService = {
     return apiClient.request(link, { componentId });
   },
 
-  confirmStep(link: HateoasLink): Promise<WorkflowStepDto> {
-    return apiClient.request(link, { command: 'CONFIRM' });
+  executeCommand(link: HateoasLink, request: WorkflowCommandExecuteRequest): Promise<WorkflowDetailDto> {
+    return apiClient.request(link, request);
   },
 
-  publish(link: HateoasLink): Promise<WorkflowDetailDto> {
-    return apiClient.request(link, { command: 'PUBLISH' });
-  },
-
-  updateDescription(link: HateoasLink, description: string | null): Promise<WorkflowDetailDto> {
-    return apiClient.request(link, { command: 'UPDATE_DESCRIPTION', description });
+  executeStepCommand(link: HateoasLink, request: WorkflowStepCommandExecuteRequest): Promise<WorkflowStepDto> {
+    return apiClient.request(link, request);
   },
 
   delete(link: HateoasLink): Promise<void> {

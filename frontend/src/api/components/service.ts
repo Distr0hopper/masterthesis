@@ -2,6 +2,7 @@ import { apiClient } from '../client';
 import type { HateoasLink, MineQueryParams, PageResponse } from '@/api/types';
 import type {
   AddVersionDto,
+  ComponentCommandExecuteRequest,
   ComponentDetailDto,
   ComponentListItemDto,
   ComponentListQueryParams,
@@ -95,11 +96,7 @@ export const componentsService = {
     return apiClient.get('/domains');
   },
 
-  toggleFavorite(link: HateoasLink, isFavorite: boolean): Promise<void> {
-    return apiClient.request(link, { command: isFavorite ? 'REMOVE_FAVORITE' : 'ADD_FAVORITE' });
-  },
-
-  publish(link: HateoasLink): Promise<ComponentDetailDto> {
-    return apiClient.request(link, { command: 'PUBLISH' });
+  executeCommand(link: HateoasLink, request: ComponentCommandExecuteRequest): Promise<ComponentDetailDto> {
+    return apiClient.request(link, request);
   },
 };

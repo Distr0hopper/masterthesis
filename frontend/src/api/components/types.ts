@@ -37,6 +37,20 @@ export interface ParameterDto {
   direction: ParameterDirection;
 }
 
+/** Mirrors the backend's ComponentCommandTypesApiV1 - the commands POST /components/{id}/commands accepts. */
+export const ComponentCommand = {
+  ADD_FAVORITE: 'ADD_FAVORITE',
+  REMOVE_FAVORITE: 'REMOVE_FAVORITE',
+  REPACKAGE: 'REPACKAGE',
+  PUBLISH: 'PUBLISH',
+} as const;
+export type ComponentCommand = (typeof ComponentCommand)[keyof typeof ComponentCommand];
+
+export interface ComponentCommandExecuteRequest {
+  command: ComponentCommand;
+  note?: string;
+}
+
 export interface ComponentListItemDto extends WithHateoasLinks {
   id: string;
   name: string;

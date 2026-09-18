@@ -2,7 +2,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toListDisplayModel, toSplitDisplayModel } from '@/api/helpers';
 import { workflowsService } from './service';
 import { workflowTransformer } from './transformer';
+import { WorkflowCommand, WorkflowStepCommand } from './types';
 import type { CreateWorkflowDto, WorkflowListQueryParams } from './types';
+import { useCommandMutation } from '@/api/useCommandMutation';
 import type { HateoasLink, MineQueryParams } from '@/api/types';
 
 export const workflowKeys = {
@@ -71,40 +73,20 @@ export const useUpdateWorkflowStepComponent = () => {
   });
 };
 
-export const useConfirmWorkflowStep = () => {
-  const queryClient = useQueryClient();
+export const useConfirmWorkflowStep = () =>
+  useCommandMutation(workflowKeys.all, (link: HateoasLink) =>
+    workflowsService.executeStepCommand(link, { command: WorkflowStepCommand.CONFIRM }),
+  );
 
-  return useMutation({
-    mutationFn: (link: HateoasLink) => workflowsService.confirmStep(link),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: workflowKeys.all });
-    },
-  });
-};
+export const usePublishWorkflow = () =>
+  useCommandMutation(workflowKeys.all, (link: HateoasLink) =>
+    workflowsService.executeCommand(link, { command: WorkflowCommand.PUBLISH }),
+  );
 
-export const usePublishWorkflow = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (link: HateoasLink) => workflowsService.publish(link),
-    onSuccess: () => {
-      // publishing makes the workflow appear in the public browse list
-      queryClient.invalidateQueries({ queryKey: workflowKeys.all });
-    },
-  });
-};
-
-export const useUpdateWorkflowDescription = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ link, description }: { link: HateoasLink; description: string | null }) =>
-      workflowsService.updateDescription(link, description),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: workflowKeys.all });
-    },
-  });
-};
+export const useUpdateWorkflowDescription = () =>
+  useCommandMutation(workflowKeys.all, ({ link, description }: { link: HateoasLink; description: string | null }) =>
+    workflowsService.executeCommand(link, { command: WorkflowCommand.UPDATE_DESCRIPTION, description }),
+  );
 
 export const useDownloadWorkflow = () => {
   return useMutation({

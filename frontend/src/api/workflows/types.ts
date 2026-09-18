@@ -43,6 +43,28 @@ export interface WorkflowCreatorDto {
   lastName: string | null;
 }
 
+/** Mirrors the backend's WorkflowCommandTypesApiV1 - the commands POST /workflows/{id}/commands accepts. */
+export const WorkflowCommand = {
+  PUBLISH: 'PUBLISH',
+  UPDATE_DESCRIPTION: 'UPDATE_DESCRIPTION',
+} as const;
+export type WorkflowCommand = (typeof WorkflowCommand)[keyof typeof WorkflowCommand];
+
+export type WorkflowCommandExecuteRequest =
+  | { command: typeof WorkflowCommand.PUBLISH; note?: string }
+  | { command: typeof WorkflowCommand.UPDATE_DESCRIPTION; note?: string; description: string | null };
+
+/** Mirrors the backend's WorkflowStepCommandTypesApiV1 - POST /workflows/steps/{id}/commands. */
+export const WorkflowStepCommand = {
+  CONFIRM: 'CONFIRM',
+} as const;
+export type WorkflowStepCommand = (typeof WorkflowStepCommand)[keyof typeof WorkflowStepCommand];
+
+export interface WorkflowStepCommandExecuteRequest {
+  command: WorkflowStepCommand;
+  note?: string;
+}
+
 export interface WorkflowListItemDto extends WithHateoasLinks {
   id: string;
   name: string;

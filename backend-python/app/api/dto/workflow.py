@@ -156,6 +156,7 @@ class UpdateWorkflowStepRequestDto(CamelModel):
 
 class WorkflowCommandTypesApiV1(StrEnum):
     PUBLISH = "PUBLISH"
+    UNPUBLISH = "UNPUBLISH"
     UPDATE_DESCRIPTION = "UPDATE_DESCRIPTION"
 
 

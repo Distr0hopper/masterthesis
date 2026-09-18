@@ -222,6 +222,19 @@ class ComponentsService:
         component.status = ComponentStatus.PUBLISHED
         return await self.components_repository.save(component)
 
+    async def unpublish(self, component: Component) -> Component:
+        """Inverse of publish - pulls the component back out of the public catalogue.
+
+        Idempotent like publish, and unconditional: a component referenced by an already
+        published workflow can still be unpublished, matching the fact that a workflow may
+        be published while its components are drafts (its steps' component names stay
+        embedded in the workflow either way).
+        """
+        if component.status == ComponentStatus.DRAFT:
+            return component
+        component.status = ComponentStatus.DRAFT
+        return await self.components_repository.save(component)
+
     async def execute_command(
         self,
         component: Component,
@@ -240,6 +253,8 @@ class ComponentsService:
                 return await self.repackage_component(component)
             case ComponentCommandType.PUBLISH:
                 return await self.publish(component)
+            case ComponentCommandType.UNPUBLISH:
+                return await self.unpublish(component)
             case ComponentCommandType.UPDATE_DESCRIPTION:
                 return await self.update_description(component, command.description)
             case ComponentCommandType.UPDATE_DOMAIN:

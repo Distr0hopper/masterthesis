@@ -83,6 +83,11 @@ export const usePublishWorkflow = () =>
     workflowsService.executeCommand(link, { command: WorkflowCommand.PUBLISH }),
   );
 
+export const useUnpublishWorkflow = () =>
+  useCommandMutation(workflowKeys.all, (link: HateoasLink) =>
+    workflowsService.executeCommand(link, { command: WorkflowCommand.UNPUBLISH }),
+  );
+
 export const useUpdateWorkflowDescription = () =>
   useCommandMutation(workflowKeys.all, ({ link, description }: { link: HateoasLink; description: string | null }) =>
     workflowsService.executeCommand(link, { command: WorkflowCommand.UPDATE_DESCRIPTION, description }),

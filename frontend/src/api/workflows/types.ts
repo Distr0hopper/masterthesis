@@ -46,12 +46,13 @@ export interface WorkflowCreatorDto {
 /** Mirrors the backend's WorkflowCommandTypesApiV1 - the commands POST /workflows/{id}/commands accepts. */
 export const WorkflowCommand = {
   PUBLISH: 'PUBLISH',
+  UNPUBLISH: 'UNPUBLISH',
   UPDATE_DESCRIPTION: 'UPDATE_DESCRIPTION',
 } as const;
 export type WorkflowCommand = (typeof WorkflowCommand)[keyof typeof WorkflowCommand];
 
 export type WorkflowCommandExecuteRequest =
-  | { command: typeof WorkflowCommand.PUBLISH; note?: string }
+  | { command: typeof WorkflowCommand.PUBLISH | typeof WorkflowCommand.UNPUBLISH; note?: string }
   | { command: typeof WorkflowCommand.UPDATE_DESCRIPTION; note?: string; description: string | null };
 
 /** Mirrors the backend's WorkflowStepCommandTypesApiV1 - POST /workflows/steps/{id}/commands. */

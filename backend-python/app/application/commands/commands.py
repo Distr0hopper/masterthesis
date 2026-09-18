@@ -7,6 +7,7 @@ class ComponentCommandType(StrEnum):
     REMOVE_FAVORITE = "REMOVE_FAVORITE"
     REPACKAGE = "REPACKAGE"
     PUBLISH = "PUBLISH"
+    UNPUBLISH = "UNPUBLISH"
     UPDATE_DESCRIPTION = "UPDATE_DESCRIPTION"
     UPDATE_DOMAIN = "UPDATE_DOMAIN"
 
@@ -34,6 +35,7 @@ class ComponentCommand:
 
 class WorkflowCommandType(StrEnum):
     PUBLISH = "PUBLISH"
+    UNPUBLISH = "UNPUBLISH"
     UPDATE_DESCRIPTION = "UPDATE_DESCRIPTION"
 
     def __str__(self) -> str:

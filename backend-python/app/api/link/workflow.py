@@ -16,6 +16,7 @@ class WorkflowLinkBuilder(BaseLinkBuilder[Workflow, WorkflowPermissionValidator]
             "self": Link(href=Endpoints.workflow_by_id(entity.id), method=HttpMethod.GET),
             "delete": Link(href=Endpoints.workflow_by_id(entity.id), method=HttpMethod.DELETE),
             "publish": Link(href=Endpoints.workflow_commands_by_id(entity.id), method=HttpMethod.POST),
+            "unpublish": Link(href=Endpoints.workflow_commands_by_id(entity.id), method=HttpMethod.POST),
             "updateDescription": Link(href=Endpoints.workflow_commands_by_id(entity.id), method=HttpMethod.POST),
         }
 
@@ -27,6 +28,8 @@ class WorkflowLinkBuilder(BaseLinkBuilder[Workflow, WorkflowPermissionValidator]
                 return self._validator.can_delete(entity)
             case "publish":
                 return self._validator.can_execute(entity, WorkflowCommandType.PUBLISH)
+            case "unpublish":
+                return self._validator.can_execute(entity, WorkflowCommandType.UNPUBLISH)
             case "updateDescription":
                 return self._validator.can_execute(entity, WorkflowCommandType.UPDATE_DESCRIPTION)
             case _:

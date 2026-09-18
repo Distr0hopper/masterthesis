@@ -26,6 +26,7 @@ class ComponentTransformer:
             ComponentCommandTypesApiV1.REMOVE_FAVORITE: ComponentCommandType.REMOVE_FAVORITE,
             ComponentCommandTypesApiV1.REPACKAGE: ComponentCommandType.REPACKAGE,
             ComponentCommandTypesApiV1.PUBLISH: ComponentCommandType.PUBLISH,
+            ComponentCommandTypesApiV1.UNPUBLISH: ComponentCommandType.UNPUBLISH,
             ComponentCommandTypesApiV1.UPDATE_DESCRIPTION: ComponentCommandType.UPDATE_DESCRIPTION,
             ComponentCommandTypesApiV1.UPDATE_DOMAIN: ComponentCommandType.UPDATE_DOMAIN,
         }

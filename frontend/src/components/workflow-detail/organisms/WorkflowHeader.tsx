@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, Download, Globe, Pencil, Trash2, Workflow as WorkflowIcon } from 'lucide-react';
+import { ChevronLeft, Download, Globe, GlobeLock, Pencil, Trash2, Workflow as WorkflowIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
@@ -10,6 +10,7 @@ import {
   StepMatchStatus,
   useDownloadWorkflow,
   usePublishWorkflow,
+  useUnpublishWorkflow,
   WorkflowSource,
   WorkflowStatus,
   type WorkflowDetailDisplayModel,
@@ -17,6 +18,7 @@ import {
 import {
   canDelete as hasDeleteLink,
   canPublish as hasPublishLink,
+  canUnpublish as hasUnpublishLink,
   canUpdateDescription as hasUpdateDescriptionLink,
   getLink,
 } from '@/api/permissions';
@@ -35,6 +37,7 @@ interface WorkflowHeaderProps {
 export function WorkflowHeader({ model, backTo, backLabel, onDeleted }: WorkflowHeaderProps) {
   const { data: domains } = useDomains();
   const { mutate: publishWorkflow, isPending: isPublishing } = usePublishWorkflow();
+  const { mutate: unpublishWorkflow, isPending: isUnpublishing } = useUnpublishWorkflow();
   const { mutate: downloadWorkflow, isPending: isDownloading } = useDownloadWorkflow();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [editDescriptionDialogOpen, setEditDescriptionDialogOpen] = useState(false);
@@ -45,10 +48,20 @@ export function WorkflowHeader({ model, backTo, backLabel, onDeleted }: Workflow
   // publish is permission-only on the backend (offered regardless of status, same as
   // mark-read/mark-unread) - the status check must stay client-side
   const canPublish = hasPublishLink(model._links) && model.status === WorkflowStatus.PENDING_VALIDATION;
+  // the mirror image of canPublish - both links are permission-only, so status is what
+  // decides which of the two buttons is offered, and never both at once
+  const canUnpublish = hasUnpublishLink(model._links) && model.status === WorkflowStatus.VALIDATED;
 
   const handlePublish = () => {
     publishWorkflow(getLink(model._links, 'publish')!, {
       onSuccess: () => toast.success('Workflow published'),
+      onError: (error) => toast.error(getErrorMessage(error)),
+    });
+  };
+
+  const handleUnpublish = () => {
+    unpublishWorkflow(getLink(model._links, 'unpublish')!, {
+      onSuccess: () => toast.success('Workflow unpublished'),
       onError: (error) => toast.error(getErrorMessage(error)),
     });
   };
@@ -112,6 +125,18 @@ export function WorkflowHeader({ model, backTo, backLabel, onDeleted }: Workflow
                   title={allStepsConfirmed ? undefined : 'Confirm every step before publishing'}
                 >
                   <Globe className="mr-1 h-4 w-4" /> Publish
+                </Button>
+              )}
+
+              {canUnpublish && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleUnpublish}
+                  disabled={isUnpublishing}
+                  title="Hide this workflow from the public list again"
+                >
+                  <GlobeLock className="mr-1 h-4 w-4" /> Unpublish
                 </Button>
               )}
 

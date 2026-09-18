@@ -30,7 +30,7 @@ class WorkflowPermissionValidator(PermissionValidator[Workflow]):
             return False
 
         match command:
-            case WorkflowCommandType.PUBLISH:
+            case WorkflowCommandType.PUBLISH | WorkflowCommandType.UNPUBLISH:
                 return self.can_update(workflow)
             case WorkflowCommandType.UPDATE_DESCRIPTION:
                 return self.can_update(workflow)

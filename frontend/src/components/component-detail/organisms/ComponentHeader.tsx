@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ChevronLeft, Download, ExternalLink, Globe } from 'lucide-react';
+import { ChevronLeft, Download, ExternalLink, Globe, GlobeLock } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
@@ -10,10 +10,16 @@ import {
   getDomainBadgeStyle,
   useDomains,
   usePublishComponent,
+  useUnpublishComponent,
   type ComponentDetailDisplayModel,
 } from '@/api/components';
 import { FavoriteButton } from '@/components/FavoriteButton';
-import { canFavorite, canPublish as hasPublishLink, getLink } from '@/api/permissions';
+import {
+  canFavorite,
+  canPublish as hasPublishLink,
+  canUnpublish as hasUnpublishLink,
+  getLink,
+} from '@/api/permissions';
 import { getErrorMessage } from '@/lib/errors';
 import { ROUTES } from '@/lib/routes';
 
@@ -24,13 +30,22 @@ interface ComponentHeaderProps {
 export function ComponentHeader({ model }: ComponentHeaderProps) {
   const { data: domains } = useDomains();
   const { mutate: publishComponent, isPending: isPublishing } = usePublishComponent();
+  const { mutate: unpublishComponent, isPending: isUnpublishing } = useUnpublishComponent();
   const domainBadgeStyle = domains ? getDomainBadgeStyle(model.domain, domains) : undefined;
 
   const canPublish = hasPublishLink(model._links) && model.status === ComponentStatus.DRAFT;
+  const canUnpublish = hasUnpublishLink(model._links) && model.status === ComponentStatus.PUBLISHED;
 
   const handlePublish = () => {
     publishComponent(getLink(model._links, 'publish')!, {
       onSuccess: () => toast.success('Component published'),
+      onError: (error) => toast.error(getErrorMessage(error)),
+    });
+  };
+
+  const handleUnpublish = () => {
+    unpublishComponent(getLink(model._links, 'unpublish')!, {
+      onSuccess: () => toast.success('Component unpublished'),
       onError: (error) => toast.error(getErrorMessage(error)),
     });
   };
@@ -74,6 +89,18 @@ export function ComponentHeader({ model }: ComponentHeaderProps) {
                   disabled={isPublishing}
                 >
                   <Globe className="mr-1 h-4 w-4" /> Publish
+                </Button>
+              )}
+
+              {canUnpublish && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleUnpublish}
+                  disabled={isUnpublishing}
+                  title="Hide this component from the public list and the Workflow Builder again"
+                >
+                  <GlobeLock className="mr-1 h-4 w-4" /> Unpublish
                 </Button>
               )}
             </div>

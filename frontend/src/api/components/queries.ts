@@ -125,6 +125,11 @@ export const usePublishComponent = () =>
     componentsService.executeCommand(link, { command: ComponentCommand.PUBLISH }),
   );
 
+export const useUnpublishComponent = () =>
+  useCommandMutation(componentKeys.all, (link: HateoasLink) =>
+    componentsService.executeCommand(link, { command: ComponentCommand.UNPUBLISH }),
+  );
+
 export const useUpdateComponentDescription = () =>
   useCommandMutation(componentKeys.all, ({ link, description }: { link: HateoasLink; description: string | null }) =>
     componentsService.executeCommand(link, { command: ComponentCommand.UPDATE_DESCRIPTION, description }),

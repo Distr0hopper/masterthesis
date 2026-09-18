@@ -527,6 +527,17 @@ class WorkflowsService:
         workflow.status = WorkflowStatus.VALIDATED
         return await self.workflows_repository.save(workflow)
 
+    async def unpublish(self, workflow: Workflow) -> Workflow:
+        """Inverse of publish - returns the workflow to PENDING_VALIDATION, where only its
+        creator can see it. Same end state as the automatic downgrade in
+        _revert_to_pending_if_needed, but triggered explicitly rather than by a step edit.
+        Idempotent: an already-pending workflow is returned untouched.
+        """
+        if workflow.status == WorkflowStatus.PENDING_VALIDATION:
+            return workflow
+        workflow.status = WorkflowStatus.PENDING_VALIDATION
+        return await self.workflows_repository.save(workflow)
+
     async def update_description(self, workflow: Workflow, description: str | None) -> Workflow:
         workflow.description = description
         return await self.workflows_repository.save(workflow)
@@ -535,6 +546,8 @@ class WorkflowsService:
         match command.type:
             case WorkflowCommandType.PUBLISH:
                 return await self.publish(workflow)
+            case WorkflowCommandType.UNPUBLISH:
+                return await self.unpublish(workflow)
             case WorkflowCommandType.UPDATE_DESCRIPTION:
                 return await self.update_description(workflow, command.description)
 

@@ -41,6 +41,7 @@ export const ComponentCommand = {
   REMOVE_FAVORITE: 'REMOVE_FAVORITE',
   REPACKAGE: 'REPACKAGE',
   PUBLISH: 'PUBLISH',
+  UNPUBLISH: 'UNPUBLISH',
   UPDATE_DESCRIPTION: 'UPDATE_DESCRIPTION',
   UPDATE_DOMAIN: 'UPDATE_DOMAIN',
 } as const;
@@ -52,7 +53,8 @@ export type ComponentCommandExecuteRequest =
         | typeof ComponentCommand.ADD_FAVORITE
         | typeof ComponentCommand.REMOVE_FAVORITE
         | typeof ComponentCommand.REPACKAGE
-        | typeof ComponentCommand.PUBLISH;
+        | typeof ComponentCommand.PUBLISH
+        | typeof ComponentCommand.UNPUBLISH;
       note?: string;
     }
   | { command: typeof ComponentCommand.UPDATE_DESCRIPTION; note?: string; description: string | null }

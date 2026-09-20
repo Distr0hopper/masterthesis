@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import type { ComponentPreviewDto } from '@/api/workflows/types';
 import type {
   ComponentCreatorDto,
   ComponentDetailDto,
@@ -161,6 +162,56 @@ export const componentTransformer = {
     // self-reference by name, not `this` - toListDisplayModel() passes this method
     // around as a bare function reference, which would drop a `this` binding
     return dtos.map((dto) => componentTransformer.toDisplayModel(dto));
+  },
+
+  /**
+   * A detail display model for a component that does NOT exist yet, so the same
+   * read-only ComponentTabs used on the detail page can preview a workflow upload's
+   * steps before anything is saved.
+   *
+   * The identity fields are placeholders: `id` is empty (ComponentTabs must be rendered
+   * with `isPreview` so it never builds a server download URL from it), `version` is 1
+   * and `status` is DRAFT because that is what creating this component would produce.
+   */
+  toPreviewDisplayModel(
+    preview: ComponentPreviewDto,
+    overrides: { name?: string; domain?: string; description?: string | null } = {},
+  ): ComponentDetailDisplayModel {
+    const now = new Date();
+    const name = overrides.name?.trim() || preview.suggestedName;
+    const domain = overrides.domain ?? '';
+    const description = overrides.description?.trim() || preview.description;
+    const parameters = preview.parameters.map(componentTransformer.toParameterDisplayModel);
+    return {
+      id: '',
+      name,
+      description,
+      authorDisplay: 'You',
+      repoUrl: null,
+      version: 1,
+      domain,
+      domainDisplay: domain ? getDomainLabel(domain) : '',
+      status: ComponentStatus.DRAFT,
+      statusDisplay: COMPONENT_STATUS_LABELS[ComponentStatus.DRAFT],
+      createdAt: now,
+      createdAtDisplay: formatDate(now),
+      isFavorite: false,
+      source: ComponentSource.MANUAL_UPLOAD,
+      sourceDisplay: SOURCE_LABELS[ComponentSource.MANUAL_UPLOAD],
+      repoCommitSha: null,
+      repoCommitShaShort: null,
+      doi: null,
+      cwlContent: preview.cwlContent,
+      cwlType: preview.cwlType,
+      dockerfileContent: preview.dockerfileContent,
+      dockerPullReference: preview.dockerPullReference,
+      dockerPullUrl: preview.dockerPullReference ? buildDockerPullUrl(preview.dockerPullReference) : null,
+      updatedAt: now,
+      updatedAtDisplay: formatDate(now),
+      parameters,
+      inputs: parameters.filter((p) => p.direction === ParameterDirection.INPUT),
+      outputs: parameters.filter((p) => p.direction === ParameterDirection.OUTPUT),
+    };
   },
 
   toDetailDisplayModel(dto: ComponentDetailDto): ComponentDetailDisplayModel {

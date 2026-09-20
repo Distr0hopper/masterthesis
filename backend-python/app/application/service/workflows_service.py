@@ -9,12 +9,13 @@ from fastapi import Depends
 from app.application.commands.commands import WorkflowCommand, WorkflowCommandType, WorkflowStepCommand, WorkflowStepCommandType
 from app.application.exception.component_exceptions import ComponentNotFoundError
 from app.application.exception.workflow_exceptions import (
-    ComponentDomainRequiredError,
     DuplicateExtractedComponentNameError,
     ExtractedComponentNameCollisionError,
+    InvalidComponentConfigError,
     InvalidExtractedComponentNameError,
     InvalidWorkflowArchiveError,
     InvalidWorkflowCwlError,
+    UnconfiguredWorkflowStepError,
     UnsupportedInlineWorkflowStepError,
     WorkflowNotFoundError,
     WorkflowNotReadyToPublishError,
@@ -23,6 +24,7 @@ from app.application.exception.workflow_exceptions import (
 )
 from app.application.service.components_service import ComponentsService
 from app.domain.models.component import Component, ComponentSource
+from app.domain.models.parameter import Parameter
 from app.domain.models.user import User
 from app.domain.models.workflow import Workflow, WorkflowSource, WorkflowStatus
 from app.domain.models.workflow_domain import WorkflowDomain
@@ -31,10 +33,16 @@ from app.domain.pagination.pagination import PaginatedList
 from app.domain.repository.components_repository import ComponentsRepository
 from app.domain.repository.workflows_repository import WorkflowListFilter, WorkflowsRepository
 from app.infrastructure.cwl.cwl_matcher import best_match
-from app.infrastructure.cwl.cwl_parser import inject_cwl_version
+from app.infrastructure.cwl.cwl_parser import (
+    extract_cwl_type,
+    extract_description,
+    extract_docker_pull,
+    extract_dockerfile_content,
+    extract_parameters,
+    inject_cwl_version,
+)
 from app.infrastructure.cwl.workflow_generator import assemble_cwl_zip, cwl_filename_for
 from app.infrastructure.cwl.workflow_parser import (
-    ExtractedComponent,
     externalize_inline_steps,
     extract_inline_components,
     extract_step_definitions,
@@ -44,6 +52,63 @@ from app.infrastructure.cwl.workflow_parser import (
     read_workflow_overview,
     strip_cwl_extension,
 )
+
+
+#: an inline `run: {class: CommandLineTool}` lifted out of a self-contained workflow
+COMPONENT_ORIGIN_INLINE = "inline"
+#: a `run: some-tool.cwl` resolved against the uploaded archive's own files
+COMPONENT_ORIGIN_ARCHIVE = "archive"
+
+
+@dataclass
+class ComponentMatch:
+    """An existing catalogue Component a step could bind to instead of creating a new one -
+    either because it shares the previewed name (name_conflict) or because the matcher
+    scored it against the step's run: filename (suggested_match)."""
+
+    component_id: uuid.UUID
+    name: str
+    version: int
+    domain: str
+    #: fuzzy-match confidence; None for an exact name collision, which isn't a guess
+    score: float | None
+
+
+@dataclass
+class ComponentPreview:
+    """One workflow step rendered as the Component it would become - the whole point of
+    the configure-before-save flow. Built for inline tools AND for the archive's own step
+    files, which previously had their content thrown away after an existence check."""
+
+    step_id: str
+    origin: str
+    #: the `run:` filename, archive origin only
+    run_reference: str | None
+    suggested_name: str
+    description: str | None
+    cwl_content: str
+    cwl_type: str | None
+    dockerfile_content: str | None
+    docker_pull_reference: str | None
+    parameters: list[Parameter]
+    name_conflict: ComponentMatch | None
+    suggested_match: ComponentMatch | None
+
+
+@dataclass
+class ComponentConfig:
+    """The user's decision for one step: reuse an existing Component, or create a new one
+    from the previewed CWL with this name/domain/description."""
+
+    step_id: str
+    reuse_component_id: uuid.UUID | None = None
+    name: str | None = None
+    domain: str | None = None
+    description: str | None = None
+
+    @property
+    def is_reuse(self) -> bool:
+        return self.reuse_component_id is not None
 
 
 @dataclass
@@ -56,7 +121,7 @@ class WorkflowUploadPreview:
     is_self_contained: bool
     workflow_name: str | None
     step_count: int
-    extracted_components: list[ExtractedComponent]
+    component_previews: list[ComponentPreview]
     external_refs: list[str]
     unsupported_inline_steps: list[str]
     missing_external_refs: list[str]
@@ -65,13 +130,22 @@ class WorkflowUploadPreview:
 @dataclass
 class WorkflowUploadContent:
     """The zip-vs-bare-file dispatch result shared by parse_workflow_upload and
-    create_from_upload - available_files is None for a bare .cwl upload (nothing to
-    cross-check external refs against)."""
+    create_from_upload - files is None for a bare .cwl upload (nothing to cross-check
+    external refs against).
+
+    NOTE: files holds the archive's full {filename: content} map, not just its keys -
+    an external-ref step's own .cwl text is what gets previewed and, when the user opts
+    to create rather than reuse, persisted as that step's Component.
+    """
 
     is_zip: bool
     cwl_content: str
     pipeline_filename: str | None
-    available_files: set[str] | None
+    files: dict[str, str] | None
+
+    @property
+    def available_files(self) -> set[str] | None:
+        return None if self.files is None else set(self.files)
 
 
 if TYPE_CHECKING:
@@ -153,7 +227,6 @@ class WorkflowsService:
             raise InvalidWorkflowCwlError(str(err)) from err
 
         self_contained = is_self_contained(upload.cwl_content)
-        components = extract_inline_components(upload.cwl_content) if self_contained else []
 
         missing_external_refs = (
             sorted(ref for ref in set(overview.external_refs) if ref not in upload.available_files)
@@ -167,11 +240,97 @@ class WorkflowsService:
             workflow_name=overview.name
             or (strip_cwl_extension(upload.pipeline_filename) if upload.pipeline_filename else None),
             step_count=overview.step_count,
-            extracted_components=components,
+            component_previews=await self._build_component_previews(upload, overview.cwl_version),
             external_refs=overview.external_refs,
             unsupported_inline_steps=overview.unsupported_inline_steps,
             missing_external_refs=missing_external_refs,
         )
+
+    async def _build_component_previews(
+        self, upload: WorkflowUploadContent, cwl_version: str | None
+    ) -> list[ComponentPreview]:
+        """Every step of the upload rendered as the Component it would become.
+
+        Covers both origins: inline CommandLineTools, and the archive's own step files -
+        the latter used to be existence-checked and then discarded, which is why a zip's
+        steps could never be previewed or imported. Steps that cannot be resolved to any
+        CWL text (an external ref on a bare .cwl upload, or one missing from the archive)
+        are skipped; read_workflow_overview's external_refs/missing_external_refs already
+        report those, and create_from_upload rejects them outright.
+        """
+        inline_by_step_id = {c.step_id: c for c in extract_inline_components(upload.cwl_content)}
+
+        # one query, reused for every archive step's fuzzy match - latest version per
+        # lineage, the same candidate pool create_from_upload and _parse_zip_into_steps use
+        all_components = await self.components_repository.find_all()
+        candidates = [(c.id, c.name) for c in all_components]
+        by_id = {c.id: c for c in all_components}
+
+        previews: list[ComponentPreview] = []
+        for step_id, definition in extract_step_definitions(upload.cwl_content):
+            run_value = definition.get("run")
+            suggested_match: ComponentMatch | None = None
+
+            if isinstance(run_value, str):
+                if upload.files is None or run_value not in upload.files:
+                    continue
+                cwl_content = upload.files[run_value]
+                origin, run_reference = COMPONENT_ORIGIN_ARCHIVE, run_value
+                suggested_name = strip_cwl_extension(run_value)
+                match = best_match(run_value, candidates)
+                if match is not None:
+                    matched_id, _name, score = match
+                    suggested_match = self._to_component_match(by_id[matched_id], score)
+            else:
+                inline = inline_by_step_id.get(step_id)
+                if inline is None:
+                    # an inline run: that isn't a CommandLineTool - reported separately as
+                    # unsupported_inline_steps and rejected on create, never previewed
+                    continue
+                # preview exactly what would be persisted: inline tools carry no
+                # cwlVersion of their own, so the parent workflow's is injected here too
+                cwl_content = inject_cwl_version(inline.cwl_content, cwl_version)
+                origin, run_reference = COMPONENT_ORIGIN_INLINE, None
+                suggested_name = inline.suggested_name
+
+            existing_versions = await self.components_repository.find_versions_by_name(suggested_name)
+            previews.append(
+                ComponentPreview(
+                    step_id=step_id,
+                    origin=origin,
+                    run_reference=run_reference,
+                    suggested_name=suggested_name,
+                    description=extract_description(cwl_content),
+                    cwl_content=cwl_content,
+                    cwl_type=extract_cwl_type(cwl_content),
+                    dockerfile_content=extract_dockerfile_content(cwl_content),
+                    docker_pull_reference=extract_docker_pull(cwl_content),
+                    parameters=self._safe_extract_parameters(cwl_content),
+                    name_conflict=self._to_component_match(existing_versions[-1], None) if existing_versions else None,
+                    suggested_match=suggested_match,
+                )
+            )
+        return previews
+
+    @staticmethod
+    def _to_component_match(component: Component, score: float | None) -> ComponentMatch:
+        return ComponentMatch(
+            component_id=component.id,
+            name=component.name,
+            version=component.version,
+            domain=component.domain,
+            score=score,
+        )
+
+    @staticmethod
+    def _safe_extract_parameters(cwl_content: str) -> list[Parameter]:
+        """Preview-only: a step file whose ports don't parse still deserves to be shown
+        (with its CWL and Docker tabs intact) rather than failing the whole upload. The
+        real parse happens again in ComponentsService.create_manual, which does raise."""
+        try:
+            return extract_parameters(cwl_content)
+        except ValueError:
+            return []
 
     def _load_upload_content(self, content: bytes, filename: str | None) -> WorkflowUploadContent:
         """Auto-detects whether `content` is a .zip archive or a bare .cwl file and
@@ -187,7 +346,7 @@ class WorkflowsService:
                 is_zip=True,
                 cwl_content=cwl_content,
                 pipeline_filename=pipeline_filename,
-                available_files=set(files.keys()),
+                files=files,
             )
 
         try:
@@ -195,27 +354,50 @@ class WorkflowsService:
         except UnicodeDecodeError as err:
             raise InvalidWorkflowCwlError("File is not valid UTF-8 text") from err
         return WorkflowUploadContent(
-            is_zip=False, cwl_content=cwl_content, pipeline_filename=filename, available_files=None
+            is_zip=False, cwl_content=cwl_content, pipeline_filename=filename, files=None
         )
 
-    async def _validate_extracted_component_names(self, names: list[str]) -> None:
-        """Validates every final extracted-component name before creating any of them -
-        blank check, duplicate-within-this-upload check, and a catalogue collision check.
+    async def _validate_component_configs(
+        self, step_definitions: list[tuple[str, dict]], configs: dict[str, ComponentConfig]
+    ) -> None:
+        """Validates every step's configuration before any Component is created.
+
+        Reuse configs only need their target to exist. Create configs get the full
+        treatment: a domain, a non-blank name, no duplicate name within this upload, and
+        no collision with the catalogue (the user is offered the reuse branch instead).
+
         Necessary because ComponentsService.create_manual commits immediately per call
         (no shared transaction across N creates), so the common failure mode (a name
         collision) must fail atomically up front rather than being discovered mid-loop
-        after earlier components are already permanently persisted."""
+        after earlier components are already permanently persisted. This matters more now
+        than it did before: archive steps create components too, so N is larger.
+        """
         seen: set[str] = set()
-        for name in names:
-            if not name.strip():
-                raise InvalidExtractedComponentNameError(name)
-            if name in seen:
-                raise DuplicateExtractedComponentNameError(name)
-            seen.add(name)
-        for name in names:
-            existing_versions = await self.components_repository.find_versions_by_name(name)
+        for step_id, _definition in step_definitions:
+            config = configs[step_id]
+
+            if config.is_reuse:
+                if config.reuse_component_id is not None:
+                    component = await self.components_repository.find_by_id(config.reuse_component_id)
+                    if component is None:
+                        raise ComponentNotFoundError(config.reuse_component_id)
+                continue
+
+            if config.name is None or not config.name.strip():
+                raise InvalidExtractedComponentNameError(config.name or "")
+            if not config.domain:
+                raise InvalidComponentConfigError(step_id, "a domain is required to create a new component")
+            if config.name in seen:
+                raise DuplicateExtractedComponentNameError(config.name)
+            seen.add(config.name)
+
+        for step_id, _definition in step_definitions:
+            config = configs[step_id]
+            if config.is_reuse or config.name is None:
+                continue
+            existing_versions = await self.components_repository.find_versions_by_name(config.name)
             if existing_versions:
-                raise ExtractedComponentNameCollisionError(name)
+                raise ExtractedComponentNameCollisionError(config.name)
 
     async def _parse_zip_into_steps(self, zip_bytes: bytes) -> tuple[str, list[WorkflowStep]]:
         """(pipeline CWL, fresh WorkflowStep rows) from an archive.
@@ -302,17 +484,17 @@ class WorkflowsService:
         name: str,
         description: str | None,
         domains: list[str],
-        component_domain: str | None,
-        component_name_overrides: dict[str, str],
+        component_configs: dict[str, ComponentConfig],
         created_by_id: uuid.UUID,
     ) -> Workflow:
         """Persists any of the 3 manual-upload shapes (external-only zip, self-contained
-        bare .cwl, or a zip mixing both) as a real Workflow - and, for each inline
-        CommandLineTool step, a real Component. component_name_overrides maps
-        step_id -> user-edited name, falling back to the extracted suggested_name;
-        component_domain applies to every extracted component in this upload
-        (Component.domain is a single value, distinct from Workflow.domains) and is only
-        required when the upload actually has inline steps to extract.
+        bare .cwl, or a zip mixing both) as a real Workflow.
+
+        Every step must carry a ComponentConfig (keyed by step_id, as previewed by
+        parse_workflow_upload): either reuse_component_id, binding the step to an existing
+        catalogue Component, or a name/domain/description to create a new one from that
+        step's CWL. Nothing is auto-created behind the user's back and nothing is left to
+        post-save fuzzy triage - an unconfigured step is an error, not a guess.
         """
         upload = self._load_upload_content(content, filename)
 
@@ -335,75 +517,85 @@ class WorkflowsService:
                     f"Referenced step file(s) not found in archive: {', '.join(missing)}"
                 )
 
-        extracted_components = extract_inline_components(upload.cwl_content)
-        if extracted_components and component_domain is None:
-            raise ComponentDomainRequiredError()
+        step_definitions = extract_step_definitions(upload.cwl_content)
+        unconfigured = [step_id for step_id, _ in step_definitions if step_id not in component_configs]
+        if unconfigured:
+            raise UnconfiguredWorkflowStepError(unconfigured)
 
-        final_names = {
-            extracted.step_id: component_name_overrides.get(extracted.step_id, extracted.suggested_name)
-            for extracted in extracted_components
+        await self._validate_component_configs(step_definitions, component_configs)
+
+        extracted_by_step_id = {c.step_id: c for c in extract_inline_components(upload.cwl_content)}
+
+        # existence already guaranteed by _validate_component_configs above
+        reused_components = {
+            step_id: await self.components_repository.find_by_id(config.reuse_component_id)
+            for step_id, config in component_configs.items()
+            if config.reuse_component_id is not None
         }
-        await self._validate_extracted_component_names(list(final_names.values()))
 
-        run_references = {step_id: cwl_filename_for(final_name) for step_id, final_name in final_names.items()}
+        # every inline step gets its run: rewritten to a filename, including one bound to
+        # an existing component (named after that component) - otherwise the stored
+        # pipeline would keep an inline tool body that no longer describes the step. An
+        # archive step is left alone: it already points at a real file that still carries
+        # that name inside the zip, so renaming its Component must not rename the reference.
+        run_references = {
+            step_id: cwl_filename_for(
+                reused_components[step_id].name
+                if component_configs[step_id].is_reuse
+                else component_configs[step_id].name
+            )
+            for step_id in extracted_by_step_id
+        }
         pipeline_content = externalize_inline_steps(upload.cwl_content, run_references)
-
-        extracted_by_step_id = {extracted.step_id: extracted for extracted in extracted_components}
-
-        # latest version per lineage of every existing Component - same fuzzy-match
-        # candidate pool as _parse_zip_into_steps, for the external-ref steps here
-        all_components = await self.components_repository.find_all()
-        candidates = [(c.id, c.name) for c in all_components]
 
         steps: list[WorkflowStep] = []
         pending_components: list[tuple[WorkflowStep, Component]] = []
-        for order, (step_id, definition) in enumerate(extract_step_definitions(upload.cwl_content)):
+        for order, (step_id, definition) in enumerate(step_definitions):
+            config = component_configs[step_id]
             run_value = definition["run"]
-            if isinstance(run_value, str):
-                match = best_match(run_value, candidates)
-                if match is not None:
-                    component_id, _name, score = match
-                    steps.append(
-                        WorkflowStep(
-                            step_id=step_id,
-                            run_reference=run_value,
-                            step_order=order,
-                            component_id=component_id,
-                            match_status=StepMatchStatus.SUGGESTED,
-                            match_score=score,
-                        )
+            is_inline = not isinstance(run_value, str)
+            reference = run_references[step_id] if is_inline else run_value
+
+            if config.is_reuse:
+                steps.append(
+                    WorkflowStep(
+                        step_id=step_id,
+                        run_reference=reference,
+                        step_order=order,
+                        component_id=config.reuse_component_id,
+                        # the user picked this explicitly during configuration - there is
+                        # nothing left to triage on the detail page, and no score to report
+                        match_status=StepMatchStatus.CONFIRMED,
+                        match_score=None,
                     )
-                else:
-                    steps.append(
-                        WorkflowStep(
-                            step_id=step_id,
-                            run_reference=run_value,
-                            step_order=order,
-                            match_status=StepMatchStatus.UNMATCHED,
-                        )
-                    )
-            else:
-                # guaranteed class: CommandLineTool by the unsupported_inline_steps guard above
+                )
+                continue
+
+            if is_inline:
                 extracted = extracted_by_step_id[step_id]
-                component = Component(
-                    name=final_names[step_id],
-                    domain=component_domain,
-                    cwl_content=inject_cwl_version(extracted.cwl_content, overview.cwl_version),
-                    source=ComponentSource.MANUAL_UPLOAD,
-                    created_by_id=created_by_id,
-                    description=extracted.description,
-                )
-                # the mapping is exact - the tool *was* this step - not a fuzzy guess, so
-                # it's CONFIRMED immediately and match_score stays None (no score to report)
-                step = WorkflowStep(
-                    step_id=step_id,
-                    run_reference=run_references[step_id],
-                    step_order=order,
-                    match_status=StepMatchStatus.CONFIRMED,
-                    match_score=None,
-                )
-                pending_components.append((step, component))
-                steps.append(step)
+                cwl_content = inject_cwl_version(extracted.cwl_content, overview.cwl_version)
+                fallback_description = extracted.description
+            else:
+                cwl_content = upload.files[run_value]
+                fallback_description = extract_description(cwl_content)
+
+            component = Component(
+                name=config.name,
+                domain=config.domain,
+                cwl_content=cwl_content,
+                source=ComponentSource.MANUAL_UPLOAD,
+                created_by_id=created_by_id,
+                description=config.description or fallback_description,
+            )
+            step = WorkflowStep(
+                step_id=step_id,
+                run_reference=reference,
+                step_order=order,
+                match_status=StepMatchStatus.CONFIRMED,
+                match_score=None,
+            )
+            pending_components.append((step, component))
+            steps.append(step)
 
         # only create Components once every validation above has passed - create_manual
         # commits immediately per call, so this loop is the point of no return

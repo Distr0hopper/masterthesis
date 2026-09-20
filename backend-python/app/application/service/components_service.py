@@ -116,6 +116,16 @@ class ComponentsService:
 
         return f"{base_name}.zip", buffer.getvalue()
 
+    async def find_latest_version_by_name(self, name: str) -> Component | None:
+        """The newest version of the lineage holding this exact name, if it exists.
+
+        Backs the name-availability check the workflow-upload flow uses to resolve a
+        collision before anything is written - either by renaming, or by binding the step
+        to the component returned here.
+        """
+        versions = await self.components_repository.find_versions_by_name(name)
+        return versions[-1] if versions else None
+
     async def create_manual(self, component: Component, context: str = "Uploaded") -> Component:
         existing_versions = await self.components_repository.find_versions_by_name(component.name)
         if existing_versions:

@@ -55,10 +55,8 @@ export const workflowsService = {
     formData.append('name', dto.name);
     dto.domains.forEach((domain) => formData.append('domains', domain));
     if (dto.description) formData.append('description', dto.description);
-    if (dto.componentDomain) formData.append('componentDomain', dto.componentDomain);
-    if (dto.componentOverrides?.length) {
-      formData.append('componentOverrides', JSON.stringify(dto.componentOverrides));
-    }
+    // one form field carrying the whole JSON array - matches the backend's Json[...] field
+    formData.append('componentConfigs', JSON.stringify(dto.componentConfigs));
     return apiClient.post(ENDPOINT, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
 

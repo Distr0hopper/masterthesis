@@ -20,6 +20,24 @@ export const componentKeys = {
   detail: (id: string) => [...componentKeys.all, 'detail', id] as const,
   versions: (id: string) => [...componentKeys.all, 'versions', id] as const,
   domains: () => ['domains'] as const,
+  nameAvailability: (name: string) => [...componentKeys.all, 'name-availability', name] as const,
+};
+
+/**
+ * Whether `name` is still free for a new component lineage.
+ *
+ * Used while configuring an upload so a collision is resolved (rename, or reuse the
+ * existing component) before anything is written - rather than surfacing as a 409 after
+ * the whole file has been submitted. Callers are expected to debounce `name` themselves.
+ */
+export const useComponentNameAvailability = (name: string) => {
+  const trimmed = name.trim();
+  return useQuery({
+    queryKey: componentKeys.nameAvailability(trimmed),
+    queryFn: () => componentsService.checkNameAvailability(trimmed),
+    enabled: trimmed.length > 0,
+    staleTime: 30_000,
+  });
 };
 
 export const useComponents = (params: ComponentListQueryParams) => {

@@ -1,4 +1,5 @@
 import type { PageParams, SplitPageResponse, WithHateoasLinks } from '@/api/types';
+import type { ParameterDirection } from '@/api/components/types';
 
 export const StepMatchStatus = {
   SUGGESTED: 'suggested',
@@ -106,20 +107,25 @@ export interface WorkflowDetailDto extends WithHateoasLinks {
   updatedAt: string;
 }
 
-/** One user-edited extracted-component name, keyed by ExtractedComponentDto.stepId. */
-export interface ComponentOverrideDto {
+/**
+ * The user's decision for one previewed step, keyed by ComponentPreviewDto.stepId.
+ * Exactly one branch: reuseComponentId binds the step to an existing component, or
+ * name+domain create a new one from that step's CWL.
+ */
+export interface ComponentConfigDto {
   stepId: string;
-  name: string;
+  reuseComponentId?: string | null;
+  name?: string | null;
+  domain?: string | null;
+  description?: string | null;
 }
 
 export interface CreateWorkflowDto {
   name: string;
   domains: string[];
   description?: string | null;
-  /** domain for every extracted inline component in this upload - required only if the
-   * upload actually has inline steps to extract. */
-  componentDomain?: string | null;
-  componentOverrides?: ComponentOverrideDto[];
+  /** one entry per step - every step must be configured before the workflow can be saved */
+  componentConfigs: ComponentConfigDto[];
 }
 
 export interface WorkflowListQueryParams extends PageParams<WorkflowListItemDto> {
@@ -130,14 +136,54 @@ export interface WorkflowListQueryParams extends PageParams<WorkflowListItemDto>
 
 export type MyWorkflowsResponseDto = SplitPageResponse<WorkflowListItemDto>;
 
-/** One inline CommandLineTool found in a self-contained/mixed upload. */
-export interface ExtractedComponentDto {
-  stepId: string;
-  suggestedName: string;
-  cwlContent: string;
+/** Where a previewed component's CWL came from. */
+export const ComponentOrigin = {
+  /** an inline `run: {class: CommandLineTool}` lifted out of the workflow */
+  INLINE: 'inline',
+  /** a `run: some-tool.cwl` resolved against the uploaded archive's own files */
+  ARCHIVE: 'archive',
+} as const;
+export type ComponentOrigin = (typeof ComponentOrigin)[keyof typeof ComponentOrigin];
+
+/** An existing component a step could bind to instead of creating a new one. */
+export interface ComponentMatchDto {
+  componentId: string;
+  name: string;
+  version: number;
+  domain: string;
+  /** fuzzy-match confidence; null for an exact name collision, which isn't a guess */
+  score: number | null;
+}
+
+/** A previewed component port - never persisted, so `id` is synthetic (see the backend DTO). */
+export interface PreviewParameterDto {
+  id: string;
+  name: string;
+  cwlType: string;
+  defaultValue: string | null;
   description: string | null;
-  inputCount: number;
-  outputCount: number;
+  format: string | null;
+  formatLabel: string | null;
+  direction: ParameterDirection;
+}
+
+/** One workflow step rendered as the Component it would become, for review before saving. */
+export interface ComponentPreviewDto {
+  stepId: string;
+  origin: ComponentOrigin;
+  /** the `run:` filename, archive origin only */
+  runReference: string | null;
+  suggestedName: string;
+  description: string | null;
+  cwlContent: string;
+  cwlType: string | null;
+  dockerfileContent: string | null;
+  dockerPullReference: string | null;
+  parameters: PreviewParameterDto[];
+  /** an existing component already holding suggestedName - the user must rename or reuse it */
+  nameConflict: ComponentMatchDto | null;
+  /** archive origin only - the catalogue component this step's run: filename matches */
+  suggestedMatch: ComponentMatchDto | null;
 }
 
 export interface ParseWorkflowResponseDto {
@@ -146,7 +192,8 @@ export interface ParseWorkflowResponseDto {
   isSelfContained: boolean;
   workflowName: string | null;
   stepCount: number;
-  extractedComponents: ExtractedComponentDto[];
+  /** one per resolvable step, inline and archive alike */
+  componentPreviews: ComponentPreviewDto[];
   /** steps whose run: is a plain filename - not extracted, the caller must supply these separately */
   externalRefs: string[];
   /** steps whose run: is inline but not class: CommandLineTool (e.g. an inline ExpressionTool) */

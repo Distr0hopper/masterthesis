@@ -12,6 +12,8 @@ from app.api.dto.component import (
     ComponentDetailDto,
     ComponentListItemDto,
     CreateComponentRequestDto,
+    ExistingComponentDto,
+    NameAvailabilityDto,
     PackageComponentRequestDto,
 )
 from app.api.dto.pagination import ListQueryPaginationDtoV1, PaginatedResponseDtoV1, build_paginated_response
@@ -117,6 +119,32 @@ async def list_latest_components(
     components = await components_service.get_latest_components(limit)
     favorited_names = await _favorited_names(favorites_service, current_user)
     return [ComponentTransformer.to_list_item(c, c.name in favorited_names, current_user) for c in components]
+
+
+@router.get("/name-availability", response_model=NameAvailabilityDto)
+async def check_name_availability(
+    components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
+    name: Annotated[str, Query(min_length=1)],
+) -> NameAvailabilityDto:
+    """Whether `name` is still free for a new component lineage.
+
+    NOTE: must stay declared above GET /{component_id} - FastAPI matches routes in
+    declaration order, and "name-availability" would otherwise be parsed as a component id.
+    """
+    existing = await components_service.find_latest_version_by_name(name)
+    return NameAvailabilityDto(
+        name=name,
+        available=existing is None,
+        existing=None
+        if existing is None
+        else ExistingComponentDto(
+            id=existing.id,
+            name=existing.name,
+            version=existing.version,
+            domain=existing.domain,
+            status=existing.status,
+        ),
+    )
 
 
 @router.post(

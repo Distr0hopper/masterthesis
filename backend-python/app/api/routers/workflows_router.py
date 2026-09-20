@@ -8,9 +8,11 @@ from fastapi.responses import Response
 from app.api.dto.common import ErrorResponse, MyItemsResponseDtoV1, build_my_items_response
 from app.api.dto.pagination import ListQueryPaginationDtoV1, PaginatedResponseDtoV1, build_paginated_response
 from app.api.dto.workflow import (
+    ComponentMatchDto,
+    ComponentPreviewDto,
     CreateWorkflowRequestDto,
-    ExtractedComponentDto,
     ParseWorkflowRequestDto,
+    PreviewParameterDto,
     ParseWorkflowResponseDto,
     UpdateWorkflowStepRequestDto,
     WorkflowCommandExecuteRequestDto,
@@ -25,7 +27,7 @@ from app.api.transformer.workflow_transformer import WorkflowTransformer
 from app.application.exception.favorites_exceptions import FavoritesRequireAuthError
 from app.application.service.auth_service import AuthService
 from app.application.service.favorites_service import FavoritesService
-from app.application.service.workflows_service import WorkflowsService
+from app.application.service.workflows_service import ComponentConfig, ComponentMatch, ComponentPreview, WorkflowsService
 from app.domain.models.component_domain import VALID_DOMAINS
 from app.domain.models.user import User
 from app.domain.models.workflow import WorkflowStatus
@@ -36,6 +38,50 @@ router = APIRouter(prefix="/workflows", tags=["workflows"])
 logger = logging.getLogger("app.api.routers.workflows_router")
 
 MAX_WORKFLOW_ZIP_SIZE = 10 * 1024 * 1024
+
+
+def _to_component_match_dto(match: ComponentMatch | None) -> ComponentMatchDto | None:
+    if match is None:
+        return None
+    return ComponentMatchDto(
+        component_id=match.component_id,
+        name=match.name,
+        version=match.version,
+        domain=match.domain,
+        score=match.score,
+    )
+
+
+def _to_component_preview_dto(preview: ComponentPreview) -> ComponentPreviewDto:
+    return ComponentPreviewDto(
+        step_id=preview.step_id,
+        origin=preview.origin,
+        run_reference=preview.run_reference,
+        suggested_name=preview.suggested_name,
+        description=preview.description,
+        cwl_content=preview.cwl_content,
+        cwl_type=preview.cwl_type,
+        dockerfile_content=preview.dockerfile_content,
+        docker_pull_reference=preview.docker_pull_reference,
+        parameters=[
+            PreviewParameterDto(
+                # synthetic: these parameters are parsed, never persisted, so they have no
+                # primary key - step_id+direction+name is unique within one response, which
+                # is all the UI needs it for
+                id=f"{preview.step_id}:{parameter.direction.value}:{parameter.name}",
+                name=parameter.name,
+                cwl_type=parameter.cwl_type,
+                default_value=parameter.default_value,
+                description=parameter.description,
+                format=parameter.format,
+                format_label=parameter.format_label,
+                direction=parameter.direction,
+            )
+            for parameter in preview.parameters
+        ],
+        name_conflict=_to_component_match_dto(preview.name_conflict),
+        suggested_match=_to_component_match_dto(preview.suggested_match),
+    )
 
 
 async def _favorited_ids(favorites_service: FavoritesService, user: User | None) -> set[str]:
@@ -130,7 +176,7 @@ async def list_latest_workflows(
         status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
         status.HTTP_409_CONFLICT: {
             "model": ErrorResponse,
-            "description": "An extracted component's name already exists",
+            "description": "A configured component's name already exists",
         },
         status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErrorResponse, "description": "Request validation failed"},
     },
@@ -151,7 +197,16 @@ async def create(
             f"Validation failed (expected size to be less than {MAX_WORKFLOW_ZIP_SIZE} bytes)",
         )
 
-    overrides_by_step = {o.step_id: o.name for o in dto.component_overrides}
+    configs_by_step = {
+        c.step_id: ComponentConfig(
+            step_id=c.step_id,
+            reuse_component_id=c.reuse_component_id,
+            name=c.name,
+            domain=c.domain,
+            description=c.description,
+        )
+        for c in dto.component_configs
+    }
     logger.info(f"Creating workflow '{dto.name}' for user {current_user.id}")
     workflow = await workflows_service.create_from_upload(
         content,
@@ -159,8 +214,7 @@ async def create(
         dto.name,
         dto.description,
         dto.domains,
-        dto.component_domain,
-        overrides_by_step,
+        configs_by_step,
         current_user.id,
     )
     logger.info(f"Created workflow {workflow.id} ('{workflow.name}') with {len(workflow.steps)} steps")
@@ -198,17 +252,7 @@ async def parse_workflow(
         is_self_contained=preview.is_self_contained,
         workflow_name=preview.workflow_name,
         step_count=preview.step_count,
-        extracted_components=[
-            ExtractedComponentDto(
-                step_id=c.step_id,
-                suggested_name=c.suggested_name,
-                cwl_content=c.cwl_content,
-                description=c.description,
-                input_count=len(c.inputs),
-                output_count=len(c.outputs),
-            )
-            for c in preview.extracted_components
-        ],
+        component_previews=[_to_component_preview_dto(c) for c in preview.component_previews],
         external_refs=preview.external_refs,
         unsupported_inline_steps=preview.unsupported_inline_steps,
         missing_external_refs=preview.missing_external_refs,

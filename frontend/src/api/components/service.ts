@@ -9,6 +9,7 @@ import type {
   CreateComponentDto,
   DomainDto,
   MyComponentsResponseDto,
+  NameAvailabilityDto,
   PackageComponentDto,
 } from './types';
 
@@ -85,6 +86,10 @@ export const componentsService = {
 
   delete(link: HateoasLink): Promise<void> {
     return apiClient.request(link);
+  },
+
+  checkNameAvailability(name: string): Promise<NameAvailabilityDto> {
+    return apiClient.get(`${ENDPOINT}/name-availability`, { params: { name } });
   },
 
   getDomains(): Promise<DomainDto[]> {

@@ -1,0 +1,31 @@
+import { ExternalLink } from 'lucide-react';
+import { ROUTES } from '@/lib/routes';
+import { cn } from '@/lib/utils';
+
+interface ComponentLinkProps {
+  componentId: string;
+  name: string;
+  version?: number | null;
+  className?: string;
+}
+
+/**
+ * A component's name, linking to its detail page in a new tab - so a step's binding can
+ * be checked without losing whatever page (upload wizard, workflow detail) it sits on.
+ */
+export function ComponentLink({ componentId, name, version, className }: ComponentLinkProps) {
+  return (
+    <a
+      href={ROUTES.componentDetail(componentId)}
+      target="_blank"
+      rel="noreferrer"
+      title="Open details in a new tab"
+      aria-label={`Open ${name} details in a new tab`}
+      className={cn('flex items-baseline gap-2 hover:underline', className)}
+    >
+      <span className="font-mono text-sm font-semibold text-slate-900">{name}</span>
+      {version != null && <span className="text-xs text-slate-500">v{version}</span>}
+      <ExternalLink className="h-3.5 w-3.5 self-center text-slate-400" />
+    </a>
+  );
+}

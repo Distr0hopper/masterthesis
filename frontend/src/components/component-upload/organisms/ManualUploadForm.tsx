@@ -5,7 +5,6 @@ import { toast } from 'sonner';
 import { Input } from '@/components/ui/input.tsx';
 import { Textarea } from '@/components/ui/textarea.tsx';
 import { Button } from '@/components/ui/button.tsx';
-import { Label } from '@/components/ui/label.tsx';
 import {
   componentTransformer,
   uploadComponentFormSchema,
@@ -16,6 +15,7 @@ import {
 import { getErrorMessage } from '@/lib/errors';
 import { ROUTES } from '@/lib/routes';
 import { FileDropzone } from '@/components/common/FileDropzone';
+import { FormField } from '@/components/common/FormField';
 import { DomainSelect } from '../common/DomainSelect';
 
 interface ManualUploadFormProps {
@@ -77,11 +77,9 @@ export function ManualUploadForm({ onSuccess }: ManualUploadFormProps) {
         )}
       />
 
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="name">Component Name</Label>
+      <FormField htmlFor="name" label="Component Name" error={errors.name?.message}>
         <Input {...register('name')} id="name" placeholder="e.g. remove-outliers" />
-        {errors.name && <p className="text-sm text-error-foreground">{errors.name.message}</p>}
-      </div>
+      </FormField>
 
       <Controller
         control={control}
@@ -89,13 +87,9 @@ export function ManualUploadForm({ onSuccess }: ManualUploadFormProps) {
         render={({ field }) => <DomainSelect value={field.value} onChange={field.onChange} error={errors.domain?.message} />}
       />
 
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="description">
-          Description <span className="font-normal text-slate-500">(optional)</span>
-        </Label>
+      <FormField htmlFor="description" label="Description" optional error={errors.description?.message}>
         <Textarea {...register('description')} id="description" placeholder="Brief description..." rows={4} />
-        {errors.description && <p className="text-sm text-error-foreground">{errors.description.message}</p>}
-      </div>
+      </FormField>
 
       <Button type="submit" className="w-full bg-jmu-blue-800 hover:bg-jmu-blue-800/90" disabled={isPending}>
         {isPending ? 'Creating...' : 'Create Component'}

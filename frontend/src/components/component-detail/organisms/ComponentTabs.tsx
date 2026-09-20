@@ -23,9 +23,15 @@ interface TabConfig {
 
 interface ComponentTabsProps {
   model: ComponentDetailDisplayModel;
+  /**
+   * Render a component that isn't persisted yet (a workflow-upload preview). Its `id` is
+   * a placeholder, so the CWL tab downloads the in-memory content as a client-side blob
+   * instead of pointing at a component download endpoint that would 404.
+   */
+  isPreview?: boolean;
 }
 
-export function ComponentTabs({ model }: ComponentTabsProps) {
+export function ComponentTabs({ model, isPreview = false }: ComponentTabsProps) {
   const tabs: TabConfig[] = [
     { value: 'overview', label: 'Overview', icon: Eye },
     { value: 'cwl', label: 'CWL Definition', icon: FileCode },
@@ -54,7 +60,9 @@ export function ComponentTabs({ model }: ComponentTabsProps) {
             <CodeBlock
               title={`${model.name}.cwl`}
               content={model.cwlContent}
-              downloadUrl={componentsService.getDownloadUrl(model.id)}
+              {...(isPreview
+                ? { downloadFilename: `${model.name}.cwl` }
+                : { downloadUrl: componentsService.getDownloadUrl(model.id) })}
             />
           </TabsContent>
 

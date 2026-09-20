@@ -31,9 +31,17 @@ class WorkflowNotReadyToPublishError(Exception):
         super().__init__(f"Workflow {workflow_id} cannot be published until every step is confirmed")
 
 
-class ComponentDomainRequiredError(Exception):
-    def __init__(self) -> None:
-        super().__init__("component_domain is required when the upload contains extracted inline components")
+class UnconfiguredWorkflowStepError(Exception):
+    def __init__(self, step_ids: list[str]) -> None:
+        super().__init__(
+            f"Step(s) {', '.join(step_ids)} have no component configuration - every step must either "
+            "reuse an existing component or configure a new one before the workflow can be created"
+        )
+
+
+class InvalidComponentConfigError(Exception):
+    def __init__(self, step_id: str, reason: str) -> None:
+        super().__init__(f"Component configuration for step '{step_id}' is invalid: {reason}")
 
 
 class InvalidExtractedComponentNameError(Exception):

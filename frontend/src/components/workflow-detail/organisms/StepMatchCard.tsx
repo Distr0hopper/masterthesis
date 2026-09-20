@@ -13,8 +13,11 @@ import {
 } from '@/api/workflows';
 import { canUpdate as hasUpdateLink, canConfirm as hasConfirmLink, getLink } from '@/api/permissions';
 import { getErrorMessage } from '@/lib/errors';
-import { ROUTES } from '@/lib/routes';
-import { ComponentPickerDialog } from './ComponentPickerDialog';
+import { ComponentPickerDialog } from '@/components/common/ComponentPickerDialog';
+import { ComponentLink } from '@/components/common/ComponentLink';
+import { DefinitionDisclosure } from '@/components/common/DefinitionDisclosure';
+import { ComponentTabs } from '@/components/component-detail/organisms/ComponentTabs';
+import { useComponent } from '@/api/components';
 
 const STATUS_BADGE_VARIANT: Record<StepMatchStatus, 'secondary' | 'default' | 'destructive'> = {
   [StepMatchStatus.SUGGESTED]: 'secondary',
@@ -28,6 +31,10 @@ interface StepMatchCardProps {
 
 export function StepMatchCard({ step }: StepMatchCardProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [showDefinition, setShowDefinition] = useState(false);
+  // only fetched once the definition is actually opened - a workflow can have many steps,
+  // and the list would otherwise pull a full component detail for every one of them
+  const { data: component } = useComponent(showDefinition && step.componentId ? step.componentId : '');
   const { mutate: updateComponent, isPending: isUpdating } = useUpdateWorkflowStepComponent();
   const { mutate: confirmStep, isPending: isConfirming } = useConfirmWorkflowStep();
   const canUpdate = hasUpdateLink(step._links);
@@ -70,16 +77,11 @@ export function StepMatchCard({ step }: StepMatchCardProps) {
           <Label>Matched Component</Label>
           {step.componentId ? (
             <div className="flex items-center justify-between gap-2 rounded-md border border-input px-3 py-2">
-              <a
-                href={ROUTES.componentDetail(step.componentId)}
-                target="_blank"
-                rel="noreferrer"
-                title="View component details"
-                className="flex items-baseline gap-2 hover:underline"
-              >
-                <span className="font-mono text-sm font-semibold text-slate-900">{step.componentName}</span>
-                <span className="text-xs text-slate-500">v{step.componentVersion}</span>
-              </a>
+              <ComponentLink
+                componentId={step.componentId}
+                name={step.componentName ?? 'Component'}
+                version={step.componentVersion}
+              />
               {canUpdate && (
                 <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={() => setPickerOpen(true)}>
                   Change
@@ -97,6 +99,16 @@ export function StepMatchCard({ step }: StepMatchCardProps) {
 
         {canUpdate && (
           <ComponentPickerDialog open={pickerOpen} onOpenChange={setPickerOpen} value={step.componentId} onSelect={handleChange} />
+        )}
+
+        {step.componentId && (
+          <DefinitionDisclosure open={showDefinition} onOpenChange={setShowDefinition}>
+            {component ? (
+              <ComponentTabs model={component} />
+            ) : (
+              <p className="text-sm text-slate-500">Loading definition...</p>
+            )}
+          </DefinitionDisclosure>
         )}
 
         {canConfirm && (

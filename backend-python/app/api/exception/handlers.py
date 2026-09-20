@@ -21,12 +21,13 @@ from app.application.exception.workflow_draft_exceptions import (
     WorkflowDraftNotFoundError,
 )
 from app.application.exception.workflow_exceptions import (
-    ComponentDomainRequiredError,
     DuplicateExtractedComponentNameError,
     ExtractedComponentNameCollisionError,
+    InvalidComponentConfigError,
     InvalidExtractedComponentNameError,
     InvalidWorkflowArchiveError,
     InvalidWorkflowCwlError,
+    UnconfiguredWorkflowStepError,
     UnsupportedInlineWorkflowStepError,
     WorkflowNotFoundError,
     WorkflowNotReadyToPublishError,
@@ -136,7 +137,11 @@ async def _missing_command_payload_handler(request: Request, exc: MissingCommand
     return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
-async def _component_domain_required_handler(request: Request, exc: ComponentDomainRequiredError) -> JSONResponse:
+async def _unconfigured_workflow_step_handler(request: Request, exc: UnconfiguredWorkflowStepError) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
+
+
+async def _invalid_component_config_handler(request: Request, exc: InvalidComponentConfigError) -> JSONResponse:
     return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
@@ -180,7 +185,8 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(WorkflowDraftForbiddenError, _workflow_draft_forbidden_handler)
     app.add_exception_handler(ExportValidationError, _export_validation_handler)
     app.add_exception_handler(MissingCommandPayloadError, _missing_command_payload_handler)
-    app.add_exception_handler(ComponentDomainRequiredError, _component_domain_required_handler)
+    app.add_exception_handler(UnconfiguredWorkflowStepError, _unconfigured_workflow_step_handler)
+    app.add_exception_handler(InvalidComponentConfigError, _invalid_component_config_handler)
     app.add_exception_handler(InvalidExtractedComponentNameError, _invalid_extracted_component_name_handler)
     app.add_exception_handler(DuplicateExtractedComponentNameError, _duplicate_extracted_component_name_handler)
     app.add_exception_handler(ExtractedComponentNameCollisionError, _extracted_component_name_collision_handler)

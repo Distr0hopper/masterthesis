@@ -36,6 +36,23 @@ export interface ParameterDto {
   direction: ParameterDirection;
 }
 
+/** The component currently holding a name, returned when that name is taken. */
+export interface ExistingComponentDto {
+  id: string;
+  name: string;
+  version: number;
+  domain: string;
+  status: ComponentStatus;
+}
+
+/** Whether a component name can still be claimed for a new lineage. */
+export interface NameAvailabilityDto {
+  name: string;
+  available: boolean;
+  /** the latest version of the lineage already holding this name, if any */
+  existing: ExistingComponentDto | null;
+}
+
 export const ComponentCommand = {
   ADD_FAVORITE: 'ADD_FAVORITE',
   REMOVE_FAVORITE: 'REMOVE_FAVORITE',

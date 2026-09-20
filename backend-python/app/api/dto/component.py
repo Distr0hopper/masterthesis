@@ -114,6 +114,27 @@ class ComponentDetailDto(CamelModel, LinkModel):
     is_favorite: bool
 
 
+class ExistingComponentDto(CamelModel):
+    """The component currently holding a name, returned when that name is taken."""
+
+    id: uuid.UUID
+    name: str
+    version: int
+    domain: str
+    status: ComponentStatus
+
+
+class NameAvailabilityDto(CamelModel):
+    """Whether a component name can still be claimed. Lets a caller warn (and offer to
+    reuse the existing component) while the user is typing, instead of only failing with
+    a 409 after the whole upload has been submitted."""
+
+    name: str
+    available: bool
+    #: the latest version of the lineage already holding this name, if any
+    existing: ExistingComponentDto | None
+
+
 class CreateComponentRequestDto(
     DomainValidatorMixin, RepoUrlValidatorMixin, EmptyRepoCommitShaToNoneMixin, EmptyDescriptionToNoneMixin, CamelModel
 ):

@@ -1,9 +1,10 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, Download, ExternalLink, Globe, GlobeLock } from 'lucide-react';
+import { ChevronLeft, Download, ExternalLink, Globe, GlobeLock, Pencil, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
-import { toast } from 'sonner';
 import {
   ComponentStatus,
   componentsService,
@@ -16,23 +17,34 @@ import {
 import { FavoriteButton } from '@/components/FavoriteButton';
 import {
   canFavorite,
+  canDelete as hasDeleteLink,
   canPublish as hasPublishLink,
   canUnpublish as hasUnpublishLink,
+  canUpdateDescription as hasUpdateDescriptionLink,
+  canUpdateDomain as hasUpdateDomainLink,
   getLink,
 } from '@/api/permissions';
 import { getErrorMessage } from '@/lib/errors';
-import { ROUTES } from '@/lib/routes';
+import { DeleteComponentDialog } from '@/components/component-mine/organisms/DeleteComponentDialog';
+import { EditComponentDialog } from './EditComponentDialog';
 
 interface ComponentHeaderProps {
   model: ComponentDetailDisplayModel;
+  backTo: string;
+  backLabel: string;
+  onDeleted: () => void;
 }
 
-export function ComponentHeader({ model }: ComponentHeaderProps) {
+export function ComponentHeader({ model, backTo, backLabel, onDeleted }: ComponentHeaderProps) {
   const { data: domains } = useDomains();
   const { mutate: publishComponent, isPending: isPublishing } = usePublishComponent();
   const { mutate: unpublishComponent, isPending: isUnpublishing } = useUnpublishComponent();
   const domainBadgeStyle = domains ? getDomainBadgeStyle(model.domain, domains) : undefined;
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
 
+  const canDelete = hasDeleteLink(model._links);
+  const canEdit = hasUpdateDescriptionLink(model._links) || hasUpdateDomainLink(model._links);
   const canPublish = hasPublishLink(model._links) && model.status === ComponentStatus.DRAFT;
   const canUnpublish = hasUnpublishLink(model._links) && model.status === ComponentStatus.PUBLISHED;
 
@@ -52,8 +64,8 @@ export function ComponentHeader({ model }: ComponentHeaderProps) {
 
   return (
     <>
-      <Link to={ROUTES.browse} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900">
-        <ChevronLeft className="h-4 w-4" /> Back to Browse
+      <Link to={backTo} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900">
+        <ChevronLeft className="h-4 w-4" /> {backLabel}
       </Link>
 
       {model.status === ComponentStatus.DRAFT && (
@@ -81,6 +93,12 @@ export function ComponentHeader({ model }: ComponentHeaderProps) {
                 </a>
               </Button>
 
+              {canEdit && (
+                <Button variant="outline" size="sm" onClick={() => setEditDialogOpen(true)}>
+                  <Pencil className="mr-1 h-4 w-4" /> Edit
+                </Button>
+              )}
+
               {canPublish && (
                 <Button
                   size="sm"
@@ -101,6 +119,12 @@ export function ComponentHeader({ model }: ComponentHeaderProps) {
                   title="Hide this component from the public list and the Workflow Builder again"
                 >
                   <GlobeLock className="mr-1 h-4 w-4" /> Unpublish
+                </Button>
+              )}
+
+              {canDelete && (
+                <Button variant="destructive" size="sm" onClick={() => setDeleteDialogOpen(true)}>
+                  <Trash2 className="mr-1 h-4 w-4" /> Delete
                 </Button>
               )}
             </div>
@@ -132,6 +156,14 @@ export function ComponentHeader({ model }: ComponentHeaderProps) {
           </div>
         </CardContent>
       </Card>
+
+      <DeleteComponentDialog
+        component={model}
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onDeleted={onDeleted}
+      />
+      <EditComponentDialog component={model} open={editDialogOpen} onOpenChange={setEditDialogOpen} />
     </>
   );
 }

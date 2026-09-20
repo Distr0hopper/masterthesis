@@ -8,8 +8,6 @@ interface DeleteWorkflowDialogProps {
   workflow: WorkflowDisplayModel;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  // WorkflowDetailPage needs to navigate away after deleting - component-mine's dialogs
-  // never needed this since deletion happens from a list, not the entity's own page
   onDeleted?: () => void;
 }
 

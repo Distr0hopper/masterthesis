@@ -120,17 +120,14 @@ export default function WorkflowBuilderOverviewPage() {
 
                 <div className="flex justify-end border-t pt-3">
                   <Button
-                    variant="ghost"
+                    variant="destructive"
                     size="sm"
-                    className="text-slate-500 hover:text-destructive"
-                    // the card itself navigates, so the delete click must not bubble
                     onClick={(e) => {
                       e.stopPropagation();
                       askDelete(draft);
                     }}
                   >
-                    <Trash2 size={14} />
-                    Delete
+                    <Trash2 className="mr-1 h-4 w-4" /> Delete
                   </Button>
                 </div>
               </CardContent>

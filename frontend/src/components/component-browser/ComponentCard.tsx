@@ -10,10 +10,11 @@ import { ROUTES } from '@/lib/routes';
 
 interface ComponentCardProps {
   component: ComponentDisplayModel;
+  backTo?: string;
   actions?: ReactNode;
 }
 
-export function ComponentCard({ component, actions }: ComponentCardProps) {
+export function ComponentCard({ component, backTo = ROUTES.browse, actions }: ComponentCardProps) {
   const { data: domains } = useDomains();
   const domainBadgeStyle = domains ? getDomainBadgeStyle(component.domain, domains) : undefined;
 
@@ -47,7 +48,9 @@ export function ComponentCard({ component, actions }: ComponentCardProps) {
         </div>
 
         <Button asChild className="w-full bg-jmu-blue-800 hover:bg-jmu-blue-800/90">
-          <Link to={ROUTES.componentDetail(component.id)}>View</Link>
+          <Link to={ROUTES.componentDetail(component.id)} state={{ from: backTo }}>
+            View
+          </Link>
         </Button>
 
         {actions}

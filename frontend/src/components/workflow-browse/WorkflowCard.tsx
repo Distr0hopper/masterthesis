@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { PenLine } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card.tsx';
@@ -10,20 +11,16 @@ import { ROUTES } from '@/lib/routes';
 
 interface WorkflowCardProps {
   workflow: WorkflowDisplayModel;
-  /** Where the detail page's "Back" link should return to - defaults to the public browse page. */
   backTo?: string;
-  /**
-   * Opt in to the "Edit in builder" action. Off by default: browsing is for viewing, and
-   * editing belongs to My Workflows only - so the button stays off the public list even
-   * for workflows you own.
-   */
   showBuilderLink?: boolean;
+  actions?: ReactNode;
 }
 
 export function WorkflowCard({
   workflow,
   backTo = ROUTES.workflows,
   showBuilderLink = false,
+  actions,
 }: WorkflowCardProps) {
   const { data: domains } = useDomains();
 
@@ -93,6 +90,8 @@ export function WorkflowCard({
               </Link>
             </Button>
           )}
+
+          {actions}
         </div>
       </CardContent>
     </Card>

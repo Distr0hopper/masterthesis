@@ -2,17 +2,17 @@ import { useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button.tsx';
 import { canDelete } from '@/api/permissions';
-import type { ComponentDisplayModel } from '@/api/components';
-import { DeleteComponentDialog } from './DeleteComponentDialog';
+import type { WorkflowDisplayModel } from '@/api/workflows';
+import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
 
-interface MyComponentCardActionsProps {
-  component: ComponentDisplayModel;
+interface MyWorkflowCardActionsProps {
+  workflow: WorkflowDisplayModel;
 }
 
-export function MyComponentCardActions({ component }: MyComponentCardActionsProps) {
+export function MyWorkflowCardActions({ workflow }: MyWorkflowCardActionsProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  if (!canDelete(component._links)) return null;
+  if (!canDelete(workflow._links)) return null;
 
   return (
     <>
@@ -20,7 +20,7 @@ export function MyComponentCardActions({ component }: MyComponentCardActionsProp
         <Trash2 className="mr-1 h-4 w-4" /> Delete
       </Button>
 
-      <DeleteComponentDialog component={component} open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen} />
+      <DeleteWorkflowDialog workflow={workflow} open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen} />
     </>
   );
 }

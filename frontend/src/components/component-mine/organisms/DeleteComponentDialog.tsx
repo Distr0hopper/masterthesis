@@ -8,9 +8,10 @@ interface DeleteComponentDialogProps {
   component: ComponentDisplayModel;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onDeleted?: () => void;
 }
 
-export function DeleteComponentDialog({ component, open, onOpenChange }: DeleteComponentDialogProps) {
+export function DeleteComponentDialog({ component, open, onOpenChange, onDeleted }: DeleteComponentDialogProps) {
   const { mutate, isPending } = useDeleteComponent();
 
   const handleDelete = () => {
@@ -18,6 +19,7 @@ export function DeleteComponentDialog({ component, open, onOpenChange }: DeleteC
       onSuccess: () => {
         toast.success(`${component.name} v${component.version} deleted`);
         onOpenChange(false);
+        onDeleted?.();
       },
       onError: (error) => {
         toast.error(getErrorMessage(error));

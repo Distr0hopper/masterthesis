@@ -24,7 +24,7 @@ import {
 } from '@/api/permissions';
 import { getErrorMessage } from '@/lib/errors';
 import { downloadBlob } from '@/lib/download';
-import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
+import { DeleteWorkflowDialog } from '@/components/workflow-mine/organisms/DeleteWorkflowDialog';
 import { EditWorkflowDescriptionDialog } from './EditWorkflowDescriptionDialog';
 
 interface WorkflowHeaderProps {
@@ -43,13 +43,9 @@ export function WorkflowHeader({ model, backTo, backLabel, onDeleted }: Workflow
   const [editDescriptionDialogOpen, setEditDescriptionDialogOpen] = useState(false);
 
   const canDelete = hasDeleteLink(model._links);
-  const canUpdateDescription = hasUpdateDescriptionLink(model._links);
+  const canEdit = hasUpdateDescriptionLink(model._links);
   const allStepsConfirmed = model.steps.every((step) => step.matchStatus === StepMatchStatus.CONFIRMED);
-  // publish is permission-only on the backend (offered regardless of status, same as
-  // mark-read/mark-unread) - the status check must stay client-side
   const canPublish = hasPublishLink(model._links) && model.status === WorkflowStatus.PENDING_VALIDATION;
-  // the mirror image of canPublish - both links are permission-only, so status is what
-  // decides which of the two buttons is offered, and never both at once
   const canUnpublish = hasUnpublishLink(model._links) && model.status === WorkflowStatus.VALIDATED;
 
   const handlePublish = () => {
@@ -101,8 +97,6 @@ export function WorkflowHeader({ model, backTo, backLabel, onDeleted }: Workflow
                 </Badge>
               ))}
 
-              {/* provenance sits with the domain badges; the icon distinguishes it at a
-                  glance from the coloured domain chips next to it */}
               <Badge variant="secondary" className="w-fit gap-1">
                 {model.source === WorkflowSource.WORKFLOW_BUILDER && (
                   <WorkflowIcon className="h-3 w-3" aria-hidden />
@@ -115,6 +109,12 @@ export function WorkflowHeader({ model, backTo, backLabel, onDeleted }: Workflow
               <Button variant="outline" size="sm" onClick={handleDownload} disabled={isDownloading}>
                 <Download className="mr-1 h-4 w-4" /> Download
               </Button>
+
+              {canEdit && (
+                <Button variant="outline" size="sm" onClick={() => setEditDescriptionDialogOpen(true)}>
+                  <Pencil className="mr-1 h-4 w-4" /> Edit
+                </Button>
+              )}
 
               {canPublish && (
                 <Button
@@ -150,16 +150,7 @@ export function WorkflowHeader({ model, backTo, backLabel, onDeleted }: Workflow
 
           <h1 className="font-mono text-2xl font-bold text-slate-900">{model.name}</h1>
 
-          {(model.description || canUpdateDescription) && (
-            <div className="flex items-start justify-between gap-2">
-              <p className="text-slate-600">{model.description || 'No description'}</p>
-              {canUpdateDescription && (
-                <Button variant="ghost" size="sm" className="shrink-0" onClick={() => setEditDescriptionDialogOpen(true)}>
-                  <Pencil className="mr-1 h-4 w-4" /> Edit
-                </Button>
-              )}
-            </div>
-          )}
+          {model.description && <p className="text-slate-600">{model.description}</p>}
 
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t pt-3 text-sm text-slate-500">
             <span>{model.createdByDisplay}</span>

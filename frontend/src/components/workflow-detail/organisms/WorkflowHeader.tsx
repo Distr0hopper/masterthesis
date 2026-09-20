@@ -16,6 +16,7 @@ import {
   type WorkflowDetailDisplayModel,
 } from '@/api/workflows';
 import {
+  canFavorite,
   canDelete as hasDeleteLink,
   canPublish as hasPublishLink,
   canUnpublish as hasUnpublishLink,
@@ -24,6 +25,7 @@ import {
 } from '@/api/permissions';
 import { getErrorMessage } from '@/lib/errors';
 import { downloadBlob } from '@/lib/download';
+import { WorkflowFavoriteButton } from '@/components/WorkflowFavoriteButton';
 import { DeleteWorkflowDialog } from '@/components/workflow-mine/organisms/DeleteWorkflowDialog';
 import { EditWorkflowDescriptionDialog } from './EditWorkflowDescriptionDialog';
 
@@ -103,6 +105,10 @@ export function WorkflowHeader({ model, backTo, backLabel, onDeleted }: Workflow
                 )}
                 {model.sourceDisplay}
               </Badge>
+
+              {canFavorite(model._links) && (
+                <WorkflowFavoriteButton links={model._links!} isFavorite={model.isFavorite} />
+              )}
             </div>
 
             <div className="flex items-center gap-2">

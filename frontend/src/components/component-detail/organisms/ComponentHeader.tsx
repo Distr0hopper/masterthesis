@@ -14,7 +14,7 @@ import {
   useUnpublishComponent,
   type ComponentDetailDisplayModel,
 } from '@/api/components';
-import { FavoriteButton } from '@/components/FavoriteButton';
+import { ComponentFavoriteButton } from '@/components/ComponentFavoriteButton';
 import {
   canFavorite,
   canDelete as hasDeleteLink,
@@ -83,7 +83,7 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
                 {model.domainDisplay}
               </Badge>
 
-              {canFavorite(model._links) && <FavoriteButton links={model._links!} isFavorite={model.isFavorite} />}
+              {canFavorite(model._links) && <ComponentFavoriteButton links={model._links!} isFavorite={model.isFavorite} />}
             </div>
 
             <div className="flex items-center gap-2">

@@ -17,7 +17,13 @@ const ENDPOINT = '/workflows';
 export const workflowsService = {
   getAll(params: WorkflowListQueryParams): Promise<PageResponse<WorkflowListItemDto>> {
     return apiClient.get(ENDPOINT, {
-      params: { domain: params.domain, search: params.search || undefined, limit: params.limit, offset: params.offset },
+      params: {
+        domain: params.domain,
+        search: params.search || undefined,
+        favoritesOnly: params.favoritesOnly || undefined,
+        limit: params.limit,
+        offset: params.offset,
+      },
     });
   },
 

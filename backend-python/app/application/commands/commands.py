@@ -34,6 +34,8 @@ class ComponentCommand:
 
 
 class WorkflowCommandType(StrEnum):
+    ADD_FAVORITE = "ADD_FAVORITE"
+    REMOVE_FAVORITE = "REMOVE_FAVORITE"
     PUBLISH = "PUBLISH"
     UNPUBLISH = "UNPUBLISH"
     UPDATE_DESCRIPTION = "UPDATE_DESCRIPTION"

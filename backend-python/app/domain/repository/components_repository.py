@@ -7,7 +7,7 @@ from sqlmodel import and_, func, or_, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.domain.models.component import Component, ComponentStatus
-from app.domain.models.favorite import Favorite
+from app.domain.models.favorite import Favorite, FavoriteEntityType
 from app.domain.pagination.pagination import PaginatedList
 from app.infrastructure.db.session import get_db
 
@@ -44,7 +44,11 @@ class ComponentsRepository:
         if filter.favorited_by is not None:
             query = query.join(
                 Favorite,
-                and_(Favorite.component_name == Component.name, Favorite.user_id == filter.favorited_by),
+                and_(
+                    Favorite.entity_type == FavoriteEntityType.COMPONENT,
+                    Favorite.entity_ref == Component.name,
+                    Favorite.user_id == filter.favorited_by,
+                ),
             )
         if filter.search is not None:
             query = query.where(Component.name.ilike(f"%{filter.search}%"))

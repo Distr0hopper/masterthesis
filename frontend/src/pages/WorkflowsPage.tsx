@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Upload } from 'lucide-react';
 import { useDomains } from '@/api/components';
 import { useWorkflows } from '@/api/workflows';
@@ -12,15 +12,28 @@ import { ROUTES } from '@/lib/routes';
 
 export default function WorkflowsPage() {
   const { limit, offset, setOffset, getFilter, setFilter } = usePageParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated());
 
   const searchTerm = getFilter('search');
   const selectedDomain = getFilter('domain');
+  const favoritesOnly = searchParams.get('favoritesOnly') === 'true';
+
+  const setBooleanFilter = (key: string, value: boolean) => {
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      if (value) params.set(key, 'true');
+      else params.delete(key);
+      params.set('offset', '0');
+      return params;
+    });
+  };
 
   const { data: domains } = useDomains();
   const { data, isLoading } = useWorkflows({
     domain: selectedDomain || undefined,
     search: searchTerm || undefined,
+    favoritesOnly: isAuthenticated && favoritesOnly,
     limit,
     offset,
   });
@@ -52,6 +65,9 @@ export default function WorkflowsPage() {
         domains={domains ?? []}
         onSearchTermChange={(value) => setFilter('search', value)}
         onDomainChange={(value) => setFilter('domain', value)}
+        showFavoritesToggle={isAuthenticated}
+        favoritesOnly={favoritesOnly}
+        onFavoritesOnlyChange={(value) => setBooleanFilter('favoritesOnly', value)}
       />
 
       {isLoading ? (

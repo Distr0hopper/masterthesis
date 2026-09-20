@@ -1,27 +1,20 @@
 import type { MouseEvent } from 'react';
 import { Star } from 'lucide-react';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button.tsx';
-import { useToggleFavorite } from '@/api/components';
-import { getLink } from '@/api/permissions';
-import type { HateoasLinks } from '@/api/types';
-import { getErrorMessage } from '@/lib/errors';
 import { cn } from '@/lib/utils';
 
 interface FavoriteButtonProps {
-  links: HateoasLinks;
   isFavorite: boolean;
+  isPending: boolean;
+  onToggle: () => void;
   className?: string;
 }
 
-export function FavoriteButton({ links, isFavorite, className }: FavoriteButtonProps) {
-  const { mutate: toggleFavorite, isPending } = useToggleFavorite();
-
+export function FavoriteButton({ isFavorite, isPending, onToggle, className }: FavoriteButtonProps) {
   const handleClick = (e: MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const link = getLink(links, isFavorite ? 'unfavorite' : 'favorite')!;
-    toggleFavorite({ link, isFavorite }, { onError: (error) => toast.error(getErrorMessage(error)) });
+    onToggle();
   };
 
   return (

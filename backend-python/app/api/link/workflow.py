@@ -18,6 +18,8 @@ class WorkflowLinkBuilder(BaseLinkBuilder[Workflow, WorkflowPermissionValidator]
             "publish": Link(href=Endpoints.workflow_commands_by_id(entity.id), method=HttpMethod.POST),
             "unpublish": Link(href=Endpoints.workflow_commands_by_id(entity.id), method=HttpMethod.POST),
             "updateDescription": Link(href=Endpoints.workflow_commands_by_id(entity.id), method=HttpMethod.POST),
+            "favorite": Link(href=Endpoints.workflow_commands_by_id(entity.id), method=HttpMethod.POST),
+            "unfavorite": Link(href=Endpoints.workflow_commands_by_id(entity.id), method=HttpMethod.POST),
         }
 
     def _is_link_allowed(self, rel: str, entity: Workflow) -> bool:
@@ -32,5 +34,9 @@ class WorkflowLinkBuilder(BaseLinkBuilder[Workflow, WorkflowPermissionValidator]
                 return self._validator.can_execute(entity, WorkflowCommandType.UNPUBLISH)
             case "updateDescription":
                 return self._validator.can_execute(entity, WorkflowCommandType.UPDATE_DESCRIPTION)
+            case "favorite":
+                return self._validator.can_execute(entity, WorkflowCommandType.ADD_FAVORITE)
+            case "unfavorite":
+                return self._validator.can_execute(entity, WorkflowCommandType.REMOVE_FAVORITE)
             case _:
                 return False

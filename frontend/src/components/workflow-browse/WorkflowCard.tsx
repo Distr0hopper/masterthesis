@@ -6,7 +6,8 @@ import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { getDomainBadgeStyle, useDomains } from '@/api/components';
 import { WorkflowSource, WorkflowStatus, type WorkflowDisplayModel } from '@/api/workflows';
-import { canDelete } from '@/api/permissions';
+import { canDelete, canFavorite } from '@/api/permissions';
+import { WorkflowFavoriteButton } from '@/components/WorkflowFavoriteButton';
 import { ROUTES } from '@/lib/routes';
 
 interface WorkflowCardProps {
@@ -41,22 +42,28 @@ export function WorkflowCard({
   return (
     <Card>
       <CardContent className="flex flex-col gap-3 pt-6">
-        <div className="flex flex-wrap items-center gap-2">
-          {workflow.status !== WorkflowStatus.VALIDATED && (
-            <Badge variant="secondary" className="w-fit">
-              {workflow.statusDisplay}
-            </Badge>
+        <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            {workflow.status !== WorkflowStatus.VALIDATED && (
+              <Badge variant="secondary" className="w-fit">
+                {workflow.statusDisplay}
+              </Badge>
+            )}
+            {workflow.domains.map((domainId, index) => (
+              <Badge
+                key={domainId}
+                variant="outline"
+                className="w-fit"
+                style={domains ? getDomainBadgeStyle(domainId, domains) : undefined}
+              >
+                {workflow.domainsDisplay[index]}
+              </Badge>
+            ))}
+          </div>
+
+          {canFavorite(workflow._links) && (
+            <WorkflowFavoriteButton links={workflow._links!} isFavorite={workflow.isFavorite} />
           )}
-          {workflow.domains.map((domainId, index) => (
-            <Badge
-              key={domainId}
-              variant="outline"
-              className="w-fit"
-              style={domains ? getDomainBadgeStyle(domainId, domains) : undefined}
-            >
-              {workflow.domainsDisplay[index]}
-            </Badge>
-          ))}
         </div>
 
         <h3 className="font-mono text-lg font-bold text-slate-900">{workflow.name}</h3>

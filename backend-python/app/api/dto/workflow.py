@@ -65,6 +65,7 @@ class WorkflowListItemDto(CamelModel, LinkModel):
     description: str | None
     domains: list[str]
     step_count: int
+    is_favorite: bool
     status: WorkflowStatus
     source: WorkflowSource
     #: set only for source=workflow_builder, and cleared if that draft is deleted
@@ -79,6 +80,7 @@ class WorkflowDetailDto(CamelModel, LinkModel):
     domains: list[str]
     created_by: ComponentCreatorDto | None
     steps: list[WorkflowStepDto]
+    is_favorite: bool
     status: WorkflowStatus
     source: WorkflowSource
     #: set only for source=workflow_builder, and cleared if that draft is deleted
@@ -155,6 +157,8 @@ class UpdateWorkflowStepRequestDto(CamelModel):
 
 
 class WorkflowCommandTypesApiV1(StrEnum):
+    ADD_FAVORITE = "ADD_FAVORITE"
+    REMOVE_FAVORITE = "REMOVE_FAVORITE"
     PUBLISH = "PUBLISH"
     UNPUBLISH = "UNPUBLISH"
     UPDATE_DESCRIPTION = "UPDATE_DESCRIPTION"

@@ -45,6 +45,8 @@ export interface WorkflowCreatorDto {
 
 /** Mirrors the backend's WorkflowCommandTypesApiV1 - the commands POST /workflows/{id}/commands accepts. */
 export const WorkflowCommand = {
+  ADD_FAVORITE: 'ADD_FAVORITE',
+  REMOVE_FAVORITE: 'REMOVE_FAVORITE',
   PUBLISH: 'PUBLISH',
   UNPUBLISH: 'UNPUBLISH',
   UPDATE_DESCRIPTION: 'UPDATE_DESCRIPTION',
@@ -52,7 +54,14 @@ export const WorkflowCommand = {
 export type WorkflowCommand = (typeof WorkflowCommand)[keyof typeof WorkflowCommand];
 
 export type WorkflowCommandExecuteRequest =
-  | { command: typeof WorkflowCommand.PUBLISH | typeof WorkflowCommand.UNPUBLISH; note?: string }
+  | {
+      command:
+        | typeof WorkflowCommand.ADD_FAVORITE
+        | typeof WorkflowCommand.REMOVE_FAVORITE
+        | typeof WorkflowCommand.PUBLISH
+        | typeof WorkflowCommand.UNPUBLISH;
+      note?: string;
+    }
   | { command: typeof WorkflowCommand.UPDATE_DESCRIPTION; note?: string; description: string | null };
 
 /** Mirrors the backend's WorkflowStepCommandTypesApiV1 - POST /workflows/steps/{id}/commands. */
@@ -72,6 +81,7 @@ export interface WorkflowListItemDto extends WithHateoasLinks {
   description: string | null;
   domains: string[];
   stepCount: number;
+  isFavorite: boolean;
   status: WorkflowStatus;
   source: WorkflowSource;
   /** set only for source=workflow_builder, and cleared if that draft is deleted */
@@ -86,6 +96,7 @@ export interface WorkflowDetailDto extends WithHateoasLinks {
   domains: string[];
   createdBy: WorkflowCreatorDto | null;
   steps: WorkflowStepDto[];
+  isFavorite: boolean;
   status: WorkflowStatus;
   source: WorkflowSource;
   /** set only for source=workflow_builder, and cleared if that draft is deleted */
@@ -114,6 +125,7 @@ export interface CreateWorkflowDto {
 export interface WorkflowListQueryParams extends PageParams<WorkflowListItemDto> {
   domain?: string;
   search?: string;
+  favoritesOnly?: boolean;
 }
 
 export type MyWorkflowsResponseDto = SplitPageResponse<WorkflowListItemDto>;

@@ -2,7 +2,7 @@ import uuid
 import zipfile
 from dataclasses import dataclass, replace
 from io import BytesIO
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import Depends
 
@@ -72,6 +72,12 @@ class WorkflowUploadContent:
     cwl_content: str
     pipeline_filename: str | None
     available_files: set[str] | None
+
+
+if TYPE_CHECKING:
+    # deferred import - favorites_service.py imports WorkflowsService, so importing
+    # FavoritesService here at module load time would create a circular import
+    from app.application.service.favorites_service import FavoritesService
 
 
 class WorkflowsService:
@@ -542,8 +548,20 @@ class WorkflowsService:
         workflow.description = description
         return await self.workflows_repository.save(workflow)
 
-    async def execute_command(self, workflow: Workflow, command: WorkflowCommand) -> Workflow:
+    async def execute_command(
+        self,
+        workflow: Workflow,
+        command: WorkflowCommand,
+        current_user_id: uuid.UUID,
+        favorites_service: "FavoritesService",
+    ) -> Workflow:
         match command.type:
+            case WorkflowCommandType.ADD_FAVORITE:
+                await favorites_service.add_workflow_favorite(current_user_id, workflow.id)
+                return workflow
+            case WorkflowCommandType.REMOVE_FAVORITE:
+                await favorites_service.remove_workflow_favorite(current_user_id, workflow.id)
+                return workflow
             case WorkflowCommandType.PUBLISH:
                 return await self.publish(workflow)
             case WorkflowCommandType.UNPUBLISH:

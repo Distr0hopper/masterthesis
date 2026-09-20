@@ -41,6 +41,7 @@ export interface WorkflowDisplayModel extends WithHateoasLinks {
   domains: string[];
   domainsDisplay: string[];
   stepCount: number;
+  isFavorite: boolean;
   status: WorkflowStatus;
   statusDisplay: string;
   source: WorkflowSource;
@@ -93,6 +94,7 @@ export const workflowTransformer = {
       domains: dto.domains,
       domainsDisplay: dto.domains.map(getDomainLabel),
       stepCount: dto.stepCount,
+      isFavorite: dto.isFavorite,
       status: dto.status,
       statusDisplay: WORKFLOW_STATUS_LABELS[dto.status],
       source: dto.source,

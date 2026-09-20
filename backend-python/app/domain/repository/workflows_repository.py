@@ -3,10 +3,12 @@ from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import Depends
+from sqlalchemy import String, and_, cast
 from sqlalchemy.orm import selectinload
 from sqlmodel import func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.domain.models.favorite import Favorite, FavoriteEntityType
 from app.domain.models.workflow import Workflow, WorkflowStatus
 from app.domain.models.workflow_domain import WorkflowDomain
 from app.domain.models.workflow_step import WorkflowStep
@@ -20,6 +22,7 @@ class WorkflowListFilter:
     search: str | None = None
     status: WorkflowStatus | None = None
     created_by: uuid.UUID | None = None
+    favorited_by: uuid.UUID | None = None
 
 
 class WorkflowsRepository:
@@ -35,6 +38,17 @@ class WorkflowsRepository:
             query = query.where(Workflow.status == filter.status)
         if filter.created_by is not None:
             query = query.where(Workflow.created_by_id == filter.created_by)
+        if filter.favorited_by is not None:
+            # Favorite.entity_ref holds the workflow uuid as text, so the id is cast to
+            # match rather than the column - casting the column would block any index on it
+            query = query.join(
+                Favorite,
+                and_(
+                    Favorite.entity_type == FavoriteEntityType.WORKFLOW,
+                    Favorite.entity_ref == cast(Workflow.id, String),
+                    Favorite.user_id == filter.favorited_by,
+                ),
+            )
         if filter.domain is not None:
             # (workflow_id, domain) is WorkflowDomain's composite PK, so this join
             # matches at most one row per workflow for a single domain value - no fan-out

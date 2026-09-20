@@ -88,6 +88,13 @@ export const useUnpublishWorkflow = () =>
     workflowsService.executeCommand(link, { command: WorkflowCommand.UNPUBLISH }),
   );
 
+export const useToggleWorkflowFavorite = () =>
+  useCommandMutation(workflowKeys.all, ({ link, isFavorite }: { link: HateoasLink; isFavorite: boolean }) =>
+    workflowsService.executeCommand(link, {
+      command: isFavorite ? WorkflowCommand.REMOVE_FAVORITE : WorkflowCommand.ADD_FAVORITE,
+    }),
+  );
+
 export const useUpdateWorkflowDescription = () =>
   useCommandMutation(workflowKeys.all, ({ link, description }: { link: HateoasLink; description: string | null }) =>
     workflowsService.executeCommand(link, { command: WorkflowCommand.UPDATE_DESCRIPTION, description }),

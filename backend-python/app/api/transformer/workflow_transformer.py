@@ -21,6 +21,8 @@ class WorkflowTransformer:
     @staticmethod
     def to_domain_command(dto: WorkflowCommandExecuteRequestDto) -> WorkflowCommand:
         mapping = {
+            WorkflowCommandTypesApiV1.ADD_FAVORITE: WorkflowCommandType.ADD_FAVORITE,
+            WorkflowCommandTypesApiV1.REMOVE_FAVORITE: WorkflowCommandType.REMOVE_FAVORITE,
             WorkflowCommandTypesApiV1.PUBLISH: WorkflowCommandType.PUBLISH,
             WorkflowCommandTypesApiV1.UNPUBLISH: WorkflowCommandType.UNPUBLISH,
             WorkflowCommandTypesApiV1.UPDATE_DESCRIPTION: WorkflowCommandType.UPDATE_DESCRIPTION,
@@ -35,13 +37,14 @@ class WorkflowTransformer:
         return WorkflowStepCommand(type=mapping[dto.command], note=dto.note)
 
     @staticmethod
-    def to_list_item(workflow: Workflow, current_user: User | None) -> WorkflowListItemDto:
+    def to_list_item(workflow: Workflow, is_favorite: bool, current_user: User | None) -> WorkflowListItemDto:
         dto = WorkflowListItemDto(
             id=workflow.id,
             name=workflow.name,
             description=workflow.description,
             domains=[d.domain for d in workflow.domains],
             step_count=len(workflow.steps),
+            is_favorite=is_favorite,
             status=workflow.status,
             source=workflow.source,
             draft_id=workflow.draft_id,
@@ -70,7 +73,7 @@ class WorkflowTransformer:
         return WorkflowStepLinkBuilder(current_user).attach_links(dto, step)
 
     @staticmethod
-    def to_detail(workflow: Workflow, current_user: User | None) -> WorkflowDetailDto:
+    def to_detail(workflow: Workflow, is_favorite: bool, current_user: User | None) -> WorkflowDetailDto:
         dto = WorkflowDetailDto(
             id=workflow.id,
             name=workflow.name,
@@ -85,6 +88,7 @@ class WorkflowTransformer:
             if workflow.created_by
             else None,
             steps=[WorkflowTransformer.to_step(s, current_user) for s in workflow.steps],
+            is_favorite=is_favorite,
             status=workflow.status,
             source=workflow.source,
             draft_id=workflow.draft_id,

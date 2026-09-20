@@ -23,6 +23,9 @@ class WorkflowPermissionValidator(PermissionValidator[Workflow]):
     def can_delete(self, workflow: Workflow) -> bool:
         return self.user is not None and workflow.created_by_id == self.user.id
 
+    def can_favorite(self) -> bool:
+        return self.user is not None
+
     def can_execute(self, workflow: Workflow, action: str | WorkflowCommandType) -> bool:
         try:
             command = WorkflowCommandType.from_string(str(action))
@@ -30,6 +33,8 @@ class WorkflowPermissionValidator(PermissionValidator[Workflow]):
             return False
 
         match command:
+            case WorkflowCommandType.ADD_FAVORITE | WorkflowCommandType.REMOVE_FAVORITE:
+                return self.can_favorite()
             case WorkflowCommandType.PUBLISH | WorkflowCommandType.UNPUBLISH:
                 return self.can_update(workflow)
             case WorkflowCommandType.UPDATE_DESCRIPTION:

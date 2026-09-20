@@ -22,7 +22,9 @@ from app.api.dto.workflow import (
 from app.api.exception.exceptions import ForbiddenException
 from app.api.permission.workflow_permission_validator import WorkflowPermissionValidator
 from app.api.transformer.workflow_transformer import WorkflowTransformer
+from app.application.exception.favorites_exceptions import FavoritesRequireAuthError
 from app.application.service.auth_service import AuthService
+from app.application.service.favorites_service import FavoritesService
 from app.application.service.workflows_service import WorkflowsService
 from app.domain.models.component_domain import VALID_DOMAINS
 from app.domain.models.user import User
@@ -36,18 +38,30 @@ logger = logging.getLogger("app.api.routers.workflows_router")
 MAX_WORKFLOW_ZIP_SIZE = 10 * 1024 * 1024
 
 
+async def _favorited_ids(favorites_service: FavoritesService, user: User | None) -> set[str]:
+    return await favorites_service.get_favorited_workflow_ids(user.id) if user is not None else set()
+
+
 @router.get("", response_model=PaginatedResponseDtoV1[WorkflowListItemDto])
 async def list_workflows(
     workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
+    favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
     current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
     pagination_dto: Annotated[ListQueryPaginationDtoV1, Depends()],
     domain: Annotated[str | None, Query(json_schema_extra={"enum": VALID_DOMAINS})] = None,
     search: Annotated[str | None, Query()] = None,
+    favorites_only: Annotated[bool, Query(alias="favoritesOnly")] = False,
 ) -> PaginatedResponseDtoV1[WorkflowListItemDto]:
+    if favorites_only and current_user is None:
+        raise FavoritesRequireAuthError()
+
     pagination = pagination_dto.to_domain()
-    filter = WorkflowListFilter(domain=domain, search=search)
+    favorited_by = current_user.id if favorites_only and current_user is not None else None
+    filter = WorkflowListFilter(domain=domain, search=search, favorited_by=favorited_by)
     workflows, total = await workflows_service.list_workflows(filter, pagination)
-    items = [WorkflowTransformer.to_list_item(w, current_user) for w in workflows]
+
+    favorited_ids = await _favorited_ids(favorites_service, current_user)
+    items = [WorkflowTransformer.to_list_item(w, str(w.id) in favorited_ids, current_user) for w in workflows]
     return build_paginated_response(items, total, pagination)
 
 
@@ -59,6 +73,7 @@ async def list_workflows(
 async def list_my_workflows(
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
     workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
+    favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
     limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
     published_offset: Annotated[int, Query(alias="publishedOffset", ge=0)] = 0,
     unpublished_offset: Annotated[int, Query(alias="unpublishedOffset", ge=0)] = 0,
@@ -73,10 +88,20 @@ async def list_my_workflows(
         current_user.id, WorkflowStatus.PENDING_VALIDATION, unpublished_pagination
     )
 
+    favorited_ids = await _favorited_ids(favorites_service, current_user)
     return build_my_items_response(
-        ([WorkflowTransformer.to_list_item(w, current_user) for w in published_workflows], published_total),
+        (
+            [WorkflowTransformer.to_list_item(w, str(w.id) in favorited_ids, current_user) for w in published_workflows],
+            published_total,
+        ),
         published_pagination,
-        ([WorkflowTransformer.to_list_item(w, current_user) for w in unpublished_workflows], unpublished_total),
+        (
+            [
+                WorkflowTransformer.to_list_item(w, str(w.id) in favorited_ids, current_user)
+                for w in unpublished_workflows
+            ],
+            unpublished_total,
+        ),
         unpublished_pagination,
     )
 
@@ -84,11 +109,13 @@ async def list_my_workflows(
 @router.get("/latest", response_model=list[WorkflowListItemDto])
 async def list_latest_workflows(
     workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
+    favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
     current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
     limit: int = 6,
 ) -> list[WorkflowListItemDto]:
     workflows = await workflows_service.get_latest_workflows(limit)
-    return [WorkflowTransformer.to_list_item(w, current_user) for w in workflows]
+    favorited_ids = await _favorited_ids(favorites_service, current_user)
+    return [WorkflowTransformer.to_list_item(w, str(w.id) in favorited_ids, current_user) for w in workflows]
 
 
 @router.post(
@@ -137,7 +164,7 @@ async def create(
         current_user.id,
     )
     logger.info(f"Created workflow {workflow.id} ('{workflow.name}') with {len(workflow.steps)} steps")
-    return WorkflowTransformer.to_detail(workflow, current_user)
+    return WorkflowTransformer.to_detail(workflow, False, current_user)
 
 
 @router.post(
@@ -196,10 +223,12 @@ async def parse_workflow(
 async def get_workflow(
     workflow_id: uuid.UUID,
     workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
+    favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
     current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
 ) -> WorkflowDetailDto:
     workflow = await workflows_service.get_visible_workflow(workflow_id, current_user)
-    return WorkflowTransformer.to_detail(workflow, current_user)
+    favorited_ids = await _favorited_ids(favorites_service, current_user)
+    return WorkflowTransformer.to_detail(workflow, str(workflow.id) in favorited_ids, current_user)
 
 
 @router.get(
@@ -293,6 +322,7 @@ async def execute_command(
     dto: WorkflowCommandExecuteRequestDto,
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
     workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
+    favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
 ) -> WorkflowDetailDto:
     workflow = await workflows_service.get_workflow(workflow_id)
     command = WorkflowTransformer.to_domain_command(dto)
@@ -302,9 +332,11 @@ async def execute_command(
         logger.warning(f"User {current_user.id} not permitted to execute {command.type} on workflow {workflow_id}")
         raise ForbiddenException(f"Insufficient permission to execute {command.type} on this workflow")
 
-    updated = await workflows_service.execute_command(workflow, command)
+    updated = await workflows_service.execute_command(workflow, command, current_user.id, favorites_service)
     logger.info(f"Executed command {command.type} on workflow {workflow_id}")
-    return WorkflowTransformer.to_detail(updated, current_user)
+
+    favorited_ids = await _favorited_ids(favorites_service, current_user)
+    return WorkflowTransformer.to_detail(updated, str(updated.id) in favorited_ids, current_user)
 
 
 @router.delete(
@@ -320,6 +352,7 @@ async def remove(
     workflow_id: uuid.UUID,
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
     workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
+    favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
 ) -> None:
     workflow = await workflows_service.get_workflow(workflow_id)
 
@@ -328,5 +361,6 @@ async def remove(
         logger.warning(f"User {current_user.id} not permitted to delete workflow {workflow_id}")
         raise ForbiddenException("Insufficient permission to delete this workflow")
 
+    await favorites_service.remove_all_workflow_favorites(workflow.id)
     await workflows_service.remove(workflow)
     logger.info(f"Deleted workflow {workflow_id}")

@@ -11,12 +11,12 @@ import { usePageParams } from '@/lib/usePageParams';
 import { ROUTES } from '@/lib/routes';
 
 export default function WorkflowsPage() {
-  const { limit, offset, setOffset, getFilter, setFilter } = usePageParams();
+  const { limit, offset, setOffset, getFilter, setFilter, getFilterAll, setFilterAll } = usePageParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated());
 
   const searchTerm = getFilter('search');
-  const selectedDomain = getFilter('domain');
+  const selectedDomains = getFilterAll('domain');
   const favoritesOnly = searchParams.get('favoritesOnly') === 'true';
 
   const setBooleanFilter = (key: string, value: boolean) => {
@@ -31,7 +31,7 @@ export default function WorkflowsPage() {
 
   const { data: domains } = useDomains();
   const { data, isLoading } = useWorkflows({
-    domain: selectedDomain || undefined,
+    domain: selectedDomains,
     search: searchTerm || undefined,
     favoritesOnly: isAuthenticated && favoritesOnly,
     limit,
@@ -61,10 +61,10 @@ export default function WorkflowsPage() {
 
       <WorkflowFilters
         searchTerm={searchTerm}
-        selectedDomain={selectedDomain}
+        selectedDomains={selectedDomains}
         domains={domains ?? []}
         onSearchTermChange={(value) => setFilter('search', value)}
-        onDomainChange={(value) => setFilter('domain', value)}
+        onDomainsChange={(value) => setFilterAll('domain', value)}
         showFavoritesToggle={isAuthenticated}
         favoritesOnly={favoritesOnly}
         onFavoritesOnlyChange={(value) => setBooleanFilter('favoritesOnly', value)}

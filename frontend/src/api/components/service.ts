@@ -20,7 +20,7 @@ export const componentsService = {
   getAll(params: ComponentListQueryParams): Promise<PageResponse<ComponentListItemDto>> {
     return apiClient.get(ENDPOINT, {
       params: {
-        domain: params.domain,
+        domain: params.domain?.length ? params.domain : undefined,
         excludeMine: params.excludeMine || undefined,
         favoritesOnly: params.favoritesOnly || undefined,
         search: params.search || undefined,

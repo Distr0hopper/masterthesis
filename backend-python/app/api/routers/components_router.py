@@ -48,8 +48,9 @@ async def list_components(
     favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
     current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
     pagination_dto: Annotated[ListQueryPaginationDtoV1, Depends()],
-    # json_schema_extra adds the enum purely so Swagger UI renders a dropdown
-    domain: Annotated[str | None, Query(json_schema_extra={"enum": VALID_DOMAINS})] = None,
+    # repeatable: ?domain=a&domain=b selects both. json_schema_extra adds the enum purely
+    # so Swagger UI renders a dropdown for each value
+    domain: Annotated[list[str] | None, Query(json_schema_extra={"items": {"enum": VALID_DOMAINS}})] = None,
     favorites_only: Annotated[bool, Query(alias="favoritesOnly")] = False,
     exclude_mine: Annotated[bool, Query(alias="excludeMine")] = False,
     search: Annotated[str | None, Query()] = None,
@@ -64,7 +65,7 @@ async def list_components(
     favorited_by = current_user.id if favorites_only and current_user is not None else None
     pagination = pagination_dto.to_domain()
     filter = ComponentListFilter(
-        domain=domain, exclude_created_by=exclude_created_by, favorited_by=favorited_by, search=search
+        domains=domain or [], exclude_created_by=exclude_created_by, favorited_by=favorited_by, search=search
     )
     components, total = await components_service.list_components(filter, pagination)
     favorited_names = await _favorited_names(favorites_service, current_user)

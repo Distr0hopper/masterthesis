@@ -1,14 +1,14 @@
 import { Input } from '@/components/ui/input.tsx';
-import { DomainSelect } from '@/components/ui/domain-select.tsx';
+import { DomainFilter } from '@/components/ui/domain-filter.tsx';
 import type { DomainDto } from '@/api/components';
 
 interface WorkflowSidebarFiltersProps {
   search: string;
-  selectedDomain: string;
+  selectedDomains: string[];
   favoritesOnly: boolean;
   domains: DomainDto[];
   onSearchChange: (value: string) => void;
-  onDomainChange: (value: string) => void;
+  onDomainsChange: (value: string[]) => void;
   onFavoritesOnlyChange: (value: boolean) => void;
   /** the favourites toggle is hidden for anonymous visitors - the endpoint 401s on it */
   showFavoritesToggle: boolean;
@@ -21,11 +21,11 @@ interface WorkflowSidebarFiltersProps {
  */
 export function WorkflowSidebarFilters({
   search,
-  selectedDomain,
+  selectedDomains,
   favoritesOnly,
   domains,
   onSearchChange,
-  onDomainChange,
+  onDomainsChange,
   onFavoritesOnlyChange,
   showFavoritesToggle,
 }: WorkflowSidebarFiltersProps) {
@@ -38,11 +38,11 @@ export function WorkflowSidebarFilters({
         onChange={(e) => onSearchChange(e.target.value)}
       />
 
-      <DomainSelect
+      <DomainFilter
         aria-label="Filter by domain"
-        value={selectedDomain}
+        value={selectedDomains}
         domains={domains}
-        onValueChange={onDomainChange}
+        onValueChange={onDomainsChange}
         className="text-sm"
       />
 

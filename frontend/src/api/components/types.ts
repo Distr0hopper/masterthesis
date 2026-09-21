@@ -169,11 +169,10 @@ export interface AddVersionDto {
 }
 
 export interface ComponentListQueryParams extends PageParams<ComponentListItemDto> {
-  domain?: ComponentDomain;
+  domain?: ComponentDomain[];
   excludeMine?: boolean;
   favoritesOnly?: boolean;
   search?: string;
-  /** opt into the per-item parameter list; only the workflow builder needs it */
   includeParameters?: boolean;
 }
 export type MyComponentsResponseDto = SplitPageResponse<ComponentListItemDto>;

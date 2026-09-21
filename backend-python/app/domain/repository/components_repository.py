@@ -1,5 +1,5 @@
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Annotated
 
 from fastapi import Depends
@@ -15,7 +15,8 @@ from app.infrastructure.db.session import get_db
 
 @dataclass
 class ComponentListFilter:
-    domain: str | None = None
+    #: match components carrying ANY of these domains (union) - empty means no filter
+    domains: list[str] = field(default_factory=list)
     created_by: uuid.UUID | None = None
     exclude_created_by: uuid.UUID | None = None
     favorited_by: uuid.UUID | None = None
@@ -32,10 +33,13 @@ class ComponentsRepository:
         return ComponentsRepository(db)
 
     def _apply_filters(self, query, filter: ComponentListFilter):
-        if filter.domain is not None:
+        if filter.domains:
+            # subquery rather than a join: a component matching several of the selected
+            # domains would otherwise come back once per match, duplicating rows and
+            # inflating the count
             query = query.where(
                 Component.id.in_(
-                    select(ComponentDomain.component_id).where(ComponentDomain.domain == filter.domain)
+                    select(ComponentDomain.component_id).where(ComponentDomain.domain.in_(filter.domains))
                 )
             )
         if filter.status is not None:

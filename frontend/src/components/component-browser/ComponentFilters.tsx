@@ -1,14 +1,14 @@
 import { Input } from '@/components/ui/input.tsx';
 import { Label } from '@/components/ui/label.tsx';
-import { DomainSelect } from '@/components/ui/domain-select.tsx';
+import { DomainFilter } from '@/components/ui/domain-filter.tsx';
 import type { DomainDto } from '@/api/components';
 
 interface ComponentFiltersProps {
   searchTerm: string;
-  selectedDomain: string;
+  selectedDomains: string[];
   domains: DomainDto[];
   onSearchTermChange: (value: string) => void;
-  onDomainChange: (value: string) => void;
+  onDomainsChange: (value: string[]) => void;
   showHideMineToggle?: boolean;
   hideMine?: boolean;
   onHideMineChange?: (value: boolean) => void;
@@ -19,10 +19,10 @@ interface ComponentFiltersProps {
 
 export function ComponentFilters({
   searchTerm,
-  selectedDomain,
+  selectedDomains,
   domains,
   onSearchTermChange,
-  onDomainChange,
+  onDomainsChange,
   showHideMineToggle,
   hideMine,
   onHideMineChange,
@@ -43,12 +43,12 @@ export function ComponentFilters({
       </div>
 
       <div className="flex flex-col gap-2 sm:w-56">
-        <Label htmlFor="domain">Domain</Label>
-        <DomainSelect
+        <Label htmlFor="domain">Domains</Label>
+        <DomainFilter
           id="domain"
-          value={selectedDomain}
+          value={selectedDomains}
           domains={domains}
-          onValueChange={onDomainChange}
+          onValueChange={onDomainsChange}
         />
       </div>
 

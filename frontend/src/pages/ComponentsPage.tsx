@@ -10,12 +10,12 @@ import { usePageParams } from '@/lib/usePageParams';
 import { ROUTES } from '@/lib/routes';
 
 export default function ComponentsPage() {
-  const { limit, offset, setOffset, getFilter, setFilter } = usePageParams();
+  const { limit, offset, setOffset, getFilter, setFilter, getFilterAll, setFilterAll } = usePageParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated());
 
   const searchTerm = getFilter('search');
-  const selectedDomain = getFilter('domain');
+  const selectedDomains = getFilterAll('domain');
   const hideMine = searchParams.get('hideMine') === 'true';
   const favoritesOnly = searchParams.get('favoritesOnly') === 'true';
 
@@ -31,7 +31,7 @@ export default function ComponentsPage() {
 
   const { data: domains } = useDomains();
   const { data, isLoading } = useComponents({
-    domain: selectedDomain || undefined,
+    domain: selectedDomains,
     excludeMine: isAuthenticated && hideMine,
     favoritesOnly: isAuthenticated && favoritesOnly,
     search: searchTerm || undefined,
@@ -59,10 +59,10 @@ export default function ComponentsPage() {
 
       <ComponentFilters
         searchTerm={searchTerm}
-        selectedDomain={selectedDomain}
+        selectedDomains={selectedDomains}
         domains={domains ?? []}
         onSearchTermChange={(value) => setFilter('search', value)}
-        onDomainChange={(value) => setFilter('domain', value)}
+        onDomainsChange={(value) => setFilterAll('domain', value)}
         showHideMineToggle={isAuthenticated}
         hideMine={hideMine}
         onHideMineChange={(value) => setBooleanFilter('hideMine', value)}

@@ -12,7 +12,7 @@ interface WorkflowSidebarProps {
 
 export function WorkflowSidebar({ outputStack }: WorkflowSidebarProps) {
   const [search, setSearch] = useState('');
-  const [selectedDomain, setSelectedDomain] = useState('');
+  const [selectedDomains, setSelectedDomains] = useState<string[]>([]);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated());
   const term = search.trim();
@@ -23,7 +23,7 @@ export function WorkflowSidebar({ outputStack }: WorkflowSidebarProps) {
   // endpoint otherwise omits.
   const { data, isLoading } = useComponents({
     search: term || undefined,
-    domain: selectedDomain || undefined,
+    domain: selectedDomains,
     limit: 50,
     includeParameters: true,
     // the endpoint 401s on favoritesOnly for anonymous visitors, so the flag is gated on
@@ -34,7 +34,7 @@ export function WorkflowSidebar({ outputStack }: WorkflowSidebarProps) {
 
   // drives the empty-state wording: "nothing here" reads as broken when the user has
   // actually filtered everything out
-  const hasActiveFilter = Boolean(term) || Boolean(selectedDomain) || favoritesOnly;
+  const hasActiveFilter = Boolean(term) || selectedDomains.length > 0 || favoritesOnly;
 
   const ranked = useMemo(() => {
     const components = data?.items ?? [];
@@ -47,11 +47,11 @@ export function WorkflowSidebar({ outputStack }: WorkflowSidebarProps) {
     <aside className="flex w-[280px] shrink-0 flex-col border-r border-slate-200 bg-white">
       <WorkflowSidebarFilters
         search={search}
-        selectedDomain={selectedDomain}
+        selectedDomains={selectedDomains}
         favoritesOnly={favoritesOnly}
         domains={domains ?? []}
         onSearchChange={setSearch}
-        onDomainChange={setSelectedDomain}
+        onDomainsChange={setSelectedDomains}
         onFavoritesOnlyChange={setFavoritesOnly}
         showFavoritesToggle={isAuthenticated}
       />

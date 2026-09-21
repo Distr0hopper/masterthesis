@@ -85,7 +85,6 @@ export interface WorkflowListItemDto extends WithHateoasLinks {
   isFavorite: boolean;
   status: WorkflowStatus;
   source: WorkflowSource;
-  /** set only for source=workflow_builder, and cleared if that draft is deleted */
   draftId: string | null;
   createdAt: string;
 }
@@ -100,7 +99,6 @@ export interface WorkflowDetailDto extends WithHateoasLinks {
   isFavorite: boolean;
   status: WorkflowStatus;
   source: WorkflowSource;
-  /** set only for source=workflow_builder, and cleared if that draft is deleted */
   draftId: string | null;
   cwlContent: string;
   createdAt: string;
@@ -129,7 +127,7 @@ export interface CreateWorkflowDto {
 }
 
 export interface WorkflowListQueryParams extends PageParams<WorkflowListItemDto> {
-  domain?: string;
+  domain?: string[];
   search?: string;
   favoritesOnly?: boolean;
 }

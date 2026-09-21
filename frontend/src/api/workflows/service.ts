@@ -18,7 +18,7 @@ export const workflowsService = {
   getAll(params: WorkflowListQueryParams): Promise<PageResponse<WorkflowListItemDto>> {
     return apiClient.get(ENDPOINT, {
       params: {
-        domain: params.domain,
+        domain: params.domain?.length ? params.domain : undefined,
         search: params.search || undefined,
         favoritesOnly: params.favoritesOnly || undefined,
         limit: params.limit,

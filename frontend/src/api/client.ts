@@ -3,9 +3,17 @@ import { useAuthStore } from '@/store/auth.store';
 import { ROUTES } from '@/lib/routes';
 import type { HateoasLink } from '@/api/types';
 
+/**
+ * Array params go out as repeated keys (?domain=a&domain=b), which is what FastAPI binds
+ * to a `list[str]`. Axios would otherwise emit ?domain[]=a and every list endpoint
+ * accepting several domains would 422.
+ */
+export const REPEATED_KEY_PARAMS = { indexes: null } as const;
+
 const axiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },
+  paramsSerializer: REPEATED_KEY_PARAMS,
 });
 
 // Interceptor before request is send out - Attach JWT to request

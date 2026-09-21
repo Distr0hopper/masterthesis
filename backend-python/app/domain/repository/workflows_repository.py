@@ -1,5 +1,5 @@
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Annotated
 
 from fastapi import Depends
@@ -18,7 +18,7 @@ from app.infrastructure.db.session import get_db
 
 @dataclass
 class WorkflowListFilter:
-    domain: str | None = None
+    domains: list[str] = field(default_factory=list)
     search: str | None = None
     status: WorkflowStatus | None = None
     created_by: uuid.UUID | None = None
@@ -49,11 +49,14 @@ class WorkflowsRepository:
                     Favorite.user_id == filter.favorited_by,
                 ),
             )
-        if filter.domain is not None:
-            # (workflow_id, domain) is WorkflowDomain's composite PK, so this join
-            # matches at most one row per workflow for a single domain value - no fan-out
-            query = query.join(WorkflowDomain, WorkflowDomain.workflow_id == Workflow.id).where(
-                WorkflowDomain.domain == filter.domain
+        if filter.domains:
+            # subquery, not a join: the composite-PK join was fan-out-free only while this
+            # matched a single domain - IN (...) would return a workflow once per matching
+            # domain, duplicating rows and inflating the count
+            query = query.where(
+                Workflow.id.in_(
+                    select(WorkflowDomain.workflow_id).where(WorkflowDomain.domain.in_(filter.domains))
+                )
             )
         if filter.search is not None:
             query = query.where(Workflow.name.ilike(f"%{filter.search}%"))

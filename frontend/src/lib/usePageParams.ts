@@ -13,6 +13,9 @@ interface UsePageParamsResult {
   getFilter: (key: string) => string;
   /** setting a filter always resets this list's offset back to 0 */
   setFilter: (key: string, value: string) => void;
+  /** a filter that can hold several values, stored as repeated keys (?domain=a&domain=b) */
+  getFilterAll: (key: string) => string[];
+  setFilterAll: (key: string, values: string[]) => void;
 }
 
 export function usePageParams(options: UsePageParamsOptions = {}): UsePageParamsResult {
@@ -42,5 +45,17 @@ export function usePageParams(options: UsePageParamsOptions = {}): UsePageParams
     });
   };
 
-  return { limit, offset, setOffset, getFilter, setFilter };
+  const getFilterAll = (key: string) => searchParams.getAll(key);
+
+  const setFilterAll = (key: string, values: string[]) => {
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      params.delete(key);
+      values.forEach((value) => params.append(key, value));
+      params.set(offsetKey, '0');
+      return params;
+    });
+  };
+
+  return { limit, offset, setOffset, getFilter, setFilter, getFilterAll, setFilterAll };
 }

@@ -30,7 +30,7 @@ class ComponentCommand:
     type: ComponentCommandType
     note: str | None = None
     description: str | None = None
-    domain: str | None = None
+    domains: list[str] | None = None
 
 
 class WorkflowCommandType(StrEnum):

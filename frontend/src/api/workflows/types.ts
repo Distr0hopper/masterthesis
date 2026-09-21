@@ -1,5 +1,5 @@
 import type { PageParams, SplitPageResponse, WithHateoasLinks } from '@/api/types';
-import type { ParameterDirection } from '@/api/components/types';
+import type { ComponentPreviewDto } from '@/api/components/types';
 
 export const StepMatchStatus = {
   SUGGESTED: 'suggested',
@@ -24,7 +24,7 @@ export interface ComponentSummaryDto {
   id: string;
   name: string;
   version: number;
-  domain: string;
+  domains: string[];
 }
 
 export interface WorkflowStepDto extends WithHateoasLinks {
@@ -108,15 +108,15 @@ export interface WorkflowDetailDto extends WithHateoasLinks {
 }
 
 /**
- * The user's decision for one previewed step, keyed by ComponentPreviewDto.stepId.
+ * The user's decision for one previewed step, keyed by WorkflowStepPreviewDto.stepId.
  * Exactly one branch: reuseComponentId binds the step to an existing component, or
- * name+domain create a new one from that step's CWL.
+ * name+domains create a new one from that step's CWL.
  */
 export interface ComponentConfigDto {
   stepId: string;
   reuseComponentId?: string | null;
   name?: string | null;
-  domain?: string | null;
+  domains?: string[] | null;
   description?: string | null;
 }
 
@@ -150,36 +150,18 @@ export interface ComponentMatchDto {
   componentId: string;
   name: string;
   version: number;
-  domain: string;
+  domains: string[];
   /** fuzzy-match confidence; null for an exact name collision, which isn't a guess */
   score: number | null;
 }
 
-/** A previewed component port - never persisted, so `id` is synthetic (see the backend DTO). */
-export interface PreviewParameterDto {
-  id: string;
-  name: string;
-  cwlType: string;
-  defaultValue: string | null;
-  description: string | null;
-  format: string | null;
-  formatLabel: string | null;
-  direction: ParameterDirection;
-}
-
 /** One workflow step rendered as the Component it would become, for review before saving. */
-export interface ComponentPreviewDto {
+export interface WorkflowStepPreviewDto extends ComponentPreviewDto {
   stepId: string;
   origin: ComponentOrigin;
   /** the `run:` filename, archive origin only */
   runReference: string | null;
   suggestedName: string;
-  description: string | null;
-  cwlContent: string;
-  cwlType: string | null;
-  dockerfileContent: string | null;
-  dockerPullReference: string | null;
-  parameters: PreviewParameterDto[];
   /** an existing component already holding suggestedName - the user must rename or reuse it */
   nameConflict: ComponentMatchDto | null;
   /** archive origin only - the catalogue component this step's run: filename matches */
@@ -193,7 +175,7 @@ export interface ParseWorkflowResponseDto {
   workflowName: string | null;
   stepCount: number;
   /** one per resolvable step, inline and archive alike */
-  componentPreviews: ComponentPreviewDto[];
+  componentPreviews: WorkflowStepPreviewDto[];
   /** steps whose run: is a plain filename - not extracted, the caller must supply these separately */
   externalRefs: string[];
   /** steps whose run: is inline but not class: CommandLineTool (e.g. an inline ExpressionTool) */

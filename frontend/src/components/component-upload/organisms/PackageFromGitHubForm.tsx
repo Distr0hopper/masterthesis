@@ -13,7 +13,7 @@ import {
 } from '@/api/components';
 import { getErrorMessage } from '@/lib/errors';
 import { ROUTES } from '@/lib/routes';
-import { DomainSelect } from '../common/DomainSelect';
+import { DomainMultiSelect } from '@/components/common/DomainMultiSelect';
 
 export function PackageFromGitHubForm() {
   const navigate = useNavigate();
@@ -63,8 +63,10 @@ export function PackageFromGitHubForm() {
 
       <Controller
         control={control}
-        name="domain"
-        render={({ field }) => <DomainSelect value={field.value} onChange={field.onChange} error={errors.domain?.message} />}
+        name="domains"
+        render={({ field }) => (
+          <DomainMultiSelect value={field.value ?? []} onChange={field.onChange} error={errors.domains?.message} />
+        )}
       />
 
       <Button type="submit" className="w-full bg-jmu-blue-800 hover:bg-jmu-blue-800/90" disabled={isPending}>

@@ -42,7 +42,7 @@ const node = (id: string, label: string, parameters: TypedParameter[]): Componen
   data: {
     componentId: id,
     label,
-    domain: 'animal_behavior',
+    domains: ['animal_behavior'],
     parameters: parameters as never,
     parameterValues: {},
   },

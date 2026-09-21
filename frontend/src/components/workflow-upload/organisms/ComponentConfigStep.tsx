@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card.tsx';
-import { DomainSelect } from '@/components/component-upload/common/DomainSelect';
-import type { ComponentPreviewDto, ParseWorkflowResponseDto } from '@/api/workflows';
+import { DomainMultiSelect } from '@/components/common/DomainMultiSelect';
+import type { WorkflowStepPreviewDto, ParseWorkflowResponseDto } from '@/api/workflows';
 import type { ExistingComponentDto } from '@/api/components';
 import type { ComponentConfigState } from '../lib/useComponentConfigs';
 import { ComponentConfigCard } from './ComponentConfigCard';
@@ -9,11 +9,11 @@ import { ParsedWorkflowOverview } from './ParsedWorkflowOverview';
 
 interface ComponentConfigStepProps {
   parsed: ParseWorkflowResponseDto;
-  previews: ComponentPreviewDto[];
+  previews: WorkflowStepPreviewDto[];
   configs: Record<string, ComponentConfigState>;
   errors: Record<string, string>;
   onChange: (stepId: string, patch: Partial<ComponentConfigState>) => void;
-  onApplyDomainToAll: (domain: string) => void;
+  onApplyDomainsToAll: (domains: string[]) => void;
   onNameConflictChange: (stepId: string, existing: ExistingComponentDto | null) => void;
 }
 
@@ -23,10 +23,10 @@ export function ComponentConfigStep({
   configs,
   errors,
   onChange,
-  onApplyDomainToAll,
+  onApplyDomainsToAll,
   onNameConflictChange,
 }: ComponentConfigStepProps) {
-  const [bulkDomain, setBulkDomain] = useState('');
+  const [bulkDomains, setBulkDomains] = useState<string[]>([]);
   const creating = previews.filter((p) => configs[p.stepId]?.mode === 'create').length;
 
   return (
@@ -41,13 +41,12 @@ export function ComponentConfigStep({
               already in the repository.
             </p>
           </div>
-          <DomainSelect
-            id="bulk-domain"
-            label="Set domain for all new components"
-            value={bulkDomain}
-            onChange={(domain) => {
-              setBulkDomain(domain);
-              onApplyDomainToAll(domain);
+          <DomainMultiSelect
+            label="Set domains for all new components"
+            value={bulkDomains}
+            onChange={(domains) => {
+              setBulkDomains(domains);
+              onApplyDomainsToAll(domains);
             }}
           />
         </CardContent>

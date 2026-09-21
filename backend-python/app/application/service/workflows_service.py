@@ -24,6 +24,7 @@ from app.application.exception.workflow_exceptions import (
 )
 from app.application.service.components_service import ComponentsService
 from app.domain.models.component import Component, ComponentSource
+from app.domain.models.component_domain import ComponentDomain
 from app.domain.models.parameter import Parameter
 from app.domain.models.user import User
 from app.domain.models.workflow import Workflow, WorkflowSource, WorkflowStatus
@@ -69,7 +70,7 @@ class ComponentMatch:
     component_id: uuid.UUID
     name: str
     version: int
-    domain: str
+    domains: list[str]
     #: fuzzy-match confidence; None for an exact name collision, which isn't a guess
     score: float | None
 
@@ -103,7 +104,7 @@ class ComponentConfig:
     step_id: str
     reuse_component_id: uuid.UUID | None = None
     name: str | None = None
-    domain: str | None = None
+    domains: list[str] | None = None
     description: str | None = None
 
     @property
@@ -318,7 +319,7 @@ class WorkflowsService:
             component_id=component.id,
             name=component.name,
             version=component.version,
-            domain=component.domain,
+            domains=sorted(d.domain for d in component.domains),
             score=score,
         )
 
@@ -385,8 +386,8 @@ class WorkflowsService:
 
             if config.name is None or not config.name.strip():
                 raise InvalidExtractedComponentNameError(config.name or "")
-            if not config.domain:
-                raise InvalidComponentConfigError(step_id, "a domain is required to create a new component")
+            if not config.domains:
+                raise InvalidComponentConfigError(step_id, "at least one domain is required to create a new component")
             if config.name in seen:
                 raise DuplicateExtractedComponentNameError(config.name)
             seen.add(config.name)
@@ -581,7 +582,7 @@ class WorkflowsService:
 
             component = Component(
                 name=config.name,
-                domain=config.domain,
+                domains=[ComponentDomain(domain=d) for d in (config.domains or [])],
                 cwl_content=cwl_content,
                 source=ComponentSource.MANUAL_UPLOAD,
                 created_by_id=created_by_id,

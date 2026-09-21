@@ -9,10 +9,12 @@ from app.api.dto.component import (
     ComponentListItemDto,
     CreateComponentRequestDto,
     ParameterDto,
+    PreviewParameterDto,
 )
 from app.api.link.component import ComponentLinkBuilder
 from app.application.commands.commands import ComponentCommand, ComponentCommandType
 from app.domain.models.component import Component, ComponentSource
+from app.domain.models.component_domain import ComponentDomain
 from app.domain.models.parameter import Parameter
 from app.domain.models.user import User
 from app.infrastructure.cwl.cwl_parser import inject_description
@@ -31,14 +33,31 @@ class ComponentTransformer:
             ComponentCommandTypesApiV1.UPDATE_DOMAIN: ComponentCommandType.UPDATE_DOMAIN,
         }
         return ComponentCommand(
-            type=mapping[dto.command], note=dto.note, description=dto.description, domain=dto.domain
+            type=mapping[dto.command], note=dto.note, description=dto.description, domains=dto.domains
         )
+
+    @staticmethod
+    def to_preview_parameter(parameter: Parameter, id_prefix: str) -> PreviewParameterDto:
+        return PreviewParameterDto(
+            id=f"{id_prefix}:{parameter.direction.value}:{parameter.name}",
+            name=parameter.name,
+            cwl_type=parameter.cwl_type,
+            default_value=parameter.default_value,
+            description=parameter.description,
+            format=parameter.format,
+            format_label=parameter.format_label,
+            direction=parameter.direction,
+        )
+
+    @staticmethod
+    def to_domains(component: Component) -> list[str]:
+        return sorted(d.domain for d in component.domains)
 
     @staticmethod
     def from_create_dto(dto: CreateComponentRequestDto, cwl_content: str, created_by_id: uuid.UUID) -> Component:
         return Component(
             name=dto.name,
-            domain=dto.domain,
+            domains=[ComponentDomain(domain=d) for d in dto.domains],
             author_name=dto.author_name,
             created_by_id=created_by_id,
             repo_url=dto.repo_url,
@@ -60,7 +79,7 @@ class ComponentTransformer:
             cwl_content=cwl_content,
             description=dto.description,
             source=parent.source,
-            domain=parent.domain,
+            domains=[ComponentDomain(domain=d.domain) for d in parent.domains],
         )
 
     @staticmethod
@@ -77,7 +96,7 @@ class ComponentTransformer:
             author_name=component.author_name,
             repo_url=component.repo_url,
             version=component.version,
-            domain=component.domain,
+            domains=ComponentTransformer.to_domains(component),
             status=component.status,
             created_at=component.created_at,
             is_favorite=is_favorite,
@@ -123,7 +142,7 @@ class ComponentTransformer:
             cwl_type=component.cwl_type,
             dockerfile_content=component.dockerfile_content,
             docker_pull_reference=component.docker_pull_reference,
-            domain=component.domain,
+            domains=ComponentTransformer.to_domains(component),
             source=component.source,
             status=component.status,
             parameters=[ComponentTransformer.to_parameter(p) for p in component.parameters],

@@ -9,13 +9,13 @@ import {
   componentTransformer,
   updateComponentFormSchema,
   useUpdateComponentDescription,
-  useUpdateComponentDomain,
+  useUpdateComponentDomains,
   type ComponentDisplayModel,
   type UpdateComponentFormData,
 } from '@/api/components';
 import { getLink } from '@/api/permissions';
 import { getErrorMessage } from '@/lib/errors';
-import { DomainSelect } from '@/components/component-upload/common/DomainSelect';
+import { DomainMultiSelect } from '@/components/common/DomainMultiSelect';
 
 interface EditComponentDialogProps {
   component: ComponentDisplayModel;
@@ -25,7 +25,7 @@ interface EditComponentDialogProps {
 
 export function EditComponentDialog({ component, open, onOpenChange }: EditComponentDialogProps) {
   const { mutateAsync: updateDescription } = useUpdateComponentDescription();
-  const { mutateAsync: updateDomain } = useUpdateComponentDomain();
+  const { mutateAsync: updateDomains } = useUpdateComponentDomains();
   const {
     control,
     register,
@@ -38,7 +38,7 @@ export function EditComponentDialog({ component, open, onOpenChange }: EditCompo
   });
 
   const onSubmit = async (data: UpdateComponentFormData) => {
-    if (!dirtyFields.description && !dirtyFields.domain) {
+    if (!dirtyFields.description && !dirtyFields.domains) {
       onOpenChange(false);
       return;
     }
@@ -50,8 +50,8 @@ export function EditComponentDialog({ component, open, onOpenChange }: EditCompo
           description: data.description || null,
         });
       }
-      if (dirtyFields.domain && data.domain) {
-        await updateDomain({ link: getLink(component._links, 'updateDomain')!, domain: data.domain });
+      if (dirtyFields.domains && data.domains?.length) {
+        await updateDomains({ link: getLink(component._links, 'updateDomain')!, domains: data.domains });
       }
       toast.success(`${component.name} updated`);
       onOpenChange(false);
@@ -72,9 +72,9 @@ export function EditComponentDialog({ component, open, onOpenChange }: EditCompo
 
           <Controller
             control={control}
-            name="domain"
+            name="domains"
             render={({ field }) => (
-              <DomainSelect value={field.value ?? ''} onChange={field.onChange} error={errors.domain?.message} />
+              <DomainMultiSelect value={field.value ?? []} onChange={field.onChange} error={errors.domains?.message} />
             )}
           />
 

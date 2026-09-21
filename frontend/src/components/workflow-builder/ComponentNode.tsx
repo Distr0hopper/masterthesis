@@ -1,12 +1,11 @@
 import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react';
 import { ExternalLink, Trash2 } from 'lucide-react';
 import type { ParameterDisplayModel } from '@/api/components';
-import { Badge } from '@/components/ui/badge.tsx';
-import { getDomainBadgeStyle, getDomainLabel, useDomains } from '@/api/components';
 import { configParameters, dataInputs, dataOutputs } from './lib/typeChecking';
 import { formatPortType } from './lib/ports';
 import { ROUTES } from '@/lib/routes';
 import type { ComponentFlowNode } from './types';
+import { DomainBadges } from '@/components/common/DomainBadges';
 
 // Handles are absolutely positioned against their containing block's padding box, so each
 // one lands on the card's edge as long as its row spans the full card width - horizontal
@@ -51,7 +50,6 @@ function PortRow({ parameter, side }: PortRowProps) {
 export function ComponentNode({ id, data, selected }: NodeProps<ComponentFlowNode>) {
   // safe to call per node - useDomains() has a 1h staleTime, so every node reads the
   // same cached entry rather than triggering a request of its own
-  const { data: domains } = useDomains();
   const { deleteElements } = useReactFlow();
 
   const inputs = dataInputs(data.parameters);
@@ -96,13 +94,7 @@ export function ComponentNode({ id, data, selected }: NodeProps<ComponentFlowNod
       </div>
 
       <div className="px-3 py-2">
-        <Badge
-          variant="outline"
-          className="w-fit"
-          style={domains ? getDomainBadgeStyle(data.domain, domains) : undefined}
-        >
-          {getDomainLabel(data.domain)}
-        </Badge>
+        <DomainBadges domains={data.domains} />
       </div>
 
       {inputs.length > 0 && (

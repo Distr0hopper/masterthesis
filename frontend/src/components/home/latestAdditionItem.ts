@@ -19,7 +19,7 @@ export function toLatestAdditionItems(
     ...components.map((c) => ({
       id: c.id,
       name: c.name,
-      subtitle: `${c.domainDisplay} · ${c.createdAtDisplay}`,
+      subtitle: `${c.domainsDisplay.join(', ')} · ${c.createdAtDisplay}`,
       href: ROUTES.componentDetail(c.id),
       badgeLabel: 'Component' as const,
       createdAt: c.createdAt,

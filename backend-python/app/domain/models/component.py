@@ -7,6 +7,7 @@ from sqlalchemy import Column, DateTime, ForeignKey, Index, String, Text, Unique
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
+    from app.domain.models.component_domain import ComponentDomain
     from app.domain.models.parameter import Parameter
     from app.domain.models.user import User
 
@@ -65,7 +66,6 @@ class Component(SQLModel, table=True):
     # ComponentsService.list_components / get_visible_component), so a still-draft v2 never
     # hides an already-published v1 from the browse list.
     status: ComponentStatus = Field(default=ComponentStatus.DRAFT, sa_column=Column(String, nullable=False))
-    domain: str
     created_at: datetime = Field(sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False))
     updated_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
@@ -76,3 +76,7 @@ class Component(SQLModel, table=True):
     # proper follow-up SELECT as part of the same async flow instead.
     created_by: Optional["User"] = Relationship(back_populates="components", sa_relationship_kwargs={"lazy": "selectin"})
     parameters: list["Parameter"] = Relationship(back_populates="component", sa_relationship_kwargs={"lazy": "selectin"})
+    domains: list["ComponentDomain"] = Relationship(
+        back_populates="component",
+        sa_relationship_kwargs={"lazy": "selectin", "cascade": "all, delete-orphan", "passive_deletes": True},
+    )

@@ -3,31 +3,22 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button.tsx';
 import { Card, CardContent } from '@/components/ui/card.tsx';
-import { UploadStepper } from '@/components/workflow-upload/common/UploadStepper';
-import { WorkflowDetailsStep } from '@/components/workflow-upload/organisms/WorkflowDetailsStep';
+import { UploadStepper } from '@/components/common/UploadStepper';
+import { UploadDetailsStep } from '@/components/common/UploadDetailsStep';
 import { ComponentConfigStep } from '@/components/workflow-upload/organisms/ComponentConfigStep';
 import { SaveWorkflowStep } from '@/components/workflow-upload/organisms/SaveWorkflowStep';
 import { useComponentConfigs } from '@/components/workflow-upload/lib/useComponentConfigs';
-import {
-  uploadWorkflowFormSchema,
-  useCreateWorkflow,
-  useParseWorkflow,
-  type ParseWorkflowResponseDto,
-  type UploadWorkflowFormErrors,
-} from '@/api/workflows';
+import { useCreateWorkflow, useParseWorkflow, type ParseWorkflowResponseDto } from '@/api/workflows';
+import { validateUploadDetails, type UploadDetailsErrors } from '@/api/schema';
 import { getErrorMessage } from '@/lib/errors';
 import { ROUTES } from '@/lib/routes';
+import { stripUploadExtension } from '@/lib/filename';
 
 const STEPS = [
   { id: 1, label: 'Workflow' },
   { id: 2, label: 'Components' },
   { id: 3, label: 'Save' },
 ];
-
-/** `pipeline.cwl` / `bundle.zip` -> `pipeline` / `bundle` */
-function stripExtension(filename: string): string {
-  return filename.replace(/\.(cwl|zip)$/i, '');
-}
 
 export default function WorkflowUploadPage() {
   const navigate = useNavigate();
@@ -40,7 +31,7 @@ export default function WorkflowUploadPage() {
   const [name, setName] = useState('');
   const [domains, setDomains] = useState<string[]>([]);
   const [description, setDescription] = useState('');
-  const [errors, setErrors] = useState<UploadWorkflowFormErrors>({});
+  const [errors, setErrors] = useState<UploadDetailsErrors>({});
   // until the user types a name themselves, the filename (and then the CWL's own label:)
   // may fill it in for them - after that it is theirs and nothing overwrites it
   const nameTouched = useRef(false);
@@ -66,7 +57,7 @@ export default function WorkflowUploadPage() {
     setErrors({});
     setStep(1);
     setFurthest(1);
-    if (selected && !nameTouched.current) setName(stripExtension(selected.name));
+    if (selected && !nameTouched.current) setName(stripUploadExtension(selected.name));
   };
 
   // every one of these makes the upload unsaveable as-is, so they block the whole flow
@@ -91,18 +82,8 @@ export default function WorkflowUploadPage() {
   }
 
   const handleContinueFromDetails = () => {
-    const result = uploadWorkflowFormSchema.safeParse({
-      name,
-      domains,
-      workflowFile: file,
-      description: description || undefined,
-    });
-    if (!result.success) {
-      const fieldErrors: UploadWorkflowFormErrors = {};
-      for (const issue of result.error.issues) {
-        const field = issue.path[0] as keyof UploadWorkflowFormErrors;
-        if (field && !fieldErrors[field]) fieldErrors[field] = issue.message;
-      }
+    const { data, errors: fieldErrors } = validateUploadDetails({ name, domains, file, description });
+    if (!data) {
       setErrors(fieldErrors);
       return;
     }
@@ -114,12 +95,10 @@ export default function WorkflowUploadPage() {
       return;
     }
 
-    parseMutation.mutate(result.data.workflowFile, {
+    parseMutation.mutate(data.file, {
       onSuccess: (response: ParseWorkflowResponseDto) => {
         if (!nameTouched.current && response.workflowName) setName(response.workflowName);
         configs.reset(response.componentPreviews);
-        // the issues are derived from this response, so recompute them here rather than
-        // reading the stale render-scoped list above
         const hasBlockers =
           response.missingExternalRefs.length > 0 ||
           response.unsupportedInlineSteps.length > 0 ||
@@ -162,18 +141,23 @@ export default function WorkflowUploadPage() {
       {step === 1 && (
         <Card className="mt-6">
           <CardContent className="pt-6">
-            <WorkflowDetailsStep
+            <UploadDetailsStep
               file={file}
               onFileChange={handleFile}
+              accept=".zip,.cwl"
+              fileLabel="Workflow File"
+              fileHelperText="A .zip archive or a bare .cwl file, or click to browse"
               name={name}
               onNameChange={handleNameChange}
+              nameLabel="Workflow Name"
+              namePlaceholder="e.g. thin-and-aggregate"
               domains={domains}
               onDomainsChange={setDomains}
               description={description}
               onDescriptionChange={setDescription}
               errors={errors}
-              blockingIssues={blockingIssues}
-              parseError={
+              issues={blockingIssues}
+              error={
                 parseMutation.error
                   ? getErrorMessage(parseMutation.error, 'Could not parse this file.')
                   : undefined
@@ -190,7 +174,7 @@ export default function WorkflowUploadPage() {
           configs={configs.configs}
           errors={configs.errors}
           onChange={configs.update}
-          onApplyDomainToAll={configs.applyDomainToAll}
+          onApplyDomainsToAll={configs.applyDomainsToAll}
           onNameConflictChange={configs.setNameConflict}
         />
       )}

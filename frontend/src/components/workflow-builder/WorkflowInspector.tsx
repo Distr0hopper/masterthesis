@@ -1,7 +1,5 @@
 import { ExternalLink } from 'lucide-react';
 import type { ParameterDisplayModel } from '@/api/components';
-import { getDomainBadgeStyle, getDomainLabel, useDomains } from '@/api/components';
-import { Badge } from '@/components/ui/badge.tsx';
 import { Input } from '@/components/ui/input.tsx';
 import {
   configParameters,
@@ -13,6 +11,7 @@ import {
 import { formatPortType } from './lib/ports';
 import { ROUTES } from '@/lib/routes';
 import type { ComponentFlowNode } from './types';
+import { DomainBadges } from '@/components/common/DomainBadges';
 
 interface WorkflowInspectorProps {
   node: ComponentFlowNode;
@@ -43,7 +42,6 @@ function PortSummary({ title, ports }: { title: string; ports: ParameterDisplayM
 }
 
 export function WorkflowInspector({ node, onParameterChange }: WorkflowInspectorProps) {
-  const { data: domains } = useDomains();
 
   const { parameters, parameterValues } = node.data;
   const configs = configParameters(parameters);
@@ -72,13 +70,7 @@ export function WorkflowInspector({ node, onParameterChange }: WorkflowInspector
             <ExternalLink className="h-3.5 w-3.5" />
           </a>
         </div>
-        <Badge
-          variant="outline"
-          className="w-fit"
-          style={domains ? getDomainBadgeStyle(node.data.domain, domains) : undefined}
-        >
-          {getDomainLabel(node.data.domain)}
-        </Badge>
+        <DomainBadges domains={node.data.domains} />
       </div>
 
       <div className="flex flex-col gap-6 p-4">

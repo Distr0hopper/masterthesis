@@ -1,6 +1,6 @@
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs.tsx';
-import { ManualUploadForm } from '@/components/component-upload/organisms/ManualUploadForm';
+import { ManualUploadWizard } from '@/components/component-upload/organisms/ManualUploadWizard';
 import { PackageFromGitHubForm } from '@/components/component-upload/organisms/PackageFromGitHubForm';
 
 const TABS_LIST_CLASSNAME = 'w-full justify-start gap-6 rounded-none border-b bg-transparent p-0';
@@ -13,28 +13,28 @@ export default function UploadPage() {
       <h1 className="text-2xl font-semibold text-slate-900">Upload Component</h1>
       <p className="mt-1 text-slate-500">Package a CWL CommandLineTool manually or from a MoveApps GitHub repository.</p>
 
-      <Card className="mt-6">
-        <CardContent className="pt-6">
-          <Tabs defaultValue="manual">
-            <TabsList className={TABS_LIST_CLASSNAME}>
-              <TabsTrigger value="manual" className={TAB_TRIGGER_CLASSNAME}>
-                Manual Upload
-              </TabsTrigger>
-              <TabsTrigger value="github" className={TAB_TRIGGER_CLASSNAME}>
-                Package from GitHub
-              </TabsTrigger>
-            </TabsList>
+      <Tabs defaultValue="manual" className="mt-6">
+        <TabsList className={TABS_LIST_CLASSNAME}>
+          <TabsTrigger value="manual" className={TAB_TRIGGER_CLASSNAME}>
+            Manual Upload
+          </TabsTrigger>
+          <TabsTrigger value="github" className={TAB_TRIGGER_CLASSNAME}>
+            Package from GitHub
+          </TabsTrigger>
+        </TabsList>
 
-            <TabsContent value="manual" className="pt-6">
-              <ManualUploadForm />
-            </TabsContent>
+        <TabsContent value="manual">
+          <ManualUploadWizard />
+        </TabsContent>
 
-            <TabsContent value="github" className="pt-6">
+        <TabsContent value="github">
+          <Card className="mt-6">
+            <CardContent className="pt-6">
               <PackageFromGitHubForm />
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

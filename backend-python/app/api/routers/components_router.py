@@ -11,10 +11,12 @@ from app.api.dto.component import (
     ComponentCommandExecuteRequestDto,
     ComponentDetailDto,
     ComponentListItemDto,
+    ComponentPreviewDto,
     CreateComponentRequestDto,
     ExistingComponentDto,
     NameAvailabilityDto,
     PackageComponentRequestDto,
+    ParseComponentRequestDto,
 )
 from app.api.dto.pagination import ListQueryPaginationDtoV1, PaginatedResponseDtoV1, build_paginated_response
 from app.api.exception.exceptions import ForbiddenException
@@ -121,6 +123,42 @@ async def list_latest_components(
     return [ComponentTransformer.to_list_item(c, c.name in favorited_names, current_user) for c in components]
 
 
+@router.post(
+    "/parse",
+    response_model=ComponentPreviewDto,
+    responses={
+        status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse, "description": "Invalid CWL or file too large"},
+        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
+    },
+)
+async def parse_component(
+    dto: Annotated[ParseComponentRequestDto, Form(media_type="multipart/form-data")],
+    current_user: Annotated[User, Depends(AuthService.get_current_user)],
+    components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
+) -> ComponentPreviewDto:
+    """Read an uploaded .cwl without persisting it, so the user can review the component
+    before creating it. Mirrors POST /workflows/parse."""
+    content = await dto.cwl_file.read()
+    if len(content) > MAX_CWL_FILE_SIZE:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Validation failed (expected size to be less than {MAX_CWL_FILE_SIZE} bytes)",
+        )
+
+    logger.info(f"Parsing component upload '{dto.cwl_file.filename}' for user {current_user.id}")
+    parsed = components_service.parse_cwl(content)
+    return ComponentPreviewDto(
+        cwl_content=parsed.cwl_content,
+        cwl_type=parsed.cwl_type,
+        description=parsed.description,
+        dockerfile_content=parsed.dockerfile_content,
+        docker_pull_reference=parsed.docker_pull_reference,
+        parameters=[
+            ComponentTransformer.to_preview_parameter(p, "preview") for p in parsed.parameters
+        ],
+    )
+
+
 @router.get("/name-availability", response_model=NameAvailabilityDto)
 async def check_name_availability(
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
@@ -141,7 +179,7 @@ async def check_name_availability(
             id=existing.id,
             name=existing.name,
             version=existing.version,
-            domain=existing.domain,
+            domains=ComponentTransformer.to_domains(existing),
             status=existing.status,
         ),
     )
@@ -215,7 +253,7 @@ async def package(
             raise ForbiddenException("Insufficient permission to package a new version of this component")
         component = await components_service.package_next_version(existing, dto.description)
     else:
-        component = await components_service.create_from_url(dto.repo_url, dto.domain, dto.description, current_user.id)
+        component = await components_service.create_from_url(dto.repo_url, dto.domains, dto.description, current_user.id)
 
     logger.info(f"Packaging complete: '{component.name}' v{component.version} ({component.id})")
     favorited_names = await _favorited_names(favorites_service, current_user)
@@ -318,7 +356,7 @@ async def download(
     responses={
         status.HTTP_400_BAD_REQUEST: {
             "model": ErrorResponse,
-            "description": "Command is missing a payload field it requires (e.g. UPDATE_DOMAIN without a domain)",
+            "description": "Command is missing a payload field it requires (e.g. UPDATE_DOMAIN without domains)",
         },
         status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
         status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Insufficient permission for this command"},

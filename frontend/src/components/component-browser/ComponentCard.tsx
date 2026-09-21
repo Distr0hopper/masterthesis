@@ -4,9 +4,10 @@ import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { ComponentFavoriteButton } from '@/components/ComponentFavoriteButton';
-import { ComponentStatus, getDomainBadgeStyle, useDomains, type ComponentDisplayModel } from '@/api/components';
+import { ComponentStatus, type ComponentDisplayModel } from '@/api/components';
 import { canFavorite } from '@/api/permissions';
 import { ROUTES } from '@/lib/routes';
+import { DomainBadges } from '@/components/common/DomainBadges';
 
 interface ComponentCardProps {
   component: ComponentDisplayModel;
@@ -15,9 +16,6 @@ interface ComponentCardProps {
 }
 
 export function ComponentCard({ component, backTo = ROUTES.browse, actions }: ComponentCardProps) {
-  const { data: domains } = useDomains();
-  const domainBadgeStyle = domains ? getDomainBadgeStyle(component.domain, domains) : undefined;
-
   return (
     <Card>
       <CardContent className="flex flex-col gap-3 pt-6">
@@ -28,9 +26,7 @@ export function ComponentCard({ component, backTo = ROUTES.browse, actions }: Co
                 {component.statusDisplay}
               </Badge>
             )}
-            <Badge variant="outline" className="w-fit" style={domainBadgeStyle}>
-              {component.domainDisplay}
-            </Badge>
+            <DomainBadges domains={component.domains} />
           </div>
 
           {canFavorite(component._links) && (

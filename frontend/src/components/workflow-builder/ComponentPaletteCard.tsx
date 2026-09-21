@@ -1,14 +1,12 @@
 import { ExternalLink, Star } from 'lucide-react';
-import { Badge } from '@/components/ui/badge.tsx';
 import {
-  getDomainBadgeStyle,
-  useDomains,
   type ComponentDisplayModel,
 } from '@/api/components';
 import { cn } from '@/lib/utils';
 import { ROUTES } from '@/lib/routes';
 import { NO_DATA_INPUTS_SCORE, type CompatibilityMatch } from './lib/typeChecking';
 import { DRAG_MIME, type ComponentDragPayload } from './types';
+import { DomainBadges } from '@/components/common/DomainBadges';
 
 interface ComponentPaletteCardProps {
   component: ComponentDisplayModel;
@@ -24,7 +22,6 @@ interface ComponentPaletteCardProps {
 export function ComponentPaletteCard({ component, match }: ComponentPaletteCardProps) {
   // safe to call per card - useDomains() has a 1h staleTime, so every card reads the
   // same cached entry rather than triggering a request of its own
-  const { data: domains } = useDomains();
 
   return (
     <div
@@ -33,7 +30,7 @@ export function ComponentPaletteCard({ component, match }: ComponentPaletteCardP
         const payload: ComponentDragPayload = {
           componentId: component.id,
           componentName: component.name,
-          domain: component.domain,
+          domains: component.domains,
           parameters: component.parameters,
         };
         e.dataTransfer.setData(DRAG_MIME, JSON.stringify(payload));
@@ -81,13 +78,7 @@ export function ComponentPaletteCard({ component, match }: ComponentPaletteCardP
         </span>
       )}
 
-      <Badge
-        variant="outline"
-        className="w-fit"
-        style={domains ? getDomainBadgeStyle(component.domain, domains) : undefined}
-      >
-        {component.domainDisplay}
-      </Badge>
+      <DomainBadges domains={component.domains} />
     </div>
   );
 }

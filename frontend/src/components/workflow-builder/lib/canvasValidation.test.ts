@@ -15,7 +15,7 @@ const node = (id: string, label: string, parameters: unknown[] = []): ComponentF
     data: {
       componentId: `c-${id}`,
       label,
-      domain: 'animal_behavior',
+      domains: ['animal_behavior'],
       parameters,
       parameterValues: {},
     },

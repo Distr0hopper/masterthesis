@@ -10,8 +10,8 @@ import { ComponentPickerDialog } from '@/components/common/ComponentPickerDialog
 import { ComponentLink } from '@/components/common/ComponentLink';
 import { DefinitionDisclosure } from '@/components/common/DefinitionDisclosure';
 import { ComponentTabs } from '@/components/component-detail/organisms/ComponentTabs';
-import { DomainSelect } from '@/components/component-upload/common/DomainSelect';
-import { ComponentOrigin, type ComponentPreviewDto } from '@/api/workflows';
+import { DomainMultiSelect } from '@/components/common/DomainMultiSelect';
+import { ComponentOrigin, type WorkflowStepPreviewDto } from '@/api/workflows';
 import {
   componentTransformer,
   useComponent,
@@ -22,7 +22,7 @@ import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import type { ComponentConfigState } from '../lib/useComponentConfigs';
 
 interface ComponentConfigCardProps {
-  preview: ComponentPreviewDto;
+  preview: WorkflowStepPreviewDto;
   config: ComponentConfigState;
   error?: string;
   onChange: (patch: Partial<ComponentConfigState>) => void;
@@ -57,7 +57,7 @@ export function ComponentConfigCard({
 
   const model = componentTransformer.toPreviewDisplayModel(preview, {
     name: config.name,
-    domain: config.domain,
+    domains: config.domains,
     description: config.description,
   });
   const OriginIcon = preview.origin === ComponentOrigin.INLINE ? FileCode : Package;
@@ -129,10 +129,9 @@ export function ComponentConfigCard({
               </div>
             )}
 
-            <DomainSelect
-              id={`component-domain-${preview.stepId}`}
-              value={config.domain}
-              onChange={(domain) => onChange({ domain })}
+            <DomainMultiSelect
+              value={config.domains}
+              onChange={(domains) => onChange({ domains })}
             />
 
             <div className="flex flex-col gap-2">

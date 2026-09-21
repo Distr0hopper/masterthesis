@@ -1,10 +1,9 @@
 import type { CSSProperties } from 'react';
-import type { ComponentPreviewDto } from '@/api/workflows/types';
 import type {
   ComponentCreatorDto,
   ComponentDetailDto,
   ComponentListItemDto,
-  CreateComponentDto,
+  ComponentPreviewDto,
   DomainDto,
   PackageComponentDto,
   ParameterDto,
@@ -13,7 +12,6 @@ import { ComponentSource, ComponentStatus, ParameterDirection } from './types';
 import type {
   PackageComponentFormData,
   UpdateComponentFormData,
-  UploadComponentFormData,
 } from './schema';
 import { formatDate, getCreatorDisplay } from '@/api/transformer';
 import type { WithHateoasLinks } from '@/api/types';
@@ -41,8 +39,8 @@ export interface ComponentDisplayModel extends WithHateoasLinks {
   authorDisplay: string;
   repoUrl: string | null;
   version: number;
-  domain: string;
-  domainDisplay: string;
+  domains: string[];
+  domainsDisplay: string[];
   status: ComponentStatus;
   statusDisplay: string;
   createdAt: Date;
@@ -101,33 +99,20 @@ export function getDomainBadgeStyle(domainId: string, domains: DomainDto[]): CSS
 }
 
 export const componentTransformer = {
-  getInitialUploadFormValues(): Omit<UploadComponentFormData, 'cwlFile'> {
-    return { name: '', domain: '', authorName: '', description: '' };
-  },
-
   getInitialPackageFormValues(): PackageComponentFormData {
-    return { repoUrl: '', domain: '', description: '' };
-  },
-
-  formToCreateDto(form: UploadComponentFormData): CreateComponentDto {
-    return {
-      name: form.name,
-      domain: form.domain,
-      authorName: form.authorName || undefined,
-      description: form.description || null,
-    };
+    return { repoUrl: '', domains: [], description: '' };
   },
 
   formToPackageDto(form: PackageComponentFormData): PackageComponentDto {
     return {
       repoUrl: form.repoUrl,
-      domain: form.domain,
+      domains: form.domains,
       description: form.description || null,
     };
   },
 
   getInitialUpdateFormValues(component: ComponentDisplayModel): UpdateComponentFormData {
-    return { domain: component.domain, description: component.description ?? '' };
+    return { domains: component.domains, description: component.description ?? '' };
   },
 
   toParameterDisplayModel(parameter: ParameterDto): ParameterDisplayModel {
@@ -146,8 +131,8 @@ export const componentTransformer = {
       authorDisplay: getAuthorDisplay(dto.authorName),
       repoUrl: dto.repoUrl,
       version: dto.version,
-      domain: dto.domain,
-      domainDisplay: getDomainLabel(dto.domain),
+      domains: dto.domains,
+      domainsDisplay: dto.domains.map(getDomainLabel),
       status: dto.status,
       statusDisplay: COMPONENT_STATUS_LABELS[dto.status],
       createdAt,
@@ -175,11 +160,11 @@ export const componentTransformer = {
    */
   toPreviewDisplayModel(
     preview: ComponentPreviewDto,
-    overrides: { name?: string; domain?: string; description?: string | null } = {},
+    overrides: { name?: string; domains?: string[]; description?: string | null } = {},
   ): ComponentDetailDisplayModel {
     const now = new Date();
-    const name = overrides.name?.trim() || preview.suggestedName;
-    const domain = overrides.domain ?? '';
+    const name = overrides.name?.trim() || 'Component';
+    const domains = overrides.domains ?? [];
     const description = overrides.description?.trim() || preview.description;
     const parameters = preview.parameters.map(componentTransformer.toParameterDisplayModel);
     return {
@@ -189,8 +174,8 @@ export const componentTransformer = {
       authorDisplay: 'You',
       repoUrl: null,
       version: 1,
-      domain,
-      domainDisplay: domain ? getDomainLabel(domain) : '',
+      domains,
+      domainsDisplay: domains.map(getDomainLabel),
       status: ComponentStatus.DRAFT,
       statusDisplay: COMPONENT_STATUS_LABELS[ComponentStatus.DRAFT],
       createdAt: now,

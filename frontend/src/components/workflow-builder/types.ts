@@ -9,7 +9,7 @@ import type { ParameterDisplayModel } from '@/api/components';
 export type ComponentDragPayload = {
   componentId: string;
   componentName: string;
-  domain: string;
+  domains: string[];
   parameters: ParameterDisplayModel[];
 };
 
@@ -21,7 +21,7 @@ export const COMPONENT_EDGE_TYPE = 'componentEdge';
 export type ComponentNodeData = {
   componentId: string;
   label: string;
-  domain: string;
+  domains: string[];
   /** drives the sidebar ranking and edge validation in lib/typeChecking.ts */
   parameters: ParameterDisplayModel[];
   /**

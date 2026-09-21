@@ -13,15 +13,19 @@ from app.domain.models.component_domain import VALID_DOMAINS
 from app.domain.models.parameter import ParameterDirection
 
 
-class DomainValidatorMixin:
-    """Shared by DTOs where `domain` is required - Update has its own (domain is optional there)."""
+class DomainsValidatorMixin:
+    """Shared by DTOs where `domains` is required - Update has its own (domains is optional there)."""
 
-    @field_validator("domain")
+    @field_validator("domains")
     @classmethod
-    def validate_domain(cls, value: str) -> str:
-        if value not in VALID_DOMAINS:
-            raise ValueError(f"domain must be one of {VALID_DOMAINS}")
-        return value
+    def validate_domains(cls, value: list[str]) -> list[str]:
+        if not value:
+            raise ValueError("at least one domain is required")
+        invalid = [d for d in value if d not in VALID_DOMAINS]
+        if invalid:
+            raise ValueError(f"domains must each be one of {VALID_DOMAINS}, got invalid: {invalid}")
+        seen: set[str] = set()
+        return [d for d in value if not (d in seen or seen.add(d))]
 
 
 class RepoUrlValidatorMixin:
@@ -80,7 +84,7 @@ class ComponentListItemDto(CamelModel, LinkModel):
     author_name: str | None
     repo_url: str | None
     version: int
-    domain: str
+    domains: list[str]
     status: ComponentStatus
     created_at: datetime
     is_favorite: bool
@@ -105,7 +109,7 @@ class ComponentDetailDto(CamelModel, LinkModel):
     cwl_type: str | None
     dockerfile_content: str | None
     docker_pull_reference: str | None
-    domain: str
+    domains: list[str]
     source: ComponentSource
     status: ComponentStatus
     parameters: list[ParameterDto]
@@ -114,13 +118,47 @@ class ComponentDetailDto(CamelModel, LinkModel):
     is_favorite: bool
 
 
+class PreviewParameterDto(CamelModel):
+    """A previewed component port. Deliberately NOT ParameterDto: that carries a real
+    uuid primary key, and these are never persisted - the id here is a synthetic,
+    stable-within-one-response string that only exists to give the UI a list key."""
+
+    id: str
+    name: str
+    cwl_type: str
+    default_value: str | None
+    description: str | None
+    format: str | None
+    format_label: str | None
+    direction: ParameterDirection
+
+
+class ComponentPreviewDto(CamelModel):
+    """Everything read out of a CWL document without persisting it.
+
+    Shared by both upload flows: /components/parse returns exactly this, and the workflow
+    upload's per-step ComponentPreviewDto extends it with the step it came from.
+    """
+
+    description: str | None
+    cwl_content: str
+    cwl_type: str | None
+    dockerfile_content: str | None
+    docker_pull_reference: str | None
+    parameters: list[PreviewParameterDto]
+
+
+class ParseComponentRequestDto(CamelModel):
+    cwl_file: UploadFile
+
+
 class ExistingComponentDto(CamelModel):
     """The component currently holding a name, returned when that name is taken."""
 
     id: uuid.UUID
     name: str
     version: int
-    domain: str
+    domains: list[str]
     status: ComponentStatus
 
 
@@ -136,12 +174,13 @@ class NameAvailabilityDto(CamelModel):
 
 
 class CreateComponentRequestDto(
-    DomainValidatorMixin, RepoUrlValidatorMixin, EmptyRepoCommitShaToNoneMixin, EmptyDescriptionToNoneMixin, CamelModel
+    DomainsValidatorMixin, RepoUrlValidatorMixin, EmptyRepoCommitShaToNoneMixin, EmptyDescriptionToNoneMixin, CamelModel
 ):
     name: str
     # json_schema_extra adds the enum purely so Swagger UI renders a dropdown -
-    # the actual type stays plain str, validated for real by DomainValidatorMixin
-    domain: str = Field(json_schema_extra={"enum": VALID_DOMAINS})
+    # the actual type stays plain str, validated for real by DomainsValidatorMixin.
+    # Repeated multipart field, exactly like CreateWorkflowRequestDto.domains.
+    domains: list[str] = Field(json_schema_extra={"items": {"enum": VALID_DOMAINS}})
     cwl_file: UploadFile
     author_name: str | None = None
     repo_url: str | None = None
@@ -160,9 +199,9 @@ class AddVersionRequestDto(EmptyRepoCommitShaToNoneMixin, EmptyDescriptionToNone
     description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
 
 
-class PackageComponentRequestDto(DomainValidatorMixin, RepoUrlValidatorMixin, CamelModel):
+class PackageComponentRequestDto(DomainsValidatorMixin, RepoUrlValidatorMixin, CamelModel):
     repo_url: str
-    domain: str = Field(json_schema_extra={"enum": VALID_DOMAINS})
+    domains: list[str] = Field(json_schema_extra={"items": {"enum": VALID_DOMAINS}})
     description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
 
 
@@ -184,15 +223,21 @@ class ComponentCommandExecuteRequestDto(EmptyDescriptionToNoneMixin, CamelModel)
         max_length=MAX_DESCRIPTION_LENGTH,
         description="New description; only used by the UPDATE_DESCRIPTION command",
     )
-    domain: str | None = Field(
+    domains: list[str] | None = Field(
         default=None,
-        json_schema_extra={"enum": VALID_DOMAINS},
-        description="New domain; only used by the UPDATE_DOMAIN command",
+        json_schema_extra={"items": {"enum": VALID_DOMAINS}},
+        description="New domains; only used by the UPDATE_DOMAIN command",
     )
 
-    @field_validator("domain")
+    @field_validator("domains")
     @classmethod
-    def validate_domain(cls, value: str | None) -> str | None:
-        if value is not None and value not in VALID_DOMAINS:
-            raise ValueError(f"domain must be one of {VALID_DOMAINS}")
-        return value
+    def validate_domains(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        if not value:
+            raise ValueError("at least one domain is required")
+        invalid = [d for d in value if d not in VALID_DOMAINS]
+        if invalid:
+            raise ValueError(f"domains must each be one of {VALID_DOMAINS}, got invalid: {invalid}")
+        seen: set[str] = set()
+        return [d for d in value if not (d in seen or seen.add(d))]

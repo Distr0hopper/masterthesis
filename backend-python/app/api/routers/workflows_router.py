@@ -9,10 +9,9 @@ from app.api.dto.common import ErrorResponse, MyItemsResponseDtoV1, build_my_ite
 from app.api.dto.pagination import ListQueryPaginationDtoV1, PaginatedResponseDtoV1, build_paginated_response
 from app.api.dto.workflow import (
     ComponentMatchDto,
-    ComponentPreviewDto,
+    WorkflowStepPreviewDto,
     CreateWorkflowRequestDto,
     ParseWorkflowRequestDto,
-    PreviewParameterDto,
     ParseWorkflowResponseDto,
     UpdateWorkflowStepRequestDto,
     WorkflowCommandExecuteRequestDto,
@@ -23,6 +22,7 @@ from app.api.dto.workflow import (
 )
 from app.api.exception.exceptions import ForbiddenException
 from app.api.permission.workflow_permission_validator import WorkflowPermissionValidator
+from app.api.transformer.component_transformer import ComponentTransformer
 from app.api.transformer.workflow_transformer import WorkflowTransformer
 from app.application.exception.favorites_exceptions import FavoritesRequireAuthError
 from app.application.service.auth_service import AuthService
@@ -47,13 +47,13 @@ def _to_component_match_dto(match: ComponentMatch | None) -> ComponentMatchDto |
         component_id=match.component_id,
         name=match.name,
         version=match.version,
-        domain=match.domain,
+        domains=match.domains,
         score=match.score,
     )
 
 
-def _to_component_preview_dto(preview: ComponentPreview) -> ComponentPreviewDto:
-    return ComponentPreviewDto(
+def _to_workflow_step_preview_dto(preview: ComponentPreview) -> WorkflowStepPreviewDto:
+    return WorkflowStepPreviewDto(
         step_id=preview.step_id,
         origin=preview.origin,
         run_reference=preview.run_reference,
@@ -64,19 +64,7 @@ def _to_component_preview_dto(preview: ComponentPreview) -> ComponentPreviewDto:
         dockerfile_content=preview.dockerfile_content,
         docker_pull_reference=preview.docker_pull_reference,
         parameters=[
-            PreviewParameterDto(
-                # synthetic: these parameters are parsed, never persisted, so they have no
-                # primary key - step_id+direction+name is unique within one response, which
-                # is all the UI needs it for
-                id=f"{preview.step_id}:{parameter.direction.value}:{parameter.name}",
-                name=parameter.name,
-                cwl_type=parameter.cwl_type,
-                default_value=parameter.default_value,
-                description=parameter.description,
-                format=parameter.format,
-                format_label=parameter.format_label,
-                direction=parameter.direction,
-            )
+            ComponentTransformer.to_preview_parameter(parameter, preview.step_id)
             for parameter in preview.parameters
         ],
         name_conflict=_to_component_match_dto(preview.name_conflict),
@@ -202,7 +190,7 @@ async def create(
             step_id=c.step_id,
             reuse_component_id=c.reuse_component_id,
             name=c.name,
-            domain=c.domain,
+            domains=c.domains,
             description=c.description,
         )
         for c in dto.component_configs
@@ -252,7 +240,7 @@ async def parse_workflow(
         is_self_contained=preview.is_self_contained,
         workflow_name=preview.workflow_name,
         step_count=preview.step_count,
-        component_previews=[_to_component_preview_dto(c) for c in preview.component_previews],
+        component_previews=[_to_workflow_step_preview_dto(c) for c in preview.component_previews],
         external_refs=preview.external_refs,
         unsupported_inline_steps=preview.unsupported_inline_steps,
         missing_external_refs=preview.missing_external_refs,

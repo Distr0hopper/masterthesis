@@ -6,8 +6,7 @@ from fastapi import UploadFile
 from pydantic import Field, Json, field_validator, model_validator
 
 from app.api.dto.base import CamelModel
-from app.api.dto.component import ComponentCreatorDto
-from app.domain.models.parameter import ParameterDirection
+from app.api.dto.component import ComponentCreatorDto, ComponentPreviewDto
 from app.api.link.model import LinkModel
 from app.domain.models.component_domain import VALID_DOMAINS
 from app.domain.models.workflow import MAX_DESCRIPTION_LENGTH, WorkflowSource, WorkflowStatus
@@ -38,7 +37,7 @@ class ComponentSummaryDto(CamelModel):
     id: uuid.UUID
     name: str
     version: int
-    domain: str
+    domains: list[str]
 
 
 class WorkflowStepDto(CamelModel, LinkModel):
@@ -83,7 +82,7 @@ class WorkflowDetailDto(CamelModel, LinkModel):
 
 
 class ComponentConfigDto(CamelModel):
-    """The user's decision for one previewed step, keyed by ComponentPreviewDto.step_id.
+    """The user's decision for one previewed step, keyed by WorkflowStepPreviewDto.step_id.
 
     Exactly one branch: reuse_component_id binds the step to an existing catalogue
     Component, or name+domain create a new one from that step's CWL.
@@ -92,21 +91,22 @@ class ComponentConfigDto(CamelModel):
     step_id: str
     reuse_component_id: uuid.UUID | None = None
     name: str | None = None
-    domain: str | None = Field(default=None, json_schema_extra={"enum": VALID_DOMAINS})
+    domains: list[str] | None = Field(default=None, json_schema_extra={"items": {"enum": VALID_DOMAINS}})
     description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
 
     @model_validator(mode="after")
     def validate_exactly_one_branch(self) -> "ComponentConfigDto":
         if self.reuse_component_id is not None:
-            if self.name or self.domain:
-                raise ValueError(f"step '{self.step_id}': reuseComponentId cannot be combined with name/domain")
+            if self.name or self.domains:
+                raise ValueError(f"step '{self.step_id}': reuseComponentId cannot be combined with name/domains")
             return self
         if not self.name:
             raise ValueError(f"step '{self.step_id}': either reuseComponentId or a name is required")
-        if not self.domain:
-            raise ValueError(f"step '{self.step_id}': domain is required when creating a new component")
-        if self.domain not in VALID_DOMAINS:
-            raise ValueError(f"step '{self.step_id}': domain must be one of {VALID_DOMAINS}, got: {self.domain}")
+        if not self.domains:
+            raise ValueError(f"step '{self.step_id}': at least one domain is required to create a new component")
+        invalid = [d for d in self.domains if d not in VALID_DOMAINS]
+        if invalid:
+            raise ValueError(f"step '{self.step_id}': domains must each be one of {VALID_DOMAINS}, got: {invalid}")
         return self
 
 
@@ -127,33 +127,18 @@ class ParseWorkflowRequestDto(CamelModel):
     file: UploadFile
 
 
-class PreviewParameterDto(CamelModel):
-    """A previewed component port. Deliberately NOT ParameterDto: that carries a real
-    uuid primary key, and these are never persisted - the id here is a synthetic,
-    stable-within-one-response string that only exists to give the UI a list key."""
-
-    id: str
-    name: str
-    cwl_type: str
-    default_value: str | None
-    description: str | None
-    format: str | None
-    format_label: str | None
-    direction: ParameterDirection
-
-
 class ComponentMatchDto(CamelModel):
     """An existing component a step could bind to instead of creating a new one."""
 
     component_id: uuid.UUID
     name: str
     version: int
-    domain: str
+    domains: list[str]
     #: fuzzy-match confidence; null for an exact name collision, which isn't a guess
     score: float | None
 
 
-class ComponentPreviewDto(CamelModel):
+class WorkflowStepPreviewDto(ComponentPreviewDto):
     """One workflow step rendered as the Component it would become, so the user can review
     and configure it before the workflow is saved."""
 
@@ -163,12 +148,6 @@ class ComponentPreviewDto(CamelModel):
     #: the `run:` filename, archive origin only
     run_reference: str | None
     suggested_name: str
-    description: str | None
-    cwl_content: str
-    cwl_type: str | None
-    dockerfile_content: str | None
-    docker_pull_reference: str | None
-    parameters: list[PreviewParameterDto]
     #: an existing component that already holds suggested_name - the user must rename or reuse
     name_conflict: ComponentMatchDto | None
     #: archive origin only - the catalogue component this step's run: filename matches
@@ -185,7 +164,7 @@ class ParseWorkflowResponseDto(CamelModel):
     step_count: int
     #: one per resolvable step, inline and archive alike. Steps listed in
     #: unsupported_inline_steps or missing_external_refs have no preview.
-    component_previews: list[ComponentPreviewDto]
+    component_previews: list[WorkflowStepPreviewDto]
     #: steps whose run: is a plain filename, e.g. "thindata-bytime.cwl"
     external_refs: list[str]
     #: steps whose run: is an inline mapping but not class: CommandLineTool (e.g. an inline

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import type { ComponentConfigDto, ComponentPreviewDto } from '@/api/workflows';
+import type { ComponentConfigDto, WorkflowStepPreviewDto } from '@/api/workflows';
 import type { ExistingComponentDto } from '@/api/components';
 
 export type ConfigMode = 'create' | 'reuse';
@@ -7,7 +7,7 @@ export type ConfigMode = 'create' | 'reuse';
 export interface ComponentConfigState {
   mode: ConfigMode;
   name: string;
-  domain: string;
+  domains: string[];
   description: string;
   /** set in 'reuse' mode - the catalogue component this step binds to */
   reuseComponentId: string | null;
@@ -18,7 +18,7 @@ export interface ComponentConfigState {
 /** The component a step's name currently collides with, as last reported by a card. */
 export type NameConflicts = Record<string, ExistingComponentDto | null>;
 
-function initialState(preview: ComponentPreviewDto): ComponentConfigState {
+function initialState(preview: WorkflowStepPreviewDto): ComponentConfigState {
   // an archive step whose run: filename matches a catalogue component defaults to reusing
   // it - re-importing a component the repository already holds is almost never intended
   if (preview.suggestedMatch) {
@@ -26,7 +26,7 @@ function initialState(preview: ComponentPreviewDto): ComponentConfigState {
     return {
       mode: 'reuse',
       name: preview.suggestedName,
-      domain: '',
+      domains: [],
       description: '',
       reuseComponentId: componentId,
       reuseName: name,
@@ -36,7 +36,7 @@ function initialState(preview: ComponentPreviewDto): ComponentConfigState {
   return {
     mode: 'create',
     name: preview.suggestedName,
-    domain: '',
+    domains: [],
     description: '',
     reuseComponentId: null,
     reuseName: null,
@@ -49,11 +49,11 @@ function initialState(preview: ComponentPreviewDto): ComponentConfigState {
  * saving. Every step must resolve to either an existing component or a fully-specified
  * new one before the workflow can be created - the backend rejects anything less.
  */
-export function useComponentConfigs(previews: ComponentPreviewDto[]) {
+export function useComponentConfigs(previews: WorkflowStepPreviewDto[]) {
   const [configs, setConfigs] = useState<Record<string, ComponentConfigState>>({});
   const [nameConflicts, setNameConflicts] = useState<NameConflicts>({});
 
-  const reset = useCallback((next: ComponentPreviewDto[]) => {
+  const reset = useCallback((next: WorkflowStepPreviewDto[]) => {
     setConfigs(Object.fromEntries(next.map((p) => [p.stepId, initialState(p)])));
     setNameConflicts({});
   }, []);
@@ -62,13 +62,13 @@ export function useComponentConfigs(previews: ComponentPreviewDto[]) {
     setConfigs((prev) => ({ ...prev, [stepId]: { ...prev[stepId], ...patch } }));
   }, []);
 
-  /** apply one domain to every step still being created - the common case is one domain */
-  const applyDomainToAll = useCallback((domain: string) => {
+  /** apply one domain set to every step still being created - the common case is one set */
+  const applyDomainsToAll = useCallback((domains: string[]) => {
     setConfigs((prev) =>
       Object.fromEntries(
         Object.entries(prev).map(([stepId, config]) => [
           stepId,
-          config.mode === 'create' ? { ...config, domain } : config,
+          config.mode === 'create' ? { ...config, domains } : config,
         ]),
       ),
     );
@@ -106,8 +106,8 @@ export function useComponentConfigs(previews: ComponentPreviewDto[]) {
       } else if (nameConflicts[preview.stepId]) {
         const existing = nameConflicts[preview.stepId]!;
         result[preview.stepId] = `A component named "${existing.name}" already exists (v${existing.version}).`;
-      } else if (!config.domain) {
-        result[preview.stepId] = 'Domain is required.';
+      } else if (config.domains.length === 0) {
+        result[preview.stepId] = 'At least one domain is required.';
       }
     }
     return result;
@@ -125,12 +125,12 @@ export function useComponentConfigs(previews: ComponentPreviewDto[]) {
         return {
           stepId: preview.stepId,
           name: config.name.trim(),
-          domain: config.domain,
+          domains: config.domains,
           description: config.description.trim() || null,
         };
       }),
     [previews, configs],
   );
 
-  return { configs, errors, isComplete, reset, update, applyDomainToAll, setNameConflict, toDtos };
+  return { configs, errors, isComplete, reset, update, applyDomainsToAll, setNameConflict, toDtos };
 }

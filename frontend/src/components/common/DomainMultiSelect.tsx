@@ -5,9 +5,10 @@ interface DomainMultiSelectProps {
   value: string[];
   onChange: (value: string[]) => void;
   error?: string;
+  label?: string;
 }
 
-export function DomainMultiSelect({ value, onChange, error }: DomainMultiSelectProps) {
+export function DomainMultiSelect({ value, onChange, error, label = 'Domains' }: DomainMultiSelectProps) {
   const { data: domains } = useDomains();
 
   const toggle = (domainId: string) => {
@@ -16,7 +17,7 @@ export function DomainMultiSelect({ value, onChange, error }: DomainMultiSelectP
 
   return (
     <div className="flex flex-col gap-2">
-      <Label>Domains</Label>
+      <Label>{label}</Label>
       <div className="flex flex-wrap gap-3 rounded-md border border-input p-3">
         {domains?.map((domain) => (
           <label key={domain.id} className="flex items-center gap-2 text-sm text-slate-700">

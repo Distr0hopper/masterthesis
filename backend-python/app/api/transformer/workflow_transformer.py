@@ -63,7 +63,7 @@ class WorkflowTransformer:
                 id=step.component.id,
                 name=step.component.name,
                 version=step.component.version,
-                domain=step.component.domain,
+                domains=sorted(d.domain for d in step.component.domains),
             )
             if step.component is not None
             else None,

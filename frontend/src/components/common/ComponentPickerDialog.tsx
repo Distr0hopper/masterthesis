@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { ChevronLeft, ExternalLink, Plus } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog.tsx';
 import { Input } from '@/components/ui/input.tsx';
-import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
-import { getDomainBadgeStyle, getDomainLabel, useComponents, useDomains } from '@/api/components';
-import { ManualUploadForm } from '@/components/component-upload/organisms/ManualUploadForm';
+import { useComponents } from '@/api/components';
+import { ManualUploadWizard } from '@/components/component-upload/organisms/ManualUploadWizard';
 import { ROUTES } from '@/lib/routes';
 import { cn } from '@/lib/utils';
+import { DomainBadges } from '@/components/common/DomainBadges';
 
 interface ComponentPickerDialogProps {
   open: boolean;
@@ -24,7 +24,6 @@ export function ComponentPickerDialog({ open, onOpenChange, value, onSelect }: C
   // 50 matches the backend's MAX_LIMIT - this picker has no pagination UI of its own,
   // so it asks for as many matches as the API allows in one page
   const { data } = useComponents({ search: term || undefined, limit: 50 });
-  const { data: domains } = useDomains();
 
   const filtered = data?.items ?? [];
 
@@ -78,13 +77,9 @@ export function ComponentPickerDialog({ open, onOpenChange, value, onSelect }: C
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-sm font-semibold text-slate-900">{component.name}</span>
                       <span className="text-xs text-slate-500">v{component.version}</span>
-                      <Badge
-                        variant="outline"
-                        className="ml-auto w-fit"
-                        style={domains ? getDomainBadgeStyle(component.domain, domains) : undefined}
-                      >
-                        {getDomainLabel(component.domain)}
-                      </Badge>
+                      <span className="ml-auto flex flex-wrap gap-1">
+                        <DomainBadges domains={component.domains} />
+                      </span>
                     </div>
                     {component.description && <p className="line-clamp-1 text-sm text-slate-500">{component.description}</p>}
                   </button>
@@ -120,7 +115,7 @@ export function ComponentPickerDialog({ open, onOpenChange, value, onSelect }: C
               <ChevronLeft className="mr-1 h-4 w-4" /> Back to browse
             </Button>
 
-            <ManualUploadForm onSuccess={(created) => handleSelect(created.id)} />
+            <ManualUploadWizard onSuccess={(created) => handleSelect(created.id)} />
           </div>
         )}
       </DialogContent>

@@ -3,7 +3,7 @@ import subprocess
 import tempfile
 import uuid
 import zipfile
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
@@ -19,6 +19,7 @@ from app.application.exception.component_exceptions import (
     MissingCommandPayloadError,
     PackagingFailedError,
 )
+from app.domain.models.component_domain import ComponentDomain
 from app.domain.models.component import MAX_DESCRIPTION_LENGTH, Component, ComponentSource, ComponentStatus
 from app.domain.models.parameter import Parameter
 from app.domain.models.user import User
@@ -39,6 +40,18 @@ if TYPE_CHECKING:
     # deferred import - favorites_service.py imports ComponentsService, so importing
     # FavoritesService here at module load time would create a circular import
     from app.application.service.favorites_service import FavoritesService
+
+
+@dataclass
+class ParsedComponent:
+    """A .cwl read but not persisted - see ComponentsService.parse_cwl."""
+
+    cwl_content: str
+    cwl_type: str | None
+    description: str | None
+    dockerfile_content: str | None
+    docker_pull_reference: str | None
+    parameters: list[Parameter]
 
 
 class ComponentsService:
@@ -126,6 +139,28 @@ class ComponentsService:
         versions = await self.components_repository.find_versions_by_name(name)
         return versions[-1] if versions else None
 
+    def parse_cwl(self, content: bytes) -> "ParsedComponent":
+        """Read an uploaded .cwl into everything the UI needs to preview it, without
+        persisting anything - the component-side counterpart of
+        WorkflowsService.parse_workflow_upload, so a component can be reviewed before it
+        is created rather than only after.
+
+        Uses exactly the extractors create_manual uses, so the preview is what gets saved.
+        """
+        try:
+            cwl_content = content.decode("utf-8")
+        except UnicodeDecodeError as err:
+            raise InvalidCwlError("Uploaded", "File is not valid UTF-8 text") from err
+
+        return ParsedComponent(
+            cwl_content=cwl_content,
+            cwl_type=extract_cwl_type(cwl_content),
+            description=extract_description(cwl_content),
+            dockerfile_content=extract_dockerfile_content(cwl_content),
+            docker_pull_reference=extract_docker_pull(cwl_content),
+            parameters=self._parse_parameters(cwl_content, "Uploaded", ComponentSource.MANUAL_UPLOAD),
+        )
+
     async def create_manual(self, component: Component, context: str = "Uploaded") -> Component:
         existing_versions = await self.components_repository.find_versions_by_name(component.name)
         if existing_versions:
@@ -162,7 +197,7 @@ class ComponentsService:
     async def create_from_url(
         self,
         repo_url: str,
-        domain: str,
+        domains: list[str],
         description_override: str | None,
         created_by_id: uuid.UUID,
     ) -> Component:
@@ -178,7 +213,7 @@ class ComponentsService:
             cwl_content=cwl_content,
             description=description_override if description_override is not None else metadata_description,
             source=ComponentSource.AUTOMATED_PACKAGING,
-            domain=domain,
+            domains=[ComponentDomain(domain=d) for d in domains],
         )
         return await self.create_manual(component, context="CLI-generated")
 
@@ -197,7 +232,7 @@ class ComponentsService:
             cwl_content=cwl_content,
             description=description_override if description_override is not None else metadata_description,
             source=existing.source,
-            domain=existing.domain,
+            domains=[ComponentDomain(domain=d.domain) for d in existing.domains],
         )
         return await self.add_manual_version(component)
 
@@ -222,7 +257,7 @@ class ComponentsService:
             cwl_content=cwl_content,
             description=metadata_description,
             source=parent.source,
-            domain=parent.domain,
+            domains=[ComponentDomain(domain=d.domain) for d in parent.domains],
         )
         return await self.add_manual_version(component)
 
@@ -268,7 +303,7 @@ class ComponentsService:
             case ComponentCommandType.UPDATE_DESCRIPTION:
                 return await self.update_description(component, command.description)
             case ComponentCommandType.UPDATE_DOMAIN:
-                return await self.update_domain(component, command.domain)
+                return await self.update_domains(component, command.domains)
 
     async def _run_packaging(self, repo_url: str) -> tuple[str, str, str | None, str | None, str | None]:
         repo_name = repo_url.rstrip("/").split("/")[-1]
@@ -286,10 +321,11 @@ class ComponentsService:
         component.description = description
         return await self._save_and_reload(component)
 
-    async def update_domain(self, component: Component, domain: str | None) -> Component:
-        if domain is None:
-            raise MissingCommandPayloadError(ComponentCommandType.UPDATE_DOMAIN, "domain")
-        component.domain = domain
+    async def update_domains(self, component: Component, domains: list[str] | None) -> Component:
+        if not domains:
+            raise MissingCommandPayloadError(ComponentCommandType.UPDATE_DOMAIN, "domains")
+        # replace wholesale - cascade="all, delete-orphan" removes the rows dropped here
+        component.domains = [ComponentDomain(domain=d) for d in domains]
         return await self._save_and_reload(component)
 
     async def remove(self, component: Component) -> None:

@@ -6,6 +6,7 @@ import type {
   ComponentDetailDto,
   ComponentListItemDto,
   ComponentListQueryParams,
+  ComponentPreviewDto,
   CreateComponentDto,
   DomainDto,
   MyComponentsResponseDto,
@@ -64,7 +65,7 @@ export const componentsService = {
     const formData = new FormData();
     formData.append('cwlFile', file);
     formData.append('name', dto.name);
-    formData.append('domain', dto.domain);
+    dto.domains.forEach((domain) => formData.append('domains', domain));
     if (dto.authorName) formData.append('authorName', dto.authorName);
     if (dto.description) formData.append('description', dto.description);
     return apiClient.post(ENDPOINT, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
@@ -86,6 +87,13 @@ export const componentsService = {
 
   delete(link: HateoasLink): Promise<void> {
     return apiClient.request(link);
+  },
+
+  // detection/parsing only - the backend never persists anything from this call
+  parse(file: File): Promise<ComponentPreviewDto> {
+    const formData = new FormData();
+    formData.append('cwlFile', file);
+    return apiClient.post(`${ENDPOINT}/parse`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
 
   checkNameAvailability(name: string): Promise<NameAvailabilityDto> {

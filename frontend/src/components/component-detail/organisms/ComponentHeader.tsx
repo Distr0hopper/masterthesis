@@ -8,8 +8,6 @@ import { Button } from '@/components/ui/button.tsx';
 import {
   ComponentStatus,
   componentsService,
-  getDomainBadgeStyle,
-  useDomains,
   usePublishComponent,
   useUnpublishComponent,
   type ComponentDetailDisplayModel,
@@ -27,6 +25,7 @@ import {
 import { getErrorMessage } from '@/lib/errors';
 import { DeleteComponentDialog } from '@/components/component-mine/organisms/DeleteComponentDialog';
 import { EditComponentDialog } from './EditComponentDialog';
+import { DomainBadges } from '@/components/common/DomainBadges';
 
 interface ComponentHeaderProps {
   model: ComponentDetailDisplayModel;
@@ -36,10 +35,8 @@ interface ComponentHeaderProps {
 }
 
 export function ComponentHeader({ model, backTo, backLabel, onDeleted }: ComponentHeaderProps) {
-  const { data: domains } = useDomains();
   const { mutate: publishComponent, isPending: isPublishing } = usePublishComponent();
   const { mutate: unpublishComponent, isPending: isUnpublishing } = useUnpublishComponent();
-  const domainBadgeStyle = domains ? getDomainBadgeStyle(model.domain, domains) : undefined;
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
@@ -79,9 +76,7 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
         <CardContent className="flex flex-col gap-3 pt-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Badge variant="outline" className="w-fit" style={domainBadgeStyle}>
-                {model.domainDisplay}
-              </Badge>
+              <DomainBadges domains={model.domains} />
 
               {canFavorite(model._links) && <ComponentFavoriteButton links={model._links!} isFavorite={model.isFavorite} />}
             </div>

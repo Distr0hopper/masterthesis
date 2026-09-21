@@ -7,6 +7,7 @@ from sqlmodel import and_, func, or_, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.domain.models.component import Component, ComponentStatus
+from app.domain.models.component_domain import ComponentDomain
 from app.domain.models.favorite import Favorite, FavoriteEntityType
 from app.domain.pagination.pagination import PaginatedList
 from app.infrastructure.db.session import get_db
@@ -32,7 +33,11 @@ class ComponentsRepository:
 
     def _apply_filters(self, query, filter: ComponentListFilter):
         if filter.domain is not None:
-            query = query.where(Component.domain == filter.domain)
+            query = query.where(
+                Component.id.in_(
+                    select(ComponentDomain.component_id).where(ComponentDomain.domain == filter.domain)
+                )
+            )
         if filter.status is not None:
             query = query.where(Component.status == filter.status)
         if filter.created_by is not None:

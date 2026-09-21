@@ -2,14 +2,14 @@ import { Badge } from '@/components/ui/badge.tsx';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { getDomainLabel } from '@/api/components';
 import { ComponentLink } from '@/components/common/ComponentLink';
-import type { ComponentPreviewDto } from '@/api/workflows';
+import type { WorkflowStepPreviewDto } from '@/api/workflows';
 import type { ComponentConfigState } from '../lib/useComponentConfigs';
 
 interface SaveWorkflowStepProps {
   name: string;
   domains: string[];
   description: string;
-  previews: ComponentPreviewDto[];
+  previews: WorkflowStepPreviewDto[];
   configs: Record<string, ComponentConfigState>;
 }
 
@@ -59,7 +59,7 @@ export function SaveWorkflowStep({ name, domains, description, previews, configs
                     <>
                       <Badge>create</Badge>
                       <span className="font-mono text-slate-900">{config.name}</span>
-                      <span className="text-slate-500">{getDomainLabel(config.domain)}</span>
+                      <span className="text-slate-500">{config.domains.map(getDomainLabel).join(', ')}</span>
                     </>
                   )}
                 </li>

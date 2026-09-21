@@ -41,7 +41,7 @@ export interface ExistingComponentDto {
   id: string;
   name: string;
   version: number;
-  domain: string;
+  domains: ComponentDomain[];
   status: ComponentStatus;
 }
 
@@ -51,6 +51,32 @@ export interface NameAvailabilityDto {
   available: boolean;
   /** the latest version of the lineage already holding this name, if any */
   existing: ExistingComponentDto | null;
+}
+
+/**
+ * A component read out of a CWL document without persisting it - what
+ * POST /components/parse returns. Also the shared base of the workflow flow's
+ * WorkflowStepPreviewDto, which adds the step the CWL came from.
+ */
+export interface ComponentPreviewDto {
+  description: string | null;
+  cwlContent: string;
+  cwlType: string | null;
+  dockerfileContent: string | null;
+  dockerPullReference: string | null;
+  parameters: PreviewParameterDto[];
+}
+
+/** A previewed component port - never persisted, so `id` is synthetic. */
+export interface PreviewParameterDto {
+  id: string;
+  name: string;
+  cwlType: string;
+  defaultValue: string | null;
+  description: string | null;
+  format: string | null;
+  formatLabel: string | null;
+  direction: ParameterDirection;
 }
 
 export const ComponentCommand = {
@@ -75,7 +101,7 @@ export type ComponentCommandExecuteRequest =
       note?: string;
     }
   | { command: typeof ComponentCommand.UPDATE_DESCRIPTION; note?: string; description: string | null }
-  | { command: typeof ComponentCommand.UPDATE_DOMAIN; note?: string; domain: ComponentDomain };
+  | { command: typeof ComponentCommand.UPDATE_DOMAIN; note?: string; domains: ComponentDomain[] };
 
 export interface ComponentListItemDto extends WithHateoasLinks {
   id: string;
@@ -84,7 +110,7 @@ export interface ComponentListItemDto extends WithHateoasLinks {
   authorName: string | null;
   repoUrl: string | null;
   version: number;
-  domain: ComponentDomain;
+  domains: ComponentDomain[];
   status: ComponentStatus;
   createdAt: string;
   isFavorite: boolean;
@@ -113,7 +139,7 @@ export interface ComponentDetailDto extends WithHateoasLinks {
   cwlType: string | null;
   dockerfileContent: string | null;
   dockerPullReference: string | null;
-  domain: ComponentDomain;
+  domains: ComponentDomain[];
   source: ComponentSource;
   status: ComponentStatus;
   parameters: ParameterDto[];
@@ -124,7 +150,7 @@ export interface ComponentDetailDto extends WithHateoasLinks {
 
 export interface CreateComponentDto {
   name: string;
-  domain: string;
+  domains: string[];
   authorName?: string;
   repoUrl?: string;
   repoCommitSha?: string;
@@ -133,7 +159,7 @@ export interface CreateComponentDto {
 
 export interface PackageComponentDto {
   repoUrl: string;
-  domain: string;
+  domains: string[];
   description?: string | null;
 }
 

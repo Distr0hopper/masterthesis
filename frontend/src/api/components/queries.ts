@@ -30,6 +30,10 @@ export const componentKeys = {
  * existing component) before anything is written - rather than surfacing as a 409 after
  * the whole file has been submitted. Callers are expected to debounce `name` themselves.
  */
+export const useParseComponent = () => {
+  return useMutation({ mutationFn: (file: File) => componentsService.parse(file) });
+};
+
 export const useComponentNameAvailability = (name: string) => {
   const trimmed = name.trim();
   return useQuery({
@@ -153,9 +157,9 @@ export const useUpdateComponentDescription = () =>
     componentsService.executeCommand(link, { command: ComponentCommand.UPDATE_DESCRIPTION, description }),
   );
 
-export const useUpdateComponentDomain = () =>
-  useCommandMutation(componentKeys.all, ({ link, domain }: { link: HateoasLink; domain: string }) =>
-    componentsService.executeCommand(link, { command: ComponentCommand.UPDATE_DOMAIN, domain }),
+export const useUpdateComponentDomains = () =>
+  useCommandMutation(componentKeys.all, ({ link, domains }: { link: HateoasLink; domains: string[] }) =>
+    componentsService.executeCommand(link, { command: ComponentCommand.UPDATE_DOMAIN, domains }),
   );
 
 export const useToggleFavorite = () =>

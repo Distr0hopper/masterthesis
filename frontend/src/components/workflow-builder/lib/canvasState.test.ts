@@ -14,7 +14,7 @@ const node = (id: string) => ({
   data: {
     componentId: 'c1',
     label: 'remove-outliers',
-    domain: 'animal_behavior',
+    domains: ['animal_behavior'],
     parameters: [],
     parameterValues: {},
   },
@@ -98,7 +98,7 @@ describe('parseCanvasState', () => {
   });
 
   it('drops nodes whose data lost its parameters', () => {
-    const stale = { ...node('c'), data: { componentId: 'c', label: 'x', domain: 'y' } };
+    const stale = { ...node('c'), data: { componentId: 'c', label: 'x', domains: ['y'] } };
     const parsed = parseCanvasState(canvas({ nodes: [node('a'), stale] }))!;
     expect(parsed.nodes.map((n) => n.id)).toEqual(['a']);
     expect(parsed.droppedNodeCount).toBe(1);
@@ -112,7 +112,7 @@ describe('parseCanvasState', () => {
   });
 
   it('drops edges left dangling by a dropped node', () => {
-    const brokenB = { ...node('b'), data: { componentId: 'b', label: 'x', domain: 'y' } };
+    const brokenB = { ...node('b'), data: { componentId: 'b', label: 'x', domains: ['y'] } };
     const parsed = parseCanvasState(canvas({ nodes: [node('a'), brokenB] }))!;
     expect(parsed.nodes.map((n) => n.id)).toEqual(['a']);
     expect(parsed.edges).toHaveLength(0);
@@ -179,11 +179,44 @@ describe('parseCanvasState', () => {
   it('defaults parameterValues on a node saved before they existed', () => {
     const legacy = {
       ...node('a'),
-      data: { componentId: 'c1', label: 'x', domain: 'y', parameters: [] },
+      data: { componentId: 'c1', label: 'x', domains: ['y'], parameters: [] },
     };
     const parsed = parseCanvasState(JSON.stringify({ nodes: [legacy], edges: [] }))!;
     expect(parsed.nodes).toHaveLength(1);
     expect(parsed.nodes[0].data.parameterValues).toEqual({});
+  });
+
+  it('restores a canvas whose nodes carry the multi-domain `domains` array', () => {
+    // regression: the shape check still demanded the pre-rename `domain` string, so every
+    // node of every canvas saved after the multi-domain change was silently dropped -
+    // reopening a draft came back empty with a "could not be restored" warning
+    const parsed = parseCanvasState(canvas())!;
+    expect(parsed.nodes).toHaveLength(2);
+    expect(parsed.droppedNodeCount).toBe(0);
+    expect(parsed.nodes[0].data.domains).toEqual(['animal_behavior']);
+  });
+
+  it('migrates a node saved with a single `domain` onto `domains`', () => {
+    const legacy = {
+      ...node('a'),
+      data: { componentId: 'c1', label: 'x', domain: 'animal_behavior', parameters: [] },
+    };
+    const parsed = parseCanvasState(JSON.stringify({ nodes: [legacy], edges: [] }))!;
+    expect(parsed.nodes).toHaveLength(1);
+    expect(parsed.nodes[0].data.domains).toEqual(['animal_behavior']);
+  });
+
+  it('defaults domains to an empty array when a node carries neither key', () => {
+    // DomainBadges maps over this, so undefined must never reach the canvas
+    const bare = { ...node('a'), data: { componentId: 'c1', label: 'x', parameters: [] } };
+    const parsed = parseCanvasState(JSON.stringify({ nodes: [bare], edges: [] }))!;
+    expect(parsed.nodes[0].data.domains).toEqual([]);
+  });
+
+  it('discards non-string entries in a stored domains array', () => {
+    const messy = { ...node('a'), data: { ...node('a').data, domains: ['ok', 42, null] } };
+    const parsed = parseCanvasState(JSON.stringify({ nodes: [messy], edges: [] }))!;
+    expect(parsed.nodes[0].data.domains).toEqual(['ok']);
   });
 
   it('keeps stored parameter values and discards non-string entries', () => {

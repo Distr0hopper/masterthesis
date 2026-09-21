@@ -45,7 +45,6 @@ function isValidNode(value: unknown): value is ComponentFlowNode {
   return (
     typeof data.componentId === 'string' &&
     typeof data.label === 'string' &&
-    typeof data.domain === 'string' &&
     Array.isArray(data.parameters)
   );
 }
@@ -68,16 +67,24 @@ function isValidEdge(value: unknown): value is Edge {
   );
 }
 
-/** Fill in fields added after a canvas may have been saved. */
+function readDomains(data: Record<string, unknown>): string[] {
+  if (Array.isArray(data.domains)) {
+    return data.domains.filter((domain): domain is string => typeof domain === 'string');
+  }
+  return typeof data.domain === 'string' ? [data.domain] : [];
+}
+
 function normalizeNode(node: ComponentFlowNode): ComponentFlowNode {
-  const raw = (node.data as Record<string, unknown>).parameterValues;
+  const data = node.data as Record<string, unknown>;
+
   const parameterValues: Record<string, string> = {};
-  if (isRecord(raw)) {
-    for (const [key, value] of Object.entries(raw)) {
+  if (isRecord(data.parameterValues)) {
+    for (const [key, value] of Object.entries(data.parameterValues)) {
       if (typeof value === 'string') parameterValues[key] = value;
     }
   }
-  return { ...node, data: { ...node.data, parameterValues } };
+
+  return { ...node, data: { ...node.data, domains: readDomains(data), parameterValues } };
 }
 
 /** What the editor sends to the API: the whole canvas as one JSON string. */

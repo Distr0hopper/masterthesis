@@ -1,4 +1,4 @@
-import { FileCode, Package } from 'lucide-react';
+import { Code, FileCode, Package } from 'lucide-react';
 import { Badge } from '@/components/ui/badge.tsx';
 import { ComponentOrigin, type ParseWorkflowResponseDto } from '@/api/workflows';
 
@@ -19,6 +19,9 @@ export function ParsedWorkflowOverview({ parsed }: ParsedWorkflowOverviewProps) 
         {parsed.isSelfContained && <Badge variant="secondary">Self-contained</Badge>}
         {inlineCount > 0 && <Badge variant="secondary">{inlineCount} inline tool(s)</Badge>}
         {archiveCount > 0 && <Badge variant="secondary">{archiveCount} step file(s)</Badge>}
+        {parsed.inlineOnlySteps.length > 0 && (
+          <Badge variant="secondary">{parsed.inlineOnlySteps.length} inline step(s)</Badge>
+        )}
       </div>
 
       <ul className="divide-y rounded-md border border-input">
@@ -42,7 +45,15 @@ export function ParsedWorkflowOverview({ parsed }: ParsedWorkflowOverviewProps) 
             )}
           </li>
         ))}
-        {parsed.componentPreviews.length === 0 && (
+        {parsed.inlineOnlySteps.map((stepId) => (
+          <li key={stepId} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm">
+            <Code className="h-4 w-4 shrink-0 text-slate-400" />
+            <span className="font-mono text-slate-900">{stepId}</span>
+            <span className="text-slate-500">inline definition (not a tool)</span>
+            <Badge variant="secondary">stays in the workflow</Badge>
+          </li>
+        ))}
+        {parsed.componentPreviews.length === 0 && parsed.inlineOnlySteps.length === 0 && (
           <li className="px-3 py-2 text-sm text-slate-500">No components could be read from this file.</li>
         )}
       </ul>

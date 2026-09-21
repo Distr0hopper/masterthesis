@@ -103,11 +103,12 @@ class WorkflowOverview:
     name: str | None
     step_count: int
     external_refs: list[str]  # `run:` values that are plain filenames
-    #: step ids whose `run:` is an inline mapping but not `class: CommandLineTool` (e.g. an
-    #: inline ExpressionTool or sub-Workflow) - not returned by extract_inline_components
-    #: and not a filename either, so callers need this to know step_count still accounts
-    #: for them.
-    unsupported_inline_steps: list[str]
+    #: step ids whose `run:` is an inline mapping but not `class: CommandLineTool` (e.g.
+    #: an inline ExpressionTool or sub-Workflow). These are glue, not reusable tools, so
+    #: they stay embedded in the pipeline rather than becoming Components - not returned
+    #: by extract_inline_components and not a filename either, so callers need this to
+    #: know step_count still accounts for them.
+    inline_only_steps: list[str]
     #: the document's own top-level cwlVersion:, if any - inline-extracted tools have none
     #: of their own (they inherit it from the parent Workflow), so persisting one needs
     #: this to inject a valid cwlVersion via cwl_parser.inject_cwl_version.
@@ -156,7 +157,7 @@ def read_workflow_overview(cwl_content: str) -> WorkflowOverview:
     message on the same problems), except this does NOT reject inline `run:` mappings -
     step_count always comes from an independent len(steps), never derived by summing
     external_refs/extracted-components counts, since a step whose inline `run:` isn't a
-    CommandLineTool (see unsupported_inline_steps) would otherwise silently vanish from
+    CommandLineTool (see inline_only_steps) would otherwise silently vanish from
     both.
     """
     try:
@@ -172,7 +173,7 @@ def read_workflow_overview(cwl_content: str) -> WorkflowOverview:
     steps = normalize_steps(doc.get("steps"))
 
     external_refs: list[str] = []
-    unsupported_inline_steps: list[str] = []
+    inline_only_steps: list[str] = []
     for step_id, definition in steps:
         if not isinstance(definition, dict) or "run" not in definition:
             raise ValueError(f"Step '{step_id}' is missing a 'run:' reference")
@@ -181,7 +182,7 @@ def read_workflow_overview(cwl_content: str) -> WorkflowOverview:
             external_refs.append(run_value)
         elif isinstance(run_value, dict):
             if run_value.get("class") != "CommandLineTool":
-                unsupported_inline_steps.append(step_id)
+                inline_only_steps.append(step_id)
         else:
             raise ValueError(f"Step '{step_id}' has an invalid 'run:' value")
 
@@ -189,7 +190,7 @@ def read_workflow_overview(cwl_content: str) -> WorkflowOverview:
         name=doc.get("label"),
         step_count=len(steps),
         external_refs=external_refs,
-        unsupported_inline_steps=unsupported_inline_steps,
+        inline_only_steps=inline_only_steps,
         cwl_version=doc.get("cwlVersion"),
     )
 
@@ -198,7 +199,7 @@ def extract_inline_components(cwl_content: str) -> list[ExtractedComponent]:
     """Extracts every step's inline `run: {class: CommandLineTool, ...}` as a standalone
     tool document. Steps with an external (filename) `run:`, or an inline `run:` that
     isn't a CommandLineTool, are silently skipped - callers that need those read
-    read_workflow_overview's external_refs / unsupported_inline_steps instead.
+    read_workflow_overview's external_refs / inline_only_steps instead.
 
     Raises ValueError if the document is not a valid CWL Workflow.
     """

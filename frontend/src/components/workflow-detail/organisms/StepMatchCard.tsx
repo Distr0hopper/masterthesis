@@ -23,6 +23,7 @@ const STATUS_BADGE_VARIANT: Record<StepMatchStatus, 'secondary' | 'default' | 'd
   [StepMatchStatus.SUGGESTED]: 'secondary',
   [StepMatchStatus.CONFIRMED]: 'default',
   [StepMatchStatus.UNMATCHED]: 'destructive',
+  [StepMatchStatus.INLINE]: 'secondary',
 };
 
 interface StepMatchCardProps {
@@ -37,8 +38,10 @@ export function StepMatchCard({ step }: StepMatchCardProps) {
   const { data: component } = useComponent(showDefinition && step.componentId ? step.componentId : '');
   const { mutate: updateComponent, isPending: isUpdating } = useUpdateWorkflowStepComponent();
   const { mutate: confirmStep, isPending: isConfirming } = useConfirmWorkflowStep();
-  const canUpdate = hasUpdateLink(step._links);
-  const canConfirm = hasConfirmLink(step._links);
+  // an inline step (ExpressionTool / nested Workflow) never had a component to pick
+  const isInline = step.matchStatus === StepMatchStatus.INLINE;
+  const canUpdate = !isInline && hasUpdateLink(step._links);
+  const canConfirm = !isInline && hasConfirmLink(step._links);
 
   const handleChange = (componentId: string | null) => {
     updateComponent(
@@ -73,6 +76,11 @@ export function StepMatchCard({ step }: StepMatchCardProps) {
           <p className="text-sm text-slate-500">Match confidence: {Math.round(step.matchScore * 100)}%</p>
         )}
 
+        {isInline ? (
+          <p className="text-sm text-slate-500">
+            This step's definition is embedded in the workflow itself, so it needs no component.
+          </p>
+        ) : (
         <div className="flex flex-col gap-2">
           <Label>Matched Component</Label>
           {step.componentId ? (
@@ -96,6 +104,7 @@ export function StepMatchCard({ step }: StepMatchCardProps) {
             <p className="text-sm text-slate-500">No component matched.</p>
           )}
         </div>
+        )}
 
         {canUpdate && (
           <ComponentPickerDialog open={pickerOpen} onOpenChange={setPickerOpen} value={step.componentId} onSelect={handleChange} />

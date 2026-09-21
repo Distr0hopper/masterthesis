@@ -163,13 +163,14 @@ class ParseWorkflowResponseDto(CamelModel):
     workflow_name: str | None
     step_count: int
     #: one per resolvable step, inline and archive alike. Steps listed in
-    #: unsupported_inline_steps or missing_external_refs have no preview.
+    #: inline_only_steps or missing_external_refs have no preview.
     component_previews: list[WorkflowStepPreviewDto]
     #: steps whose run: is a plain filename, e.g. "thindata-bytime.cwl"
     external_refs: list[str]
     #: steps whose run: is an inline mapping but not class: CommandLineTool (e.g. an inline
-    #: ExpressionTool or sub-Workflow) - counted in step_count but not otherwise handled yet
-    unsupported_inline_steps: list[str]
+    #: ExpressionTool or sub-Workflow). They stay embedded in the saved pipeline and never
+    #: become Components, so they need no configuration - informational, not blocking.
+    inline_only_steps: list[str]
     #: external_refs not found among the zip's own .cwl files - always [] for a bare
     #: .cwl upload, since there's nothing to cross-check against
     missing_external_refs: list[str]

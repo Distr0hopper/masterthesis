@@ -14,6 +14,7 @@ class StepMatchStatus(str, Enum):
     SUGGESTED = "suggested"
     CONFIRMED = "confirmed"
     UNMATCHED = "unmatched"
+    INLINE = "inline"
 
 
 class WorkflowStep(SQLModel, table=True):

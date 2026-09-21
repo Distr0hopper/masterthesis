@@ -9,6 +9,7 @@ const MATCH_STATUS_LABELS: Record<StepMatchStatus, string> = {
   [StepMatchStatus.SUGGESTED]: 'Suggested match — please confirm',
   [StepMatchStatus.CONFIRMED]: 'Confirmed',
   [StepMatchStatus.UNMATCHED]: 'Not matched',
+  [StepMatchStatus.INLINE]: 'Runs inline',
 };
 
 const WORKFLOW_SOURCE_LABELS: Record<WorkflowSource, string> = {

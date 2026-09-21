@@ -67,11 +67,6 @@ export default function WorkflowUploadPage() {
       `Missing referenced file(s) in the archive: ${parsed.missingExternalRefs.join(', ')}. Fix the archive and try again.`,
     );
   }
-  if (parsed?.unsupportedInlineSteps.length) {
-    blockingIssues.push(
-      `Step(s) with an unsupported inline definition (not a CommandLineTool): ${parsed.unsupportedInlineSteps.join(', ')}. These cannot be saved yet.`,
-    );
-  }
   if (parsed && !parsed.isZip && parsed.externalRefs.length > 0) {
     blockingIssues.push(
       `This .cwl file references step file(s) it doesn't contain: ${parsed.externalRefs.join(', ')}. Upload a .zip archive with them instead.`,
@@ -101,7 +96,6 @@ export default function WorkflowUploadPage() {
         configs.reset(response.componentPreviews);
         const hasBlockers =
           response.missingExternalRefs.length > 0 ||
-          response.unsupportedInlineSteps.length > 0 ||
           (!response.isZip && response.externalRefs.length > 0) ||
           response.componentPreviews.length === 0;
         if (!hasBlockers) goTo(2);

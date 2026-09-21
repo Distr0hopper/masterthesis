@@ -28,7 +28,6 @@ from app.application.exception.workflow_exceptions import (
     InvalidWorkflowArchiveError,
     InvalidWorkflowCwlError,
     UnconfiguredWorkflowStepError,
-    UnsupportedInlineWorkflowStepError,
     WorkflowNotFoundError,
     WorkflowNotReadyToPublishError,
     WorkflowStepNotFoundError,
@@ -157,10 +156,6 @@ async def _extracted_component_name_collision_handler(request: Request, exc: Ext
     return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
-async def _unsupported_inline_workflow_step_handler(request: Request, exc: UnsupportedInlineWorkflowStepError) -> JSONResponse:
-    return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
-
-
 def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(InvalidTokenError, _invalid_token_handler)
     app.add_exception_handler(InvalidOtpCodeError, _invalid_otp_code_handler)
@@ -190,4 +185,3 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(InvalidExtractedComponentNameError, _invalid_extracted_component_name_handler)
     app.add_exception_handler(DuplicateExtractedComponentNameError, _duplicate_extracted_component_name_handler)
     app.add_exception_handler(ExtractedComponentNameCollisionError, _extracted_component_name_collision_handler)
-    app.add_exception_handler(UnsupportedInlineWorkflowStepError, _unsupported_inline_workflow_step_handler)

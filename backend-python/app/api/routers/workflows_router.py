@@ -242,7 +242,7 @@ async def parse_workflow(
         step_count=preview.step_count,
         component_previews=[_to_workflow_step_preview_dto(c) for c in preview.component_previews],
         external_refs=preview.external_refs,
-        unsupported_inline_steps=preview.unsupported_inline_steps,
+        inline_only_steps=preview.inline_only_steps,
         missing_external_refs=preview.missing_external_refs,
     )
 

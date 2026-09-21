@@ -58,10 +58,3 @@ class ExtractedComponentNameCollisionError(Exception):
     def __init__(self, name: str) -> None:
         super().__init__(f"A component named '{name}' already exists - rename it before creating this workflow")
 
-
-class UnsupportedInlineWorkflowStepError(Exception):
-    def __init__(self, step_ids: list[str]) -> None:
-        super().__init__(
-            f"Step(s) {', '.join(step_ids)} have an inline run: that is not class: CommandLineTool "
-            "(e.g. an inline ExpressionTool or sub-Workflow) - not supported for upload"
-        )

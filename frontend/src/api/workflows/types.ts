@@ -5,6 +5,8 @@ export const StepMatchStatus = {
   SUGGESTED: 'suggested',
   CONFIRMED: 'confirmed',
   UNMATCHED: 'unmatched',
+  /** runs inline in the pipeline (ExpressionTool / nested Workflow) - no component to match */
+  INLINE: 'inline',
 } as const;
 export type StepMatchStatus = (typeof StepMatchStatus)[keyof typeof StepMatchStatus];
 
@@ -177,7 +179,12 @@ export interface ParseWorkflowResponseDto {
   /** steps whose run: is a plain filename - not extracted, the caller must supply these separately */
   externalRefs: string[];
   /** steps whose run: is inline but not class: CommandLineTool (e.g. an inline ExpressionTool) */
-  unsupportedInlineSteps: string[];
+  /**
+   * Steps whose run: is an inline definition that isn't a CommandLineTool. They stay
+   * embedded in the saved pipeline and never become components, so they need no
+   * configuration - informational, not blocking.
+   */
+  inlineOnlySteps: string[];
   /** external refs not found among the zip's own .cwl files - always [] for a bare .cwl upload */
   missingExternalRefs: string[];
 }

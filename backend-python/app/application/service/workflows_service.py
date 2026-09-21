@@ -16,7 +16,6 @@ from app.application.exception.workflow_exceptions import (
     InvalidWorkflowArchiveError,
     InvalidWorkflowCwlError,
     UnconfiguredWorkflowStepError,
-    UnsupportedInlineWorkflowStepError,
     WorkflowNotFoundError,
     WorkflowNotReadyToPublishError,
     WorkflowStepNotFoundError,
@@ -55,6 +54,10 @@ from app.infrastructure.cwl.workflow_parser import (
     strip_cwl_extension,
 )
 
+
+#: step states that need no further action before a workflow can be published - either the
+#: user confirmed the component, or the step runs inline and never had one to confirm
+_SETTLED_STEP_STATUSES = {StepMatchStatus.CONFIRMED, StepMatchStatus.INLINE}
 
 #: an inline `run: {class: CommandLineTool}` lifted out of a self-contained workflow
 COMPONENT_ORIGIN_INLINE = "inline"
@@ -125,7 +128,7 @@ class WorkflowUploadPreview:
     step_count: int
     component_previews: list[ComponentPreview]
     external_refs: list[str]
-    unsupported_inline_steps: list[str]
+    inline_only_steps: list[str]
     missing_external_refs: list[str]
 
 
@@ -251,7 +254,7 @@ class WorkflowsService:
             step_count=overview.step_count,
             component_previews=await self._build_component_previews(upload, overview.cwl_version),
             external_refs=overview.external_refs,
-            unsupported_inline_steps=overview.unsupported_inline_steps,
+            inline_only_steps=overview.inline_only_steps,
             missing_external_refs=missing_external_refs,
         )
 
@@ -294,7 +297,7 @@ class WorkflowsService:
                 inline = inline_by_step_id.get(step_id)
                 if inline is None:
                     # an inline run: that isn't a CommandLineTool - reported separately as
-                    # unsupported_inline_steps and rejected on create, never previewed
+                    # inline_only_steps and rejected on create, never previewed
                     continue
                 # preview exactly what would be persisted: inline tools carry no
                 # cwlVersion of their own, so the parent workflow's is injected here too
@@ -512,9 +515,6 @@ class WorkflowsService:
         except ValueError as err:
             raise InvalidWorkflowCwlError(str(err)) from err
 
-        if overview.unsupported_inline_steps:
-            raise UnsupportedInlineWorkflowStepError(overview.unsupported_inline_steps)
-
         if not upload.is_zip and overview.external_refs:
             raise InvalidWorkflowCwlError(
                 "A bare .cwl upload cannot reference external step files - upload a .zip archive instead"
@@ -527,11 +527,19 @@ class WorkflowsService:
                 )
 
         step_definitions = extract_step_definitions(upload.cwl_content)
-        unconfigured = [step_id for step_id, _ in step_definitions if step_id not in component_configs]
+        # inline-only steps (ExpressionTool / nested Workflow) stay embedded in the
+        # pipeline and never become Components, so there is nothing to configure for them
+        inline_only = set(overview.inline_only_steps)
+        unconfigured = [
+            step_id
+            for step_id, _ in step_definitions
+            if step_id not in component_configs and step_id not in inline_only
+        ]
         if unconfigured:
             raise UnconfiguredWorkflowStepError(unconfigured)
 
-        await self._validate_component_configs(step_definitions, component_configs)
+        configurable_steps = [(sid, d) for sid, d in step_definitions if sid not in inline_only]
+        await self._validate_component_configs(configurable_steps, component_configs)
 
         extracted_by_step_id = {c.step_id: c for c in extract_inline_components(upload.cwl_content)}
 
@@ -560,9 +568,28 @@ class WorkflowsService:
         steps: list[WorkflowStep] = []
         pending_components: list[tuple[WorkflowStep, Component]] = []
         for order, (step_id, definition) in enumerate(step_definitions):
-            config = component_configs[step_id]
             run_value = definition["run"]
             is_inline = not isinstance(run_value, str)
+
+            if step_id in inline_only:
+                # left exactly as the author wrote it: externalize_inline_steps skipped
+                # this step (it isn't in run_references), so the pipeline still carries
+                # the definition inline. run_reference is NOT NULL and there is no file
+                # to point at, so it records what the step actually is - the parentheses
+                # keep it from ever being mistaken for a filename.
+                inline_class = run_value.get("class") if isinstance(run_value, dict) else None
+                steps.append(
+                    WorkflowStep(
+                        step_id=step_id,
+                        run_reference=f"(inline {inline_class or 'definition'})",
+                        step_order=order,
+                        match_status=StepMatchStatus.INLINE,
+                        match_score=None,
+                    )
+                )
+                continue
+
+            config = component_configs[step_id]
             reference = run_references[step_id] if is_inline else run_value
 
             if config.is_reuse:
@@ -729,7 +756,7 @@ class WorkflowsService:
     async def publish(self, workflow: Workflow) -> Workflow:
         if workflow.status == WorkflowStatus.VALIDATED:
             return workflow
-        if not all(s.match_status == StepMatchStatus.CONFIRMED for s in workflow.steps):
+        if not all(s.match_status in _SETTLED_STEP_STATUSES for s in workflow.steps):
             raise WorkflowNotReadyToPublishError(workflow.id)
         workflow.status = WorkflowStatus.VALIDATED
         return await self.workflows_repository.save(workflow)

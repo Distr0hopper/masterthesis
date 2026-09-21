@@ -5,6 +5,8 @@ export type ComponentDomain = string;
 export interface DomainDto {
   id: string;
   color: string;
+  /** short hint shown beside the domain pickers; null for domains that need no gloss */
+  description: string | null;
 }
 
 export const ComponentSource = {

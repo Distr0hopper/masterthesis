@@ -7,7 +7,7 @@ from sqlmodel import and_, func, or_, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.domain.models.component import Component, ComponentStatus
-from app.domain.models.component_domain import ComponentDomain
+from app.domain.models.component_domain import DOMAIN_AGNOSTIC, ComponentDomain
 from app.domain.models.favorite import Favorite, FavoriteEntityType
 from app.domain.pagination.pagination import PaginatedList
 from app.infrastructure.db.session import get_db
@@ -34,12 +34,10 @@ class ComponentsRepository:
 
     def _apply_filters(self, query, filter: ComponentListFilter):
         if filter.domains:
-            # subquery rather than a join: a component matching several of the selected
-            # domains would otherwise come back once per match, duplicating rows and
-            # inflating the count
+            matching = {*filter.domains, DOMAIN_AGNOSTIC}
             query = query.where(
                 Component.id.in_(
-                    select(ComponentDomain.component_id).where(ComponentDomain.domain.in_(filter.domains))
+                    select(ComponentDomain.component_id).where(ComponentDomain.domain.in_(matching))
                 )
             )
         if filter.status is not None:

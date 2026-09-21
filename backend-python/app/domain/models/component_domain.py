@@ -15,6 +15,17 @@ _RAW_DOMAINS: list[dict[str, str]] = json.loads(_DOMAINS_CONFIG_PATH.read_text()
 
 VALID_DOMAINS: list[str] = [d["id"] for d in _RAW_DOMAINS]
 DOMAIN_COLORS: dict[str, str] = {d["id"]: d["color"] for d in _RAW_DOMAINS}
+#: optional per-domain hint, surfaced next to the domain pickers. Only the values whose
+#: meaning isn't obvious from the name carry one, so this is sparse by design.
+DOMAIN_DESCRIPTIONS: dict[str, str] = {
+    d["id"]: d["description"] for d in _RAW_DOMAINS if d.get("description")
+}
+
+#: The "works anywhere" domain. Unlike every other value it is not a subject area but a
+#: statement that the item applies to all of them, so a domain filter matches it on top of
+#: whatever was actually selected (see the repositories' _apply_filters). Filtering by it
+#: explicitly still narrows to just these items, since it is a member of the selection.
+DOMAIN_AGNOSTIC = "domain_agnostic"
 
 
 class ComponentDomain(SQLModel, table=True):

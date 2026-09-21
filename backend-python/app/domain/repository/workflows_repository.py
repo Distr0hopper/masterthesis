@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 from sqlmodel import func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.domain.models.component_domain import DOMAIN_AGNOSTIC
 from app.domain.models.favorite import Favorite, FavoriteEntityType
 from app.domain.models.workflow import Workflow, WorkflowStatus
 from app.domain.models.workflow_domain import WorkflowDomain
@@ -39,8 +40,6 @@ class WorkflowsRepository:
         if filter.created_by is not None:
             query = query.where(Workflow.created_by_id == filter.created_by)
         if filter.favorited_by is not None:
-            # Favorite.entity_ref holds the workflow uuid as text, so the id is cast to
-            # match rather than the column - casting the column would block any index on it
             query = query.join(
                 Favorite,
                 and_(
@@ -50,12 +49,10 @@ class WorkflowsRepository:
                 ),
             )
         if filter.domains:
-            # subquery, not a join: the composite-PK join was fan-out-free only while this
-            # matched a single domain - IN (...) would return a workflow once per matching
-            # domain, duplicating rows and inflating the count
+            matching = {*filter.domains, DOMAIN_AGNOSTIC}
             query = query.where(
                 Workflow.id.in_(
-                    select(WorkflowDomain.workflow_id).where(WorkflowDomain.domain.in_(filter.domains))
+                    select(WorkflowDomain.workflow_id).where(WorkflowDomain.domain.in_(matching))
                 )
             )
         if filter.search is not None:
@@ -63,9 +60,6 @@ class WorkflowsRepository:
         return query
 
     async def find_all(self) -> list[Workflow]:
-        # VALIDATED-only, matching the public browse list's visibility rule - only backs
-        # get_latest_workflows now; the paginated browse/mine endpoints go through
-        # find_paginated instead
         query = select(Workflow).where(Workflow.status == WorkflowStatus.VALIDATED).order_by(Workflow.created_at.desc())
         result = await self.db.exec(query)
         return list(result.all())

@@ -132,6 +132,7 @@ export function ComponentConfigCard({
             <DomainMultiSelect
               value={config.domains}
               onChange={(domains) => onChange({ domains })}
+              showHints={false}
             />
 
             <div className="flex flex-col gap-2">

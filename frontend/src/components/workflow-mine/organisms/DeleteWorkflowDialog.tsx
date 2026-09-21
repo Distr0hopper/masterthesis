@@ -1,6 +1,6 @@
 import { toast } from 'sonner';
 import { ConfirmDeleteDialog } from '@/components/common/ConfirmDeleteDialog';
-import { useDeleteWorkflow, type WorkflowDisplayModel } from '@/api/workflows';
+import { useDeleteWorkflow, WorkflowSource, type WorkflowDisplayModel } from '@/api/workflows';
 import { getLink } from '@/api/permissions';
 import { getErrorMessage } from '@/lib/errors';
 
@@ -14,15 +14,24 @@ interface DeleteWorkflowDialogProps {
 export function DeleteWorkflowDialog({ workflow, open, onOpenChange, onDeleted }: DeleteWorkflowDialogProps) {
   const { mutate, isPending } = useDeleteWorkflow();
 
-  const handleDelete = () => {
-    mutate(getLink(workflow._links, 'delete')!, {
-      onSuccess: () => {
-        toast.success('Workflow deleted');
-        onOpenChange(false);
-        onDeleted?.();
+  // only offer the cascade when there is something on the other side to delete: the
+  // workflow came from the builder and its draft still exists (draftId is ON DELETE SET
+  // NULL, so a draft already deleted from the builder leaves this null)
+  const hasLinkedDraft =
+    workflow.source === WorkflowSource.WORKFLOW_BUILDER && workflow.draftId !== null;
+
+  const handleDelete = (deleteLinkedDraft: boolean) => {
+    mutate(
+      { link: getLink(workflow._links, 'delete')!, deleteLinkedDraft },
+      {
+        onSuccess: () => {
+          toast.success(deleteLinkedDraft ? 'Workflow and builder canvas deleted' : 'Workflow deleted');
+          onOpenChange(false);
+          onDeleted?.();
+        },
+        onError: (error) => toast.error(getErrorMessage(error)),
       },
-      onError: (error) => toast.error(getErrorMessage(error)),
-    });
+    );
   };
 
   return (
@@ -31,6 +40,19 @@ export function DeleteWorkflowDialog({ workflow, open, onOpenChange, onDeleted }
       onOpenChange={onOpenChange}
       title={`Delete workflow "${workflow.name}"?`}
       description="This will permanently delete the workflow. This action cannot be undone."
+      linkedOption={
+        hasLinkedDraft
+          ? {
+              label: (
+                <>
+                  Also delete its canvas in the <span className="font-medium">Workflow Builder</span>.
+                  Leave unchecked to keep editing it there - saving again will create a new
+                  copy here.
+                </>
+              ),
+            }
+          : undefined
+      }
       onConfirm={handleDelete}
       isPending={isPending}
     />

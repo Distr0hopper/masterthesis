@@ -80,7 +80,9 @@ export const workflowsService = {
     return apiClient.request(link, request);
   },
 
-  delete(link: HateoasLink): Promise<void> {
-    return apiClient.request(link);
+  delete(link: HateoasLink, deleteLinkedDraft = false): Promise<void> {
+    return apiClient.request(link, undefined, {
+      params: deleteLinkedDraft ? { deleteLinkedDraft: true } : undefined,
+    });
   },
 };

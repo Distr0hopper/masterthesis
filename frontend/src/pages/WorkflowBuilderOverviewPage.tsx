@@ -1,28 +1,11 @@
-import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { GitBranch, Plus, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog.tsx';
-import { Button, buttonVariants } from '@/components/ui/button.tsx';
+import { GitBranch, Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button.tsx';
 import { Card, CardContent } from '@/components/ui/card.tsx';
-import {
-  useDeleteDraft,
-  useWorkflowDrafts,
-  type WorkflowDraftListItemDto,
-} from '@/api/workflow-drafts';
+import { useWorkflowDrafts } from '@/api/workflow-drafts';
+import { DraftCardActions } from '@/components/workflow-builder/DraftCardActions';
 import { formatRelativeTime } from '@/components/workflow-builder/lib/canvasState';
-import { getErrorMessage } from '@/lib/errors';
 import { useAuthStore } from '@/store/auth.store';
-import { cn } from '@/lib/utils';
 import { ROUTES } from '@/lib/routes';
 
 export default function WorkflowBuilderOverviewPage() {
@@ -30,26 +13,8 @@ export default function WorkflowBuilderOverviewPage() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated());
 
   const { data: drafts, isLoading } = useWorkflowDrafts();
-  const { mutate: deleteDraft } = useDeleteDraft();
-
-  const [pendingDelete, setPendingDelete] = useState<WorkflowDraftListItemDto | null>(null);
-  const [alsoDeleteWorkflow, setAlsoDeleteWorkflow] = useState(false);
 
   const handleNew = () => navigate(ROUTES.builderNew);
-
-  const askDelete = (draft: WorkflowDraftListItemDto) => {
-    setAlsoDeleteWorkflow(false);
-    setPendingDelete(draft);
-  };
-
-  const handleDelete = () => {
-    if (!pendingDelete) return;
-    deleteDraft(
-      { id: pendingDelete.id, deleteLinkedWorkflow: alsoDeleteWorkflow },
-      { onError: (error) => toast.error(getErrorMessage(error, 'Could not delete this workflow.')) },
-    );
-    setPendingDelete(null);
-  };
 
   if (!isAuthenticated) {
     return (
@@ -119,63 +84,13 @@ export default function WorkflowBuilderOverviewPage() {
                 </p>
 
                 <div className="flex justify-end border-t pt-3">
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      askDelete(draft);
-                    }}
-                  >
-                    <Trash2 className="mr-1 h-4 w-4" /> Delete
-                  </Button>
+                  <DraftCardActions draft={draft} />
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
-
-      <AlertDialog
-        open={pendingDelete !== null}
-        onOpenChange={(open) => !open && setPendingDelete(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete workflow?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently remove &quot;{pendingDelete?.name}&quot; from your saved
-              workflows.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-
-          {pendingDelete?.linkedWorkflowId && (
-            <label className="flex items-start gap-2 rounded-md border border-slate-200 p-3 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                checked={alsoDeleteWorkflow}
-                onChange={(e) => setAlsoDeleteWorkflow(e.target.checked)}
-                className="mt-0.5 h-4 w-4 rounded border-input accent-jmu-blue-800"
-              />
-              <span>
-                Also delete its copy in{' '}
-                <span className="font-medium">My Workflows</span>. Leave unchecked to keep that
-                copy (including if it has been published).
-              </span>
-            </label>
-          )}
-
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className={cn(buttonVariants({ variant: 'destructive' }))}
-              onClick={handleDelete}
-            >
-              {alsoDeleteWorkflow ? 'Delete both' : 'Delete'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

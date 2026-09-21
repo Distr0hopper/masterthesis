@@ -385,6 +385,7 @@ async def remove(
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
     workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
     favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
+    delete_linked_draft: Annotated[bool, Query(alias="deleteLinkedDraft")] = False,
 ) -> None:
     workflow = await workflows_service.get_workflow(workflow_id)
 
@@ -394,5 +395,5 @@ async def remove(
         raise ForbiddenException("Insufficient permission to delete this workflow")
 
     await favorites_service.remove_all_workflow_favorites(workflow.id)
-    await workflows_service.remove(workflow)
-    logger.info(f"Deleted workflow {workflow_id}")
+    deleted_draft = await workflows_service.remove(workflow, current_user.id, delete_linked_draft)
+    logger.info(f"Deleted workflow {workflow_id}{' and its builder draft' if deleted_draft else ''}")

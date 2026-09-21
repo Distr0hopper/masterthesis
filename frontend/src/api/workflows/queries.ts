@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toListDisplayModel, toSplitDisplayModel } from '@/api/helpers';
+import { draftKeys } from '@/api/workflow-drafts';
 import { workflowsService } from './service';
 import { workflowTransformer } from './transformer';
 import { WorkflowCommand, WorkflowStepCommand } from './types';
@@ -66,8 +67,6 @@ export const useUpdateWorkflowStepComponent = () => {
     mutationFn: ({ link, componentId }: { link: HateoasLink; componentId: string | null }) =>
       workflowsService.updateStepComponent(link, componentId),
     onSuccess: () => {
-      // a step change can un-confirm the workflow and hide it from the browse list again,
-      // so invalidate broadly rather than just this workflow's detail view
       queryClient.invalidateQueries({ queryKey: workflowKeys.all });
     },
   });
@@ -112,13 +111,22 @@ export const useParseWorkflow = () => {
   });
 };
 
+export interface DeleteWorkflowVariables {
+  link: HateoasLink;
+  deleteLinkedDraft?: boolean;
+}
+
 export const useDeleteWorkflow = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (link: HateoasLink) => workflowsService.delete(link),
-    onSuccess: () => {
+    mutationFn: ({ link, deleteLinkedDraft = false }: DeleteWorkflowVariables) =>
+      workflowsService.delete(link, deleteLinkedDraft),
+    onSuccess: (_result, { deleteLinkedDraft }) => {
       queryClient.invalidateQueries({ queryKey: workflowKeys.all });
+      if (deleteLinkedDraft) {
+        queryClient.invalidateQueries({ queryKey: draftKeys.all });
+      }
     },
   });
 };

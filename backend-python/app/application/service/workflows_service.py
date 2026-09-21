@@ -32,6 +32,7 @@ from app.domain.models.workflow_domain import WorkflowDomain
 from app.domain.models.workflow_step import StepMatchStatus, WorkflowStep
 from app.domain.pagination.pagination import PaginatedList
 from app.domain.repository.components_repository import ComponentsRepository
+from app.domain.repository.workflow_draft_repository import WorkflowDraftRepository
 from app.domain.repository.workflows_repository import WorkflowListFilter, WorkflowsRepository
 from app.infrastructure.cwl.cwl_matcher import best_match
 from app.infrastructure.cwl.cwl_parser import (
@@ -161,18 +162,25 @@ class WorkflowsService:
         workflows_repository: WorkflowsRepository,
         components_repository: ComponentsRepository,
         components_service: ComponentsService,
+        workflow_draft_repository: WorkflowDraftRepository,
     ):
         self.workflows_repository = workflows_repository
         self.components_repository = components_repository
         self.components_service = components_service
+        self.workflow_draft_repository = workflow_draft_repository
 
     @staticmethod
     def get_service(
         workflows_repository: Annotated[WorkflowsRepository, Depends(WorkflowsRepository.get_repository)],
         components_repository: Annotated[ComponentsRepository, Depends(ComponentsRepository.get_repository)],
         components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
+        workflow_draft_repository: Annotated[
+            WorkflowDraftRepository, Depends(WorkflowDraftRepository.get_repository)
+        ],
     ) -> "WorkflowsService":
-        return WorkflowsService(workflows_repository, components_repository, components_service)
+        return WorkflowsService(
+            workflows_repository, components_repository, components_service, workflow_draft_repository
+        )
 
     async def list_workflows(
         self, filter: WorkflowListFilter, pagination: PaginatedList
@@ -767,8 +775,34 @@ class WorkflowsService:
             case WorkflowStepCommandType.CONFIRM:
                 return await self.confirm_step(step.id)
 
-    async def remove(self, workflow: Workflow) -> None:
+    async def remove(
+        self, workflow: Workflow, deleted_by_id: uuid.UUID, delete_linked_draft: bool = False
+    ) -> bool:
+        """Delete a workflow, optionally taking the builder canvas it was synced from with it.
+
+        Returns whether a linked draft was deleted too. The mirror of
+        WorkflowDraftService.delete_draft's delete_linked_workflow: both directions of the
+        draft <-> workflow link are opt-in, so neither side's delete silently destroys the
+        other. Without it the draft survives as an orphan - still openable, but no longer
+        offering "edit in builder" from a workflow that no longer exists.
+
+        The workflow is deleted first: it is what the user actually asked to remove, so
+        failing to reach the draft afterwards must not leave that undone.
+        """
+        # read before the row goes away - the FK is ON DELETE SET NULL on the workflow side,
+        # so nothing else recovers which draft this came from
+        draft_id = workflow.draft_id
         await self.workflows_repository.delete(workflow)
+
+        if not delete_linked_draft or draft_id is None:
+            return False
+
+        draft = await self.workflow_draft_repository.find_by_id(draft_id)
+        if draft is None or draft.created_by_id != deleted_by_id:
+            return False
+
+        await self.workflow_draft_repository.delete(draft)
+        return True
 
     async def get_download(self, workflow: Workflow) -> tuple[str, bytes]:
         # same archive layout and naming as the builder's "Export CWL" (assemble_cwl_zip).

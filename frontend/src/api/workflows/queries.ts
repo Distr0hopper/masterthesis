@@ -14,6 +14,8 @@ export const workflowKeys = {
   mine: (params: MineQueryParams) => [...workflowKeys.all, 'mine', params] as const,
   latest: (limit?: number) => [...workflowKeys.all, 'latest', limit] as const,
   detail: (id: string) => [...workflowKeys.all, 'detail', id] as const,
+  nameAvailability: (name: string, excludeId?: string) =>
+    [...workflowKeys.all, 'name-availability', name, excludeId ?? null] as const,
 };
 
 export const useWorkflows = (params: WorkflowListQueryParams) => {
@@ -102,6 +104,16 @@ export const useUpdateWorkflowDescription = () =>
 export const useDownloadWorkflow = () => {
   return useMutation({
     mutationFn: (id: string) => workflowsService.download(id),
+  });
+};
+
+export const useWorkflowNameAvailability = (name: string, excludeId?: string) => {
+  const trimmed = name.trim();
+  return useQuery({
+    queryKey: workflowKeys.nameAvailability(trimmed, excludeId),
+    queryFn: () => workflowsService.checkNameAvailability(trimmed, excludeId),
+    enabled: trimmed.length > 0,
+    staleTime: 30_000,
   });
 };
 

@@ -7,6 +7,7 @@ import type {
   WorkflowDetailDto,
   WorkflowListItemDto,
   WorkflowListQueryParams,
+  WorkflowNameAvailabilityDto,
   WorkflowCommandExecuteRequest,
   WorkflowStepCommandExecuteRequest,
   WorkflowStepDto,
@@ -55,13 +56,14 @@ export const workflowsService = {
     formData.append('name', dto.name);
     dto.domains.forEach((domain) => formData.append('domains', domain));
     if (dto.description) formData.append('description', dto.description);
-    // one form field carrying the whole JSON array - matches the backend's Json[...] field
     formData.append('componentConfigs', JSON.stringify(dto.componentConfigs));
     return apiClient.post(ENDPOINT, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
 
-  // detection/classification only - the backend never persists anything from this call.
-  // Accepts either a .zip or a bare .cwl file; the server figures out which.
+  checkNameAvailability(name: string, excludeId?: string): Promise<WorkflowNameAvailabilityDto> {
+    return apiClient.get(`${ENDPOINT}/name-availability`, { params: { name, excludeId } });
+  },
+
   parse(file: File): Promise<ParseWorkflowResponseDto> {
     const formData = new FormData();
     formData.append('file', file);

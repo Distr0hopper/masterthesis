@@ -5,7 +5,6 @@ export const StepMatchStatus = {
   SUGGESTED: 'suggested',
   CONFIRMED: 'confirmed',
   UNMATCHED: 'unmatched',
-  /** runs inline in the pipeline (ExpressionTool / nested Workflow) - no component to match */
   INLINE: 'inline',
 } as const;
 export type StepMatchStatus = (typeof StepMatchStatus)[keyof typeof StepMatchStatus];
@@ -128,6 +127,18 @@ export interface CreateWorkflowDto {
   componentConfigs: ComponentConfigDto[];
 }
 
+export interface ExistingWorkflowDto {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
+export interface WorkflowNameAvailabilityDto {
+  name: string;
+  available: boolean;
+  existing: ExistingWorkflowDto | null;
+}
+
 export interface WorkflowListQueryParams extends PageParams<WorkflowListItemDto> {
   domain?: string[];
   search?: string;
@@ -159,32 +170,19 @@ export interface ComponentMatchDto {
 export interface WorkflowStepPreviewDto extends ComponentPreviewDto {
   stepId: string;
   origin: ComponentOrigin;
-  /** the `run:` filename, archive origin only */
   runReference: string | null;
   suggestedName: string;
-  /** an existing component already holding suggestedName - the user must rename or reuse it */
   nameConflict: ComponentMatchDto | null;
-  /** archive origin only - the catalogue component this step's run: filename matches */
   suggestedMatch: ComponentMatchDto | null;
 }
 
 export interface ParseWorkflowResponseDto {
-  /** whether the upload was a .zip archive (vs a bare .cwl file) */
   isZip: boolean;
   isSelfContained: boolean;
   workflowName: string | null;
   stepCount: number;
-  /** one per resolvable step, inline and archive alike */
   componentPreviews: WorkflowStepPreviewDto[];
-  /** steps whose run: is a plain filename - not extracted, the caller must supply these separately */
   externalRefs: string[];
-  /** steps whose run: is inline but not class: CommandLineTool (e.g. an inline ExpressionTool) */
-  /**
-   * Steps whose run: is an inline definition that isn't a CommandLineTool. They stay
-   * embedded in the saved pipeline and never become components, so they need no
-   * configuration - informational, not blocking.
-   */
   inlineOnlySteps: string[];
-  /** external refs not found among the zip's own .cwl files - always [] for a bare .cwl upload */
   missingExternalRefs: string[];
 }

@@ -10,6 +10,7 @@ import {
   StepMatchStatus,
   useDownloadWorkflow,
   usePublishWorkflow,
+  useWorkflowNameAvailability,
   useUnpublishWorkflow,
   WorkflowSource,
   WorkflowStatus,
@@ -27,6 +28,7 @@ import { getErrorMessage } from '@/lib/errors';
 import { downloadBlob } from '@/lib/download';
 import { WorkflowFavoriteButton } from '@/components/WorkflowFavoriteButton';
 import { DeleteWorkflowDialog } from '@/components/workflow-mine/organisms/DeleteWorkflowDialog';
+import { ConfirmPublishDialog } from './ConfirmPublishDialog';
 import { EditWorkflowDescriptionDialog } from './EditWorkflowDescriptionDialog';
 
 interface WorkflowHeaderProps {
@@ -43,18 +45,36 @@ export function WorkflowHeader({ model, backTo, backLabel, onDeleted }: Workflow
   const { mutate: downloadWorkflow, isPending: isDownloading } = useDownloadWorkflow();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [editDescriptionDialogOpen, setEditDescriptionDialogOpen] = useState(false);
+  const [publishDialogOpen, setPublishDialogOpen] = useState(false);
 
   const canDelete = hasDeleteLink(model._links);
   const canEdit = hasUpdateDescriptionLink(model._links);
-  const allStepsConfirmed = model.steps.every((step) => step.matchStatus === StepMatchStatus.CONFIRMED);
+  const allStepsSettled = model.steps.every(
+    (step) =>
+      step.matchStatus === StepMatchStatus.CONFIRMED || step.matchStatus === StepMatchStatus.INLINE,
+  );
   const canPublish = hasPublishLink(model._links) && model.status === WorkflowStatus.PENDING_VALIDATION;
   const canUnpublish = hasUnpublishLink(model._links) && model.status === WorkflowStatus.VALIDATED;
 
-  const handlePublish = () => {
+  const { data: nameAvailability } = useWorkflowNameAvailability(canPublish ? model.name : '', model.id);
+  const nameTaken = nameAvailability?.available === false ? nameAvailability.existing : null;
+
+  const doPublish = () => {
     publishWorkflow(getLink(model._links, 'publish')!, {
-      onSuccess: () => toast.success('Workflow published'),
+      onSuccess: () => {
+        setPublishDialogOpen(false);
+        toast.success('Workflow published');
+      },
       onError: (error) => toast.error(getErrorMessage(error)),
     });
+  };
+
+  const handlePublish = () => {
+    if (nameTaken) {
+      setPublishDialogOpen(true);
+      return;
+    }
+    doPublish();
   };
 
   const handleUnpublish = () => {
@@ -127,8 +147,8 @@ export function WorkflowHeader({ model, backTo, backLabel, onDeleted }: Workflow
                   size="sm"
                   className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90"
                   onClick={handlePublish}
-                  disabled={isPublishing || !allStepsConfirmed}
-                  title={allStepsConfirmed ? undefined : 'Confirm every step before publishing'}
+                  disabled={isPublishing || !allStepsSettled}
+                  title={allStepsSettled ? undefined : 'Confirm every step before publishing'}
                 >
                   <Globe className="mr-1 h-4 w-4" /> Publish
                 </Button>
@@ -172,6 +192,15 @@ export function WorkflowHeader({ model, backTo, backLabel, onDeleted }: Workflow
         open={editDescriptionDialogOpen}
         onOpenChange={setEditDescriptionDialogOpen}
       />
+      {nameTaken && (
+        <ConfirmPublishDialog
+          open={publishDialogOpen}
+          onOpenChange={setPublishDialogOpen}
+          existing={nameTaken}
+          onConfirm={doPublish}
+          isPending={isPublishing}
+        />
+      )}
     </>
   );
 }

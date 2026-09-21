@@ -122,6 +122,21 @@ class CreateWorkflowRequestDto(WorkflowDomainsValidatorMixin, EmptyWorkflowDescr
     component_configs: Json[list[ComponentConfigDto]] = Field(default_factory=list)
 
 
+class ExistingWorkflowDto(CamelModel):
+    """The workflow currently holding a name, returned when that name is in use."""
+
+    id: uuid.UUID
+    name: str
+    created_at: datetime
+
+
+class WorkflowNameAvailabilityDto(CamelModel):
+
+    name: str
+    available: bool
+    existing: ExistingWorkflowDto | None
+
+
 class ParseWorkflowRequestDto(CamelModel):
     # may be a bare .cwl file or a .zip archive - the endpoint detects which
     file: UploadFile

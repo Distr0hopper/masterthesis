@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { AlertTriangle, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button.tsx';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { UploadStepper } from '@/components/common/UploadStepper';
@@ -8,11 +9,17 @@ import { UploadDetailsStep } from '@/components/common/UploadDetailsStep';
 import { ComponentConfigStep } from '@/components/workflow-upload/organisms/ComponentConfigStep';
 import { SaveWorkflowStep } from '@/components/workflow-upload/organisms/SaveWorkflowStep';
 import { useComponentConfigs } from '@/components/workflow-upload/lib/useComponentConfigs';
-import { useCreateWorkflow, useParseWorkflow, type ParseWorkflowResponseDto } from '@/api/workflows';
+import {
+  useCreateWorkflow,
+  useParseWorkflow,
+  useWorkflowNameAvailability,
+  type ParseWorkflowResponseDto,
+} from '@/api/workflows';
 import { validateUploadDetails, type UploadDetailsErrors } from '@/api/schema';
 import { getErrorMessage } from '@/lib/errors';
 import { ROUTES } from '@/lib/routes';
 import { stripUploadExtension } from '@/lib/filename';
+import { useDebouncedValue } from '@/lib/useDebouncedValue';
 
 const STEPS = [
   { id: 1, label: 'Workflow' },
@@ -35,6 +42,12 @@ export default function WorkflowUploadPage() {
   // until the user types a name themselves, the filename (and then the CWL's own label:)
   // may fill it in for them - after that it is theirs and nothing overwrites it
   const nameTouched = useRef(false);
+
+  const debouncedName = useDebouncedValue(name);
+  const { data: nameAvailability } = useWorkflowNameAvailability(debouncedName);
+  // advisory only - the API accepts a duplicate workflow name, so this never
+  // gates Continue the way the component flow's name check does
+  const nameTaken = nameAvailability?.available === false ? nameAvailability.existing : null;
 
   const parsed = parseMutation.data;
   const previews = parsed?.componentPreviews ?? [];
@@ -60,7 +73,6 @@ export default function WorkflowUploadPage() {
     if (selected && !nameTouched.current) setName(stripUploadExtension(selected.name));
   };
 
-  // every one of these makes the upload unsaveable as-is, so they block the whole flow
   const blockingIssues: string[] = [];
   if (parsed?.missingExternalRefs.length) {
     blockingIssues.push(
@@ -84,7 +96,6 @@ export default function WorkflowUploadPage() {
     }
     setErrors({});
 
-    // already parsed this exact file and it was fine - don't re-upload it just to go forward
     if (parsed && blockingIssues.length === 0) {
       goTo(2);
       return;
@@ -121,6 +132,26 @@ export default function WorkflowUploadPage() {
     );
   };
 
+  const nameNotice = nameTaken ? (
+    <div className="flex flex-wrap items-center gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+      <AlertTriangle className="h-4 w-4 shrink-0" />
+      <span className="flex flex-wrap items-center gap-1">
+        A workflow named
+        <a
+          href={ROUTES.workflowDetail(nameTaken.id)}
+          target="_blank"
+          rel="noreferrer"
+          title="Open it in a new tab"
+          className="inline-flex items-center gap-1 font-mono font-semibold hover:underline"
+        >
+          {nameTaken.name}
+          <ExternalLink className="h-3.5 w-3.5" />
+        </a>
+        already exists - you can still continue.
+      </span>
+    </div>
+  ) : undefined;
+
   return (
     <div>
       <h1 className="text-2xl font-semibold text-slate-900">Upload Workflow</h1>
@@ -150,6 +181,7 @@ export default function WorkflowUploadPage() {
               description={description}
               onDescriptionChange={setDescription}
               errors={errors}
+              nameNotice={nameNotice}
               issues={blockingIssues}
               error={
                 parseMutation.error

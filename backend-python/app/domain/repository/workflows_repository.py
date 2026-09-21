@@ -95,6 +95,23 @@ class WorkflowsRepository:
         result = await self.db.exec(query)
         return result.first()
 
+    async def find_latest_by_name(self, name: str, exclude_id: uuid.UUID | None = None) -> Workflow | None:
+        """The most recently created workflow with this exact name, if any.
+
+        Workflow names are NOT unique (no constraint, no version lineage - unlike
+        Component). This backs an advisory "that name is already in use" notice, not a
+        rule, so it deliberately returns just the newest match rather than all of them.
+
+        `exclude_id` skips one workflow - a saved workflow trivially matches its own name,
+        so the publish-time check has to leave itself out or it would always warn.
+        """
+        query = select(Workflow).where(Workflow.name == name)
+        if exclude_id is not None:
+            query = query.where(Workflow.id != exclude_id)
+        query = query.order_by(Workflow.created_at.desc())
+        result = await self.db.exec(query)
+        return result.first()
+
     async def find_by_draft_id(self, draft_id: uuid.UUID) -> Workflow | None:
         query = select(Workflow).where(Workflow.draft_id == draft_id)
         result = await self.db.exec(query)

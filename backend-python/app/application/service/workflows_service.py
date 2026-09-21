@@ -212,11 +212,13 @@ class WorkflowsService:
             raise WorkflowNotFoundError(workflow_id)
         return workflow
 
+    async def find_latest_by_name(self, name: str, exclude_id: uuid.UUID | None = None) -> Workflow | None:
+        return await self.workflows_repository.find_latest_by_name(name, exclude_id)
+
     async def get_visible_workflow(self, workflow_id: uuid.UUID, current_user: User | None) -> Workflow:
         workflow = await self.get_workflow(workflow_id)
         is_owner = current_user is not None and current_user.id == workflow.created_by_id
         if workflow.status == WorkflowStatus.PENDING_VALIDATION and not is_owner:
-            # deliberately indistinguishable from "doesn't exist" to non-owners
             raise WorkflowNotFoundError(workflow_id)
         return workflow
 

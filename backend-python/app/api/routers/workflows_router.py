@@ -9,6 +9,7 @@ from app.api.dto.common import ErrorResponse, MyItemsResponseDtoV1, build_my_ite
 from app.api.dto.pagination import ListQueryPaginationDtoV1, PaginatedResponseDtoV1, build_paginated_response
 from app.api.dto.workflow import (
     ComponentMatchDto,
+    ExistingWorkflowDto,
     WorkflowStepPreviewDto,
     CreateWorkflowRequestDto,
     ParseWorkflowRequestDto,
@@ -17,6 +18,7 @@ from app.api.dto.workflow import (
     WorkflowCommandExecuteRequestDto,
     WorkflowDetailDto,
     WorkflowListItemDto,
+    WorkflowNameAvailabilityDto,
     WorkflowStepCommandExecuteRequestDto,
     WorkflowStepDto,
 )
@@ -150,6 +152,22 @@ async def list_latest_workflows(
     workflows = await workflows_service.get_latest_workflows(limit)
     favorited_ids = await _favorited_ids(favorites_service, current_user)
     return [WorkflowTransformer.to_list_item(w, str(w.id) in favorited_ids, current_user) for w in workflows]
+
+
+@router.get("/name-availability", response_model=WorkflowNameAvailabilityDto)
+async def check_workflow_name_availability(
+    workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
+    name: Annotated[str, Query(min_length=1)],
+    exclude_id: Annotated[uuid.UUID | None, Query(alias="excludeId")] = None,
+) -> WorkflowNameAvailabilityDto:
+    existing = await workflows_service.find_latest_by_name(name, exclude_id)
+    return WorkflowNameAvailabilityDto(
+        name=name,
+        available=existing is None,
+        existing=None
+        if existing is None
+        else ExistingWorkflowDto(id=existing.id, name=existing.name, created_at=existing.created_at),
+    )
 
 
 @router.post(

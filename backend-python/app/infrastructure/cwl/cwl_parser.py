@@ -34,6 +34,45 @@ def extract_description(cwl_content: str) -> str | None:
     return doc.get("doc") if isinstance(doc, dict) else None
 
 
+def normalize_idmap(value: Any, key_field: str) -> dict[str, Any]:
+    """CWL's idmap shorthand: `requirements`, `hints`, `inputs` and `outputs` may each be
+    written either as a mapping keyed by class/id, or as a list of entries carrying that
+    key inline. Both are valid CWL v1.2 - workflow_parser.normalize_steps does the same
+    for `steps:`. Returns the mapping form.
+
+        requirements: {DockerRequirement: {dockerPull: x}}
+        requirements: [{class: DockerRequirement, dockerPull: x}]   -> identical result
+    """
+    if isinstance(value, dict):
+        return value
+    if not isinstance(value, list):
+        return {}
+
+    result: dict[str, Any] = {}
+    for entry in value:
+        if isinstance(entry, dict) and key_field in entry:
+            # the key moves out of the body, matching how the mapping form is written
+            result[entry[key_field]] = {k: v for k, v in entry.items() if k != key_field}
+        elif isinstance(entry, str):
+            # a bare name, e.g. `outputs: [result]` - present but undescribed
+            result[entry] = {}
+    return result
+
+
+def _find_requirement(doc: dict, requirement_class: str) -> dict:
+    """A requirement by class, looked up in `requirements` then `hints`.
+
+    Both may carry a DockerRequirement, and hints is where tools that treat the container
+    as advisory usually put it - reading only `requirements` would silently report such a
+    tool as having no container at all.
+    """
+    for field in ("requirements", "hints"):
+        found = normalize_idmap(doc.get(field), "class").get(requirement_class)
+        if isinstance(found, dict):
+            return found
+    return {}
+
+
 def extract_parameters(cwl_content: str) -> list[Parameter]:
     try:
         doc: Any = load_cwl(cwl_content)
@@ -41,8 +80,13 @@ def extract_parameters(cwl_content: str) -> list[Parameter]:
         raise ValueError(f"YAML parse error: {err}") from err
 
     namespaces: dict[str, str] = (doc or {}).get("$namespaces") or {}
-    inputs = _extract_parameter_group((doc or {}).get("inputs") or {}, ParameterDirection.INPUT, namespaces)
-    outputs = _extract_parameter_group((doc or {}).get("outputs") or {}, ParameterDirection.OUTPUT, namespaces)
+    # inputs/outputs accept the same idmap-or-list shorthand as requirements
+    inputs = _extract_parameter_group(
+        normalize_idmap((doc or {}).get("inputs"), "id"), ParameterDirection.INPUT, namespaces
+    )
+    outputs = _extract_parameter_group(
+        normalize_idmap((doc or {}).get("outputs"), "id"), ParameterDirection.OUTPUT, namespaces
+    )
     return inputs + outputs
 
 
@@ -91,9 +135,7 @@ def extract_dockerfile_content(cwl_content: str) -> str | None:
         return None
     if not isinstance(doc, dict):
         return None
-    requirements = doc.get("requirements") or {}
-    docker_requirement = requirements.get("DockerRequirement") or {}
-    return docker_requirement.get("dockerFile")
+    return _find_requirement(doc, "DockerRequirement").get("dockerFile")
 
 
 def extract_docker_pull(cwl_content: str) -> str | None:
@@ -103,9 +145,7 @@ def extract_docker_pull(cwl_content: str) -> str | None:
         return None
     if not isinstance(doc, dict):
         return None
-    requirements = doc.get("requirements") or {}
-    docker_requirement = requirements.get("DockerRequirement") or {}
-    return docker_requirement.get("dockerPull")
+    return _find_requirement(doc, "DockerRequirement").get("dockerPull")
 
 
 def _resolve_format(format_value: Any, namespaces: dict[str, str]) -> str | None:

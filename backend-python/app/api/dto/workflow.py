@@ -8,6 +8,7 @@ from pydantic import Field, Json, field_validator, model_validator
 from app.api.dto.base import CamelModel
 from app.api.dto.component import ComponentCreatorDto, ComponentPreviewDto
 from app.api.link.model import LinkModel
+from app.domain.models.component import ComponentStatus
 from app.domain.models.component_domain import VALID_DOMAINS
 from app.domain.models.workflow import MAX_DESCRIPTION_LENGTH, WorkflowSource, WorkflowStatus
 from app.domain.models.workflow_step import StepMatchStatus
@@ -38,6 +39,8 @@ class ComponentSummaryDto(CamelModel):
     name: str
     version: int
     domains: list[str]
+    status: ComponentStatus
+    can_publish: bool
 
 
 class WorkflowStepDto(CamelModel, LinkModel):
@@ -207,6 +210,13 @@ class WorkflowCommandTypesApiV1(StrEnum):
 class WorkflowCommandExecuteRequestDto(EmptyWorkflowDescriptionToNoneMixin, CamelModel):
     command: WorkflowCommandTypesApiV1 = Field(..., description="The specific action to perform on the workflow")
     note: str | None = Field(default=None, description="Optional note for the command execution")
+    #: only read by PUBLISH - publish the workflow's still-draft components along with it.
+    #: Without it, publishing a workflow that uses draft components is refused rather than
+    #: silently making those components public.
+    publish_components: bool = Field(
+        default=False,
+        description="PUBLISH only: also publish the workflow's draft components",
+    )
     # only read by UPDATE_DESCRIPTION - the new description to store (blank/omitted clears it)
     description: str | None = Field(
         default=None,

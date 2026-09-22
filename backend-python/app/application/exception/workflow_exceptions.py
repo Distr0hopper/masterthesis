@@ -26,6 +26,29 @@ class WorkflowStepNotMatchedError(Exception):
         super().__init__(f"Workflow step {step_id} has no matched component to confirm")
 
 
+class WorkflowHasUnpublishedComponentsError(Exception):
+    """A workflow may only be public once every component it uses is public - otherwise
+    browsing users would hit steps pointing at components they cannot see."""
+
+    def __init__(self, names: list[str]) -> None:
+        self.names = names
+        super().__init__(
+            f"Component(s) {', '.join(names)} are still drafts - publish them before publishing this workflow"
+        )
+
+
+class UnpublishableWorkflowComponentsError(Exception):
+    """The workflow depends on draft components owned by someone else, so the current user
+    cannot clear the blocker themselves."""
+
+    def __init__(self, names: list[str]) -> None:
+        self.names = names
+        super().__init__(
+            f"Component(s) {', '.join(names)} are drafts owned by another user - ask their owner to "
+            "publish them before publishing this workflow"
+        )
+
+
 class WorkflowNotReadyToPublishError(Exception):
     def __init__(self, workflow_id: uuid.UUID) -> None:
         super().__init__(f"Workflow {workflow_id} cannot be published until every step is confirmed")

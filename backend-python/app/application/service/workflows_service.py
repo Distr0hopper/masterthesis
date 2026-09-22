@@ -16,13 +16,15 @@ from app.application.exception.workflow_exceptions import (
     InvalidWorkflowArchiveError,
     InvalidWorkflowCwlError,
     UnconfiguredWorkflowStepError,
+    UnpublishableWorkflowComponentsError,
+    WorkflowHasUnpublishedComponentsError,
     WorkflowNotFoundError,
     WorkflowNotReadyToPublishError,
     WorkflowStepNotFoundError,
     WorkflowStepNotMatchedError,
 )
 from app.application.service.components_service import ComponentsService
-from app.domain.models.component import Component, ComponentSource
+from app.domain.models.component import Component, ComponentSource, ComponentStatus
 from app.domain.models.component_domain import ComponentDomain
 from app.domain.models.parameter import Parameter
 from app.domain.models.user import User
@@ -755,11 +757,35 @@ class WorkflowsService:
         step.match_status = StepMatchStatus.CONFIRMED
         return await self.workflows_repository.save_step(step)
 
-    async def publish(self, workflow: Workflow) -> Workflow:
+    async def publish(
+        self, workflow: Workflow, current_user_id: uuid.UUID, publish_components: bool = False
+    ) -> Workflow:
+        """Make a workflow public.
+
+        A public workflow whose steps point at draft components would be broken for every
+        other user - drafts are owner-only - so every component it uses must be published
+        too. `publish_components` opts into publishing them as part of this action;
+        without it the draft components are reported and nothing is changed.
+        """
         if workflow.status == WorkflowStatus.VALIDATED:
             return workflow
         if not all(s.match_status in _SETTLED_STEP_STATUSES for s in workflow.steps):
             raise WorkflowNotReadyToPublishError(workflow.id)
+
+        drafts = [
+            step.component
+            for step in workflow.steps
+            if step.component is not None and step.component.status == ComponentStatus.DRAFT
+        ]
+        if drafts:
+            foreign = sorted({c.name for c in drafts if c.created_by_id != current_user_id})
+            if foreign:
+                raise UnpublishableWorkflowComponentsError(foreign)
+            if not publish_components:
+                raise WorkflowHasUnpublishedComponentsError(sorted({c.name for c in drafts}))
+            for component in drafts:
+                await self.components_service.publish(component)
+
         workflow.status = WorkflowStatus.VALIDATED
         return await self.workflows_repository.save(workflow)
 
@@ -793,7 +819,7 @@ class WorkflowsService:
                 await favorites_service.remove_workflow_favorite(current_user_id, workflow.id)
                 return workflow
             case WorkflowCommandType.PUBLISH:
-                return await self.publish(workflow)
+                return await self.publish(workflow, current_user_id, command.publish_components)
             case WorkflowCommandType.UNPUBLISH:
                 return await self.unpublish(workflow)
             case WorkflowCommandType.UPDATE_DESCRIPTION:

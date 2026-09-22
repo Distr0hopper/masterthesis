@@ -80,8 +80,10 @@ export const useConfirmWorkflowStep = () =>
   );
 
 export const usePublishWorkflow = () =>
-  useCommandMutation(workflowKeys.all, (link: HateoasLink) =>
-    workflowsService.executeCommand(link, { command: WorkflowCommand.PUBLISH }),
+  useCommandMutation(
+    workflowKeys.all,
+    ({ link, publishComponents }: { link: HateoasLink; publishComponents?: boolean }) =>
+      workflowsService.executeCommand(link, { command: WorkflowCommand.PUBLISH, publishComponents }),
   );
 
 export const useUnpublishWorkflow = () =>

@@ -1,4 +1,4 @@
-import type { WorkflowDetailDto, WorkflowListItemDto, WorkflowStepDto } from './types';
+import type { ComponentSummaryDto, WorkflowDetailDto, WorkflowListItemDto, WorkflowStepDto } from './types';
 import { StepMatchStatus, WorkflowSource, WorkflowStatus } from './types';
 import type { UpdateWorkflowDescriptionFormData } from './schema';
 import { getDomainLabel } from '@/api/components';
@@ -30,6 +30,7 @@ export interface WorkflowStepDisplayModel extends WithHateoasLinks {
   componentId: string | null;
   componentName: string | null;
   componentVersion: number | null;
+  component: ComponentSummaryDto | null;
   matchStatus: StepMatchStatus;
   matchStatusDisplay: string;
   matchScore: number | null;
@@ -79,6 +80,7 @@ export const workflowTransformer = {
       componentId: dto.component?.id ?? null,
       componentName: dto.component?.name ?? null,
       componentVersion: dto.component?.version ?? null,
+      component: dto.component ?? null,
       matchStatus: dto.matchStatus,
       matchStatusDisplay: isManualPick ? 'Selected — please confirm' : MATCH_STATUS_LABELS[dto.matchStatus],
       matchScore: dto.matchScore,

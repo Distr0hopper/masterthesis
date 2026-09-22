@@ -60,6 +60,8 @@ class WorkflowCommand:
     note: str | None = None
     # payload for UPDATE_DESCRIPTION - the new description (None clears it); ignored by other commands
     description: str | None = None
+    #: PUBLISH only - also publish the workflow's still-draft components
+    publish_components: bool = False
 
 
 class WorkflowStepCommandType(StrEnum):

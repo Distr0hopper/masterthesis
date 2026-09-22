@@ -5,7 +5,8 @@ import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
-import { getDomainBadgeStyle, useDomains } from '@/api/components';
+import { ComponentStatus, getDomainBadgeStyle, useDomains } from '@/api/components';
+import type { ComponentSummaryDto } from '@/api/workflows';
 import {
   StepMatchStatus,
   useDownloadWorkflow,
@@ -59,18 +60,33 @@ export function WorkflowHeader({ model, backTo, backLabel, onDeleted }: Workflow
   const { data: nameAvailability } = useWorkflowNameAvailability(canPublish ? model.name : '', model.id);
   const nameTaken = nameAvailability?.available === false ? nameAvailability.existing : null;
 
-  const doPublish = () => {
-    publishWorkflow(getLink(model._links, 'publish')!, {
-      onSuccess: () => {
-        setPublishDialogOpen(false);
-        toast.success('Workflow published');
+  const draftComponents = model.steps
+    .map((step) => step.component)
+    .filter(
+      (component): component is ComponentSummaryDto =>
+        component !== null && component.status === ComponentStatus.DRAFT,
+    );
+  const blockedByOthers = draftComponents.filter((component) => !component.canPublish);
+
+  const doPublish = (publishComponents = false) => {
+    publishWorkflow(
+      { link: getLink(model._links, 'publish')!, publishComponents },
+      {
+        onSuccess: () => {
+          setPublishDialogOpen(false);
+          toast.success(
+            publishComponents && draftComponents.length > 0
+              ? `Workflow published, along with ${draftComponents.length} component(s)`
+              : 'Workflow published',
+          );
+        },
+        onError: (error) => toast.error(getErrorMessage(error)),
       },
-      onError: (error) => toast.error(getErrorMessage(error)),
-    });
+    );
   };
 
   const handlePublish = () => {
-    if (nameTaken) {
+    if (draftComponents.length > 0 || nameTaken) {
       setPublishDialogOpen(true);
       return;
     }
@@ -192,15 +208,15 @@ export function WorkflowHeader({ model, backTo, backLabel, onDeleted }: Workflow
         open={editDescriptionDialogOpen}
         onOpenChange={setEditDescriptionDialogOpen}
       />
-      {nameTaken && (
-        <ConfirmPublishDialog
-          open={publishDialogOpen}
-          onOpenChange={setPublishDialogOpen}
-          existing={nameTaken}
-          onConfirm={doPublish}
-          isPending={isPublishing}
-        />
-      )}
+      <ConfirmPublishDialog
+        open={publishDialogOpen}
+        onOpenChange={setPublishDialogOpen}
+        nameTaken={nameTaken}
+        draftComponents={draftComponents}
+        blockedByOthers={blockedByOthers}
+        onConfirm={doPublish}
+        isPending={isPublishing}
+      />
     </>
   );
 }

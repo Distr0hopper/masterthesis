@@ -1,5 +1,5 @@
 import type { PageParams, SplitPageResponse, WithHateoasLinks } from '@/api/types';
-import type { ComponentPreviewDto } from '@/api/components/types';
+import type { ComponentPreviewDto, ComponentStatus } from '@/api/components/types';
 
 export const StepMatchStatus = {
   SUGGESTED: 'suggested',
@@ -26,6 +26,8 @@ export interface ComponentSummaryDto {
   name: string;
   version: number;
   domains: string[];
+  status: ComponentStatus;
+  canPublish: boolean;
 }
 
 export interface WorkflowStepDto extends WithHateoasLinks {
@@ -60,9 +62,13 @@ export type WorkflowCommandExecuteRequest =
       command:
         | typeof WorkflowCommand.ADD_FAVORITE
         | typeof WorkflowCommand.REMOVE_FAVORITE
-        | typeof WorkflowCommand.PUBLISH
         | typeof WorkflowCommand.UNPUBLISH;
       note?: string;
+    }
+  | {
+      command: typeof WorkflowCommand.PUBLISH;
+      note?: string;
+      publishComponents?: boolean;
     }
   | { command: typeof WorkflowCommand.UPDATE_DESCRIPTION; note?: string; description: string | null };
 

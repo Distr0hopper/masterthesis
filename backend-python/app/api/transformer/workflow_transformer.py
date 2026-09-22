@@ -12,6 +12,7 @@ from app.api.dto.workflow import (
 from app.api.link.workflow import WorkflowLinkBuilder
 from app.api.link.workflow_step import WorkflowStepLinkBuilder
 from app.application.commands.commands import WorkflowCommand, WorkflowCommandType, WorkflowStepCommand, WorkflowStepCommandType
+from app.api.permission.component_permission_validator import ComponentPermissionValidator
 from app.domain.models.user import User
 from app.domain.models.workflow import Workflow
 from app.domain.models.workflow_step import WorkflowStep
@@ -27,7 +28,12 @@ class WorkflowTransformer:
             WorkflowCommandTypesApiV1.UNPUBLISH: WorkflowCommandType.UNPUBLISH,
             WorkflowCommandTypesApiV1.UPDATE_DESCRIPTION: WorkflowCommandType.UPDATE_DESCRIPTION,
         }
-        return WorkflowCommand(type=mapping[dto.command], note=dto.note, description=dto.description)
+        return WorkflowCommand(
+            type=mapping[dto.command],
+            note=dto.note,
+            description=dto.description,
+            publish_components=dto.publish_components,
+        )
 
     @staticmethod
     def to_domain_step_command(dto: WorkflowStepCommandExecuteRequestDto) -> WorkflowStepCommand:
@@ -64,6 +70,8 @@ class WorkflowTransformer:
                 name=step.component.name,
                 version=step.component.version,
                 domains=sorted(d.domain for d in step.component.domains),
+                status=step.component.status,
+                can_publish=ComponentPermissionValidator(current_user).can_update(step.component),
             )
             if step.component is not None
             else None,

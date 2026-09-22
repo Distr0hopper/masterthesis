@@ -264,6 +264,8 @@ async def parse_workflow(
         external_refs=preview.external_refs,
         inline_only_steps=preview.inline_only_steps,
         missing_external_refs=preview.missing_external_refs,
+        auxiliary_files=preview.auxiliary_files,
+        missing_imports=preview.missing_imports,
     )
 
 

@@ -34,6 +34,50 @@ def extract_description(cwl_content: str) -> str | None:
     return doc.get("doc") if isinstance(doc, dict) else None
 
 
+#: CWL pulls other files in two ways: $import parses the target and splices the result in,
+#: $include inserts it as raw text. For bundling purposes they are the same thing - a file
+#: the document cannot do without.
+_IMPORT_KEYS = ("$import", "$include")
+#: not ours to bundle - the document keeps the URL and resolves it at run time
+_REMOTE_PREFIXES = ("http://", "https://", "file://")
+
+
+def collect_import_targets(cwl_content: str) -> set[str]:
+    """Every local file referenced by $import/$include anywhere in the document.
+
+    Paths come back exactly as written, because that is what has to resolve when the
+    document is written back out - rewriting `types/spatial.yml` to `spatial.yml` would
+    leave the $import pointing at nothing. A `#fragment` is stripped
+    (`types.yml#ClusterSpec` -> `types.yml`): it selects a symbol inside the file, not a
+    different file.
+
+    Never raises - an unparseable document has no discoverable imports, and the callers
+    that care about validity report that separately.
+    """
+    try:
+        doc: Any = load_cwl(cwl_content)
+    except YAMLError:
+        return set()
+
+    targets: set[str] = set()
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key in _IMPORT_KEYS and isinstance(value, str):
+                    target = value.split("#", 1)[0].strip()
+                    if target and not target.lower().startswith(_REMOTE_PREFIXES):
+                        targets.add(target)
+                else:
+                    walk(value)
+        elif isinstance(node, list):
+            for entry in node:
+                walk(entry)
+
+    walk(doc)
+    return targets
+
+
 def normalize_idmap(value: Any, key_field: str) -> dict[str, Any]:
     """CWL's idmap shorthand: `requirements`, `hints`, `inputs` and `outputs` may each be
     written either as a mapping keyed by class/id, or as a list of entries carrying that

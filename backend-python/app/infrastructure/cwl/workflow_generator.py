@@ -81,6 +81,7 @@ def assemble_cwl_zip(
     workflow_name: str,
     pipeline_cwl: str,
     step_files: list[tuple[str, str]],
+    extra_files: list[tuple[str, str]] | None = None,
 ) -> tuple[str, bytes]:
     """Zip a pipeline CWL together with its step CWLs, one consistent layout.
 
@@ -93,6 +94,9 @@ def assemble_cwl_zip(
                    ``cwl_filename_for(component_name)``; the download passes each step's
                    stored ``run_reference`` (it has to - that is what the pipeline's
                    ``run:`` lines point at).
+      - extras:    ``$import``/``$include`` targets, written at their stored *paths* (e.g.
+                   ``types/spatial.yml``) rather than flattened, so the import in the CWL
+                   still resolves. Empty for the builder, which generates no imports.
 
     Returns ``(archive_filename, zip_bytes)``.
     """
@@ -108,6 +112,8 @@ def assemble_cwl_zip(
         archive.writestr(main_filename, pipeline_cwl)
         for name, content in step_files:
             archive.writestr(name, content)
+        for path, content in extra_files or []:
+            archive.writestr(path, content)
 
     return f"{slug}.zip", buffer.getvalue()
 

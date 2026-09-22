@@ -129,7 +129,6 @@ export interface CreateWorkflowDto {
   name: string;
   domains: string[];
   description?: string | null;
-  /** one entry per step - every step must be configured before the workflow can be saved */
   componentConfigs: ComponentConfigDto[];
 }
 
@@ -162,17 +161,14 @@ export const ComponentOrigin = {
 } as const;
 export type ComponentOrigin = (typeof ComponentOrigin)[keyof typeof ComponentOrigin];
 
-/** An existing component a step could bind to instead of creating a new one. */
 export interface ComponentMatchDto {
   componentId: string;
   name: string;
   version: number;
   domains: string[];
-  /** fuzzy-match confidence; null for an exact name collision, which isn't a guess */
   score: number | null;
 }
 
-/** One workflow step rendered as the Component it would become, for review before saving. */
 export interface WorkflowStepPreviewDto extends ComponentPreviewDto {
   stepId: string;
   origin: ComponentOrigin;
@@ -191,4 +187,6 @@ export interface ParseWorkflowResponseDto {
   externalRefs: string[];
   inlineOnlySteps: string[];
   missingExternalRefs: string[];
+  auxiliaryFiles: string[];
+  missingImports: string[];
 }

@@ -9,6 +9,7 @@ from sqlmodel import Field, Relationship, SQLModel
 if TYPE_CHECKING:
     from app.domain.models.user import User
     from app.domain.models.workflow_domain import WorkflowDomain
+    from app.domain.models.workflow_file import WorkflowFile
     from app.domain.models.workflow_step import WorkflowStep
 
 
@@ -79,6 +80,10 @@ class Workflow(SQLModel, table=True):
         },
     )
     domains: list["WorkflowDomain"] = Relationship(
+        back_populates="workflow",
+        sa_relationship_kwargs={"lazy": "selectin", "cascade": "all, delete-orphan", "passive_deletes": True},
+    )
+    files: list["WorkflowFile"] = Relationship(
         back_populates="workflow",
         sa_relationship_kwargs={"lazy": "selectin", "cascade": "all, delete-orphan", "passive_deletes": True},
     )

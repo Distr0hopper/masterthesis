@@ -78,6 +78,11 @@ export default function WorkflowUploadPage() {
       `Missing referenced file(s) in the archive: ${parsed.missingExternalRefs.join(', ')}. Fix the archive and try again.`,
     );
   }
+  if (parsed?.missingImports.length) {
+    blockingIssues.push(
+      `Imported file(s) missing from the archive: ${parsed.missingImports.join(', ')}. The workflow references these type definitions and cannot run without them.`,
+    );
+  }
   if (parsed && !parsed.isZip && parsed.externalRefs.length > 0) {
     blockingIssues.push(
       `This .cwl file references step file(s) it doesn't contain: ${parsed.externalRefs.join(', ')}. Upload a .zip archive with them instead.`,
@@ -107,6 +112,7 @@ export default function WorkflowUploadPage() {
         configs.reset(response.componentPreviews);
         const hasBlockers =
           response.missingExternalRefs.length > 0 ||
+          response.missingImports.length > 0 ||
           (!response.isZip && response.externalRefs.length > 0) ||
           response.componentPreviews.length === 0;
         if (!hasBlockers) goTo(2);

@@ -192,6 +192,11 @@ class ParseWorkflowResponseDto(CamelModel):
     #: external_refs not found among the zip's own .cwl files - always [] for a bare
     #: .cwl upload, since there's nothing to cross-check against
     missing_external_refs: list[str]
+    #: $import/$include targets resolved from the archive - preserved with the workflow and
+    #: written back into every download
+    auxiliary_files: list[str]
+    #: referenced but absent from the archive - blocks the save, like missing_external_refs
+    missing_imports: list[str]
 
 
 class UpdateWorkflowStepRequestDto(CamelModel):

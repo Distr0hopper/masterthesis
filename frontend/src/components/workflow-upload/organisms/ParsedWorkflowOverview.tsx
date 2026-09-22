@@ -1,4 +1,4 @@
-import { Code, FileCode, Package } from 'lucide-react';
+import { Code, FileCode, FileType, Package } from 'lucide-react';
 import { Badge } from '@/components/ui/badge.tsx';
 import { ComponentOrigin, type ParseWorkflowResponseDto } from '@/api/workflows';
 
@@ -21,6 +21,9 @@ export function ParsedWorkflowOverview({ parsed }: ParsedWorkflowOverviewProps) 
         {archiveCount > 0 && <Badge variant="secondary">{archiveCount} step file(s)</Badge>}
         {parsed.inlineOnlySteps.length > 0 && (
           <Badge variant="secondary">{parsed.inlineOnlySteps.length} inline step(s)</Badge>
+        )}
+        {parsed.auxiliaryFiles.length > 0 && (
+          <Badge variant="secondary">{parsed.auxiliaryFiles.length} imported file(s)</Badge>
         )}
       </div>
 
@@ -57,6 +60,24 @@ export function ParsedWorkflowOverview({ parsed }: ParsedWorkflowOverviewProps) 
           <li className="px-3 py-2 text-sm text-slate-500">No components could be read from this file.</li>
         )}
       </ul>
+
+      {parsed.auxiliaryFiles.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <p className="text-sm font-medium text-slate-900">Imported files</p>
+          <p className="text-xs text-slate-500">
+            Type definitions the CWL pulls in. They are kept with the workflow and included in every
+            download.
+          </p>
+          <ul className="mt-1 divide-y rounded-md border border-input">
+            {parsed.auxiliaryFiles.map((path) => (
+              <li key={path} className="flex items-center gap-3 px-3 py-2 text-sm">
+                <FileType className="h-4 w-4 shrink-0 text-slate-400" />
+                <span className="font-mono text-slate-900">{path}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import uuid
 import zipfile
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from io import BytesIO
 from typing import TYPE_CHECKING, Annotated
 
@@ -15,6 +15,8 @@ from app.application.exception.workflow_exceptions import (
     InvalidExtractedComponentNameError,
     InvalidWorkflowArchiveError,
     InvalidWorkflowCwlError,
+    ConflictingAuxiliaryFileError,
+    MissingImportedFileError,
     UnconfiguredWorkflowStepError,
     UnpublishableWorkflowComponentsError,
     WorkflowHasUnpublishedComponentsError,
@@ -27,10 +29,12 @@ from app.application.exception.workflow_exceptions import (
 from app.application.service.components_service import ComponentsService
 from app.domain.models.component import Component, ComponentSource, ComponentStatus
 from app.domain.models.component_domain import ComponentDomain
+from app.domain.models.component_file import ComponentFile
 from app.domain.models.parameter import Parameter
 from app.domain.models.user import User
 from app.domain.models.workflow import Workflow, WorkflowSource, WorkflowStatus
 from app.domain.models.workflow_domain import WorkflowDomain
+from app.domain.models.workflow_file import WorkflowFile
 from app.domain.models.workflow_step import StepMatchStatus, WorkflowStep
 from app.domain.pagination.pagination import PaginatedList
 from app.domain.repository.components_repository import ComponentsRepository
@@ -38,6 +42,7 @@ from app.domain.repository.workflow_draft_repository import WorkflowDraftReposit
 from app.domain.repository.workflows_repository import WorkflowListFilter, WorkflowsRepository
 from app.infrastructure.cwl.cwl_matcher import best_match
 from app.infrastructure.cwl.cwl_parser import (
+    collect_import_targets,
     extract_cwl_type,
     extract_description,
     extract_docker_pull,
@@ -56,6 +61,23 @@ from app.infrastructure.cwl.workflow_parser import (
     read_workflow_overview,
     strip_cwl_extension,
 )
+
+
+def _merge_auxiliary_files(sources: list[list]) -> list[tuple[str, str]]:
+    """One (path, content) list from several file collections.
+
+    The same type file legitimately arrives from the workflow and from each component that
+    imports it - identical content, so de-duplication is right. Genuinely different content
+    under one path has no correct answer, so it fails loudly rather than picking a winner.
+    """
+    merged: dict[str, str] = {}
+    for files in sources:
+        for file in files:
+            existing = merged.get(file.path)
+            if existing is not None and existing != file.content:
+                raise ConflictingAuxiliaryFileError(file.path)
+            merged[file.path] = file.content
+    return sorted(merged.items())
 
 
 #: step states that need no further action before a workflow can be published - either the
@@ -133,6 +155,10 @@ class WorkflowUploadPreview:
     external_refs: list[str]
     inline_only_steps: list[str]
     missing_external_refs: list[str]
+    #: $import/$include targets resolved from the archive - preserved with the workflow
+    auxiliary_files: list[str]
+    #: referenced but absent from the archive; blocks the save, like missing_external_refs
+    missing_imports: list[str]
 
 
 @dataclass
@@ -150,6 +176,10 @@ class WorkflowUploadContent:
     cwl_content: str
     pipeline_filename: str | None
     files: dict[str, str] | None
+    #: the archive's non-.cwl text files, keyed by their path relative to the archive root
+    #: rather than flattened like `files` - a $import writes a path, and that exact path
+    #: has to resolve in the archive handed back on download
+    aux_files: dict[str, str] = field(default_factory=dict)
 
     @property
     def available_files(self) -> set[str] | None:
@@ -278,6 +308,11 @@ class WorkflowsService:
             else []
         )
 
+        # every document the upload will persist can pull in type definitions, so scan the
+        # pipeline and each step file, not just the pipeline
+        documents = [upload.cwl_content, *(upload.files or {}).values()]
+        auxiliary, missing_imports = self._resolve_imports(documents, upload.aux_files)
+
         return WorkflowUploadPreview(
             is_zip=upload.is_zip,
             is_self_contained=self_contained,
@@ -288,6 +323,8 @@ class WorkflowsService:
             external_refs=overview.external_refs,
             inline_only_steps=overview.inline_only_steps,
             missing_external_refs=missing_external_refs,
+            auxiliary_files=sorted(auxiliary),
+            missing_imports=missing_imports,
         )
 
     async def _build_component_previews(
@@ -391,6 +428,7 @@ class WorkflowsService:
                 cwl_content=cwl_content,
                 pipeline_filename=pipeline_filename,
                 files=files,
+                aux_files=self._extract_zip_aux_files(content),
             )
 
         try:
@@ -560,6 +598,17 @@ class WorkflowsService:
                     f"Referenced step file(s) not found in archive: {', '.join(missing)}"
                 )
 
+        # a bare .cwl has no archive to resolve against, so any import is unsatisfiable
+        pipeline_imports = collect_import_targets(upload.cwl_content)
+        if not upload.is_zip and pipeline_imports:
+            raise InvalidWorkflowCwlError(
+                "A bare .cwl upload cannot import other files - upload a .zip archive containing them instead"
+            )
+        documents = [upload.cwl_content, *(upload.files or {}).values()]
+        auxiliary, missing_imports = self._resolve_imports(documents, upload.aux_files)
+        if missing_imports:
+            raise MissingImportedFileError(missing_imports)
+
         step_definitions = extract_step_definitions(upload.cwl_content)
         # inline-only steps (ExpressionTool / nested Workflow) stay embedded in the
         # pipeline and never become Components, so there is nothing to configure for them
@@ -656,6 +705,9 @@ class WorkflowsService:
                 source=ComponentSource.MANUAL_UPLOAD,
                 created_by_id=created_by_id,
                 description=config.description or fallback_description,
+                # a component stands alone in the catalogue, so it carries its own imports
+                # rather than relying on the workflow it arrived with still being around
+                files=self._files_for(cwl_content, auxiliary, ComponentFile),
             )
             step = WorkflowStep(
                 step_id=step_id,
@@ -687,6 +739,7 @@ class WorkflowsService:
             steps=steps,
             domains=[WorkflowDomain(domain=d) for d in domains],
             source=WorkflowSource.MANUAL_UPLOAD,
+            files=self._files_for(pipeline_content, auxiliary, WorkflowFile),
         )
         return await self._save_and_reload(workflow)
 
@@ -900,7 +953,119 @@ class WorkflowsService:
             for step in workflow.steps
             if step.component is not None
         ]
-        return assemble_cwl_zip(workflow.name, workflow.cwl_content, step_files)
+        # the pipeline's own imports plus every component's - a step tool may import a
+        # type the pipeline itself never mentions
+        sources = [workflow.files, *(s.component.files for s in workflow.steps if s.component is not None)]
+        return assemble_cwl_zip(
+            workflow.name, workflow.cwl_content, step_files, _merge_auxiliary_files(sources)
+        )
+
+    #: plausible $import/$include targets - all text, so an unrelated binary in the archive
+    #: never has to be decoded just to be ignored
+    _AUX_EXTENSIONS = (".yml", ".yaml", ".json")
+
+    @staticmethod
+    def _files_for(cwl_content: str, auxiliary: dict[str, str], model: type) -> list:
+        """The auxiliary rows one document needs, transitively.
+
+        Only what this document reaches: a workflow that imports nothing gets no rows even
+        when a sibling step file imports plenty.
+        """
+        needed: dict[str, str] = {}
+        pending = list(collect_import_targets(cwl_content))
+        while pending:
+            target = pending.pop()
+            if target in needed or target not in auxiliary:
+                continue
+            needed[target] = auxiliary[target]
+            pending.extend(collect_import_targets(auxiliary[target]))
+        return [model(path=path, content=content) for path, content in sorted(needed.items())]
+
+    def _extract_zip_aux_files(self, zip_bytes: bytes) -> dict[str, str]:
+        """The archive's non-.cwl text files, keyed by path relative to the archive root.
+
+        Deliberately NOT flattened the way _extract_zip_files is: `run:` references are
+        filenames, but a $import writes a path, and rewriting `types/spatial.yml` to
+        `spatial.yml` would leave the import pointing at nothing once the archive is
+        rebuilt on download.
+
+        A single wrapper folder (what Finder adds when you zip a directory) is stripped,
+        so `SpatialClustering/types/spatial.yml` still resolves as `types/spatial.yml`.
+        """
+        try:
+            with zipfile.ZipFile(BytesIO(zip_bytes)) as zf:
+                names = [
+                    info.filename
+                    for info in zf.infolist()
+                    if not info.is_dir()
+                    and not info.filename.startswith("__MACOSX/")
+                    and not info.filename.rsplit("/", 1)[-1].startswith("._")
+                ]
+                prefix = self._common_wrapper_folder(names)
+
+                result: dict[str, str] = {}
+                for name in names:
+                    if not name.lower().endswith(self._AUX_EXTENSIONS):
+                        continue
+                    path = name[len(prefix) :] if prefix and name.startswith(prefix) else name
+                    try:
+                        result[path] = zf.read(name).decode("utf-8")
+                    except UnicodeDecodeError:
+                        # not text after all - it cannot be a $import target, so skipping it
+                        # is better than failing an upload over a file nothing references
+                        continue
+                return result
+        except zipfile.BadZipFile as err:
+            raise InvalidWorkflowArchiveError("Not a valid zip archive") from err
+
+    @staticmethod
+    def _common_wrapper_folder(names: list[str]) -> str:
+        """`"SpatialClustering/"` when every entry sits under one top-level folder, else ""."""
+        tops = {name.split("/", 1)[0] for name in names if "/" in name}
+        if len(tops) != 1 or any("/" not in name for name in names):
+            return ""
+        return f"{tops.pop()}/"
+
+    @staticmethod
+    def _match_archive_path(target: str, files: dict[str, str]) -> str | None:
+        """The archive entry a $import target refers to, tolerating layout differences."""
+        if target in files:
+            return target
+        suffix = "/" + target
+        matches = [path for path in files if path.endswith(suffix)]
+        if len(matches) == 1:
+            return matches[0]
+        # last resort: the import writes a path the archive flattened (or vice versa)
+        base = target.rsplit("/", 1)[-1]
+        matches = [path for path in files if path.rsplit("/", 1)[-1] == base]
+        return matches[0] if len(matches) == 1 else None
+
+    def _resolve_imports(
+        self, documents: list[str], aux_files: dict[str, str]
+    ) -> tuple[dict[str, str], list[str]]:
+        """({path: content} to preserve, sorted paths that could not be found).
+
+        Follows imports transitively - an imported types file may import another - and
+        keys each result under the path the document actually wrote, since that is what
+        has to resolve on the way back out.
+        """
+        resolved: dict[str, str] = {}
+        missing: set[str] = set()
+        pending = [target for document in documents for target in collect_import_targets(document)]
+
+        while pending:
+            target = pending.pop()
+            if target in resolved or target in missing:
+                continue
+            match = self._match_archive_path(target, aux_files)
+            if match is None:
+                missing.add(target)
+                continue
+            content = aux_files[match]
+            resolved[target] = content
+            pending.extend(collect_import_targets(content))
+
+        return resolved, sorted(missing)
 
     def _extract_zip_files(self, zip_bytes: bytes) -> dict[str, str]:
         try:

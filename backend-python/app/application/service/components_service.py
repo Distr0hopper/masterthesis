@@ -126,6 +126,9 @@ class ComponentsService:
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
             zf.writestr(f"{base_name}.cwl", cwl_content)
             zf.writestr("inputs.yaml", inputs_yaml)
+            # $import targets at their stored paths, so the import in the CWL resolves
+            for file in sorted(component.files, key=lambda f: f.path):
+                zf.writestr(file.path, file.content)
 
         return f"{base_name}.zip", buffer.getvalue()
 

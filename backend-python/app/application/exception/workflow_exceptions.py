@@ -26,6 +26,29 @@ class WorkflowStepNotMatchedError(Exception):
         super().__init__(f"Workflow step {step_id} has no matched component to confirm")
 
 
+class ConflictingAuxiliaryFileError(Exception):
+    """Two sources in one workflow disagree about the contents of the same imported path.
+    There is no correct file to hand back, so the download fails rather than guessing."""
+
+    def __init__(self, path: str) -> None:
+        self.path = path
+        super().__init__(
+            f"Imported file '{path}' has conflicting contents across this workflow's components "
+            "- the archive cannot be assembled"
+        )
+
+
+class MissingImportedFileError(Exception):
+    """A $import/$include target is not in the archive. Saving anyway would store a
+    workflow whose CWL references a file nothing can produce - broken only at run time."""
+
+    def __init__(self, paths: list[str]) -> None:
+        self.paths = paths
+        super().__init__(
+            f"Imported file(s) not found in archive: {', '.join(paths)} - add them and try again"
+        )
+
+
 class WorkflowNameAlreadyExistsError(Exception):
     """Workflow names are globally unique (uq_workflows_name) - unlike Component there is
     no version lineage to tell two same-named workflows apart."""

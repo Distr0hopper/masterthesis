@@ -10,5 +10,7 @@ register the tables with SQLModel.metadata before the relatinships are dissolved
 
 from app.domain.models.component import Component  # noqa: F401
 from app.domain.models.component_domain import ComponentDomain  # noqa: F401
+from app.domain.models.component_file import ComponentFile  # noqa: F401
+from app.domain.models.workflow_file import WorkflowFile  # noqa: F401
 from app.domain.models.parameter import Parameter  # noqa: F401
 from app.domain.models.user import User  # noqa: F401

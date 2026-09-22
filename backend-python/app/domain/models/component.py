@@ -8,6 +8,7 @@ from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from app.domain.models.component_domain import ComponentDomain
+    from app.domain.models.component_file import ComponentFile
     from app.domain.models.parameter import Parameter
     from app.domain.models.user import User
 
@@ -77,6 +78,10 @@ class Component(SQLModel, table=True):
     created_by: Optional["User"] = Relationship(back_populates="components", sa_relationship_kwargs={"lazy": "selectin"})
     parameters: list["Parameter"] = Relationship(back_populates="component", sa_relationship_kwargs={"lazy": "selectin"})
     domains: list["ComponentDomain"] = Relationship(
+        back_populates="component",
+        sa_relationship_kwargs={"lazy": "selectin", "cascade": "all, delete-orphan", "passive_deletes": True},
+    )
+    files: list["ComponentFile"] = Relationship(
         back_populates="component",
         sa_relationship_kwargs={"lazy": "selectin", "cascade": "all, delete-orphan", "passive_deletes": True},
     )

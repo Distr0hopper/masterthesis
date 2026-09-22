@@ -163,17 +163,23 @@ async def parse_component(
 @router.get("/name-availability", response_model=NameAvailabilityDto)
 async def check_name_availability(
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
+    current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
     name: Annotated[str, Query(min_length=1)],
 ) -> NameAvailabilityDto:
     """Whether `name` is still free for a new component lineage.
 
+    `available` reflects the whole catalogue, since component names are globally unique.
+    `existing` is only filled in when the caller may actually see that component - a name
+    held by somebody else's draft still reads as taken, just without details.
+
     NOTE: must stay declared above GET /{component_id} - FastAPI matches routes in
     declaration order, and "name-availability" would otherwise be parsed as a component id.
     """
-    existing = await components_service.find_latest_version_by_name(name)
+    taken = await components_service.find_latest_version_by_name(name) is not None
+    existing = await components_service.find_visible_latest_version_by_name(name, current_user)
     return NameAvailabilityDto(
         name=name,
-        available=existing is None,
+        available=not taken,
         existing=None
         if existing is None
         else ExistingComponentDto(
@@ -182,6 +188,7 @@ async def check_name_availability(
             version=existing.version,
             domains=ComponentTransformer.to_domains(existing),
             status=existing.status,
+            can_add_version=ComponentPermissionValidator(current_user).can_update(existing),
         ),
     )
 

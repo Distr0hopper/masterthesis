@@ -157,13 +157,15 @@ async def list_latest_workflows(
 @router.get("/name-availability", response_model=WorkflowNameAvailabilityDto)
 async def check_workflow_name_availability(
     workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
+    current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
     name: Annotated[str, Query(min_length=1)],
     exclude_id: Annotated[uuid.UUID | None, Query(alias="excludeId")] = None,
 ) -> WorkflowNameAvailabilityDto:
-    existing = await workflows_service.find_latest_by_name(name, exclude_id)
+    taken = await workflows_service.find_latest_by_name(name, exclude_id) is not None
+    existing = await workflows_service.find_visible_latest_by_name(name, current_user, exclude_id)
     return WorkflowNameAvailabilityDto(
         name=name,
-        available=existing is None,
+        available=not taken,
         existing=None
         if existing is None
         else ExistingWorkflowDto(id=existing.id, name=existing.name, created_at=existing.created_at),

@@ -218,6 +218,24 @@ class WorkflowsService:
     async def find_latest_by_name(self, name: str, exclude_id: uuid.UUID | None = None) -> Workflow | None:
         return await self.workflows_repository.find_latest_by_name(name, exclude_id)
 
+    async def find_visible_latest_by_name(
+        self, name: str, current_user: User | None, exclude_id: uuid.UUID | None = None
+    ) -> Workflow | None:
+        """The workflow holding this name, but only if the caller may see it.
+
+        A pending workflow is owner-only, so naming it to another user would both leak it
+        and hand them a link they cannot open. The name is taken either way -
+        uq_workflows_name is global - so only the description is withheld, never the
+        collision itself.
+        """
+        existing = await self.workflows_repository.find_latest_by_name(name, exclude_id)
+        if existing is None:
+            return None
+        is_owner = current_user is not None and current_user.id == existing.created_by_id
+        if existing.status == WorkflowStatus.PENDING_VALIDATION and not is_owner:
+            return None
+        return existing
+
     async def _require_name_available(self, name: str, exclude_id: uuid.UUID | None = None) -> None:
         """Enforces uq_workflows_name in the service, so a collision comes back as a clean
         409 rather than an IntegrityError from the database.

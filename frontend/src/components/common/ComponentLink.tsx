@@ -21,11 +21,11 @@ export function ComponentLink({ componentId, name, version, className }: Compone
       rel="noreferrer"
       title="Open details in a new tab"
       aria-label={`Open ${name} details in a new tab`}
-      className={cn('flex items-baseline gap-2 hover:underline', className)}
+      className={cn('inline-flex items-baseline hover:underline', className)}
     >
       <span className="font-mono text-sm font-semibold text-slate-900">{name}</span>
-      {version != null && <span className="text-xs text-slate-500">v{version}</span>}
-      <ExternalLink className="h-3.5 w-3.5 self-center text-slate-400" />
+      {version != null && <span className="text-xs text-slate-500">&nbsp;v{version}</span>}
+      <ExternalLink className="ml-1.5 h-3.5 w-3.5 self-center text-slate-400" />
     </a>
   );
 }

@@ -45,6 +45,7 @@ export interface ExistingComponentDto {
   version: number;
   domains: ComponentDomain[];
   status: ComponentStatus;
+  canAddVersion: boolean;
 }
 
 /** Whether a component name can still be claimed for a new lineage. */

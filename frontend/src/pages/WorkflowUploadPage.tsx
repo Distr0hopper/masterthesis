@@ -39,15 +39,14 @@ export default function WorkflowUploadPage() {
   const [domains, setDomains] = useState<string[]>([]);
   const [description, setDescription] = useState('');
   const [errors, setErrors] = useState<UploadDetailsErrors>({});
-  // until the user types a name themselves, the filename (and then the CWL's own label:)
-  // may fill it in for them - after that it is theirs and nothing overwrites it
+
   const nameTouched = useRef(false);
 
   const debouncedName = useDebouncedValue(name);
   const { data: nameAvailability } = useWorkflowNameAvailability(debouncedName);
-  // advisory only - the API accepts a duplicate workflow name, so this never
-  // gates Continue the way the component flow's name check does
-  const nameTaken = nameAvailability?.available === false ? nameAvailability.existing : null;
+
+  const nameTaken = nameAvailability?.available === false;
+  const nameTakenBy = nameTaken ? nameAvailability?.existing : null;
 
   const parsed = parseMutation.data;
   const previews = parsed?.componentPreviews ?? [];
@@ -134,21 +133,28 @@ export default function WorkflowUploadPage() {
   };
 
   const nameNotice = nameTaken ? (
-    <div className="flex flex-wrap items-center gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
-      <AlertTriangle className="h-4 w-4 shrink-0" />
-      <span className="flex flex-wrap items-center gap-1">
-        A workflow named
-        <a
-          href={ROUTES.workflowDetail(nameTaken.id)}
-          target="_blank"
-          rel="noreferrer"
-          title="Open it in a new tab"
-          className="inline-flex items-center gap-1 font-mono font-semibold hover:underline"
-        >
-          {nameTaken.name}
-          <ExternalLink className="h-3.5 w-3.5" />
-        </a>
-        already exists - choose a different name.
+    // plain inline text, real spaces - see the note in ManualUploadWizard
+    <div className="flex items-start gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+      <span>
+        {nameTakenBy ? (
+          <>
+            A workflow named{' '}
+            <a
+              href={ROUTES.workflowDetail(nameTakenBy.id)}
+              target="_blank"
+              rel="noreferrer"
+              title="Open it in a new tab"
+              className="inline-flex items-center gap-1 font-mono font-semibold hover:underline"
+            >
+              {nameTakenBy.name}
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>{' '}
+            already exists \u2014 choose a different name.
+          </>
+        ) : (
+          'That name is already taken \u2014 choose a different name.'
+        )}
       </span>
     </div>
   ) : undefined;
@@ -231,7 +237,7 @@ export default function WorkflowUploadPage() {
         {step === 1 && (
           <Button
             onClick={handleContinueFromDetails}
-            disabled={parseMutation.isPending || !!nameTaken}
+            disabled={parseMutation.isPending || nameTaken}
             className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90"
           >
             {parseMutation.isPending ? 'Reading file...' : 'Continue'}

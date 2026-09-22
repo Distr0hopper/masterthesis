@@ -160,6 +160,7 @@ class ExistingComponentDto(CamelModel):
     version: int
     domains: list[str]
     status: ComponentStatus
+    can_add_version: bool
 
 
 class NameAvailabilityDto(CamelModel):

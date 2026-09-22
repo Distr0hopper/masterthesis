@@ -47,12 +47,13 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
   const [domains, setDomains] = useState<string[]>([]);
   const [description, setDescription] = useState('');
   const [errors, setErrors] = useState<UploadDetailsErrors>({});
-  // until the user types a name themselves, the filename fills it in for them
   const nameTouched = useRef(false);
 
   const debouncedName = useDebouncedValue(name);
   const { data: availability } = useComponentNameAvailability(debouncedName);
-  const taken = availability?.available === false ? availability.existing : null;
+
+  const taken = availability?.available === false;
+  const takenBy = taken ? availability?.existing : null;
 
   const parsed = parseMutation.data;
 
@@ -80,7 +81,6 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
     setErrors({});
     if (taken) return;
 
-    // already parsed this exact file - don't re-upload it just to go forward
     if (parsed) {
       goTo(2);
       return;
@@ -103,13 +103,27 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
   };
 
   const nameNotice = taken ? (
-    <div className="flex flex-wrap items-center gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
-      <AlertTriangle className="h-4 w-4 shrink-0" />
-      <span className="flex flex-wrap items-center gap-1">
-        This name is already taken by
-        <ComponentLink componentId={taken.id} name={taken.name} version={taken.version} />
+
+    <div className="flex items-start gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+      <span>
+        {takenBy ? (
+          <>
+            This name is already taken by{' '}
+            <ComponentLink
+              componentId={takenBy.id}
+              name={takenBy.name}
+              version={takenBy.version}
+              className="inline-flex"
+            />{' '}
+            {takenBy.canAddVersion
+              ? '\u2014 rename yours, or add a new version to it instead.'
+              : '\u2014 choose a different name.'}
+          </>
+        ) : (
+          'This name is already taken \u2014 choose a different name.'
+        )}
       </span>
-      <span>— pick another name, or add a new version to that component instead.</span>
     </div>
   ) : undefined;
 
@@ -182,7 +196,7 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
         {step === 1 && (
           <Button
             onClick={handleContinue}
-            disabled={parseMutation.isPending || !!taken}
+            disabled={parseMutation.isPending || taken}
             className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90"
           >
             {parseMutation.isPending ? 'Reading file...' : 'Continue'}
@@ -191,7 +205,7 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
         {step === 2 && (
           <Button
             onClick={handleCreate}
-            disabled={isCreating || !!taken}
+            disabled={isCreating || taken}
             className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90"
           >
             {isCreating ? 'Creating...' : 'Create Component'}

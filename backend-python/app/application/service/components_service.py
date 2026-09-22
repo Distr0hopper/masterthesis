@@ -129,6 +129,20 @@ class ComponentsService:
 
         return f"{base_name}.zip", buffer.getvalue()
 
+    async def find_visible_latest_version_by_name(self, name: str, current_user: User | None) -> Component | None:
+        """The newest version of this lineage, but only if the caller may see it.
+
+        A name can be held by someone else's unpublished draft. The name is still taken -
+        it is a global key (favourites reference components by name, and
+        uq_components_name_version pins one row per name+version) - but the caller has no
+        business learning anything about a draft that is not theirs, and linking them to
+        a component they cannot open is a dead end.
+        """
+        existing = await self.find_latest_version_by_name(name)
+        if existing is None or not self._is_visible(existing, current_user):
+            return None
+        return existing
+
     async def find_latest_version_by_name(self, name: str) -> Component | None:
         """The newest version of the lineage holding this exact name, if it exists.
 

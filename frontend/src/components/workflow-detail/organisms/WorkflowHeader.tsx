@@ -11,7 +11,6 @@ import {
   StepMatchStatus,
   useDownloadWorkflow,
   usePublishWorkflow,
-  useWorkflowNameAvailability,
   useUnpublishWorkflow,
   WorkflowSource,
   WorkflowStatus,
@@ -57,9 +56,6 @@ export function WorkflowHeader({ model, backTo, backLabel, onDeleted }: Workflow
   const canPublish = hasPublishLink(model._links) && model.status === WorkflowStatus.PENDING_VALIDATION;
   const canUnpublish = hasUnpublishLink(model._links) && model.status === WorkflowStatus.VALIDATED;
 
-  const { data: nameAvailability } = useWorkflowNameAvailability(canPublish ? model.name : '', model.id);
-  const nameTaken = nameAvailability?.available === false ? nameAvailability.existing : null;
-
   const draftComponents = model.steps
     .map((step) => step.component)
     .filter(
@@ -86,7 +82,7 @@ export function WorkflowHeader({ model, backTo, backLabel, onDeleted }: Workflow
   };
 
   const handlePublish = () => {
-    if (draftComponents.length > 0 || nameTaken) {
+    if (draftComponents.length > 0) {
       setPublishDialogOpen(true);
       return;
     }
@@ -211,7 +207,6 @@ export function WorkflowHeader({ model, backTo, backLabel, onDeleted }: Workflow
       <ConfirmPublishDialog
         open={publishDialogOpen}
         onOpenChange={setPublishDialogOpen}
-        nameTaken={nameTaken}
         draftComponents={draftComponents}
         blockedByOthers={blockedByOthers}
         onConfirm={doPublish}

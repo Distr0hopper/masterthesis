@@ -95,6 +95,7 @@ export default function WorkflowUploadPage() {
       return;
     }
     setErrors({});
+    if (nameTaken) return;
 
     if (parsed && blockingIssues.length === 0) {
       goTo(2);
@@ -147,7 +148,7 @@ export default function WorkflowUploadPage() {
           {nameTaken.name}
           <ExternalLink className="h-3.5 w-3.5" />
         </a>
-        already exists - you can still continue.
+        already exists - choose a different name.
       </span>
     </div>
   ) : undefined;
@@ -230,7 +231,7 @@ export default function WorkflowUploadPage() {
         {step === 1 && (
           <Button
             onClick={handleContinueFromDetails}
-            disabled={parseMutation.isPending}
+            disabled={parseMutation.isPending || !!nameTaken}
             className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90"
           >
             {parseMutation.isPending ? 'Reading file...' : 'Continue'}

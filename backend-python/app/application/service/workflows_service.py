@@ -18,6 +18,7 @@ from app.application.exception.workflow_exceptions import (
     UnconfiguredWorkflowStepError,
     UnpublishableWorkflowComponentsError,
     WorkflowHasUnpublishedComponentsError,
+    WorkflowNameAlreadyExistsError,
     WorkflowNotFoundError,
     WorkflowNotReadyToPublishError,
     WorkflowStepNotFoundError,
@@ -216,6 +217,15 @@ class WorkflowsService:
 
     async def find_latest_by_name(self, name: str, exclude_id: uuid.UUID | None = None) -> Workflow | None:
         return await self.workflows_repository.find_latest_by_name(name, exclude_id)
+
+    async def _require_name_available(self, name: str, exclude_id: uuid.UUID | None = None) -> None:
+        """Enforces uq_workflows_name in the service, so a collision comes back as a clean
+        409 rather than an IntegrityError from the database.
+
+        `exclude_id` is what lets a builder draft re-sync keep the name it already has.
+        """
+        if await self.workflows_repository.find_latest_by_name(name, exclude_id) is not None:
+            raise WorkflowNameAlreadyExistsError(name)
 
     async def get_visible_workflow(self, workflow_id: uuid.UUID, current_user: User | None) -> Workflow:
         workflow = await self.get_workflow(workflow_id)
@@ -479,6 +489,7 @@ class WorkflowsService:
         source: WorkflowSource = WorkflowSource.MANUAL_UPLOAD,
         draft_id: uuid.UUID | None = None,
     ) -> Workflow:
+        await self._require_name_available(name)
         pipeline_content, steps = await self._parse_zip_into_steps(zip_bytes)
 
         workflow = Workflow(
@@ -512,6 +523,7 @@ class WorkflowsService:
         step's CWL. Nothing is auto-created behind the user's back and nothing is left to
         post-save fuzzy triage - an unconfigured step is an error, not a guess.
         """
+        await self._require_name_available(name)
         upload = self._load_upload_content(content, filename)
 
         try:
@@ -688,6 +700,8 @@ class WorkflowsService:
                 draft_id=draft_id,
             )
 
+        # excludes itself: re-syncing a draft keeps the workflow's own name
+        await self._require_name_available(name, exclude_id=existing.id)
         pipeline_content, steps = await self._parse_zip_into_steps(zip_bytes)
         existing.name = name
         existing.cwl_content = pipeline_content

@@ -1,4 +1,3 @@
-import { AlertTriangle, ExternalLink } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -9,14 +8,11 @@ import {
 } from '@/components/ui/dialog.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { ComponentLink } from '@/components/common/ComponentLink';
-import type { ComponentSummaryDto, ExistingWorkflowDto } from '@/api/workflows';
-import { ROUTES } from '@/lib/routes';
+import type { ComponentSummaryDto } from '@/api/workflows';
 
 interface ConfirmPublishDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** another workflow already using this name, if any - advisory only */
-  nameTaken: ExistingWorkflowDto | null;
   draftComponents: ComponentSummaryDto[];
   blockedByOthers: ComponentSummaryDto[];
   onConfirm: (publishComponents: boolean) => void;
@@ -27,14 +23,13 @@ interface ConfirmPublishDialogProps {
  * The last gate before a workflow goes public, and the only one a builder-synced workflow
  * passes through - it never sees the upload form's checks.
  *
- * Two very different things share it: draft components are a hard blocker (a public
- * workflow pointing at owner-only drafts is broken for everyone else), while a duplicate
- * name is merely worth knowing, since workflow names need not be unique.
+ * Draft components are a hard blocker: a public workflow pointing at owner-only drafts is
+ * broken for everyone else. (Duplicate names are handled at upload time instead - they
+ * cannot reach this point, since workflow names are unique.)
  */
 export function ConfirmPublishDialog({
   open,
   onOpenChange,
-  nameTaken,
   draftComponents,
   blockedByOthers,
   onConfirm,
@@ -77,26 +72,6 @@ export function ConfirmPublishDialog({
                 </li>
               ))}
             </ul>
-          </div>
-        )}
-
-        {nameTaken && (
-          <div className="flex flex-wrap items-center gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
-            <span className="flex flex-wrap items-center gap-1">
-              A workflow named
-              <a
-                href={ROUTES.workflowDetail(nameTaken.id)}
-                target="_blank"
-                rel="noreferrer"
-                title="Open it in a new tab"
-                className="inline-flex items-center gap-1 font-mono font-semibold hover:underline"
-              >
-                {nameTaken.name}
-                <ExternalLink className="h-3.5 w-3.5" />
-              </a>
-              already exists - names do not have to be unique.
-            </span>
           </div>
         )}
 

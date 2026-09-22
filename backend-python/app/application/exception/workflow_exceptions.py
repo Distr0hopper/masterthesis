@@ -26,6 +26,15 @@ class WorkflowStepNotMatchedError(Exception):
         super().__init__(f"Workflow step {step_id} has no matched component to confirm")
 
 
+class WorkflowNameAlreadyExistsError(Exception):
+    """Workflow names are globally unique (uq_workflows_name) - unlike Component there is
+    no version lineage to tell two same-named workflows apart."""
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+        super().__init__(f"A workflow named '{name}' already exists - choose a different name")
+
+
 class WorkflowHasUnpublishedComponentsError(Exception):
     """A workflow may only be public once every component it uses is public - otherwise
     browsing users would hit steps pointing at components they cannot see."""

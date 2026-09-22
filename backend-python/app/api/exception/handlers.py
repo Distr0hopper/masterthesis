@@ -30,6 +30,7 @@ from app.application.exception.workflow_exceptions import (
     UnconfiguredWorkflowStepError,
     UnpublishableWorkflowComponentsError,
     WorkflowHasUnpublishedComponentsError,
+    WorkflowNameAlreadyExistsError,
     WorkflowNotFoundError,
     WorkflowNotReadyToPublishError,
     WorkflowStepNotFoundError,
@@ -138,6 +139,12 @@ async def _missing_command_payload_handler(request: Request, exc: MissingCommand
     return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
+async def _workflow_name_already_exists_handler(
+    request: Request, exc: WorkflowNameAlreadyExistsError
+) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=ErrorResponse(detail=str(exc)).model_dump())
+
+
 async def _workflow_has_unpublished_components_handler(
     request: Request, exc: WorkflowHasUnpublishedComponentsError
 ) -> JSONResponse:
@@ -194,6 +201,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(WorkflowDraftForbiddenError, _workflow_draft_forbidden_handler)
     app.add_exception_handler(ExportValidationError, _export_validation_handler)
     app.add_exception_handler(MissingCommandPayloadError, _missing_command_payload_handler)
+    app.add_exception_handler(WorkflowNameAlreadyExistsError, _workflow_name_already_exists_handler)
     app.add_exception_handler(
         WorkflowHasUnpublishedComponentsError, _workflow_has_unpublished_components_handler
     )

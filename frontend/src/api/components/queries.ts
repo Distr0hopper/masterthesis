@@ -7,6 +7,7 @@ import type {
   AddVersionDto,
   ComponentListQueryParams,
   CreateComponentDto,
+  FormatLabelDto,
   PackageComponentDto,
 } from './types';
 import { useCommandMutation } from '@/api/useCommandMutation';
@@ -160,6 +161,13 @@ export const useUpdateComponentDescription = () =>
 export const useUpdateComponentDomains = () =>
   useCommandMutation(componentKeys.all, ({ link, domains }: { link: HateoasLink; domains: string[] }) =>
     componentsService.executeCommand(link, { command: ComponentCommand.UPDATE_DOMAIN, domains }),
+  );
+
+export const useUpdateComponentFormatLabels = () =>
+  useCommandMutation(
+    componentKeys.all,
+    ({ link, formatLabels }: { link: HateoasLink; formatLabels: FormatLabelDto[] }) =>
+      componentsService.executeCommand(link, { command: ComponentCommand.UPDATE_FORMAT_LABELS, formatLabels }),
   );
 
 export const useToggleFavorite = () =>

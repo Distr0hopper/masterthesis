@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from enum import StrEnum
 
+from app.domain.models.parameter import ParameterDirection
+
 
 class ComponentCommandType(StrEnum):
     ADD_FAVORITE = "ADD_FAVORITE"
@@ -10,6 +12,7 @@ class ComponentCommandType(StrEnum):
     UNPUBLISH = "UNPUBLISH"
     UPDATE_DESCRIPTION = "UPDATE_DESCRIPTION"
     UPDATE_DOMAIN = "UPDATE_DOMAIN"
+    UPDATE_FORMAT_LABELS = "UPDATE_FORMAT_LABELS"
 
     def __str__(self) -> str:
         return self.value
@@ -25,12 +28,26 @@ class ComponentCommandType(StrEnum):
             raise ValueError(f"Unknown command '{value}'. Allowed: {allowed}") from e
 
 
+@dataclass(frozen=True)
+class ManualFormatLabel:
+    """A hand-written format label for a File port whose format no ontology covers (e.g.
+    "RDS"). Addressed by name + direction, since a port has no id before it is persisted.
+    Display only - it never makes a connection count as verified."""
+
+    name: str
+    direction: ParameterDirection
+    #: None (or blank) clears the label
+    label: str | None
+
+
 @dataclass
 class ComponentCommand:
     type: ComponentCommandType
     note: str | None = None
     description: str | None = None
     domains: list[str] | None = None
+    #: payload for UPDATE_FORMAT_LABELS
+    format_labels: list[ManualFormatLabel] | None = None
 
 
 class WorkflowCommandType(StrEnum):

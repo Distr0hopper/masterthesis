@@ -1,5 +1,5 @@
-import { ExternalLink } from 'lucide-react';
-import type { ParameterDisplayModel } from '@/api/components';
+import { ExternalLink, Info, PenLine } from 'lucide-react';
+import { isManualFormatLabel, type ParameterDisplayModel } from '@/api/components';
 import { Input } from '@/components/ui/input.tsx';
 import {
   configParameters,
@@ -8,7 +8,7 @@ import {
   isBooleanParameter,
   isNumericParameter,
 } from './lib/typeChecking';
-import { formatPortType } from './lib/ports';
+import { formatNoteFor, formatPortType } from './lib/ports';
 import { ROUTES } from '@/lib/routes';
 import type { ComponentFlowNode } from './types';
 import { DomainBadges } from '@/components/common/DomainBadges';
@@ -31,6 +31,7 @@ function PortSummary({ title, ports }: { title: string; ports: ParameterDisplayM
               {port.name}
             </div>
             <div className="text-[11px] text-slate-400">{formatPortType(port)}</div>
+            <FormatNote port={port} />
             {port.description && (
               <p className="mt-1 text-[11px] leading-snug text-slate-500">{port.description}</p>
             )}
@@ -38,6 +39,27 @@ function PortSummary({ title, ports }: { title: string; ports: ParameterDisplayM
         ))}
       </div>
     </div>
+  );
+}
+
+function FormatNote({ port }: { port: ParameterDisplayModel }) {
+  const note = formatNoteFor(port);
+  if (!note) return null;
+
+  const manual = isManualFormatLabel(port);
+  const Icon = manual ? PenLine : Info;
+  return (
+    <p
+      className={`mt-1.5 flex items-start gap-1.5 rounded px-1.5 py-1 text-[11px] leading-snug ${
+        manual ? 'bg-amber-50 text-amber-800' : 'bg-slate-50 text-slate-500'
+      }`}
+    >
+      <Icon className="mt-px h-3 w-3 shrink-0" />
+      <span>
+        {manual && <span className="font-semibold">Manual format label. </span>}
+        {note}
+      </span>
+    </p>
   );
 }
 

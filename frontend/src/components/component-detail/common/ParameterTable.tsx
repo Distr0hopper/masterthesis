@@ -7,7 +7,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table.tsx';
-import type { ParameterDisplayModel } from '@/api/components';
+import { isManualFormatLabel, type ParameterDisplayModel } from '@/api/components';
 import { ParameterDirection } from '@/api/components/types';
 
 const DIRECTION_BADGE_CLASSNAME: Record<ParameterDirection, string> = {
@@ -44,27 +44,40 @@ export function ParameterTable({ parameters }: ParameterTableProps) {
             </TableCell>
             <TableCell className="text-slate-500">{parameter.defaultValue ?? '—'}</TableCell>
             <TableCell className="text-slate-500">
-              {parameter.format ? (
-                parameter.format.startsWith('http') ? (
-                  <a
-                    href={parameter.format}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-jmu-blue-800 hover:underline"
-                  >
-                    {parameter.formatLabel ?? parameter.format}
-                  </a>
-                ) : (
-                  (parameter.formatLabel ?? parameter.format)
-                )
-              ) : (
-                '—'
-              )}
+              <FormatCell parameter={parameter} />
             </TableCell>
             <TableCell className="text-slate-500">{parameter.description ?? '—'}</TableCell>
           </TableRow>
         ))}
       </TableBody>
     </Table>
+  );
+}
+
+/**
+ * The resolved label when there is one, else the raw format. A label can exist without a
+ * format - one written by hand (e.g. "RDS") for a port no ontology covers - and is marked
+ * as such, so it isn't mistaken for a verified ontology format.
+ */
+function FormatCell({ parameter }: { parameter: ParameterDisplayModel }) {
+  const text = parameter.formatLabel ?? parameter.format;
+  if (!text) return <>—</>;
+
+  const isManual = isManualFormatLabel(parameter);
+  return (
+    <>
+      {parameter.format?.startsWith('http') ? (
+        <a href={parameter.format} target="_blank" rel="noreferrer" className="text-jmu-blue-800 hover:underline">
+          {text}
+        </a>
+      ) : (
+        text
+      )}
+      {isManual && (
+        <span className="ml-1 text-xs text-slate-400" title="Entered by hand - not from an ontology, not verified">
+          (manual)
+        </span>
+      )}
+    </>
   );
 }

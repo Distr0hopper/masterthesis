@@ -1,4 +1,4 @@
-import type { ParameterDisplayModel } from '@/api/components';
+import { isManualFormatLabel, type ParameterDisplayModel } from '@/api/components';
 
 /**
  * TODO: Add consistent format.
@@ -19,4 +19,21 @@ export function formatLabelFor(parameter: ParameterDisplayModel): string | null 
 export function formatPortType(parameter: ParameterDisplayModel): string {
   const format = formatLabelFor(parameter);
   return format ? `${parameter.cwlType} · ${format}` : parameter.cwlType;
+}
+
+/**
+ * What the inspector says about a File port's format when it can't be trusted - the same
+ * cases typeChecking.checkPorts reports as unverified. Null for an ontology format.
+ */
+export function formatNoteFor(parameter: ParameterDisplayModel): string | null {
+  if (isManualFormatLabel(parameter)) {
+    return `"${parameter.formatLabel}" was entered by hand by the component's author. It is not from an ontology, so connections to this port cannot be verified.`;
+  }
+  if (!parameter.format) {
+    return 'No format declared - connections to this port cannot be verified.';
+  }
+  if (!parameter.format.includes('://')) {
+    return `"${parameter.format}" is not an ontology format, so connections to this port cannot be verified.`;
+  }
+  return null;
 }

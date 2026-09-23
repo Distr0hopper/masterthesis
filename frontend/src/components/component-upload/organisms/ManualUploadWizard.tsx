@@ -10,8 +10,12 @@ import { UploadStepper } from '@/components/common/UploadStepper';
 import { ComponentLink } from '@/components/common/ComponentLink';
 import { DomainBadges } from '@/components/common/DomainBadges';
 import { ComponentTabs } from '@/components/component-detail/organisms/ComponentTabs';
+import { FormatLabelFields } from '@/components/common/FormatLabelFields';
 import {
   componentTransformer,
+  toFormatLabelDtos,
+  withFormatLabels,
+  type FormatLabelDraft,
   useComponentNameAvailability,
   useParseComponent,
   useUploadComponent,
@@ -47,6 +51,7 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
   const [domains, setDomains] = useState<string[]>([]);
   const [description, setDescription] = useState('');
   const [errors, setErrors] = useState<UploadDetailsErrors>({});
+  const [formatLabels, setFormatLabels] = useState<FormatLabelDraft>({});
   const nameTouched = useRef(false);
 
   const debouncedName = useDebouncedValue(name);
@@ -67,6 +72,7 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
     parseMutation.reset();
     resetCreate();
     setErrors({});
+    setFormatLabels({});
     setStep(1);
     setFurthest(1);
     if (selected && !nameTouched.current) setName(stripUploadExtension(selected.name));
@@ -91,7 +97,15 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
   const handleCreate = () => {
     if (!file || taken) return;
     upload(
-      { file, dto: { name, domains, description: description || null } },
+      {
+        file,
+        dto: {
+          name,
+          domains,
+          description: description || null,
+          formatLabels: parsed ? toFormatLabelDtos(parsed.parameters, formatLabels) : [],
+        },
+      },
       {
         onSuccess: (created) => {
           toast.success(`${created.name} created`);
@@ -127,8 +141,12 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
     </div>
   ) : undefined;
 
+  // typed labels go straight into the preview, so the parameter tab shows what gets saved
   const previewModel = parsed
-    ? componentTransformer.toPreviewDisplayModel(parsed, { name, domains, description })
+    ? componentTransformer.toPreviewDisplayModel(
+        { ...parsed, parameters: withFormatLabels(parsed.parameters, formatLabels) },
+        { name, domains, description },
+      )
     : null;
 
   return (
@@ -175,6 +193,12 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
                 <DomainBadges domains={domains} />
               </div>
               {previewModel.description && <p className="text-sm text-slate-500">{previewModel.description}</p>}
+              <FormatLabelFields
+                parameters={parsed!.parameters}
+                value={formatLabels}
+                onChange={setFormatLabels}
+                idPrefix="upload"
+              />
             </CardContent>
           </Card>
           <ComponentTabs model={previewModel} isPreview />

@@ -95,6 +95,7 @@ export const ComponentCommand = {
   UNPUBLISH: 'UNPUBLISH',
   UPDATE_DESCRIPTION: 'UPDATE_DESCRIPTION',
   UPDATE_DOMAIN: 'UPDATE_DOMAIN',
+  UPDATE_FORMAT_LABELS: 'UPDATE_FORMAT_LABELS',
 } as const;
 export type ComponentCommand = (typeof ComponentCommand)[keyof typeof ComponentCommand];
 
@@ -109,7 +110,19 @@ export type ComponentCommandExecuteRequest =
       note?: string;
     }
   | { command: typeof ComponentCommand.UPDATE_DESCRIPTION; note?: string; description: string | null }
-  | { command: typeof ComponentCommand.UPDATE_DOMAIN; note?: string; domains: ComponentDomain[] };
+  | { command: typeof ComponentCommand.UPDATE_DOMAIN; note?: string; domains: ComponentDomain[] }
+  | { command: typeof ComponentCommand.UPDATE_FORMAT_LABELS; note?: string; formatLabels: FormatLabelDto[] };
+
+/**
+ * A hand-written label for a File port whose format no ontology covers (e.g. "RDS"), so the
+ * builder can show it on the port. Display only - it never verifies a connection.
+ */
+export interface FormatLabelDto {
+  name: string;
+  direction: ParameterDirection;
+  /** null clears the label */
+  label: string | null;
+}
 
 export interface ComponentListItemDto extends WithHateoasLinks {
   id: string;
@@ -164,6 +177,7 @@ export interface CreateComponentDto {
   repoUrl?: string;
   repoCommitSha?: string;
   description?: string | null;
+  formatLabels?: FormatLabelDto[];
 }
 
 export interface PackageComponentDto {

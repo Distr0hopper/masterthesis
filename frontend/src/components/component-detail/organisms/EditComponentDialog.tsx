@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
@@ -7,18 +8,23 @@ import { Button } from '@/components/ui/button.tsx';
 import { Label } from '@/components/ui/label.tsx';
 import {
   componentTransformer,
+  initialFormatLabelDraft,
+  toFormatLabelDtos,
   updateComponentFormSchema,
   useUpdateComponentDescription,
   useUpdateComponentDomains,
-  type ComponentDisplayModel,
+  useUpdateComponentFormatLabels,
+  type ComponentDetailDisplayModel,
+  type FormatLabelDraft,
   type UpdateComponentFormData,
 } from '@/api/components';
-import { getLink } from '@/api/permissions';
+import { canUpdateFormatLabels, getLink } from '@/api/permissions';
 import { getErrorMessage } from '@/lib/errors';
 import { DomainMultiSelect } from '@/components/common/DomainMultiSelect';
+import { FormatLabelFields } from '@/components/common/FormatLabelFields';
 
 interface EditComponentDialogProps {
-  component: ComponentDisplayModel;
+  component: ComponentDetailDisplayModel;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -26,6 +32,17 @@ interface EditComponentDialogProps {
 export function EditComponentDialog({ component, open, onOpenChange }: EditComponentDialogProps) {
   const { mutateAsync: updateDescription } = useUpdateComponentDescription();
   const { mutateAsync: updateDomains } = useUpdateComponentDomains();
+  const { mutateAsync: updateFormatLabels } = useUpdateComponentFormatLabels();
+  const [formatLabels, setFormatLabels] = useState<FormatLabelDraft>({});
+
+  // fresh from the component on every open - a cancelled edit must not linger
+  useEffect(() => {
+    if (open) setFormatLabels(initialFormatLabelDraft(component.parameters));
+  }, [open, component.parameters]);
+
+  const formatLabelsChanged =
+    JSON.stringify(toFormatLabelDtos(component.parameters, formatLabels)) !==
+    JSON.stringify(toFormatLabelDtos(component.parameters, initialFormatLabelDraft(component.parameters)));
   const {
     control,
     register,
@@ -38,7 +55,7 @@ export function EditComponentDialog({ component, open, onOpenChange }: EditCompo
   });
 
   const onSubmit = async (data: UpdateComponentFormData) => {
-    if (!dirtyFields.description && !dirtyFields.domains) {
+    if (!dirtyFields.description && !dirtyFields.domains && !formatLabelsChanged) {
       onOpenChange(false);
       return;
     }
@@ -53,6 +70,12 @@ export function EditComponentDialog({ component, open, onOpenChange }: EditCompo
       if (dirtyFields.domains && data.domains?.length) {
         await updateDomains({ link: getLink(component._links, 'updateDomain')!, domains: data.domains });
       }
+      if (formatLabelsChanged) {
+        await updateFormatLabels({
+          link: getLink(component._links, 'updateFormatLabels')!,
+          formatLabels: toFormatLabelDtos(component.parameters, formatLabels),
+        });
+      }
       toast.success(`${component.name} updated`);
       onOpenChange(false);
     } catch (error) {
@@ -62,7 +85,7 @@ export function EditComponentDialog({ component, open, onOpenChange }: EditCompo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit {component.name}</DialogTitle>
         </DialogHeader>
@@ -85,6 +108,15 @@ export function EditComponentDialog({ component, open, onOpenChange }: EditCompo
             <Textarea {...register('description')} id="edit-description" rows={4} />
             {errors.description && <p className="text-sm text-error-foreground">{errors.description.message}</p>}
           </div>
+
+          {canUpdateFormatLabels(component._links) && (
+            <FormatLabelFields
+              parameters={component.parameters}
+              value={formatLabels}
+              onChange={setFormatLabels}
+              idPrefix="edit"
+            />
+          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

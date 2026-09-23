@@ -11,9 +11,11 @@ import { ComponentLink } from '@/components/common/ComponentLink';
 import { DefinitionDisclosure } from '@/components/common/DefinitionDisclosure';
 import { ComponentTabs } from '@/components/component-detail/organisms/ComponentTabs';
 import { DomainMultiSelect } from '@/components/common/DomainMultiSelect';
+import { FormatLabelFields } from '@/components/common/FormatLabelFields';
 import { ComponentOrigin, type WorkflowStepPreviewDto } from '@/api/workflows';
 import {
   componentTransformer,
+  withFormatLabels,
   useComponent,
   useComponentNameAvailability,
   type ExistingComponentDto,
@@ -55,11 +57,14 @@ export function ComponentConfigCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reused?.id, reused?.name, reused?.version]);
 
-  const model = componentTransformer.toPreviewDisplayModel(preview, {
-    name: config.name,
-    domains: config.domains,
-    description: config.description,
-  });
+  const model = componentTransformer.toPreviewDisplayModel(
+    { ...preview, parameters: withFormatLabels(preview.parameters, config.formatLabels) },
+    {
+      name: config.name,
+      domains: config.domains,
+      description: config.description,
+    },
+  );
   const OriginIcon = preview.origin === ComponentOrigin.INLINE ? FileCode : Package;
 
   return (
@@ -145,6 +150,13 @@ export function ComponentConfigCard({
                 onChange={(e) => onChange({ description: e.target.value })}
               />
             </div>
+
+            <FormatLabelFields
+              parameters={preview.parameters}
+              value={config.formatLabels}
+              onChange={(formatLabels) => onChange({ formatLabels })}
+              idPrefix={preview.stepId}
+            />
           </>
         ) : (
           <div className="flex flex-col gap-2">

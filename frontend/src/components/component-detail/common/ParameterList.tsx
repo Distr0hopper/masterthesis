@@ -14,7 +14,7 @@ export function ParameterList({ title, parameters }: ParameterListProps) {
           <div key={parameter.id} className="text-sm">
             <span className="font-mono font-semibold text-slate-900">{parameter.name}</span>{' '}
             <span className="text-slate-500">{parameter.cwlType}</span>
-            {parameter.formatLabel && (
+            {(parameter.formatLabel ?? parameter.format) && (
               <span className="text-slate-400"> ({parameter.formatLabel ?? parameter.format})</span>
             )}
             {parameter.defaultValue !== null && (

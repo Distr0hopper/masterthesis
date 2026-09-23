@@ -6,7 +6,7 @@ from fastapi import UploadFile
 from pydantic import Field, Json, field_validator, model_validator
 
 from app.api.dto.base import CamelModel
-from app.api.dto.component import ComponentCreatorDto, ComponentPreviewDto
+from app.api.dto.component import ComponentCreatorDto, ComponentPreviewDto, FormatLabelDto
 from app.api.link.model import LinkModel
 from app.domain.models.component import ComponentStatus
 from app.domain.models.component_domain import VALID_DOMAINS
@@ -96,6 +96,8 @@ class ComponentConfigDto(CamelModel):
     name: str | None = None
     domains: list[str] | None = Field(default=None, json_schema_extra={"items": {"enum": VALID_DOMAINS}})
     description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
+    #: create branch only - hand-written labels for File ports without an ontology format
+    format_labels: list[FormatLabelDto] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_exactly_one_branch(self) -> "ComponentConfigDto":

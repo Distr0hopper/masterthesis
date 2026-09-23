@@ -18,6 +18,7 @@ class ComponentLinkBuilder(BaseLinkBuilder[Component, ComponentPermissionValidat
             "delete": Link(href=Endpoints.component_by_id(entity.id), method=HttpMethod.DELETE),
             "updateDescription": Link(href=Endpoints.component_commands_by_id(entity.id), method=HttpMethod.POST),
             "updateDomain": Link(href=Endpoints.component_commands_by_id(entity.id), method=HttpMethod.POST),
+            "updateFormatLabels": Link(href=Endpoints.component_commands_by_id(entity.id), method=HttpMethod.POST),
             "favorite": Link(href=Endpoints.component_commands_by_id(entity.id), method=HttpMethod.POST),
             "unfavorite": Link(href=Endpoints.component_commands_by_id(entity.id), method=HttpMethod.POST),
             "repackage": Link(href=Endpoints.component_commands_by_id(entity.id), method=HttpMethod.POST),
@@ -35,6 +36,8 @@ class ComponentLinkBuilder(BaseLinkBuilder[Component, ComponentPermissionValidat
                 return self._validator.can_execute(entity, ComponentCommandType.UPDATE_DESCRIPTION)
             case "updateDomain":
                 return self._validator.can_execute(entity, ComponentCommandType.UPDATE_DOMAIN)
+            case "updateFormatLabels":
+                return self._validator.can_execute(entity, ComponentCommandType.UPDATE_FORMAT_LABELS)
             case "favorite":
                 return self._validator.can_execute(entity, ComponentCommandType.ADD_FAVORITE)
             case "unfavorite":

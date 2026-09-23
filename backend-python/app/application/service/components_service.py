@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Annotated
 
 from fastapi import Depends
 
-from app.application.commands.commands import ComponentCommand, ComponentCommandType
+from app.application.commands.commands import ComponentCommand, ComponentCommandType, ManualFormatLabel
 from app.application.exception.component_exceptions import (
     AlreadyPackagedError,
     ComponentNameAlreadyExistsError,
@@ -187,7 +187,12 @@ class ComponentsService:
             parameters=parameters,
         )
 
-    async def create_manual(self, component: Component, context: str = "Uploaded") -> Component:
+    async def create_manual(
+        self,
+        component: Component,
+        context: str = "Uploaded",
+        format_labels: list[ManualFormatLabel] | None = None,
+    ) -> Component:
         existing_versions = await self.components_repository.find_versions_by_name(component.name)
         if existing_versions:
             raise ComponentNameAlreadyExistsError(component.name)
@@ -195,6 +200,7 @@ class ComponentsService:
         component.parameters = self._parse_parameters(component.cwl_content, context, component.source)
         component.ontology_url = self.ontology_url_for(component.cwl_content)
         await self.resolve_format_labels(component.ontology_url, component.parameters)
+        self._apply_manual_format_labels(component, format_labels or [])
         component.cwl_type = extract_cwl_type(component.cwl_content)
         component.dockerfile_content = extract_dockerfile_content(component.cwl_content)
         component.docker_pull_reference = extract_docker_pull(component.cwl_content)
@@ -212,6 +218,10 @@ class ComponentsService:
         component.parameters = self._parse_parameters(component.cwl_content, f"v{next_version}", component.source)
         component.ontology_url = self.ontology_url_for(component.cwl_content)
         await self.resolve_format_labels(component.ontology_url, component.parameters)
+        if versions:
+            # hand labels live outside the CWL, so a new version (e.g. a MoveApps repo
+            # re-packaged from GitHub) would otherwise silently lose them
+            self._apply_manual_format_labels(component, self._manual_format_labels_of(versions[-1]))
         component.cwl_type = extract_cwl_type(component.cwl_content)
         component.dockerfile_content = extract_dockerfile_content(component.cwl_content)
         component.docker_pull_reference = extract_docker_pull(component.cwl_content)
@@ -327,6 +337,8 @@ class ComponentsService:
                 return await self.update_description(component, command.description)
             case ComponentCommandType.UPDATE_DOMAIN:
                 return await self.update_domains(component, command.domains)
+            case ComponentCommandType.UPDATE_FORMAT_LABELS:
+                return await self.update_format_labels(component, command.format_labels)
 
     async def _run_packaging(self, repo_url: str) -> tuple[str, str, str | None, str | None, str | None]:
         repo_name = repo_url.rstrip("/").split("/")[-1]
@@ -349,6 +361,40 @@ class ComponentsService:
             raise MissingCommandPayloadError(ComponentCommandType.UPDATE_DOMAIN, "domains")
         component.domains = [ComponentDomain(domain=d) for d in domains]
         return await self._save_and_reload(component)
+
+    async def update_format_labels(
+        self, component: Component, format_labels: list[ManualFormatLabel] | None
+    ) -> Component:
+        if format_labels is None:
+            raise MissingCommandPayloadError(ComponentCommandType.UPDATE_FORMAT_LABELS, "formatLabels")
+        self._apply_manual_format_labels(component, format_labels)
+        return await self._save_and_reload(component)
+
+    @staticmethod
+    def accepts_manual_format_label(component: Component, parameter: Parameter) -> bool:
+        """Whether a port's label is the user's to write: a File port whose format no
+        ontology resolves - none at all, or a bare token like `rds` (only a namespaced
+        format expands to a URI). An ontology-resolved label is never overwritten by hand."""
+        is_file = parameter.cwl_type.strip().lower().startswith("file")
+        has_ontology_format = (
+            parameter.format is not None and "://" in parameter.format and component.ontology_url is not None
+        )
+        return is_file and not has_ontology_format
+
+    def _apply_manual_format_labels(self, component: Component, format_labels: list[ManualFormatLabel]) -> None:
+        by_port = {(label.name, label.direction): label for label in format_labels}
+        for parameter in component.parameters:
+            label = by_port.get((parameter.name, parameter.direction))
+            if label is None or not self.accepts_manual_format_label(component, parameter):
+                continue
+            parameter.format_label = (label.label or "").strip() or None
+
+    def _manual_format_labels_of(self, component: Component) -> list[ManualFormatLabel]:
+        return [
+            ManualFormatLabel(name=p.name, direction=p.direction, label=p.format_label)
+            for p in component.parameters
+            if p.format_label and self.accepts_manual_format_label(component, p)
+        ]
 
     async def remove(self, component: Component) -> None:
         await self.components_repository.delete(component)

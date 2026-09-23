@@ -6,7 +6,13 @@ from typing import TYPE_CHECKING, Annotated
 
 from fastapi import Depends
 
-from app.application.commands.commands import WorkflowCommand, WorkflowCommandType, WorkflowStepCommand, WorkflowStepCommandType
+from app.application.commands.commands import (
+    ManualFormatLabel,
+    WorkflowCommand,
+    WorkflowCommandType,
+    WorkflowStepCommand,
+    WorkflowStepCommandType,
+)
 from app.application.exception.component_exceptions import ComponentNotFoundError
 from app.application.exception.workflow_exceptions import (
     DuplicateExtractedComponentNameError,
@@ -136,6 +142,7 @@ class ComponentConfig:
     name: str | None = None
     domains: list[str] | None = None
     description: str | None = None
+    format_labels: list[ManualFormatLabel] = field(default_factory=list)
 
     @property
     def is_reuse(self) -> bool:
@@ -654,7 +661,7 @@ class WorkflowsService:
         pipeline_content = externalize_inline_steps(upload.cwl_content, run_references)
 
         steps: list[WorkflowStep] = []
-        pending_components: list[tuple[WorkflowStep, Component]] = []
+        pending_components: list[tuple[WorkflowStep, Component, list[ManualFormatLabel]]] = []
         for order, (step_id, definition) in enumerate(step_definitions):
             run_value = definition["run"]
             is_inline = not isinstance(run_value, str)
@@ -721,13 +728,13 @@ class WorkflowsService:
                 match_status=StepMatchStatus.CONFIRMED,
                 match_score=None,
             )
-            pending_components.append((step, component))
+            pending_components.append((step, component, config.format_labels))
             steps.append(step)
 
         # only create Components once every validation above has passed - create_manual
         # commits immediately per call, so this loop is the point of no return
-        for step, component in pending_components:
-            created = await self.components_service.create_manual(component)
+        for step, component, format_labels in pending_components:
+            created = await self.components_service.create_manual(component, format_labels=format_labels)
             step.component_id = created.id
             # also link the ORM relationship object itself (not just the FK id) - the
             # later commit()+refresh() in _save_and_reload expires every object in the

@@ -8,11 +8,12 @@ from app.api.dto.component import (
     ComponentDetailDto,
     ComponentListItemDto,
     CreateComponentRequestDto,
+    FormatLabelDto,
     ParameterDto,
     PreviewParameterDto,
 )
 from app.api.link.component import ComponentLinkBuilder
-from app.application.commands.commands import ComponentCommand, ComponentCommandType
+from app.application.commands.commands import ComponentCommand, ComponentCommandType, ManualFormatLabel
 from app.domain.models.component import Component, ComponentSource
 from app.domain.models.component_domain import ComponentDomain
 from app.domain.models.parameter import Parameter
@@ -31,10 +32,21 @@ class ComponentTransformer:
             ComponentCommandTypesApiV1.UNPUBLISH: ComponentCommandType.UNPUBLISH,
             ComponentCommandTypesApiV1.UPDATE_DESCRIPTION: ComponentCommandType.UPDATE_DESCRIPTION,
             ComponentCommandTypesApiV1.UPDATE_DOMAIN: ComponentCommandType.UPDATE_DOMAIN,
+            ComponentCommandTypesApiV1.UPDATE_FORMAT_LABELS: ComponentCommandType.UPDATE_FORMAT_LABELS,
         }
         return ComponentCommand(
-            type=mapping[dto.command], note=dto.note, description=dto.description, domains=dto.domains
+            type=mapping[dto.command],
+            note=dto.note,
+            description=dto.description,
+            domains=dto.domains,
+            format_labels=(
+                ComponentTransformer.to_format_labels(dto.format_labels) if dto.format_labels is not None else None
+            ),
         )
+
+    @staticmethod
+    def to_format_labels(dtos: list[FormatLabelDto]) -> list[ManualFormatLabel]:
+        return [ManualFormatLabel(name=d.name, direction=d.direction, label=d.label) for d in dtos]
 
     @staticmethod
     def to_preview_parameter(parameter: Parameter, id_prefix: str, ontology_url: str | None) -> PreviewParameterDto:

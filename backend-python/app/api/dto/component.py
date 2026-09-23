@@ -4,7 +4,7 @@ from enum import StrEnum
 from urllib.parse import urlparse
 
 from fastapi import UploadFile
-from pydantic import Field, field_validator
+from pydantic import Field, Json, field_validator
 
 from app.api.dto.base import CamelModel
 from app.api.link.model import LinkModel
@@ -57,6 +57,18 @@ class EmptyDescriptionToNoneMixin:
     @classmethod
     def empty_description_to_none(cls, value: str | None) -> str | None:
         return None if value == "" else value
+
+
+MAX_FORMAT_LABEL_LENGTH = 64
+
+
+class FormatLabelDto(CamelModel):
+    """A hand-written label for a File port without an ontology format, e.g. "RDS"."""
+
+    name: str
+    direction: ParameterDirection
+    #: null or blank clears the label
+    label: str | None = Field(default=None, max_length=MAX_FORMAT_LABEL_LENGTH)
 
 
 class ParameterDto(CamelModel):
@@ -195,6 +207,9 @@ class CreateComponentRequestDto(
     repo_url: str | None = None
     repo_commit_sha: str | None = None
     description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
+    #: hand-written labels for File ports without an ontology format - one multipart form
+    #: field carrying a JSON-encoded array, like CreateWorkflowRequestDto.component_configs
+    format_labels: Json[list[FormatLabelDto]] = Field(default_factory=list)
 
     @field_validator("repo_url", mode="before")
     @classmethod
@@ -222,6 +237,7 @@ class ComponentCommandTypesApiV1(StrEnum):
     UNPUBLISH = "UNPUBLISH"
     UPDATE_DESCRIPTION = "UPDATE_DESCRIPTION"
     UPDATE_DOMAIN = "UPDATE_DOMAIN"
+    UPDATE_FORMAT_LABELS = "UPDATE_FORMAT_LABELS"
 
 
 class ComponentCommandExecuteRequestDto(EmptyDescriptionToNoneMixin, CamelModel):
@@ -236,6 +252,11 @@ class ComponentCommandExecuteRequestDto(EmptyDescriptionToNoneMixin, CamelModel)
         default=None,
         json_schema_extra={"items": {"enum": VALID_DOMAINS}},
         description="New domains; only used by the UPDATE_DOMAIN command",
+    )
+    format_labels: list[FormatLabelDto] | None = Field(
+        default=None,
+        description="Hand-written labels for File ports without an ontology format; only used by the "
+        "UPDATE_FORMAT_LABELS command",
     )
 
     @field_validator("domains")

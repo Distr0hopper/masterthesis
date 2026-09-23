@@ -1,5 +1,5 @@
 import type { PageParams, SplitPageResponse, WithHateoasLinks } from '@/api/types';
-import type { ComponentPreviewDto, ComponentStatus } from '@/api/components/types';
+import type { ComponentPreviewDto, ComponentStatus, FormatLabelDto } from '@/api/components/types';
 
 export const StepMatchStatus = {
   SUGGESTED: 'suggested',
@@ -123,6 +123,8 @@ export interface ComponentConfigDto {
   name?: string | null;
   domains?: string[] | null;
   description?: string | null;
+  /** create branch only - hand-written labels for File ports without an ontology format */
+  formatLabels?: FormatLabelDto[];
 }
 
 export interface CreateWorkflowDto {

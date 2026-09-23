@@ -20,6 +20,7 @@ import {
   canUnpublish as hasUnpublishLink,
   canUpdateDescription as hasUpdateDescriptionLink,
   canUpdateDomain as hasUpdateDomainLink,
+  canUpdateFormatLabels as hasUpdateFormatLabelsLink,
   getLink,
 } from '@/api/permissions';
 import { getErrorMessage } from '@/lib/errors';
@@ -41,7 +42,10 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   const canDelete = hasDeleteLink(model._links);
-  const canEdit = hasUpdateDescriptionLink(model._links) || hasUpdateDomainLink(model._links);
+  const canEdit =
+    hasUpdateDescriptionLink(model._links) ||
+    hasUpdateDomainLink(model._links) ||
+    hasUpdateFormatLabelsLink(model._links);
   const canPublish = hasPublishLink(model._links) && model.status === ComponentStatus.DRAFT;
   const canUnpublish = hasUnpublishLink(model._links) && model.status === ComponentStatus.PUBLISHED;
 

@@ -1,6 +1,6 @@
 import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react';
-import { ExternalLink, Trash2 } from 'lucide-react';
-import type { ParameterDisplayModel } from '@/api/components';
+import { ExternalLink, PenLine, Trash2 } from 'lucide-react';
+import { isManualFormatLabel, type ParameterDisplayModel } from '@/api/components';
 import { configParameters, dataInputs, dataOutputs } from './lib/typeChecking';
 import { formatPortType } from './lib/ports';
 import { ROUTES } from '@/lib/routes';
@@ -42,7 +42,20 @@ function PortRow({ parameter, side }: PortRowProps) {
       <div className="truncate font-mono text-xs font-semibold text-slate-900">
         {parameter.name}
       </div>
-      <div className="truncate text-[11px] text-slate-400">{formatPortType(parameter)}</div>
+      <div
+        className={`flex items-center gap-1 text-[11px] text-slate-400 ${isInput ? 'justify-start' : 'justify-end'}`}
+      >
+        <span className="truncate">{formatPortType(parameter)}</span>
+        {isManualFormatLabel(parameter) && (
+          <PenLine
+            size={10}
+            className="shrink-0 text-amber-500"
+            aria-label="Format label entered by hand"
+          >
+            <title>Format label entered by hand - not verified</title>
+          </PenLine>
+        )}
+      </div>
     </div>
   );
 }

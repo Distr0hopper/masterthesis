@@ -47,6 +47,9 @@ export const canUpdateDescription = (links: HateoasLinks | undefined | null): bo
 
 export const canUpdateDomain = (links: HateoasLinks | undefined | null): boolean => hasLink(links, 'updateDomain');
 
+export const canUpdateFormatLabels = (links: HateoasLinks | undefined | null): boolean =>
+  hasLink(links, 'updateFormatLabels');
+
 export const canConfirm = (links: HateoasLinks | undefined | null): boolean => hasLink(links, 'confirm');
 
 export const canRepackage = (links: HateoasLinks | undefined | null): boolean => hasLink(links, 'repackage');

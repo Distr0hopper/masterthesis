@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { ComponentConfigDto, WorkflowStepPreviewDto } from '@/api/workflows';
-import type { ExistingComponentDto } from '@/api/components';
+import { toFormatLabelDtos, type ExistingComponentDto, type FormatLabelDraft } from '@/api/components';
 
 export type ConfigMode = 'create' | 'reuse';
 
@@ -9,6 +9,8 @@ export interface ComponentConfigState {
   name: string;
   domains: string[];
   description: string;
+  /** 'create' mode - hand-written labels for File ports without an ontology format */
+  formatLabels: FormatLabelDraft;
   /** set in 'reuse' mode - the catalogue component this step binds to */
   reuseComponentId: string | null;
   reuseName: string | null;
@@ -28,6 +30,7 @@ function initialState(preview: WorkflowStepPreviewDto): ComponentConfigState {
       name: preview.suggestedName,
       domains: [],
       description: '',
+      formatLabels: {},
       reuseComponentId: componentId,
       reuseName: name,
       reuseVersion: version,
@@ -38,6 +41,7 @@ function initialState(preview: WorkflowStepPreviewDto): ComponentConfigState {
     name: preview.suggestedName,
     domains: [],
     description: '',
+    formatLabels: {},
     reuseComponentId: null,
     reuseName: null,
     reuseVersion: null,
@@ -127,6 +131,7 @@ export function useComponentConfigs(previews: WorkflowStepPreviewDto[]) {
           name: config.name.trim(),
           domains: config.domains,
           description: config.description.trim() || null,
+          formatLabels: toFormatLabelDtos(preview.parameters, config.formatLabels),
         };
       }),
     [previews, configs],

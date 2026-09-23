@@ -39,7 +39,11 @@ class ComponentPermissionValidator(PermissionValidator[Component]):
                 return self.can_update(component)
             case ComponentCommandType.PUBLISH | ComponentCommandType.UNPUBLISH:
                 return self.can_update(component)
-            case ComponentCommandType.UPDATE_DESCRIPTION | ComponentCommandType.UPDATE_DOMAIN:
+            case (
+                ComponentCommandType.UPDATE_DESCRIPTION
+                | ComponentCommandType.UPDATE_DOMAIN
+                | ComponentCommandType.UPDATE_FORMAT_LABELS
+            ):
                 return self.can_update(component)
             case _:
                 return False

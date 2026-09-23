@@ -76,8 +76,9 @@ export function UploadDetailsStep({
         <span>
           Parameter formats are resolved against the ontology referenced in the CWL&apos;s{' '}
           <code className="text-xs">$schemas</code>. Currently only the <strong>EDAM</strong> ontology (
-          <code className="text-xs">http://edamontology.org/</code>) is supported - formats from other ontologies are
-          kept but not labelled.
+          <code className="text-xs">http://edamontology.org/</code>) is supported. The workflow builder can only verify
+          that two components fit together when both declare an EDAM format - ports without a format, or with a format
+          from another ontology, are kept but not labelled and show up as unverified connections.
         </span>
       </div>
 

@@ -223,7 +223,9 @@ async def create(
 
     logger.info(f"Creating component '{dto.name}' for user {current_user.id}")
     component = ComponentTransformer.from_create_dto(dto, content.decode("utf-8"), current_user.id)
-    created = await components_service.create_manual(component)
+    created = await components_service.create_manual(
+        component, format_labels=ComponentTransformer.to_format_labels(dto.format_labels)
+    )
     logger.info(f"Created component {created.id} ('{created.name}' v{created.version})")
     return ComponentTransformer.to_detail(created, is_favorite=False, current_user=current_user)
 

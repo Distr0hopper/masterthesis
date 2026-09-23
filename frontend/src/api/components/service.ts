@@ -68,6 +68,7 @@ export const componentsService = {
     dto.domains.forEach((domain) => formData.append('domains', domain));
     if (dto.authorName) formData.append('authorName', dto.authorName);
     if (dto.description) formData.append('description', dto.description);
+    if (dto.formatLabels?.length) formData.append('formatLabels', JSON.stringify(dto.formatLabels));
     return apiClient.post(ENDPOINT, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
 

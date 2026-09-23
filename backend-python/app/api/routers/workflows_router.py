@@ -213,6 +213,7 @@ async def create(
             name=c.name,
             domains=c.domains,
             description=c.description,
+            format_labels=ComponentTransformer.to_format_labels(c.format_labels),
         )
         for c in dto.component_configs
     }

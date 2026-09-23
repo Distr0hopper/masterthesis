@@ -18,16 +18,26 @@ export interface TypedParameter {
 }
 
 /**
- * - `compatible`: the types fit, and so do the formats (or the input accepts any format)
+ * - `compatible`: the types fit, and the formats are identical or the format service said they fit
  * - `incompatible`: the types don't fit, or the format service said the formats don't
- * - `unverified`: the types fit but the formats couldn't be checked - allowed, but flagged
+ * - `unverified`: the types fit but the formats couldn't be checked - allowed, but flagged.
+ *   A port without a format is unknown, not "accepts anything": File -> File only *might* fit.
  */
 export type ConnectionStatus = 'compatible' | 'incompatible' | 'unverified';
 
-export type UnverifiedReason = 'missing-output-format' | 'different-ontology' | 'not-checked';
+export type UnverifiedReason =
+  | 'missing-formats'
+  | 'missing-input-format'
+  | 'missing-output-format'
+  | 'unknown-ontology'
+  | 'different-ontology'
+  | 'not-checked';
 
 export const UNVERIFIED_REASON_TEXT: Record<UnverifiedReason, string> = {
+  'missing-formats': 'Neither port declares a format, so they may or may not fit.',
+  'missing-input-format': 'The input declares no format, so it cannot be checked against the output’s format.',
   'missing-output-format': 'The output declares no format, so it cannot be checked against the input’s format.',
+  'unknown-ontology': 'A format is not from a known ontology ($schemas), so it cannot be checked.',
   'different-ontology': 'The components use different ontologies ($schemas), so their formats cannot be compared.',
   'not-checked': 'The format service could not check these formats.',
 };
@@ -178,11 +188,11 @@ export function formatPairFor(sourcePort: TypedParameter, targetPort: TypedParam
  * semantics, in order:
  *
  * 1. the cwlTypes must fit (File -> File, File[] -> File, ...) - otherwise incompatible
- * 2. an input without a format accepts any file - compatible
- * 3. an output without a format can't be checked - unverified
- * 4. formats from different ontologies can't be compared - unverified
- * 5. identical formats - compatible
- * 6. otherwise the format service decides (via `lookup`) - unverified until it has
+ * 2. a port without a format can't be checked - unverified.
+ * 3. a format outside any known ontology (no $schemas), or formats from two different
+ *    ontologies, can't be compared - unverified
+ * 4. identical formats - compatible
+ * 5. otherwise the format service decides (via `lookup`) - unverified until it has
  */
 export function checkPorts(
   sourcePort: TypedParameter | undefined,
@@ -192,11 +202,11 @@ export function checkPorts(
   if (!sourcePort || !targetPort || !structurallyCompatible(sourcePort, targetPort)) {
     return { status: 'incompatible' };
   }
-  if (!targetPort.format) return { status: 'compatible' };
+  if (!sourcePort.format && !targetPort.format) return { status: 'unverified', reason: 'missing-formats' };
+  if (!targetPort.format) return { status: 'unverified', reason: 'missing-input-format' };
   if (!sourcePort.format) return { status: 'unverified', reason: 'missing-output-format' };
-  if (!sourcePort.ontologyUrl || sourcePort.ontologyUrl !== targetPort.ontologyUrl) {
-    return { status: 'unverified', reason: 'different-ontology' };
-  }
+  if (!sourcePort.ontologyUrl || !targetPort.ontologyUrl) return { status: 'unverified', reason: 'unknown-ontology' };
+  if (sourcePort.ontologyUrl !== targetPort.ontologyUrl) return { status: 'unverified', reason: 'different-ontology' };
   if (sourcePort.format === targetPort.format) return { status: 'compatible' };
 
   const answer = lookup(formatPairFor(sourcePort, targetPort)!);

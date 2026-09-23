@@ -188,16 +188,17 @@ describe('matchComponent', () => {
   });
 
   it('gives the most recent matching frame the highest score', () => {
+    // untyped ports: the types fit, the formats are unknown - an unverified match
     const match = matchComponent([input('File')], stack);
-    expect(match.score).toBe(4);
+    expect(match.score).toBe(3);
     expect(match.frame?.componentName).toBe('remove-outliers');
-    expect(match.status).toBe('compatible');
+    expect(match.status).toBe('unverified');
   });
 
   it('falls back to an older frame when the newest does not match', () => {
     // only File[] is accepted, which the newest frame (File) cannot satisfy
     const match = matchComponent([input('File[]')], stack);
-    expect(match.score).toBe(2);
+    expect(match.score).toBe(1);
     expect(match.frame?.componentName).toBe('load-tracking-data');
   });
 
@@ -229,7 +230,7 @@ describe('matchComponent', () => {
 describe('scoreComponent', () => {
   it('reports the score of the matching frame', () => {
     const stack: OutputFrame[] = [{ nodeId: 'a', componentName: 'load-data', outputs: [output('File')] }];
-    expect(scoreComponent([input('File')], stack)).toBe(2);
+    expect(scoreComponent([input('File')], stack)).toBe(1);
     expect(scoreComponent([input('string')], stack)).toBe(NO_DATA_INPUTS_SCORE);
     expect(scoreComponent([input('File')], [])).toBe(0);
   });
@@ -303,9 +304,16 @@ describe('checkPorts', () => {
     expect(check).toEqual({ status: 'incompatible' });
   });
 
-  it('is compatible when the input declares no format - it accepts any file', () => {
-    expect(checkPorts(formatted(output('File'), GEOJSON), input('File'))).toEqual({ status: 'compatible' });
-    expect(checkPorts(output('File'), input('File'))).toEqual({ status: 'compatible' });
+  it('is unverified - not compatible - when the input declares no format', () => {
+    // e.g. an .rds input: no ontology covers it, so a GeoJSON output only *might* fit
+    expect(checkPorts(formatted(output('File'), GEOJSON), input('File'))).toEqual({
+      status: 'unverified',
+      reason: 'missing-input-format',
+    });
+  });
+
+  it('is unverified when neither port declares a format', () => {
+    expect(checkPorts(output('File'), input('File'))).toEqual({ status: 'unverified', reason: 'missing-formats' });
   });
 
   it('is unverified when only the input declares a format', () => {
@@ -315,13 +323,18 @@ describe('checkPorts', () => {
     });
   });
 
-  it('is unverified across ontologies, or when either side has none', () => {
+  it('is unverified across ontologies', () => {
     const other = formatted(input('File'), VECTOR, 'http://other.org/o.owl');
     expect(checkPorts(formatted(output('File'), GEOJSON), other, fakeService).reason).toBe('different-ontology');
-    const noOntology = formatted(output('File'), GEOJSON, null);
-    expect(checkPorts(noOntology, formatted(input('File'), VECTOR, null), fakeService).reason).toBe(
-      'different-ontology',
-    );
+  });
+
+  it('is unverified when a format belongs to no known ontology', () => {
+    // e.g. `format: rds` in a CWL without $schemas
+    const rds = formatted(input('File'), 'rds', null);
+    expect(checkPorts(formatted(output('File'), GEOJSON), rds, fakeService)).toEqual({
+      status: 'unverified',
+      reason: 'unknown-ontology',
+    });
   });
 
   it('is compatible for identical formats without asking the service', () => {
@@ -356,7 +369,7 @@ describe('collectFormatPairs', () => {
     const inputs = [
       formatted(input('File'), VECTOR),
       formatted(input('File'), GEOJSON), // identical format - decided locally
-      input('File'), // no format - accepts anything
+      input('File'), // no format - unverifiable
       formatted(input('File'), VECTOR, 'http://other.org/o.owl'), // another ontology
     ];
     expect(collectFormatPairs(outputs, inputs)).toEqual([

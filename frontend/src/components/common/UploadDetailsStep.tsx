@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Info } from 'lucide-react';
 import { Input } from '@/components/ui/input.tsx';
 import { Textarea } from '@/components/ui/textarea.tsx';
 import { FileDropzone } from '@/components/common/FileDropzone';
@@ -70,6 +70,16 @@ export function UploadDetailsStep({
         helperText={fileHelperText}
         error={errors.file}
       />
+
+      <div className="flex items-start gap-2 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600">
+        <Info className="mt-0.5 h-4 w-4 shrink-0" />
+        <span>
+          Parameter formats are resolved against the ontology referenced in the CWL&apos;s{' '}
+          <code className="text-xs">$schemas</code>. Currently only the <strong>EDAM</strong> ontology (
+          <code className="text-xs">http://edamontology.org/</code>) is supported - formats from other ontologies are
+          kept but not labelled.
+        </span>
+      </div>
 
       <FormField htmlFor="upload-name" label={nameLabel} error={errors.name}>
         <Input

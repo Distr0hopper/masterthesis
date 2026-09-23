@@ -195,6 +195,10 @@ def read_workflow_overview(cwl_content: str) -> WorkflowOverview:
     )
 
 
+#: top-level-only CWL directives an extracted inline tool inherits from its parent
+_DOCUMENT_LEVEL_KEYS = ("$namespaces", "$schemas")
+
+
 def extract_inline_components(cwl_content: str) -> list[ExtractedComponent]:
     """Extracts every step's inline `run: {class: CommandLineTool, ...}` as a standalone
     tool document. Steps with an external (filename) `run:`, or an inline `run:` that
@@ -220,6 +224,13 @@ def extract_inline_components(cwl_content: str) -> list[ExtractedComponent]:
         run_value = definition.get("run") if isinstance(definition, dict) else None
         if not isinstance(run_value, dict) or run_value.get("class") != "CommandLineTool":
             continue
+
+        # $namespaces/$schemas are only allowed on the top-level document, so an inline tool
+        # relies on its parent's - carry them over, or the standalone tool's `format`
+        # prefixes (edam:format_2572) no longer expand and can't be resolved to a label
+        for key in _DOCUMENT_LEVEL_KEYS:
+            if key in doc and key not in run_value:
+                run_value = {**run_value, key: doc[key]}
 
         cwl_text = yaml.dump(run_value, default_flow_style=False, sort_keys=False, allow_unicode=True)
 

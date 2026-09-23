@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     otp_max_attempts: int = 5
     otp_request_cooldown: int = 60
 
+    # SOS File Format Service - resolves CWL `format` identifiers to labels
+    format_service_url: str = "http://localhost:8001/api/v1"
+    format_service_timeout: float = 30.0
+
     @property
     def database_url(self) -> str:
         return (

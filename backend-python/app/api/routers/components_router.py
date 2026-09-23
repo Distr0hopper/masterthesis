@@ -147,7 +147,7 @@ async def parse_component(
         )
 
     logger.info(f"Parsing component upload '{dto.cwl_file.filename}' for user {current_user.id}")
-    parsed = components_service.parse_cwl(content)
+    parsed = await components_service.parse_cwl(content)
     return ComponentPreviewDto(
         cwl_content=parsed.cwl_content,
         cwl_type=parsed.cwl_type,

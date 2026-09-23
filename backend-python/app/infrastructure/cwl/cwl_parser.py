@@ -172,6 +172,24 @@ def extract_cwl_type(cwl_content: str) -> str | None:
     return doc.get("class") if isinstance(doc, dict) else None
 
 
+def extract_schema_url(cwl_content: str) -> str | None:
+    """The ontology the document's `format` identifiers belong to - the first `$schemas`
+    entry, e.g. http://edamontology.org/EDAM_1.18.owl. `$schemas` is a list per the CWL
+    spec; a bare string is accepted too."""
+    try:
+        doc: Any = load_cwl(cwl_content)
+    except YAMLError:
+        return None
+    if not isinstance(doc, dict):
+        return None
+    schemas = doc.get("$schemas")
+    if isinstance(schemas, str):
+        return schemas
+    if isinstance(schemas, list):
+        return next((s for s in schemas if isinstance(s, str)), None)
+    return None
+
+
 def extract_dockerfile_content(cwl_content: str) -> str | None:
     try:
         doc: Any = load_cwl(cwl_content)

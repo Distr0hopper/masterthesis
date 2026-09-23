@@ -375,6 +375,8 @@ class WorkflowsService:
                 suggested_name = inline.suggested_name
 
             existing_versions = await self.components_repository.find_versions_by_name(suggested_name)
+            parameters = self._safe_extract_parameters(cwl_content)
+            await self.components_service.resolve_format_labels(cwl_content, parameters)
             previews.append(
                 ComponentPreview(
                     step_id=step_id,
@@ -386,7 +388,7 @@ class WorkflowsService:
                     cwl_type=extract_cwl_type(cwl_content),
                     dockerfile_content=extract_dockerfile_content(cwl_content),
                     docker_pull_reference=extract_docker_pull(cwl_content),
-                    parameters=self._safe_extract_parameters(cwl_content),
+                    parameters=parameters,
                     name_conflict=self._to_component_match(existing_versions[-1], None) if existing_versions else None,
                     suggested_match=suggested_match,
                 )

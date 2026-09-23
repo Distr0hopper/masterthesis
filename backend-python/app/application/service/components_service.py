@@ -31,9 +31,11 @@ from app.infrastructure.cwl.cwl_parser import (
     extract_docker_pull,
     extract_dockerfile_content,
     extract_parameters,
+    extract_schema_url,
     generate_inputs_yaml,
     inject_description,
 )
+from app.infrastructure.format_service.format_service_client import FormatServiceClient
 from app.infrastructure.packaging.packaging_cli import read_packaging_output, run_packaging_cli
 
 if TYPE_CHECKING:
@@ -55,14 +57,16 @@ class ParsedComponent:
 
 
 class ComponentsService:
-    def __init__(self, components_repository: ComponentsRepository):
+    def __init__(self, components_repository: ComponentsRepository, format_service_client: FormatServiceClient):
         self.components_repository = components_repository
+        self.format_service_client = format_service_client
 
     @staticmethod
     def get_service(
         components_repository: Annotated[ComponentsRepository, Depends(ComponentsRepository.get_repository)],
+        format_service_client: Annotated[FormatServiceClient, Depends(FormatServiceClient.get_client)],
     ) -> "ComponentsService":
-        return ComponentsService(components_repository)
+        return ComponentsService(components_repository, format_service_client)
 
     async def list_components(
         self, filter: ComponentListFilter, pagination: PaginatedList
@@ -126,7 +130,6 @@ class ComponentsService:
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
             zf.writestr(f"{base_name}.cwl", cwl_content)
             zf.writestr("inputs.yaml", inputs_yaml)
-            # $import targets at their stored paths, so the import in the CWL resolves
             for file in sorted(component.files, key=lambda f: f.path):
                 zf.writestr(file.path, file.content)
 
@@ -156,7 +159,7 @@ class ComponentsService:
         versions = await self.components_repository.find_versions_by_name(name)
         return versions[-1] if versions else None
 
-    def parse_cwl(self, content: bytes) -> "ParsedComponent":
+    async def parse_cwl(self, content: bytes) -> "ParsedComponent":
         """Read an uploaded .cwl into everything the UI needs to preview it, without
         persisting anything - the component-side counterpart of
         WorkflowsService.parse_workflow_upload, so a component can be reviewed before it
@@ -169,13 +172,15 @@ class ComponentsService:
         except UnicodeDecodeError as err:
             raise InvalidCwlError("Uploaded", "File is not valid UTF-8 text") from err
 
+        parameters = self._parse_parameters(cwl_content, "Uploaded", ComponentSource.MANUAL_UPLOAD)
+        await self.resolve_format_labels(cwl_content, parameters)
         return ParsedComponent(
             cwl_content=cwl_content,
             cwl_type=extract_cwl_type(cwl_content),
             description=extract_description(cwl_content),
             dockerfile_content=extract_dockerfile_content(cwl_content),
             docker_pull_reference=extract_docker_pull(cwl_content),
-            parameters=self._parse_parameters(cwl_content, "Uploaded", ComponentSource.MANUAL_UPLOAD),
+            parameters=parameters,
         )
 
     async def create_manual(self, component: Component, context: str = "Uploaded") -> Component:
@@ -184,6 +189,7 @@ class ComponentsService:
             raise ComponentNameAlreadyExistsError(component.name)
 
         component.parameters = self._parse_parameters(component.cwl_content, context, component.source)
+        await self.resolve_format_labels(component.cwl_content, component.parameters)
         component.cwl_type = extract_cwl_type(component.cwl_content)
         component.dockerfile_content = extract_dockerfile_content(component.cwl_content)
         component.docker_pull_reference = extract_docker_pull(component.cwl_content)
@@ -199,6 +205,7 @@ class ComponentsService:
 
         component.version = next_version
         component.parameters = self._parse_parameters(component.cwl_content, f"v{next_version}", component.source)
+        await self.resolve_format_labels(component.cwl_content, component.parameters)
         component.cwl_type = extract_cwl_type(component.cwl_content)
         component.dockerfile_content = extract_dockerfile_content(component.cwl_content)
         component.docker_pull_reference = extract_docker_pull(component.cwl_content)
@@ -285,13 +292,6 @@ class ComponentsService:
         return await self.components_repository.save(component)
 
     async def unpublish(self, component: Component) -> Component:
-        """Inverse of publish - pulls the component back out of the public catalogue.
-
-        Idempotent like publish, and unconditional: a component referenced by an already
-        published workflow can still be unpublished, matching the fact that a workflow may
-        be published while its components are drafts (its steps' component names stay
-        embedded in the workflow either way).
-        """
         if component.status == ComponentStatus.DRAFT:
             return component
         component.status = ComponentStatus.DRAFT
@@ -341,7 +341,6 @@ class ComponentsService:
     async def update_domains(self, component: Component, domains: list[str] | None) -> Component:
         if not domains:
             raise MissingCommandPayloadError(ComponentCommandType.UPDATE_DOMAIN, "domains")
-        # replace wholesale - cascade="all, delete-orphan" removes the rows dropped here
         component.domains = [ComponentDomain(domain=d) for d in domains]
         return await self._save_and_reload(component)
 
@@ -371,3 +370,15 @@ class ComponentsService:
             for parameter in parameters:
                 parameter.format = None
         return parameters
+
+    async def resolve_format_labels(self, cwl_content: str, parameters: list[Parameter]) -> None:
+        """Fills format_label in place - shared by create and the parse previews, so what
+        the user reviews is what gets saved."""
+        schema_url = extract_schema_url(cwl_content)
+        formats = {p.format for p in parameters if p.format}
+        if schema_url is None or not formats:
+            return
+        labels = await self.format_service_client.resolve_labels(formats, schema_url)
+        for parameter in parameters:
+            if parameter.format:
+                parameter.format_label = labels.get(parameter.format)

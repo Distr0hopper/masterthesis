@@ -24,8 +24,8 @@ class Parameter(SQLModel, table=True):
     description: str | None = None
     format: str | None = None
     # resolved human-readable name for `format` (an ontology identifier, e.g. EDAM) -
-    # populated later by a separate resolution call against an external endpoint, not by
-    # anything in this codebase yet
+    # looked up in the SOS File Format Service against the CWL's `$schemas` ontology on
+    # parse and create (see ComponentsService.resolve_format_labels); None if that lookup failed
     format_label: str | None = None
     # explicit String column: SQLModel would otherwise infer a native Postgres
     # enum type from the Python Enum, which we deliberately avoided (see the

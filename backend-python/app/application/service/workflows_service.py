@@ -120,6 +120,7 @@ class ComponentPreview:
     cwl_type: str | None
     dockerfile_content: str | None
     docker_pull_reference: str | None
+    ontology_url: str | None
     parameters: list[Parameter]
     name_conflict: ComponentMatch | None
     suggested_match: ComponentMatch | None
@@ -376,7 +377,8 @@ class WorkflowsService:
 
             existing_versions = await self.components_repository.find_versions_by_name(suggested_name)
             parameters = self._safe_extract_parameters(cwl_content)
-            await self.components_service.resolve_format_labels(cwl_content, parameters)
+            ontology_url = self.components_service.ontology_url_for(cwl_content)
+            await self.components_service.resolve_format_labels(ontology_url, parameters)
             previews.append(
                 ComponentPreview(
                     step_id=step_id,
@@ -388,6 +390,7 @@ class WorkflowsService:
                     cwl_type=extract_cwl_type(cwl_content),
                     dockerfile_content=extract_dockerfile_content(cwl_content),
                     docker_pull_reference=extract_docker_pull(cwl_content),
+                    ontology_url=ontology_url,
                     parameters=parameters,
                     name_conflict=self._to_component_match(existing_versions[-1], None) if existing_versions else None,
                     suggested_match=suggested_match,

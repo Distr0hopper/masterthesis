@@ -112,6 +112,11 @@ class ComponentsRepository:
         result = await self.db.exec(query)
         return result.first()
 
+    async def exists_ontology_url(self, ontology_url: str) -> bool:
+        query = select(Component.id).where(Component.ontology_url == ontology_url).limit(1)
+        result = await self.db.exec(query)
+        return result.first() is not None
+
     async def save(self, component: Component) -> Component:
         self.db.add(component)
         await self.db.commit()

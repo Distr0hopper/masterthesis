@@ -71,10 +71,19 @@ export function ComponentPaletteCard({ component, match }: ComponentPaletteCardP
         </div>
       </div>
 
-      {match.frame && (
+      {match.frame && match.status === 'compatible' && (
         <span className="flex items-center gap-1 text-xs text-green-600">
           <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-green-500" />
           <span className="truncate">Compatible with {match.frame.componentName}</span>
+        </span>
+      )}
+      {match.frame && match.status === 'unverified' && (
+        <span
+          className="flex items-center gap-1 text-xs text-amber-600"
+          title="The file types fit, but the formats could not be verified"
+        >
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+          <span className="truncate">Possibly compatible with {match.frame.componentName}</span>
         </span>
       )}
 

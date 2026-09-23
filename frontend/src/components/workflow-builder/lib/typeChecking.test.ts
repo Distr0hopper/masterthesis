@@ -4,6 +4,8 @@ import {
   NO_DATA_INPUTS_SCORE,
   compareByRank,
   arePortsCompatible,
+  checkPorts,
+  collectFormatPairs,
   configParameters,
   dataInputs,
   dataOutputs,
@@ -16,6 +18,7 @@ import {
   isNumericParameter,
   matchComponent,
   scoreComponent,
+  type FormatLookup,
   type OutputFrame,
   type TypedParameter,
 } from './typeChecking';
@@ -32,6 +35,27 @@ const output = (cwlType: string, name = `out_${seq++}`): TypedParameter => ({
   cwlType,
   direction: ParameterDirection.OUTPUT,
 });
+
+const EDAM = 'http://ontology/edam_eo.owl';
+const GEOJSON = 'http://edamontology.org/format_4106';
+const GEOPACKAGE = 'http://edamontology.org/format_4107';
+const VECTOR = 'http://edamontology.org/format_4126';
+const SHAPEFILE = 'http://edamontology.org/format_4119';
+
+/** a File port declaring `format` within `ontologyUrl` */
+const formatted = (port: TypedParameter, format: string, ontologyUrl: string | null = EDAM): TypedParameter => ({
+  ...port,
+  format,
+  ontologyUrl,
+});
+
+/** the format service, faked: GeoJSON and GeoPackage are vectors, nothing is a Shapefile */
+const fakeService: FormatLookup = ({ actualFormat, expectedFormat }) =>
+  expectedFormat === VECTOR && [GEOJSON, GEOPACKAGE].includes(actualFormat)
+    ? true
+    : expectedFormat === SHAPEFILE
+      ? false
+      : undefined;
 
 const node = (id: string, label: string, parameters: TypedParameter[]): ComponentFlowNode => ({
   id,
@@ -131,9 +155,9 @@ describe('buildOutputStack', () => {
     expect(stack.map((f) => f.nodeId)).toEqual(['a']);
   });
 
-  it('collects every File output type of a node', () => {
+  it('collects every File output port of a node', () => {
     const [frame] = buildOutputStack([node('a', 'split', [output('File'), output('File[]'), output('int')])]);
-    expect(frame.outputTypes).toEqual(['File', 'File[]']);
+    expect(frame.outputs.map((p) => p.cwlType)).toEqual(['File', 'File[]']);
   });
 
   it('returns an empty stack for an empty canvas', () => {
@@ -149,12 +173,12 @@ describe('buildOutputStack', () => {
 
 describe('matchComponent', () => {
   const stack: OutputFrame[] = [
-    { nodeId: 'b', componentName: 'remove-outliers', outputTypes: ['File'] },
-    { nodeId: 'a', componentName: 'load-tracking-data', outputTypes: ['File[]'] },
+    { nodeId: 'b', componentName: 'remove-outliers', outputs: [output('File')] },
+    { nodeId: 'a', componentName: 'load-tracking-data', outputs: [output('File[]')] },
   ];
 
   it('scores everything 0 with no frame when the canvas is empty', () => {
-    expect(matchComponent([input('File')], [])).toEqual({ score: 0, frame: null });
+    expect(matchComponent([input('File')], [])).toEqual({ score: 0, frame: null, status: null });
   });
 
   it('scores a candidate with no data inputs below everything else', () => {
@@ -165,27 +189,47 @@ describe('matchComponent', () => {
 
   it('gives the most recent matching frame the highest score', () => {
     const match = matchComponent([input('File')], stack);
-    expect(match.score).toBe(2);
+    expect(match.score).toBe(4);
     expect(match.frame?.componentName).toBe('remove-outliers');
+    expect(match.status).toBe('compatible');
   });
 
   it('falls back to an older frame when the newest does not match', () => {
     // only File[] is accepted, which the newest frame (File) cannot satisfy
     const match = matchComponent([input('File[]')], stack);
-    expect(match.score).toBe(1);
+    expect(match.score).toBe(2);
     expect(match.frame?.componentName).toBe('load-tracking-data');
   });
 
   it('scores 0 with no frame when nothing on the canvas matches', () => {
-    const onlyArrays: OutputFrame[] = [{ nodeId: 'a', componentName: 'split', outputTypes: ['File'] }];
-    expect(matchComponent([input('File[]')], onlyArrays)).toEqual({ score: 0, frame: null });
+    const onlyArrays: OutputFrame[] = [{ nodeId: 'a', componentName: 'split', outputs: [output('File')] }];
+    expect(matchComponent([input('File[]')], onlyArrays)).toEqual({ score: 0, frame: null, status: null });
+  });
+
+  it('ranks an unverified match just below a verified one in the same frame', () => {
+    const geojson: OutputFrame[] = [
+      { nodeId: 'a', componentName: 'load', outputs: [formatted(output('File'), GEOJSON)] },
+    ];
+    const verified = matchComponent([formatted(input('File'), VECTOR)], geojson, fakeService);
+    const unverified = matchComponent([formatted(input('File'), VECTOR, 'http://other.org/o.owl')], geojson, fakeService);
+    expect(verified).toMatchObject({ score: 2, status: 'compatible' });
+    expect(unverified).toMatchObject({ score: 1, status: 'unverified' });
+  });
+
+  it('skips a frame whose formats the service rejects', () => {
+    const frames: OutputFrame[] = [
+      { nodeId: 'b', componentName: 'newest', outputs: [formatted(output('File'), GEOPACKAGE)] },
+      { nodeId: 'a', componentName: 'oldest', outputs: [formatted(output('File'), SHAPEFILE)] },
+    ];
+    const match = matchComponent([formatted(input('File'), SHAPEFILE)], frames, fakeService);
+    expect(match.frame?.componentName).toBe('oldest');
   });
 });
 
 describe('scoreComponent', () => {
   it('reports the score of the matching frame', () => {
-    const stack: OutputFrame[] = [{ nodeId: 'a', componentName: 'load-data', outputTypes: ['File'] }];
-    expect(scoreComponent([input('File')], stack)).toBe(1);
+    const stack: OutputFrame[] = [{ nodeId: 'a', componentName: 'load-data', outputs: [output('File')] }];
+    expect(scoreComponent([input('File')], stack)).toBe(2);
     expect(scoreComponent([input('string')], stack)).toBe(NO_DATA_INPUTS_SCORE);
     expect(scoreComponent([input('File')], [])).toBe(0);
   });
@@ -253,10 +297,78 @@ describe('arePortsCompatible', () => {
   });
 });
 
+describe('checkPorts', () => {
+  it('is incompatible when the cwlTypes do not fit, whatever the formats', () => {
+    const check = checkPorts(formatted(output('File'), GEOJSON), formatted(input('File[]'), GEOJSON), fakeService);
+    expect(check).toEqual({ status: 'incompatible' });
+  });
+
+  it('is compatible when the input declares no format - it accepts any file', () => {
+    expect(checkPorts(formatted(output('File'), GEOJSON), input('File'))).toEqual({ status: 'compatible' });
+    expect(checkPorts(output('File'), input('File'))).toEqual({ status: 'compatible' });
+  });
+
+  it('is unverified when only the input declares a format', () => {
+    expect(checkPorts(output('File'), formatted(input('File'), VECTOR))).toEqual({
+      status: 'unverified',
+      reason: 'missing-output-format',
+    });
+  });
+
+  it('is unverified across ontologies, or when either side has none', () => {
+    const other = formatted(input('File'), VECTOR, 'http://other.org/o.owl');
+    expect(checkPorts(formatted(output('File'), GEOJSON), other, fakeService).reason).toBe('different-ontology');
+    const noOntology = formatted(output('File'), GEOJSON, null);
+    expect(checkPorts(noOntology, formatted(input('File'), VECTOR, null), fakeService).reason).toBe(
+      'different-ontology',
+    );
+  });
+
+  it('is compatible for identical formats without asking the service', () => {
+    const neverCalled: FormatLookup = () => {
+      throw new Error('lookup should not be consulted');
+    };
+    const check = checkPorts(formatted(output('File'), GEOJSON), formatted(input('File'), GEOJSON), neverCalled);
+    expect(check).toEqual({ status: 'compatible' });
+  });
+
+  it('follows the service for different formats in one ontology', () => {
+    const out = formatted(output('File'), GEOPACKAGE);
+    expect(checkPorts(out, formatted(input('File'), VECTOR), fakeService)).toEqual({ status: 'compatible' });
+    expect(checkPorts(out, formatted(input('File'), SHAPEFILE), fakeService)).toEqual({ status: 'incompatible' });
+  });
+
+  it('is unverified while the service has not answered', () => {
+    const check = checkPorts(formatted(output('File'), GEOPACKAGE), formatted(input('File'), VECTOR));
+    expect(check).toEqual({ status: 'unverified', reason: 'not-checked' });
+  });
+
+  it('only lets a definite service "no" block a connection', () => {
+    const out = formatted(output('File'), GEOPACKAGE);
+    expect(arePortsCompatible(out, formatted(input('File'), VECTOR))).toBe(true);
+    expect(arePortsCompatible(out, formatted(input('File'), SHAPEFILE), fakeService)).toBe(false);
+  });
+});
+
+describe('collectFormatPairs', () => {
+  it('returns each distinct question the service has to answer, and nothing decidable locally', () => {
+    const outputs = [formatted(output('File'), GEOJSON), formatted(output('File'), GEOJSON), output('File')];
+    const inputs = [
+      formatted(input('File'), VECTOR),
+      formatted(input('File'), GEOJSON), // identical format - decided locally
+      input('File'), // no format - accepts anything
+      formatted(input('File'), VECTOR, 'http://other.org/o.owl'), // another ontology
+    ];
+    expect(collectFormatPairs(outputs, inputs)).toEqual([
+      { actualFormat: GEOJSON, expectedFormat: VECTOR, ontologyUrl: EDAM },
+    ]);
+  });
+});
+
 describe('compareByRank', () => {
   const candidate = (name: string, score: number, isFavorite = false) => ({
     component: { name, isFavorite },
-    match: { score, frame: null },
+    match: { score, frame: null, status: null },
   });
 
   const order = (items: ReturnType<typeof candidate>[]) =>

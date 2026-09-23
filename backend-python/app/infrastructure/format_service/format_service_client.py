@@ -47,3 +47,26 @@ class FormatServiceClient:
             logger.warning("Could not resolve format label for %s (schema %s): %s", format_identifier, schema_url, err)
             return None
         return label if isinstance(label, str) else None
+
+    async def check_compatibility(self, expected_format: str, actual_format: str, ontology_url: str) -> bool | None:
+        """Whether `actual_format` (an output's) satisfies `expected_format` (an input's) -
+        i.e. is it the same class, or a subclass/equivalent of it, in the ontology.
+        None when the service couldn't answer."""
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    f"{self.base_url}/compatibility",
+                    json={
+                        "expected_format": expected_format,
+                        "actual_format": actual_format,
+                        "ontology_schema_url": ontology_url,
+                    },
+                )
+                response.raise_for_status()
+                compatible = response.json().get("compatible")
+        except (httpx.HTTPError, ValueError) as err:
+            logger.warning(
+                "Could not check compatibility %s -> %s (schema %s): %s", actual_format, expected_format, ontology_url, err
+            )
+            return None
+        return compatible if isinstance(compatible, bool) else None

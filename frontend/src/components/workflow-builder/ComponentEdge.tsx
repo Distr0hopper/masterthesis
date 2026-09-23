@@ -3,14 +3,21 @@ import {
   EdgeLabelRenderer,
   getSmoothStepPath,
   useReactFlow,
+  type Edge,
   type EdgeProps,
 } from '@xyflow/react';
-import { X } from 'lucide-react';
+import { AlertTriangle, X } from 'lucide-react';
+import { UNVERIFIED_REASON_TEXT } from './lib/typeChecking';
+import type { ComponentEdgeData } from './types';
+
+/** dashed amber: allowed, but the formats on either end couldn't be checked */
+const UNVERIFIED_STYLE = { stroke: '#f59e0b', strokeDasharray: '6 4' };
 
 /**
  * A smoothstep edge with a delete button at its midpoint. Without this, a connection can
  * only be removed by selecting it and pressing Delete - undiscoverable, and awkward on a
- * thin target.
+ * thin target. An unverified connection (see typeChecking.checkPorts) is drawn dashed
+ * amber with a warning badge explaining why.
  */
 export function ComponentEdge({
   id,
@@ -22,7 +29,8 @@ export function ComponentEdge({
   targetPosition,
   markerEnd,
   style,
-}: EdgeProps) {
+  data,
+}: EdgeProps<Edge<ComponentEdgeData>>) {
   const { deleteElements } = useReactFlow();
 
   const [edgePath, labelX, labelY] = getSmoothStepPath({
@@ -34,13 +42,31 @@ export function ComponentEdge({
     targetPosition,
   });
 
+  const unverifiedReason = data?.check?.status === 'unverified' ? data.check.reason : undefined;
+
   return (
     <>
-      <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} style={style} />
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        markerEnd={markerEnd}
+        style={unverifiedReason ? { ...style, ...UNVERIFIED_STYLE } : style}
+      />
 
       {/* EdgeLabelRenderer hoists this out of the SVG into a DOM overlay, so it can be a
           real <button>. That overlay is pointer-events:none, hence the explicit re-enable. */}
       <EdgeLabelRenderer>
+        {unverifiedReason && (
+          <span
+            className="nodrag nopan pointer-events-auto absolute flex h-5 w-5 items-center justify-center rounded-full border border-amber-300 bg-amber-50 text-amber-600 shadow-sm"
+            // sits just left of the delete button
+            style={{ transform: `translate(-50%, -50%) translate(${labelX - 24}px, ${labelY}px)` }}
+            title={`Not verified: ${UNVERIFIED_REASON_TEXT[unverifiedReason]}`}
+            aria-label="Connection not verified"
+          >
+            <AlertTriangle size={12} />
+          </span>
+        )}
         <button
           type="button"
           // nodrag/nopan: without them a click here starts a canvas pan instead

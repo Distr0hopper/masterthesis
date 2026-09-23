@@ -67,6 +67,9 @@ class ParameterDto(CamelModel):
     description: str | None
     format: str | None
     format_label: str | None
+    # the owning component's ontology (Component.ontology_url), repeated per port so the
+    # builder can tell from a port alone whether two formats are comparable
+    ontology_url: str | None
     direction: ParameterDirection
 
 
@@ -109,6 +112,7 @@ class ComponentDetailDto(CamelModel, LinkModel):
     cwl_type: str | None
     dockerfile_content: str | None
     docker_pull_reference: str | None
+    ontology_url: str | None
     domains: list[str]
     source: ComponentSource
     status: ComponentStatus
@@ -130,6 +134,9 @@ class PreviewParameterDto(CamelModel):
     description: str | None
     format: str | None
     format_label: str | None
+    # the owning component's ontology (Component.ontology_url), repeated per port so the
+    # builder can tell from a port alone whether two formats are comparable
+    ontology_url: str | None
     direction: ParameterDirection
 
 
@@ -145,6 +152,7 @@ class ComponentPreviewDto(CamelModel):
     cwl_type: str | None
     dockerfile_content: str | None
     docker_pull_reference: str | None
+    ontology_url: str | None
     parameters: list[PreviewParameterDto]
 
 

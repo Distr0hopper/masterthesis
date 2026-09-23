@@ -65,8 +65,9 @@ def _to_workflow_step_preview_dto(preview: ComponentPreview) -> WorkflowStepPrev
         cwl_type=preview.cwl_type,
         dockerfile_content=preview.dockerfile_content,
         docker_pull_reference=preview.docker_pull_reference,
+        ontology_url=preview.ontology_url,
         parameters=[
-            ComponentTransformer.to_preview_parameter(parameter, preview.step_id)
+            ComponentTransformer.to_preview_parameter(parameter, preview.step_id, preview.ontology_url)
             for parameter in preview.parameters
         ],
         name_conflict=_to_component_match_dto(preview.name_conflict),

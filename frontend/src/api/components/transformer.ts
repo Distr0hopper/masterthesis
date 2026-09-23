@@ -58,6 +58,7 @@ export interface ParameterDisplayModel {
   description: string | null;
   format: string | null;
   formatLabel: string | null;
+  ontologyUrl: string | null;
   direction: ParameterDirection;
   directionDisplay: string;
 }

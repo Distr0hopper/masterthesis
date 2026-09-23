@@ -154,8 +154,9 @@ async def parse_component(
         description=parsed.description,
         dockerfile_content=parsed.dockerfile_content,
         docker_pull_reference=parsed.docker_pull_reference,
+        ontology_url=parsed.ontology_url,
         parameters=[
-            ComponentTransformer.to_preview_parameter(p, "preview") for p in parsed.parameters
+            ComponentTransformer.to_preview_parameter(p, "preview", parsed.ontology_url) for p in parsed.parameters
         ],
     )
 

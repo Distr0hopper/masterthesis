@@ -35,6 +35,8 @@ export interface ParameterDto {
   description: string | null;
   format: string | null;
   formatLabel: string | null;
+  /** the owning component's ontology - two ports' formats are only comparable within one */
+  ontologyUrl: string | null;
   direction: ParameterDirection;
 }
 
@@ -67,6 +69,7 @@ export interface ComponentPreviewDto {
   cwlType: string | null;
   dockerfileContent: string | null;
   dockerPullReference: string | null;
+  ontologyUrl: string | null;
   parameters: PreviewParameterDto[];
 }
 
@@ -79,6 +82,8 @@ export interface PreviewParameterDto {
   description: string | null;
   format: string | null;
   formatLabel: string | null;
+  /** the owning component's ontology - two ports' formats are only comparable within one */
+  ontologyUrl: string | null;
   direction: ParameterDirection;
 }
 
@@ -142,6 +147,7 @@ export interface ComponentDetailDto extends WithHateoasLinks {
   cwlType: string | null;
   dockerfileContent: string | null;
   dockerPullReference: string | null;
+  ontologyUrl: string | null;
   domains: ComponentDomain[];
   source: ComponentSource;
   status: ComponentStatus;

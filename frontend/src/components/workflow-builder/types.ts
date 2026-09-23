@@ -1,5 +1,6 @@
 import type { Node } from '@xyflow/react';
 import type { ParameterDisplayModel } from '@/api/components';
+import type { PortCheck } from './lib/typeChecking';
 
 /**
  * Payload a sidebar card writes into the drag event - everything the canvas needs to
@@ -14,6 +15,11 @@ export type ComponentDragPayload = {
 };
 
 export const DRAG_MIME = 'application/json';
+
+/** Render-time data on a canvas edge - derived, never saved with a draft. */
+export type ComponentEdgeData = {
+  check?: PortCheck;
+};
 
 /** Registered name of the custom edge that carries the delete button. */
 export const COMPONENT_EDGE_TYPE = 'componentEdge';

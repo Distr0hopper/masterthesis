@@ -11,19 +11,59 @@ export interface TypedParameter {
   name: string;
   cwlType: string;
   direction: ParameterDirection;
+  /** ontology format URI, e.g. http://edamontology.org/format_4106 - absent on untyped ports */
+  format?: string | null;
+  /** the component's ontology; formats are only comparable when both ports share it */
+  ontologyUrl?: string | null;
 }
+
+/**
+ * - `compatible`: the types fit, and so do the formats (or the input accepts any format)
+ * - `incompatible`: the types don't fit, or the format service said the formats don't
+ * - `unverified`: the types fit but the formats couldn't be checked - allowed, but flagged
+ */
+export type ConnectionStatus = 'compatible' | 'incompatible' | 'unverified';
+
+export type UnverifiedReason = 'missing-output-format' | 'different-ontology' | 'not-checked';
+
+export const UNVERIFIED_REASON_TEXT: Record<UnverifiedReason, string> = {
+  'missing-output-format': 'The output declares no format, so it cannot be checked against the input’s format.',
+  'different-ontology': 'The components use different ontologies ($schemas), so their formats cannot be compared.',
+  'not-checked': 'The format service could not check these formats.',
+};
+
+export interface PortCheck {
+  status: ConnectionStatus;
+  /** why the check was inconclusive - set only when status is `unverified` */
+  reason?: UnverifiedReason;
+}
+
+/** One question for the format service: may an output of `actualFormat` feed an input of `expectedFormat`? */
+export interface FormatPair {
+  actualFormat: string;
+  expectedFormat: string;
+  ontologyUrl: string;
+}
+
+/** The format service's answer for a pair, or undefined while unknown (not fetched yet, or it failed). */
+export type FormatLookup = (pair: FormatPair) => boolean | undefined;
+
+/** A lookup that knows nothing - every format question stays unverified. */
+export const noFormatLookup: FormatLookup = () => undefined;
 
 export interface OutputFrame {
   nodeId: string;
   componentName: string;
-  /** every File-ish output cwlType this node produces */
-  outputTypes: string[];
+  /** every File-ish output port this node produces */
+  outputs: TypedParameter[];
 }
 
 export interface CompatibilityMatch {
   score: number;
   /** the stack frame that produced the score, or null when nothing matched */
   frame: OutputFrame | null;
+  /** whether that frame's best match was format-checked - null when nothing matched */
+  status: Exclude<ConnectionStatus, 'incompatible'> | null;
 }
 
 /** score for a candidate that has no data inputs at all - sorts below "no match" */
@@ -88,9 +128,8 @@ export function dataOutputTypes(parameters: TypedParameter[]): string[] {
 }
 
 /**
- * Stage 1 (primitive) compatibility: normalised string equality, plus the one special
- * case below.
- * TODO: Replace this with a real check (format/EDAM ontology aware).
+ * Structural compatibility of two cwlTypes: normalised string equality, plus the one
+ * special case below. The format-aware part lives in {@link checkPorts}.
  */
 export function isCompatible(outputType: string, inputType: string): boolean {
   const out = normalizeCwlType(outputType);
@@ -114,20 +153,81 @@ export function findPort<T extends TypedParameter>(
   return parameters.find((p) => p.name === handleId);
 }
 
-/**
- * Whether one concrete output port may feed one concrete input port. This is the real
- * connection rule now that every port has its own handle - the node-level "any output to
- * any input" check was only ever a stand-in for it.
- */
-export function arePortsCompatible(
-  sourcePort: TypedParameter | undefined,
-  targetPort: TypedParameter | undefined,
-): boolean {
-  if (!sourcePort || !targetPort) return false;
+/** Whether the ports are a File output feeding a File input whose cwlTypes fit. */
+function structurallyCompatible(sourcePort: TypedParameter, targetPort: TypedParameter): boolean {
   if (!isDataParameter(sourcePort) || !isDataParameter(targetPort)) return false;
   if (sourcePort.direction !== ParameterDirection.OUTPUT) return false;
   if (targetPort.direction !== ParameterDirection.INPUT) return false;
   return isCompatible(sourcePort.cwlType, targetPort.cwlType);
+}
+
+/**
+ * The format question a connection has to put to the format service, or null when it can
+ * be decided without one - see {@link checkPorts} for the order the rules apply in.
+ */
+export function formatPairFor(sourcePort: TypedParameter, targetPort: TypedParameter): FormatPair | null {
+  if (!structurallyCompatible(sourcePort, targetPort)) return null;
+  if (!targetPort.format || !sourcePort.format) return null;
+  if (!sourcePort.ontologyUrl || sourcePort.ontologyUrl !== targetPort.ontologyUrl) return null;
+  if (sourcePort.format === targetPort.format) return null;
+  return { actualFormat: sourcePort.format, expectedFormat: targetPort.format, ontologyUrl: sourcePort.ontologyUrl };
+}
+
+/**
+ * Whether one concrete output port may feed one concrete input port. Follows CWL's own
+ * semantics, in order:
+ *
+ * 1. the cwlTypes must fit (File -> File, File[] -> File, ...) - otherwise incompatible
+ * 2. an input without a format accepts any file - compatible
+ * 3. an output without a format can't be checked - unverified
+ * 4. formats from different ontologies can't be compared - unverified
+ * 5. identical formats - compatible
+ * 6. otherwise the format service decides (via `lookup`) - unverified until it has
+ */
+export function checkPorts(
+  sourcePort: TypedParameter | undefined,
+  targetPort: TypedParameter | undefined,
+  lookup: FormatLookup = noFormatLookup,
+): PortCheck {
+  if (!sourcePort || !targetPort || !structurallyCompatible(sourcePort, targetPort)) {
+    return { status: 'incompatible' };
+  }
+  if (!targetPort.format) return { status: 'compatible' };
+  if (!sourcePort.format) return { status: 'unverified', reason: 'missing-output-format' };
+  if (!sourcePort.ontologyUrl || sourcePort.ontologyUrl !== targetPort.ontologyUrl) {
+    return { status: 'unverified', reason: 'different-ontology' };
+  }
+  if (sourcePort.format === targetPort.format) return { status: 'compatible' };
+
+  const answer = lookup(formatPairFor(sourcePort, targetPort)!);
+  if (answer === undefined) return { status: 'unverified', reason: 'not-checked' };
+  return { status: answer ? 'compatible' : 'incompatible' };
+}
+
+/** Whether a connection may be drawn at all - only a definite `incompatible` blocks it. */
+export function arePortsCompatible(
+  sourcePort: TypedParameter | undefined,
+  targetPort: TypedParameter | undefined,
+  lookup: FormatLookup = noFormatLookup,
+): boolean {
+  return checkPorts(sourcePort, targetPort, lookup).status !== 'incompatible';
+}
+
+/** Stable identity of a pair - the key the format service's answers are stored under. */
+export function formatPairKey(pair: FormatPair): string {
+  return `${pair.ontologyUrl}|${pair.actualFormat}|${pair.expectedFormat}`;
+}
+
+/** Every distinct format question between any of `outputs` and any of `inputs`. */
+export function collectFormatPairs(outputs: TypedParameter[], inputs: TypedParameter[]): FormatPair[] {
+  const pairs = new Map<string, FormatPair>();
+  for (const out of outputs) {
+    for (const inp of inputs) {
+      const pair = formatPairFor(out, inp);
+      if (pair) pairs.set(formatPairKey(pair), pair);
+    }
+  }
+  return [...pairs.values()];
 }
 
 /**
@@ -140,32 +240,36 @@ export function buildOutputStack(nodes: ComponentFlowNode[]): OutputFrame[] {
     .map((node) => ({
       nodeId: node.id,
       componentName: node.data.label,
-      outputTypes: dataOutputTypes(node.data.parameters),
+      outputs: dataOutputs(node.data.parameters),
     }))
-    .filter((frame) => frame.outputTypes.length > 0);
+    .filter((frame) => frame.outputs.length > 0);
 }
 
 /**
  * Rank one candidate against the canvas. Higher is better; the most recent frame that
- * matches wins, so `stack.length` is the top score and 1 the oldest.
+ * matches wins. Within a frame a format-checked match outranks an unverified one, so the
+ * top frame scores `2 * stack.length` (verified) or one less, and the oldest 2 or 1.
  */
 export function matchComponent(
   candidateParameters: TypedParameter[],
   outputStack: OutputFrame[],
+  lookup: FormatLookup = noFormatLookup,
 ): CompatibilityMatch {
   // nothing on the canvas yet -> everything ranks equally, list stays alphabetical
-  if (outputStack.length === 0) return { score: 0, frame: null };
+  if (outputStack.length === 0) return { score: 0, frame: null, status: null };
 
-  const inputTypes = dataInputTypes(candidateParameters);
-  if (inputTypes.length === 0) return { score: NO_DATA_INPUTS_SCORE, frame: null };
+  const inputs = dataInputs(candidateParameters);
+  if (inputs.length === 0) return { score: NO_DATA_INPUTS_SCORE, frame: null, status: null };
 
   for (let i = 0; i < outputStack.length; i++) {
     const frame = outputStack[i];
-    const compatible = frame.outputTypes.some((out) => inputTypes.some((inp) => isCompatible(out, inp)));
-    if (compatible) return { score: outputStack.length - i, frame };
+    const statuses = frame.outputs.flatMap((out) => inputs.map((inp) => checkPorts(out, inp, lookup).status));
+    const frameScore = 2 * (outputStack.length - i);
+    if (statuses.includes('compatible')) return { score: frameScore, frame, status: 'compatible' };
+    if (statuses.includes('unverified')) return { score: frameScore - 1, frame, status: 'unverified' };
   }
 
-  return { score: 0, frame: null };
+  return { score: 0, frame: null, status: null };
 }
 
 /** The fields the palette ordering reads off a candidate. */
@@ -195,6 +299,10 @@ export function compareByRank(a: RankedCandidate, b: RankedCandidate): number {
 }
 
 /** Score-only view of {@link matchComponent}. */
-export function scoreComponent(candidateParameters: TypedParameter[], outputStack: OutputFrame[]): number {
-  return matchComponent(candidateParameters, outputStack).score;
+export function scoreComponent(
+  candidateParameters: TypedParameter[],
+  outputStack: OutputFrame[],
+  lookup: FormatLookup = noFormatLookup,
+): number {
+  return matchComponent(candidateParameters, outputStack, lookup).score;
 }

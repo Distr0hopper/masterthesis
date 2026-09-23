@@ -37,7 +37,7 @@ class ComponentTransformer:
         )
 
     @staticmethod
-    def to_preview_parameter(parameter: Parameter, id_prefix: str) -> PreviewParameterDto:
+    def to_preview_parameter(parameter: Parameter, id_prefix: str, ontology_url: str | None) -> PreviewParameterDto:
         return PreviewParameterDto(
             id=f"{id_prefix}:{parameter.direction.value}:{parameter.name}",
             name=parameter.name,
@@ -46,6 +46,7 @@ class ComponentTransformer:
             description=parameter.description,
             format=parameter.format,
             format_label=parameter.format_label,
+            ontology_url=ontology_url,
             direction=parameter.direction,
         )
 
@@ -101,13 +102,15 @@ class ComponentTransformer:
             created_at=component.created_at,
             is_favorite=is_favorite,
             parameters=(
-                [ComponentTransformer.to_parameter(p) for p in component.parameters] if include_parameters else None
+                [ComponentTransformer.to_parameter(p, component.ontology_url) for p in component.parameters]
+                if include_parameters
+                else None
             ),
         )
         return ComponentLinkBuilder(current_user).attach_links(dto, component)
 
     @staticmethod
-    def to_parameter(parameter: Parameter) -> ParameterDto:
+    def to_parameter(parameter: Parameter, ontology_url: str | None) -> ParameterDto:
         return ParameterDto(
             id=parameter.id,
             name=parameter.name,
@@ -116,6 +119,7 @@ class ComponentTransformer:
             description=parameter.description,
             format=parameter.format,
             format_label=parameter.format_label,
+            ontology_url=ontology_url,
             direction=parameter.direction,
         )
 
@@ -142,10 +146,11 @@ class ComponentTransformer:
             cwl_type=component.cwl_type,
             dockerfile_content=component.dockerfile_content,
             docker_pull_reference=component.docker_pull_reference,
+            ontology_url=component.ontology_url,
             domains=ComponentTransformer.to_domains(component),
             source=component.source,
             status=component.status,
-            parameters=[ComponentTransformer.to_parameter(p) for p in component.parameters],
+            parameters=[ComponentTransformer.to_parameter(p, component.ontology_url) for p in component.parameters],
             created_at=component.created_at,
             updated_at=component.updated_at,
             is_favorite=is_favorite,

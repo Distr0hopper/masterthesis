@@ -60,6 +60,12 @@ class Component(SQLModel, table=True):
     # with dockerfile_content per the CWL spec (DockerRequirement has either dockerFile or
     # dockerPull);
     docker_pull_reference: str | None = None
+    # also derived from cwl_content: the ontology its parameters' `format`s belong to -
+    # the `$schemas` URL, normalized so every EDAM release maps to one configured
+    # ontology (see format_service.ontology.resolve_ontology_url). Two ports are only
+    # comparable via the format service when both components share it; None when the
+    # CWL declares no $schemas.
+    ontology_url: str | None = None
     # explicit String column: SQLModel would otherwise infer a native Postgres
     # enum type from the Python Enum
     source: ComponentSource = Field(default=ComponentSource.MANUAL_UPLOAD, sa_column=Column(String, nullable=False))

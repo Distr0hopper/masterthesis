@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useComponents, useDomains } from '@/api/components';
 import { useAuthStore } from '@/store/auth.store';
-import { compareByRank, matchComponent, type OutputFrame } from './lib/typeChecking';
+import { useFormatCompatibility } from '@/api/compatibility';
+import { collectFormatPairs, compareByRank, dataInputs, matchComponent, type OutputFrame } from './lib/typeChecking';
 import { ComponentPaletteCard } from './ComponentPaletteCard.tsx';
 import { WorkflowSidebarFilters } from './WorkflowSidebarFilters.tsx';
 
@@ -36,12 +37,24 @@ export function WorkflowSidebar({ outputStack }: WorkflowSidebarProps) {
   // actually filtered everything out
   const hasActiveFilter = Boolean(term) || selectedDomains.length > 0 || favoritesOnly;
 
+  // every format question between the canvas' outputs and the listed candidates' inputs,
+  // asked in one batch; until it answers, those pairs rank as unverified
+  const formatPairs = useMemo(
+    () =>
+      collectFormatPairs(
+        outputStack.flatMap((frame) => frame.outputs),
+        (data?.items ?? []).flatMap((component) => dataInputs(component.parameters)),
+      ),
+    [data, outputStack],
+  );
+  const lookup = useFormatCompatibility(formatPairs);
+
   const ranked = useMemo(() => {
     const components = data?.items ?? [];
     return components
-      .map((component) => ({ component, match: matchComponent(component.parameters, outputStack) }))
+      .map((component) => ({ component, match: matchComponent(component.parameters, outputStack, lookup) }))
       .sort(compareByRank);
-  }, [data, outputStack]);
+  }, [data, outputStack, lookup]);
 
   return (
     <aside className="flex w-[280px] shrink-0 flex-col border-r border-slate-200 bg-white">

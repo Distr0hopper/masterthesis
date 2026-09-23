@@ -36,6 +36,7 @@ from app.infrastructure.cwl.cwl_parser import (
     inject_description,
 )
 from app.infrastructure.format_service.format_service_client import FormatServiceClient
+from app.infrastructure.format_service.ontology import resolve_ontology_url
 from app.infrastructure.packaging.packaging_cli import read_packaging_output, run_packaging_cli
 
 if TYPE_CHECKING:
@@ -53,6 +54,7 @@ class ParsedComponent:
     description: str | None
     dockerfile_content: str | None
     docker_pull_reference: str | None
+    ontology_url: str | None
     parameters: list[Parameter]
 
 
@@ -173,13 +175,15 @@ class ComponentsService:
             raise InvalidCwlError("Uploaded", "File is not valid UTF-8 text") from err
 
         parameters = self._parse_parameters(cwl_content, "Uploaded", ComponentSource.MANUAL_UPLOAD)
-        await self.resolve_format_labels(cwl_content, parameters)
+        ontology_url = self.ontology_url_for(cwl_content)
+        await self.resolve_format_labels(ontology_url, parameters)
         return ParsedComponent(
             cwl_content=cwl_content,
             cwl_type=extract_cwl_type(cwl_content),
             description=extract_description(cwl_content),
             dockerfile_content=extract_dockerfile_content(cwl_content),
             docker_pull_reference=extract_docker_pull(cwl_content),
+            ontology_url=ontology_url,
             parameters=parameters,
         )
 
@@ -189,7 +193,8 @@ class ComponentsService:
             raise ComponentNameAlreadyExistsError(component.name)
 
         component.parameters = self._parse_parameters(component.cwl_content, context, component.source)
-        await self.resolve_format_labels(component.cwl_content, component.parameters)
+        component.ontology_url = self.ontology_url_for(component.cwl_content)
+        await self.resolve_format_labels(component.ontology_url, component.parameters)
         component.cwl_type = extract_cwl_type(component.cwl_content)
         component.dockerfile_content = extract_dockerfile_content(component.cwl_content)
         component.docker_pull_reference = extract_docker_pull(component.cwl_content)
@@ -205,7 +210,8 @@ class ComponentsService:
 
         component.version = next_version
         component.parameters = self._parse_parameters(component.cwl_content, f"v{next_version}", component.source)
-        await self.resolve_format_labels(component.cwl_content, component.parameters)
+        component.ontology_url = self.ontology_url_for(component.cwl_content)
+        await self.resolve_format_labels(component.ontology_url, component.parameters)
         component.cwl_type = extract_cwl_type(component.cwl_content)
         component.dockerfile_content = extract_dockerfile_content(component.cwl_content)
         component.docker_pull_reference = extract_docker_pull(component.cwl_content)
@@ -371,14 +377,20 @@ class ComponentsService:
                 parameter.format = None
         return parameters
 
-    async def resolve_format_labels(self, cwl_content: str, parameters: list[Parameter]) -> None:
+    @staticmethod
+    def ontology_url_for(cwl_content: str) -> str | None:
+        """The ontology a document's formats belong to - see Component.ontology_url."""
+        return resolve_ontology_url(extract_schema_url(cwl_content))
+
+    async def resolve_format_labels(self, ontology_url: str | None, parameters: list[Parameter]) -> None:
         """Fills format_label in place - shared by create and the parse previews, so what
         the user reviews is what gets saved."""
-        schema_url = extract_schema_url(cwl_content)
+        # a format identifier only has a label within an ontology - without one (no
+        # $schemas in the CWL) there is nothing to resolve against
         formats = {p.format for p in parameters if p.format}
-        if schema_url is None or not formats:
+        if ontology_url is None or not formats:
             return
-        labels = await self.format_service_client.resolve_labels(formats, schema_url)
+        labels = await self.format_service_client.resolve_labels(formats, ontology_url)
         for parameter in parameters:
             if parameter.format:
                 parameter.format_label = labels.get(parameter.format)

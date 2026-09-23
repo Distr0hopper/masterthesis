@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     # SOS File Format Service - resolves CWL `format` identifiers to labels
     format_service_url: str = "http://localhost:8001/api/v1"
     format_service_timeout: float = 30.0
+    # every EDAM `$schemas` URL is mapped to this one ontology (see
+    # format_service/ontology.py) - fetched by the format service, not by this backend,
+    # so it's an address inside the service's docker network
+    format_service_edam_url: str = "http://ontology/edam_eo.owl"
 
     @property
     def database_url(self) -> str:

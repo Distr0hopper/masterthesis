@@ -82,7 +82,13 @@ class Component(SQLModel, table=True):
     # access outside an awaited context raises MissingGreenlet) - selectin issues a
     # proper follow-up SELECT as part of the same async flow instead.
     created_by: Optional["User"] = Relationship(back_populates="components", sa_relationship_kwargs={"lazy": "selectin"})
-    parameters: list["Parameter"] = Relationship(back_populates="component", sa_relationship_kwargs={"lazy": "selectin"})
+    # cascade + passive_deletes, like domains/files below: without them, deleting a component
+    # made SQLAlchemy NULL out every parameter's component_id before the DELETE, so the
+    # database's ON DELETE CASCADE had nothing left to cascade and the rows were orphaned
+    parameters: list["Parameter"] = Relationship(
+        back_populates="component",
+        sa_relationship_kwargs={"lazy": "selectin", "cascade": "all, delete-orphan", "passive_deletes": True},
+    )
     domains: list["ComponentDomain"] = Relationship(
         back_populates="component",
         sa_relationship_kwargs={"lazy": "selectin", "cascade": "all, delete-orphan", "passive_deletes": True},

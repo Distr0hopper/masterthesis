@@ -123,8 +123,7 @@ class CreateWorkflowRequestDto(WorkflowDomainsValidatorMixin, EmptyWorkflowDescr
     description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
     #: one entry per workflow step - every step must be configured before the workflow can
     #: be created (the service rejects any that isn't). One multipart form field carrying
-    #: a JSON-encoded array.
-    component_configs: Json[list[ComponentConfigDto]] = Field(default_factory=list)
+    component_configs: Json[list[ComponentConfigDto]] = Field(default="[]", validate_default=True)
 
 
 class ExistingWorkflowDto(CamelModel):

@@ -233,8 +233,8 @@ class CreateComponentRequestDto(
     repo_commit_sha: str | None = None
     description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
     #: hand-written labels for File ports without an ontology format - one multipart form
-    #: field carrying a JSON-encoded array, like CreateWorkflowRequestDto.component_configs
-    format_labels: Json[list[FormatLabelDto]] = Field(default_factory=list)
+    #: field carrying a JSON-encoded array, like CreateWorkflowRequestDto.component_configs.
+    format_labels: Json[list[FormatLabelDto]] = Field(default="[]", validate_default=True)
 
     @field_validator("repo_url", mode="before")
     @classmethod

@@ -7,7 +7,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table.tsx';
-import { isManualFormatLabel, type ParameterDisplayModel } from '@/api/components';
+import {
+  UNRESOLVED_FORMAT_HINT,
+  isManualFormatLabel,
+  isUnresolvedFormatLabel,
+  type ParameterDisplayModel,
+} from '@/api/components';
 import { ParameterDirection } from '@/api/components/types';
 
 const DIRECTION_BADGE_CLASSNAME: Record<ParameterDirection, string> = {
@@ -57,7 +62,8 @@ export function ParameterTable({ parameters }: ParameterTableProps) {
 /**
  * The resolved label when there is one, else the raw format. A label can exist without a
  * format - one written by hand (e.g. "RDS") for a port no ontology covers - and is marked
- * as such, so it isn't mistaken for a verified ontology format.
+ * as such, so it isn't mistaken for a verified ontology format. An ontology format whose
+ * name couldn't be looked up shows its URL, marked so it doesn't read as broken.
  */
 function FormatCell({ parameter }: { parameter: ParameterDisplayModel }) {
   const text = parameter.formatLabel ?? parameter.format;
@@ -76,6 +82,11 @@ function FormatCell({ parameter }: { parameter: ParameterDisplayModel }) {
       {isManual && (
         <span className="ml-1 text-xs text-slate-400" title="Entered by hand - not from an ontology, not verified">
           (manual)
+        </span>
+      )}
+      {isUnresolvedFormatLabel(parameter) && (
+        <span className="ml-1 text-xs text-slate-400" title={UNRESOLVED_FORMAT_HINT}>
+          (name unavailable)
         </span>
       )}
     </>

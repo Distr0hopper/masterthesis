@@ -7,6 +7,7 @@ from app.api.dto.component import (
     ComponentCreatorDto,
     ComponentDetailDto,
     ComponentListItemDto,
+    ComponentMatchDto,
     CreateComponentRequestDto,
     FormatLabelDto,
     ParameterDto,
@@ -14,6 +15,8 @@ from app.api.dto.component import (
 )
 from app.api.link.component import ComponentLinkBuilder
 from app.application.commands.commands import ComponentCommand, ComponentCommandType, ManualFormatLabel
+from app.application.service.compatibility_service import RankedComponent
+from app.domain.compatibility.format_label import accepts_manual_format_label, format_label_source
 from app.domain.models.component import Component, ComponentSource
 from app.domain.models.component_domain import ComponentDomain
 from app.domain.models.parameter import Parameter
@@ -59,6 +62,8 @@ class ComponentTransformer:
             format=parameter.format,
             format_label=parameter.format_label,
             ontology_url=ontology_url,
+            format_label_source=format_label_source(parameter, ontology_url),
+            accepts_manual_format_label=accepts_manual_format_label(parameter, ontology_url),
             direction=parameter.direction,
         )
 
@@ -122,6 +127,20 @@ class ComponentTransformer:
         return ComponentLinkBuilder(current_user).attach_links(dto, component)
 
     @staticmethod
+    def to_ranked_list_item(
+        ranked: RankedComponent, is_favorite: bool, current_user: User | None
+    ) -> ComponentListItemDto:
+        dto = ComponentTransformer.to_list_item(ranked.component, is_favorite, current_user, include_parameters=True)
+        match = ranked.match
+        dto.match = ComponentMatchDto(
+            score=match.score,
+            status=match.status,
+            component_id=match.frame.component_id if match.frame else None,
+            component_name=match.frame.component_name if match.frame else None,
+        )
+        return dto
+
+    @staticmethod
     def to_parameter(parameter: Parameter, ontology_url: str | None) -> ParameterDto:
         return ParameterDto(
             id=parameter.id,
@@ -132,6 +151,8 @@ class ComponentTransformer:
             format=parameter.format,
             format_label=parameter.format_label,
             ontology_url=ontology_url,
+            format_label_source=format_label_source(parameter, ontology_url),
+            accepts_manual_format_label=accepts_manual_format_label(parameter, ontology_url),
             direction=parameter.direction,
         )
 

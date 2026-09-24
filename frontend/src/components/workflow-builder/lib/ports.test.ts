@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { ParameterDirection, isManualFormatLabel, type ParameterDisplayModel } from '@/api/components';
+import {
+  FormatLabelSource,
+  ParameterDirection,
+  isManualFormatLabel,
+  type ParameterDisplayModel,
+} from '@/api/components';
 import { formatNoteFor } from './ports';
-
-const EDAM = 'http://ontology/edam_eo.owl';
 
 const port = (overrides: Partial<ParameterDisplayModel>): ParameterDisplayModel => ({
   id: 'p',
@@ -13,36 +16,27 @@ const port = (overrides: Partial<ParameterDisplayModel>): ParameterDisplayModel 
   format: null,
   formatLabel: null,
   ontologyUrl: null,
+  formatLabelSource: null,
+  acceptsManualFormatLabel: true,
   direction: ParameterDirection.INPUT,
   directionDisplay: 'Input',
   ...overrides,
 });
 
+const BAM = { format: 'http://edamontology.org/format_2572', formatLabel: 'BAM' };
+
 describe('isManualFormatLabel', () => {
-  it('flags a label on a port without an ontology format', () => {
-    expect(isManualFormatLabel(port({ formatLabel: 'RDS' }))).toBe(true);
-    expect(isManualFormatLabel(port({ format: 'rds', formatLabel: 'RDS' }))).toBe(true);
-  });
-
-  it('does not flag a label resolved from the ontology', () => {
-    const bam = port({ format: 'http://edamontology.org/format_2572', formatLabel: 'BAM', ontologyUrl: EDAM });
-    expect(isManualFormatLabel(bam)).toBe(false);
-  });
-
-  it('does not flag labels from canvases saved before ontologyUrl existed', () => {
-    const legacy = port({ format: 'http://edamontology.org/format_2572', formatLabel: 'BAM' });
-    delete (legacy as Partial<ParameterDisplayModel>).ontologyUrl;
-    expect(isManualFormatLabel(legacy)).toBe(false);
-  });
-
-  it('is false without a label', () => {
+  it('reads the backend decision', () => {
+    expect(isManualFormatLabel(port({ formatLabel: 'RDS', formatLabelSource: FormatLabelSource.MANUAL }))).toBe(true);
+    expect(isManualFormatLabel(port({ ...BAM, formatLabelSource: FormatLabelSource.ONTOLOGY }))).toBe(false);
     expect(isManualFormatLabel(port({}))).toBe(false);
   });
 });
 
 describe('formatNoteFor', () => {
   it('explains a manual label', () => {
-    expect(formatNoteFor(port({ formatLabel: 'RDS' }))).toContain('"RDS" was entered by hand');
+    const rds = port({ formatLabel: 'RDS', formatLabelSource: FormatLabelSource.MANUAL });
+    expect(formatNoteFor(rds)).toContain('"RDS" was entered by hand');
   });
 
   it('explains a missing or non-ontology format', () => {
@@ -50,8 +44,18 @@ describe('formatNoteFor', () => {
     expect(formatNoteFor(port({ format: 'rds' }))).toContain('"rds" is not an ontology format');
   });
 
-  it('says nothing for an ontology format', () => {
-    const bam = port({ format: 'http://edamontology.org/format_2572', formatLabel: 'BAM', ontologyUrl: EDAM });
-    expect(formatNoteFor(bam)).toBeNull();
+  it('says nothing for an ontology format with its label', () => {
+    expect(formatNoteFor(port({ ...BAM, formatLabelSource: FormatLabelSource.ONTOLOGY }))).toBeNull();
+  });
+
+  it('explains an ontology format whose name is missing', () => {
+    const raster = port({ format: 'http://edamontology.org/format_4125', formatLabelSource: FormatLabelSource.UNRESOLVED });
+    expect(formatNoteFor(raster)).toContain('name could not be looked up');
+  });
+
+  it('says nothing for canvases saved before formatLabelSource existed', () => {
+    const legacy = port({ ...BAM });
+    delete (legacy as Partial<ParameterDisplayModel>).formatLabelSource;
+    expect(formatNoteFor(legacy)).toBeNull();
   });
 });

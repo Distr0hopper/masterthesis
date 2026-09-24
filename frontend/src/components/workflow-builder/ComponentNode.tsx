@@ -1,7 +1,12 @@
 import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react';
-import { ExternalLink, PenLine, Trash2 } from 'lucide-react';
-import { isManualFormatLabel, type ParameterDisplayModel } from '@/api/components';
-import { configParameters, dataInputs, dataOutputs } from './lib/typeChecking';
+import { ExternalLink, Info, PenLine, Trash2 } from 'lucide-react';
+import {
+  UNRESOLVED_FORMAT_HINT,
+  isManualFormatLabel,
+  isUnresolvedFormatLabel,
+  type ParameterDisplayModel,
+} from '@/api/components';
+import { configParameters, dataInputs, dataOutputs } from './lib/portKinds';
 import { formatPortType } from './lib/ports';
 import { ROUTES } from '@/lib/routes';
 import type { ComponentFlowNode } from './types';
@@ -54,6 +59,11 @@ function PortRow({ parameter, side }: PortRowProps) {
           >
             <title>Format label entered by hand - not verified</title>
           </PenLine>
+        )}
+        {isUnresolvedFormatLabel(parameter) && (
+          <Info size={10} className="shrink-0 text-slate-400" aria-label="Format name unavailable">
+            <title>{UNRESOLVED_FORMAT_HINT}</title>
+          </Info>
         )}
       </div>
     </div>

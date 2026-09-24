@@ -4,14 +4,13 @@ import {
 } from '@/api/components';
 import { cn } from '@/lib/utils';
 import { ROUTES } from '@/lib/routes';
-import { NO_DATA_INPUTS_SCORE, type CompatibilityMatch } from './lib/typeChecking';
+import { NO_DATA_INPUTS_SCORE } from './lib/portKinds';
 import { DRAG_MIME, type ComponentDragPayload } from './types';
 import { DomainBadges } from '@/components/common/DomainBadges';
 
 interface ComponentPaletteCardProps {
+  /** `component.match` is the backend's ranking of this candidate against the canvas */
   component: ComponentDisplayModel;
-  /** ranking result for this candidate against the current canvas */
-  match: CompatibilityMatch;
 }
 
 /**
@@ -19,9 +18,8 @@ interface ComponentPaletteCardProps {
  * drag source; dropping it on the canvas costs no request because the payload carries
  * every field a node needs (see {@link ComponentDragPayload}).
  */
-export function ComponentPaletteCard({ component, match }: ComponentPaletteCardProps) {
-  // safe to call per card - useDomains() has a 1h staleTime, so every card reads the
-  // same cached entry rather than triggering a request of its own
+export function ComponentPaletteCard({ component }: ComponentPaletteCardProps) {
+  const { match } = component;
 
   return (
     <div
@@ -39,7 +37,7 @@ export function ComponentPaletteCard({ component, match }: ComponentPaletteCardP
       className={cn(
         'flex cursor-grab flex-col gap-2 rounded-md border border-slate-200 bg-white p-3 transition-colors hover:border-jmu-blue-300 active:cursor-grabbing',
         // no data inputs at all - still draggable, just de-emphasised
-        match.score === NO_DATA_INPUTS_SCORE && 'opacity-60',
+        match?.score === NO_DATA_INPUTS_SCORE && 'opacity-60',
       )}
     >
       <div className="flex items-start justify-between gap-2">
@@ -71,19 +69,19 @@ export function ComponentPaletteCard({ component, match }: ComponentPaletteCardP
         </div>
       </div>
 
-      {match.frame && match.status === 'compatible' && (
+      {match?.componentName && match.status === 'compatible' && (
         <span className="flex items-center gap-1 text-xs text-green-600">
           <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-green-500" />
-          <span className="truncate">Compatible with {match.frame.componentName}</span>
+          <span className="truncate">Compatible with {match.componentName}</span>
         </span>
       )}
-      {match.frame && match.status === 'unverified' && (
+      {match?.componentName && match.status === 'unverified' && (
         <span
           className="flex items-center gap-1 text-xs text-amber-600"
           title="The file types fit, but the formats could not be verified"
         >
           <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
-          <span className="truncate">Possibly compatible with {match.frame.componentName}</span>
+          <span className="truncate">Possibly compatible with {match.componentName}</span>
         </span>
       )}
 

@@ -7,7 +7,6 @@ import {
   type EdgeProps,
 } from '@xyflow/react';
 import { AlertTriangle, X } from 'lucide-react';
-import { UNVERIFIED_REASON_TEXT } from './lib/typeChecking';
 import type { ComponentEdgeData } from './types';
 
 /** dashed amber: allowed, but the formats on either end couldn't be checked */
@@ -16,7 +15,7 @@ const UNVERIFIED_STYLE = { stroke: '#f59e0b', strokeDasharray: '6 4' };
 /**
  * A smoothstep edge with a delete button at its midpoint. Without this, a connection can
  * only be removed by selecting it and pressing Delete - undiscoverable, and awkward on a
- * thin target. An unverified connection (see typeChecking.checkPorts) is drawn dashed
+ * thin target. A connection the backend reports as unverified is drawn dashed
  * amber with a warning badge explaining why.
  */
 export function ComponentEdge({
@@ -42,7 +41,7 @@ export function ComponentEdge({
     targetPosition,
   });
 
-  const unverifiedReason = data?.check?.status === 'unverified' ? data.check.reason : undefined;
+  const unverifiedMessage = data?.check?.status === 'unverified' ? data.check.message : undefined;
 
   return (
     <>
@@ -50,18 +49,17 @@ export function ComponentEdge({
         id={id}
         path={edgePath}
         markerEnd={markerEnd}
-        style={unverifiedReason ? { ...style, ...UNVERIFIED_STYLE } : style}
+        style={unverifiedMessage ? { ...style, ...UNVERIFIED_STYLE } : style}
       />
 
       {/* EdgeLabelRenderer hoists this out of the SVG into a DOM overlay, so it can be a
           real <button>. That overlay is pointer-events:none, hence the explicit re-enable. */}
       <EdgeLabelRenderer>
-        {unverifiedReason && (
+        {unverifiedMessage && (
           <span
             className="nodrag nopan pointer-events-auto absolute flex h-5 w-5 items-center justify-center rounded-full border border-amber-300 bg-amber-50 text-amber-600 shadow-sm"
-            // sits just left of the delete button
             style={{ transform: `translate(-50%, -50%) translate(${labelX - 24}px, ${labelY}px)` }}
-            title={`Not verified: ${UNVERIFIED_REASON_TEXT[unverifiedReason]}`}
+            title={`Not verified: ${unverifiedMessage}`}
             aria-label="Connection not verified"
           >
             <AlertTriangle size={12} />
@@ -69,7 +67,6 @@ export function ComponentEdge({
         )}
         <button
           type="button"
-          // nodrag/nopan: without them a click here starts a canvas pan instead
           className="nodrag nopan pointer-events-auto absolute flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-400 shadow-sm transition-colors hover:border-destructive hover:bg-destructive hover:text-destructive-foreground"
           style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
           aria-label="Remove connection"

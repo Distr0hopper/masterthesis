@@ -3,8 +3,10 @@ import type {
   ComponentCreatorDto,
   ComponentDetailDto,
   ComponentListItemDto,
+  ComponentMatchDto,
   ComponentPreviewDto,
   DomainDto,
+  FormatLabelSource,
   PackageComponentDto,
   ParameterDto,
 } from './types';
@@ -46,8 +48,8 @@ export interface ComponentDisplayModel extends WithHateoasLinks {
   createdAt: Date;
   createdAtDisplay: string;
   isFavorite: boolean;
-  /** empty unless the list request opted in via `includeParameters` (always populated on detail) */
   parameters: ParameterDisplayModel[];
+  match: ComponentMatchDto | null;
 }
 
 export interface ParameterDisplayModel {
@@ -59,6 +61,8 @@ export interface ParameterDisplayModel {
   format: string | null;
   formatLabel: string | null;
   ontologyUrl: string | null;
+  formatLabelSource: FormatLabelSource | null;
+  acceptsManualFormatLabel: boolean;
   direction: ParameterDirection;
   directionDisplay: string;
 }
@@ -140,6 +144,7 @@ export const componentTransformer = {
       createdAtDisplay: formatDate(createdAt),
       isFavorite: dto.isFavorite,
       parameters: dto.parameters?.map(componentTransformer.toParameterDisplayModel) ?? [],
+      match: dto.match ?? null,
       _links: dto._links,
     };
   },
@@ -182,6 +187,7 @@ export const componentTransformer = {
       createdAt: now,
       createdAtDisplay: formatDate(now),
       isFavorite: false,
+      match: null,
       source: ComponentSource.MANUAL_UPLOAD,
       sourceDisplay: SOURCE_LABELS[ComponentSource.MANUAL_UPLOAD],
       repoCommitSha: null,

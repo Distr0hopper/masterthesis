@@ -19,6 +19,7 @@ from app.application.exception.component_exceptions import (
     MissingCommandPayloadError,
     PackagingFailedError,
 )
+from app.domain.compatibility.format_label import accepts_manual_format_label
 from app.domain.models.component_domain import ComponentDomain
 from app.domain.models.component import MAX_DESCRIPTION_LENGTH, Component, ComponentSource, ComponentStatus
 from app.domain.models.parameter import Parameter
@@ -83,6 +84,12 @@ class ComponentsService:
         filter = ComponentListFilter(created_by=created_by_id, status=status)
         return await self.components_repository.find_paginated(filter, pagination)
 
+    async def list_all_components(self, filter: ComponentListFilter) -> list[Component]:
+        """Every component list_components would page through, unpaged - for callers that
+        must order the whole set themselves before paging (the builder palette's ranking)."""
+        filter = replace(filter, status=ComponentStatus.PUBLISHED, created_by=None)
+        return await self.components_repository.find_all_filtered(filter)
+
     async def get_latest_components(self, limit: int) -> list[Component]:
         components = await self.components_repository.find_all(ComponentStatus.PUBLISHED)
         return sorted(components, key=lambda c: c.created_at, reverse=True)[:limit]
@@ -101,7 +108,7 @@ class ComponentsService:
 
     async def get_visible_component(self, component_id: uuid.UUID, current_user: User | None) -> Component:
         component = await self.get_component(component_id)
-        if not self._is_visible(component, current_user):
+        if not self.is_visible(component, current_user):
             raise ComponentNotFoundError(component_id)
         return component
 
@@ -110,10 +117,10 @@ class ComponentsService:
 
     async def get_visible_versions(self, component: Component, current_user: User | None) -> list[Component]:
         versions = await self.get_versions(component)
-        return [v for v in versions if self._is_visible(v, current_user)]
+        return [v for v in versions if self.is_visible(v, current_user)]
 
     @staticmethod
-    def _is_visible(component: Component, current_user: User | None) -> bool:
+    def is_visible(component: Component, current_user: User | None) -> bool:
         if component.status == ComponentStatus.PUBLISHED:
             return True
         return current_user is not None and component.created_by_id == current_user.id
@@ -147,7 +154,7 @@ class ComponentsService:
         a component they cannot open is a dead end.
         """
         existing = await self.find_latest_version_by_name(name)
-        if existing is None or not self._is_visible(existing, current_user):
+        if existing is None or not self.is_visible(existing, current_user):
             return None
         return existing
 
@@ -370,22 +377,11 @@ class ComponentsService:
         self._apply_manual_format_labels(component, format_labels)
         return await self._save_and_reload(component)
 
-    @staticmethod
-    def accepts_manual_format_label(component: Component, parameter: Parameter) -> bool:
-        """Whether a port's label is the user's to write: a File port whose format no
-        ontology resolves - none at all, or a bare token like `rds` (only a namespaced
-        format expands to a URI). An ontology-resolved label is never overwritten by hand."""
-        is_file = parameter.cwl_type.strip().lower().startswith("file")
-        has_ontology_format = (
-            parameter.format is not None and "://" in parameter.format and component.ontology_url is not None
-        )
-        return is_file and not has_ontology_format
-
     def _apply_manual_format_labels(self, component: Component, format_labels: list[ManualFormatLabel]) -> None:
         by_port = {(label.name, label.direction): label for label in format_labels}
         for parameter in component.parameters:
             label = by_port.get((parameter.name, parameter.direction))
-            if label is None or not self.accepts_manual_format_label(component, parameter):
+            if label is None or not accepts_manual_format_label(parameter, component.ontology_url):
                 continue
             parameter.format_label = (label.label or "").strip() or None
 
@@ -393,7 +389,7 @@ class ComponentsService:
         return [
             ManualFormatLabel(name=p.name, direction=p.direction, label=p.format_label)
             for p in component.parameters
-            if p.format_label and self.accepts_manual_format_label(component, p)
+            if p.format_label and accepts_manual_format_label(p, component.ontology_url)
         ]
 
     async def remove(self, component: Component) -> None:

@@ -1,8 +1,8 @@
 import { apiClient } from '../client';
-import type { CompatibilityResponseDto, FormatPairDto } from './types';
+import type { CompatibilityResponseDto, ConnectionDto } from './types';
 
 export const compatibilityService = {
-  check(pairs: FormatPairDto[]): Promise<CompatibilityResponseDto> {
-    return apiClient.post('/compatibility', { pairs });
+  check(connections: ConnectionDto[]): Promise<CompatibilityResponseDto> {
+    return apiClient.post('/compatibility', { connections });
   },
 };

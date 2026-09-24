@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toListDisplayModel, toSplitDisplayModel } from '@/api/helpers';
 import { componentsService } from './service';
 import { componentTransformer } from './transformer';
@@ -50,6 +50,29 @@ export const useComponents = (params: ComponentListQueryParams) => {
     queryKey: componentKeys.lists(params),
     queryFn: () => componentsService.getAll(params),
     select: (response) => toListDisplayModel(response, componentTransformer.toListDisplayModels),
+  });
+};
+
+/**
+ * The component list one page at a time, pages accumulating as `fetchNextPage` is called -
+ * for the builder palette, which scrolls rather than pages. `limit` is the page size.
+ */
+export const useInfiniteComponents = (params: Omit<ComponentListQueryParams, 'offset'> & { limit: number }) => {
+  return useInfiniteQuery({
+    queryKey: [...componentKeys.all, 'infinite', params] as const,
+    queryFn: ({ pageParam }) => componentsService.getAll({ ...params, offset: pageParam }),
+    initialPageParam: 0,
+    getNextPageParam: (last) => {
+      const next = last.offset + last.limit;
+      return next < last.totalElements ? next : undefined;
+    },
+    select: (data) => ({
+      items: data.pages.flatMap((page) => componentTransformer.toListDisplayModels(page.content)),
+      total: data.pages[0]?.totalElements ?? 0,
+    }),
+    // a changed filter or canvas (rankAgainst) starts a new list - keep the old one shown
+    // until it arrives instead of flashing "Loading..."
+    placeholderData: keepPreviousData,
   });
 };
 

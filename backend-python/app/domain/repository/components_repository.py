@@ -85,6 +85,20 @@ class ComponentsRepository:
         result = await self.db.exec(items_query)
         return list(result.all()), total
 
+    async def find_all_filtered(self, filter: ComponentListFilter) -> list[Component]:
+        """find_paginated without the paging - the latest version per name, by name."""
+        query = self._apply_filters(select(Component).distinct(Component.name), filter).order_by(
+            Component.name, Component.version.desc()
+        )
+        result = await self.db.exec(query)
+        return list(result.all())
+
+    async def find_by_ids(self, ids: list[uuid.UUID]) -> list[Component]:
+        if not ids:
+            return []
+        result = await self.db.exec(select(Component).where(Component.id.in_(ids)))
+        return list(result.all())
+
     async def count_distinct_names(self, status: ComponentStatus | None = None) -> int:
         query = select(func.count(func.distinct(Component.name)))
         if status is not None:
@@ -111,11 +125,6 @@ class ComponentsRepository:
         query = select(Component).where(Component.repo_url == repo_url).order_by(Component.version.desc())
         result = await self.db.exec(query)
         return result.first()
-
-    async def exists_ontology_url(self, ontology_url: str) -> bool:
-        query = select(Component.id).where(Component.ontology_url == ontology_url).limit(1)
-        result = await self.db.exec(query)
-        return result.first() is not None
 
     async def save(self, component: Component) -> Component:
         self.db.add(component)

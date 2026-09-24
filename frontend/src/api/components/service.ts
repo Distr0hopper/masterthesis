@@ -25,6 +25,7 @@ export const componentsService = {
         favoritesOnly: params.favoritesOnly || undefined,
         search: params.search || undefined,
         includeParameters: params.includeParameters || undefined,
+        rankAgainst: params.rankAgainst?.length ? params.rankAgainst : undefined,
         limit: params.limit,
         offset: params.offset,
       },

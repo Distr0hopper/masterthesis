@@ -1,13 +1,16 @@
-import { ParameterDirection, type FormatLabelDto } from './types';
+import { FormatLabelSource, type FormatLabelDto, type ParameterDirection } from './types';
 
-/** The parameter fields the hand-label rules read - fits DTOs and display models alike. */
+/**
+ * The parameter fields the hand-label helpers read - fits DTOs and display models alike.
+ * Which ports accept a label, and where a label came from, are the backend's decisions
+ * (`acceptsManualFormatLabel`, `formatLabelSource`); these helpers only read them.
+ */
 interface LabelablePort {
   name: string;
-  cwlType: string;
   direction: ParameterDirection;
-  format: string | null;
   formatLabel: string | null;
-  ontologyUrl: string | null;
+  formatLabelSource?: FormatLabelSource | null;
+  acceptsManualFormatLabel?: boolean;
 }
 
 /** Hand-written labels being edited, keyed by {@link formatLabelKey}. */
@@ -16,27 +19,27 @@ export type FormatLabelDraft = Record<string, string>;
 export const formatLabelKey = (port: Pick<LabelablePort, 'name' | 'direction'>) => `${port.direction}:${port.name}`;
 
 /**
- * Whether a port's label is the user's to write - mirrors
- * ComponentsService.accepts_manual_format_label: a File port whose format no ontology
- * resolves (none at all, or a bare token like `rds` - only a namespaced format is a URI).
+ * Whether a port's label was written by hand. Canvases saved before the backend sent
+ * `formatLabelSource` carry parameters without it - those show no hint.
  */
-export function acceptsManualFormatLabel(port: LabelablePort): boolean {
-  const isFile = port.cwlType.trim().toLowerCase().startsWith('file');
-  const hasOntologyFormat = Boolean(port.format?.includes('://') && port.ontologyUrl);
-  return isFile && !hasOntologyFormat;
+export function isManualFormatLabel(port: LabelablePort): boolean {
+  return port.formatLabelSource === FormatLabelSource.MANUAL;
 }
 
 /**
- * Whether a port's label was written by hand rather than resolved from an ontology.
- * `ontologyUrl` is checked for undefined on purpose: canvases saved before it existed
- * carry parameters without it, and every label from that time was ontology-resolved.
+ * Whether a port has an ontology format whose name couldn't be looked up - the format
+ * service was unreachable on upload, or the ontology has no label for it (e.g. EDAM's
+ * format_4125 "raster"). The format is still real and still checked; only its name is missing.
  */
-export function isManualFormatLabel(port: LabelablePort): boolean {
-  return Boolean(port.formatLabel) && port.ontologyUrl !== undefined && acceptsManualFormatLabel(port);
+export function isUnresolvedFormatLabel(port: LabelablePort): boolean {
+  return port.formatLabelSource === FormatLabelSource.UNRESOLVED;
 }
 
+export const UNRESOLVED_FORMAT_HINT =
+  'Format from the ontology, but its name could not be looked up. Connections to this port are still checked.';
+
 export function labelablePorts<T extends LabelablePort>(parameters: T[]): T[] {
-  return parameters.filter(acceptsManualFormatLabel);
+  return parameters.filter((p) => p.acceptsManualFormatLabel);
 }
 
 /** The labels a component already carries, as an editable draft. */
@@ -55,9 +58,9 @@ export function toFormatLabelDtos(parameters: LabelablePort[], draft: FormatLabe
 
 /** `parameters` with the draft's labels applied - so a preview shows them before saving. */
 export function withFormatLabels<T extends LabelablePort>(parameters: T[], draft: FormatLabelDraft): T[] {
-  return parameters.map((p) =>
-    acceptsManualFormatLabel(p) && formatLabelKey(p) in draft
-      ? { ...p, formatLabel: draft[formatLabelKey(p)].trim() || null }
-      : p,
-  );
+  return parameters.map((p) => {
+    if (!p.acceptsManualFormatLabel || !(formatLabelKey(p) in draft)) return p;
+    const label = draft[formatLabelKey(p)].trim() || null;
+    return { ...p, formatLabel: label, formatLabelSource: label ? FormatLabelSource.MANUAL : null };
+  });
 }

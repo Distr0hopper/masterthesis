@@ -7,7 +7,7 @@ import {
   dataOutputs,
   isBooleanParameter,
   isNumericParameter,
-} from './lib/typeChecking';
+} from './lib/portKinds';
 import { formatNoteFor, formatPortType } from './lib/ports';
 import { ROUTES } from '@/lib/routes';
 import type { ComponentFlowNode } from './types';

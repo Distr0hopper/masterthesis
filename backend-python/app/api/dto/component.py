@@ -8,6 +8,8 @@ from pydantic import Field, Json, field_validator
 
 from app.api.dto.base import CamelModel
 from app.api.link.model import LinkModel
+from app.domain.compatibility.format_label import FormatLabelSource
+from app.domain.compatibility.port_check import ConnectionStatus
 from app.domain.models.component import MAX_DESCRIPTION_LENGTH, ComponentSource, ComponentStatus
 from app.domain.models.component_domain import VALID_DOMAINS
 from app.domain.models.parameter import ParameterDirection
@@ -82,6 +84,10 @@ class ParameterDto(CamelModel):
     # the owning component's ontology (Component.ontology_url), repeated per port so the
     # builder can tell from a port alone whether two formats are comparable
     ontology_url: str | None
+    #: where format_label came from - null when there is neither label nor ontology format
+    format_label_source: FormatLabelSource | None
+    #: whether a hand-written label may be set on this port (UPDATE_FORMAT_LABELS, upload)
+    accepts_manual_format_label: bool
     direction: ParameterDirection
 
 
@@ -108,6 +114,21 @@ class ComponentListItemDto(CamelModel, LinkModel):
     # every listed component at once to rank its palette. Costs no extra query - the
     # relationship is already lazy="selectin", so these rows are loaded either way.
     parameters: list[ParameterDto] | None = None
+    # only present when the request passed `rankAgainst` - how this component fits the
+    # builder canvas it was ranked against (null: nothing on the canvas fits it)
+    match: "ComponentMatchDto | None" = None
+
+
+class ComponentMatchDto(CamelModel):
+    """A palette candidate's best fit on the canvas."""
+
+    #: higher ranks first; negative when the component has no data inputs at all
+    score: int
+    #: compatible (format-checked) or unverified (the types fit, the formats are unknown)
+    status: ConnectionStatus | None
+    #: the canvas component whose outputs it fits - null when nothing matched
+    component_id: uuid.UUID | None
+    component_name: str | None
 
 
 class ComponentDetailDto(CamelModel, LinkModel):
@@ -149,6 +170,10 @@ class PreviewParameterDto(CamelModel):
     # the owning component's ontology (Component.ontology_url), repeated per port so the
     # builder can tell from a port alone whether two formats are comparable
     ontology_url: str | None
+    #: where format_label came from - null when there is neither label nor ontology format
+    format_label_source: FormatLabelSource | None
+    #: whether a hand-written label may be set on this port (UPDATE_FORMAT_LABELS, upload)
+    accepts_manual_format_label: bool
     direction: ParameterDirection
 
 

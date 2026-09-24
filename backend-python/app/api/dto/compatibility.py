@@ -1,29 +1,34 @@
+import uuid
+
 from pydantic import Field
 
 from app.api.dto.base import CamelModel
+from app.domain.compatibility.port_check import ConnectionStatus, UnverifiedReason
 
-MAX_COMPATIBILITY_PAIRS = 200
+MAX_CONNECTIONS = 200
 
 
-class FormatPairDto(CamelModel):
-    #: the output port's format
-    actual_format: str
-    #: the input port's format
-    expected_format: str
-    #: both ports' ontology (Component.ontology_url) - pairs across ontologies can't be checked
-    ontology_url: str
+class ConnectionDto(CamelModel):
+    """A builder edge: the output `sourcePort` of one component feeding the input `targetPort` of another."""
+
+    source_component_id: uuid.UUID
+    source_port: str
+    target_component_id: uuid.UUID
+    target_port: str
 
 
 class CompatibilityRequestDto(CamelModel):
-    pairs: list[FormatPairDto] = Field(max_length=MAX_COMPATIBILITY_PAIRS)
+    connections: list[ConnectionDto] = Field(max_length=MAX_CONNECTIONS)
 
 
-class FormatPairResultDto(FormatPairDto):
-    #: null when the pair couldn't be checked (format service unavailable, or an ontology
-    #: no component uses) - the builder treats that as an unverified connection
-    compatible: bool | None
+class ConnectionCheckDto(CamelModel):
+    status: ConnectionStatus
+    #: why the check was inconclusive - set only when status is unverified
+    reason: UnverifiedReason | None
+    #: ready-to-show explanation - null for a plain compatible connection
+    message: str | None
 
 
 class CompatibilityResponseDto(CamelModel):
-    #: one per requested pair, in request order
-    results: list[FormatPairResultDto]
+    #: one per requested connection, in request order
+    results: list[ConnectionCheckDto]

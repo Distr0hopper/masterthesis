@@ -1,16 +1,28 @@
-export interface FormatPairDto {
-  /** the output port's format */
-  actualFormat: string;
-  /** the input port's format */
-  expectedFormat: string;
-  ontologyUrl: string;
+import type { ConnectionStatus } from '@/api/components/types';
+
+/** A builder edge: the output `sourcePort` of one component feeding the input `targetPort` of another. */
+export interface ConnectionDto {
+  sourceComponentId: string;
+  sourcePort: string;
+  targetComponentId: string;
+  targetPort: string;
 }
 
-export interface FormatPairResultDto extends FormatPairDto {
-  /** null when the pair couldn't be checked - treated as unverified */
-  compatible: boolean | null;
+export type UnverifiedReason =
+  | 'missing-formats'
+  | 'missing-input-format'
+  | 'missing-output-format'
+  | 'unknown-ontology'
+  | 'different-ontology'
+  | 'not-checked';
+
+/** The backend's verdict on one connection. */
+export interface ConnectionCheckDto {
+  status: ConnectionStatus;
+  reason: UnverifiedReason | null;
+  message: string | null;
 }
 
 export interface CompatibilityResponseDto {
-  results: FormatPairResultDto[];
+  results: ConnectionCheckDto[];
 }

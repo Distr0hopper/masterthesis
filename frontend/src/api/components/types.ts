@@ -5,7 +5,6 @@ export type ComponentDomain = string;
 export interface DomainDto {
   id: string;
   color: string;
-  /** short hint shown beside the domain pickers; null for domains that need no gloss */
   description: string | null;
 }
 
@@ -21,6 +20,26 @@ export const ComponentStatus = {
 } as const;
 export type ComponentStatus = (typeof ComponentStatus)[keyof typeof ComponentStatus];
 
+export const FormatLabelSource = {
+  /** resolved from the component's ontology by the format service */
+  ONTOLOGY: 'ontology',
+  /** written by hand for a port no ontology covers (e.g. "RDS") - display only */
+  MANUAL: 'manual',
+  /** an ontology format whose label could not be resolved (yet) */
+  UNRESOLVED: 'unresolved',
+} as const;
+export type FormatLabelSource = (typeof FormatLabelSource)[keyof typeof FormatLabelSource];
+
+export type ConnectionStatus = 'compatible' | 'incompatible' | 'unverified';
+
+/** A palette candidate's best fit on the builder canvas, as ranked by the backend. */
+export interface ComponentMatchDto {
+  score: number;
+  status: Exclude<ConnectionStatus, 'incompatible'> | null;
+  componentId: string | null;
+  componentName: string | null;
+}
+
 export const ParameterDirection = {
   INPUT: 'input',
   OUTPUT: 'output',
@@ -35,8 +54,9 @@ export interface ParameterDto {
   description: string | null;
   format: string | null;
   formatLabel: string | null;
-  /** the owning component's ontology - two ports' formats are only comparable within one */
   ontologyUrl: string | null;
+  formatLabelSource: FormatLabelSource | null;
+  acceptsManualFormatLabel: boolean;
   direction: ParameterDirection;
 }
 
@@ -54,7 +74,6 @@ export interface ExistingComponentDto {
 export interface NameAvailabilityDto {
   name: string;
   available: boolean;
-  /** the latest version of the lineage already holding this name, if any */
   existing: ExistingComponentDto | null;
 }
 
@@ -82,8 +101,9 @@ export interface PreviewParameterDto {
   description: string | null;
   format: string | null;
   formatLabel: string | null;
-  /** the owning component's ontology - two ports' formats are only comparable within one */
   ontologyUrl: string | null;
+  formatLabelSource: FormatLabelSource | null;
+  acceptsManualFormatLabel: boolean;
   direction: ParameterDirection;
 }
 
@@ -120,7 +140,6 @@ export type ComponentCommandExecuteRequest =
 export interface FormatLabelDto {
   name: string;
   direction: ParameterDirection;
-  /** null clears the label */
   label: string | null;
 }
 
@@ -135,8 +154,8 @@ export interface ComponentListItemDto extends WithHateoasLinks {
   status: ComponentStatus;
   createdAt: string;
   isFavorite: boolean;
-  /** only present when the request passed `includeParameters: true` - null otherwise */
   parameters: ParameterDto[] | null;
+  match?: ComponentMatchDto | null;
 }
 
 export interface ComponentCreatorDto {
@@ -197,5 +216,6 @@ export interface ComponentListQueryParams extends PageParams<ComponentListItemDt
   favoritesOnly?: boolean;
   search?: string;
   includeParameters?: boolean;
+  rankAgainst?: string[];
 }
 export type MyComponentsResponseDto = SplitPageResponse<ComponentListItemDto>;

@@ -1,6 +1,6 @@
 import type { Edge } from '@xyflow/react';
 import { DEFAULT_WORKFLOW_NAME } from './canvasState';
-import { dataInputs } from './typeChecking';
+import { dataInputs } from './portKinds';
 import type { ComponentFlowNode } from '../types';
 
 export type ValidationErrorType =

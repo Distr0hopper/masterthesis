@@ -17,15 +17,12 @@ import { WorkflowInspector } from '@/components/workflow-builder/WorkflowInspect
 import { WorkflowSidebar } from '@/components/workflow-builder/WorkflowSidebar';
 import { WorkflowTopBar } from '@/components/workflow-builder/WorkflowTopBar';
 import {
-  UNVERIFIED_REASON_TEXT,
-  buildOutputStack,
-  checkPorts,
-  findPort,
-  formatPairFor,
-  type FormatPair,
-  type TypedParameter,
-} from '@/components/workflow-builder/lib/typeChecking';
-import { fetchCompatibility, readCompatibility, useFormatCompatibility } from '@/api/compatibility';
+  checkConnection,
+  connectionKey,
+  useConnectionChecks,
+  type ConnectionCheckDto,
+  type ConnectionDto,
+} from '@/api/compatibility';
 import {
   DEFAULT_WORKFLOW_NAME,
   parseCanvasState,
@@ -94,17 +91,25 @@ export default function WorkflowBuilderPage() {
     }
   }, [draft, restoredDraftId, setNodes, setEdges]);
 
-  const outputStack = useMemo(() => buildOutputStack(nodes), [nodes]);
+  // the palette ranks against every canvas node's component, most recently added first.
+  // Joined into a key so dragging a node (a new `nodes` array, same components) doesn't
+  // hand the sidebar a new array and re-rank
+  const rankAgainstKey = nodes.map((n) => n.data.componentId).reverse().join(',');
+  const rankAgainst = useMemo(() => (rankAgainstKey ? rankAgainstKey.split(',') : []), [rankAgainstKey]);
 
   const queryClient = useQueryClient();
 
-  const portsOf = useCallback(
-    (edge: Pick<Edge, 'source' | 'target' | 'sourceHandle' | 'targetHandle'>) => {
+  /** The edge as the backend addresses it - null when a node or port is gone from the canvas. */
+  const toConnectionDto = useCallback(
+    (edge: Pick<Edge, 'source' | 'target' | 'sourceHandle' | 'targetHandle'>): ConnectionDto | null => {
       const source = nodes.find((n) => n.id === edge.source);
       const target = nodes.find((n) => n.id === edge.target);
+      if (!source || !target || !edge.sourceHandle || !edge.targetHandle) return null;
       return {
-        sourcePort: source && findPort(source.data.parameters, edge.sourceHandle),
-        targetPort: target && findPort(target.data.parameters, edge.targetHandle),
+        sourceComponentId: source.data.componentId,
+        sourcePort: edge.sourceHandle,
+        targetComponentId: target.data.componentId,
+        targetPort: edge.targetHandle,
       };
     },
     [nodes],
@@ -112,58 +117,56 @@ export default function WorkflowBuilderPage() {
 
   const onConnect = useCallback(
     async (connection: Connection) => {
-      const { sourcePort, targetPort } = portsOf(connection);
-      if (!sourcePort || !targetPort) return;
+      const dto = toConnectionDto(connection);
+      if (!dto) return;
 
       const inputTaken = (candidates: Edge[]) =>
         candidates.some((e) => e.target === connection.target && e.targetHandle === connection.targetHandle);
       if (inputTaken(edges)) {
-        toast.error(`"${targetPort.name}" is already connected`);
+        toast.error(`"${dto.targetPort}" is already connected`);
         return;
       }
 
-      // a format question the palette hasn't already answered is asked now - drawing the
-      // edge waits for it, since a definite "incompatible" must block the connection
-      const pair = formatPairFor(sourcePort, targetPort);
-      if (pair) await fetchCompatibility(queryClient, [pair]);
-
-      const check = checkPorts(sourcePort, targetPort, readCompatibility(queryClient));
+      // the backend decides - drawing the edge waits for it, since "incompatible" must block
+      let check: ConnectionCheckDto;
+      try {
+        check = await checkConnection(queryClient, dto);
+      } catch {
+        toast.warning('Connected, but the connection could not be checked right now.');
+        setEdges((prev) => (inputTaken(prev) ? prev : addEdge(connection, prev)));
+        return;
+      }
       if (check.status === 'incompatible') {
-        toast.error(`Incompatible - ${portTypeName(sourcePort)} cannot feed ${portTypeName(targetPort)}`);
+        toast.error(check.message ?? 'These ports are incompatible.');
         return;
       }
-      if (check.reason) {
-        toast.warning(`Connected, but not verified - ${UNVERIFIED_REASON_TEXT[check.reason]}`);
+      if (check.status === 'unverified' && check.message) {
+        toast.warning(`Connected, but not verified - ${check.message}`);
       }
 
       // re-checked against the latest edges: the await above leaves a window for another connect
       setEdges((prev) => (inputTaken(prev) ? prev : addEdge(connection, prev)));
     },
-    [portsOf, edges, queryClient, setEdges],
+    [toConnectionDto, edges, queryClient, setEdges],
   );
 
-  // edges restored from a draft need their format questions answered too
-  const edgeFormatPairs = useMemo(
-    () =>
-      edges
-        .map((edge) => {
-          const { sourcePort, targetPort } = portsOf(edge);
-          return sourcePort && targetPort ? formatPairFor(sourcePort, targetPort) : null;
-        })
-        .filter((pair): pair is FormatPair => pair !== null),
-    [edges, portsOf],
+  // every edge's verdict, including edges restored from a draft - in one request
+  const edgeConnections = useMemo(
+    () => edges.map(toConnectionDto).filter((c): c is ConnectionDto => c !== null),
+    [edges, toConnectionDto],
   );
-  const edgeLookup = useFormatCompatibility(edgeFormatPairs);
+  const edgeChecks = useConnectionChecks(edgeConnections);
 
-  // the check result rides on each edge's data for ComponentEdge to render - derived on
-  // every change rather than stored, so it never ends up in a saved draft
+  // the verdict rides on each edge's data for ComponentEdge to render - derived on every
+  // change rather than stored, so it never ends up in a saved draft
   const checkedEdges = useMemo(
     () =>
       edges.map((edge): Edge<ComponentEdgeData> => {
-        const { sourcePort, targetPort } = portsOf(edge);
-        return { ...edge, data: { ...edge.data, check: checkPorts(sourcePort, targetPort, edgeLookup) } };
+        const dto = toConnectionDto(edge);
+        const check = dto ? edgeChecks.get(connectionKey(dto)) : undefined;
+        return { ...edge, data: { ...edge.data, check } };
       }),
-    [edges, portsOf, edgeLookup],
+    [edges, toConnectionDto, edgeChecks],
   );
 
   const onAddNode = useCallback(
@@ -283,7 +286,7 @@ export default function WorkflowBuilderPage() {
           updatedAt={draft?.updatedAt ?? null}
         />
         <div className="flex min-h-0 flex-1">
-          <WorkflowSidebar outputStack={outputStack} />
+          <WorkflowSidebar rankAgainst={rankAgainst} />
           {isError ? (
             <div className="flex flex-1 items-center justify-center text-slate-500">
               This workflow could not be loaded.
@@ -316,9 +319,4 @@ export default function WorkflowBuilderPage() {
       />
     </ReactFlowProvider>
   );
-}
-
-/** A port's type as the user knows it: its format label when it has one, else its cwlType. */
-function portTypeName(port: TypedParameter & { formatLabel?: string | null }): string {
-  return port.formatLabel ?? port.format ?? port.cwlType;
 }

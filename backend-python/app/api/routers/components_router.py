@@ -24,6 +24,7 @@ from app.api.permission.component_permission_validator import ComponentPermissio
 from app.api.transformer.component_transformer import ComponentTransformer
 from app.application.exception.favorites_exceptions import FavoritesRequireAuthError
 from app.application.service.auth_service import AuthService
+from app.application.service.compatibility_service import CompatibilityService
 from app.application.service.components_service import ComponentsService
 from app.application.service.favorites_service import FavoritesService
 from app.domain.models.component import ComponentStatus
@@ -45,6 +46,7 @@ async def _favorited_names(favorites_service: FavoritesService, user: User | Non
 @router.get("", response_model=PaginatedResponseDtoV1[ComponentListItemDto])
 async def list_components(
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
+    compatibility_service: Annotated[CompatibilityService, Depends(CompatibilityService.get_service)],
     favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
     current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
     pagination_dto: Annotated[ListQueryPaginationDtoV1, Depends()],
@@ -57,6 +59,10 @@ async def list_components(
     # off by default so the browse grid keeps its slim payload - only the workflow
     # builder, which type-checks every listed component's ports, asks for these
     include_parameters: Annotated[bool, Query(alias="includeParameters")] = False,
+    # repeatable: the component of every workflow-builder canvas node, most recently added
+    # first. Switches the list to the builder palette's order - ranked by how well each
+    # component fits the canvas, before paging - and implies includeParameters
+    rank_against: Annotated[list[uuid.UUID] | None, Query(alias="rankAgainst")] = None,
 ) -> PaginatedResponseDtoV1[ComponentListItemDto]:
     if favorites_only and current_user is None:
         raise FavoritesRequireAuthError()
@@ -67,8 +73,20 @@ async def list_components(
     filter = ComponentListFilter(
         domains=domain or [], exclude_created_by=exclude_created_by, favorited_by=favorited_by, search=search
     )
-    components, total = await components_service.list_components(filter, pagination)
     favorited_names = await _favorited_names(favorites_service, current_user)
+
+    if rank_against is not None:
+        candidates = await components_service.list_all_components(filter)
+        ranked, total = await compatibility_service.rank_components(
+            candidates, rank_against, favorited_names, current_user, pagination
+        )
+        ranked_items = [
+            ComponentTransformer.to_ranked_list_item(r, r.component.name in favorited_names, current_user)
+            for r in ranked
+        ]
+        return build_paginated_response(ranked_items, total, pagination)
+
+    components, total = await components_service.list_components(filter, pagination)
 
     items = [
         ComponentTransformer.to_list_item(c, c.name in favorited_names, current_user, include_parameters)

@@ -1,4 +1,4 @@
-import type { ParameterDisplayModel } from '@/api/components';
+import { UNRESOLVED_FORMAT_HINT, isUnresolvedFormatLabel, type ParameterDisplayModel } from '@/api/components';
 
 interface ParameterListProps {
   title: string;
@@ -15,7 +15,14 @@ export function ParameterList({ title, parameters }: ParameterListProps) {
             <span className="font-mono font-semibold text-slate-900">{parameter.name}</span>{' '}
             <span className="text-slate-500">{parameter.cwlType}</span>
             {(parameter.formatLabel ?? parameter.format) && (
-              <span className="text-slate-400"> ({parameter.formatLabel ?? parameter.format})</span>
+              <span
+                className="text-slate-400"
+                title={isUnresolvedFormatLabel(parameter) ? UNRESOLVED_FORMAT_HINT : undefined}
+              >
+                {' '}
+                ({parameter.formatLabel ?? parameter.format}
+                {isUnresolvedFormatLabel(parameter) && ', name unavailable'})
+              </span>
             )}
             {parameter.defaultValue !== null && (
               <span className="text-slate-400"> = {parameter.defaultValue}</span>

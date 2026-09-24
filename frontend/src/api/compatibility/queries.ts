@@ -1,79 +1,71 @@
 import { useMemo } from 'react';
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { compatibilityService } from './service';
-import type { FormatPairDto, FormatPairResultDto } from './types';
+import type { ConnectionCheckDto, ConnectionDto } from './types';
 
-/** the backend's per-request cap (MAX_COMPATIBILITY_PAIRS) */
-const MAX_PAIRS_PER_REQUEST = 200;
-
-const pairKey = (pair: FormatPairDto) => `${pair.ontologyUrl}|${pair.actualFormat}|${pair.expectedFormat}`;
+/** Stable identity of a connection - how verdicts are looked up. */
+export const connectionKey = (c: ConnectionDto) =>
+  `${c.sourceComponentId}:${c.sourcePort}->${c.targetComponentId}:${c.targetPort}`;
 
 export const compatibilityKeys = {
   all: ['compatibility'] as const,
-  pair: (pair: FormatPairDto) => [...compatibilityKeys.all, pairKey(pair)] as const,
+  connection: (c: ConnectionDto) => [...compatibilityKeys.all, 'connection', connectionKey(c)] as const,
+  batch: (connections: ConnectionDto[]) =>
+    [...compatibilityKeys.all, 'batch', connections.map(connectionKey).sort()] as const,
 };
 
-/** Answer for a pair as the builder reads it: undefined while unknown or uncheckable. */
-export type CompatibilityLookup = (pair: FormatPairDto) => boolean | undefined;
-
-async function fetchResults(pairs: FormatPairDto[]): Promise<FormatPairResultDto[]> {
-  const results: FormatPairResultDto[] = [];
-  for (let i = 0; i < pairs.length; i += MAX_PAIRS_PER_REQUEST) {
-    const response = await compatibilityService.check(pairs.slice(i, i + MAX_PAIRS_PER_REQUEST));
-    results.push(...response.results);
-  }
-  return results;
+/**
+ * The backend's verdict for one connection - what `onConnect` awaits before drawing an edge.
+ * Cached per connection, so re-drawing a deleted edge costs no request.
+ */
+export function checkConnection(queryClient: QueryClient, connection: ConnectionDto): Promise<ConnectionCheckDto> {
+  return queryClient.fetchQuery({
+    queryKey: compatibilityKeys.connection(connection),
+    queryFn: async () => (await compatibilityService.check([connection])).results[0],
+    staleTime: Infinity,
+  });
 }
 
 /**
- * Asks the backend about every pair not already answered, and caches each answer under its
- * own key - so the palette's batch and a later single connection share one cache. A
- * format's place in an ontology never changes, hence no staleness.
+ * Verdicts for every edge on the canvas, as a Map by {@link connectionKey}.
+ *
+ * Shares the per-connection cache with {@link checkConnection}: only edges without a cached
+ * verdict are sent (in one batch), and each answer is stored under its own connection's key.
+ * So drawing an edge costs exactly the one request `onConnect` makes, deleting one costs
+ * nothing, and restoring a draft checks all its edges in a single request. Components don't
+ * change under a canvas, so a verdict never goes stale.
  */
-async function ensureAnswered(queryClient: QueryClient, pairs: FormatPairDto[]): Promise<void> {
-  const missing = pairs.filter((pair) => queryClient.getQueryData(compatibilityKeys.pair(pair)) === undefined);
-  if (missing.length === 0) return;
-  for (const result of await fetchResults(missing)) {
-    // null (service down / unknown ontology) is not cached - the next ask retries it
-    if (result.compatible !== null) {
-      queryClient.setQueryData(compatibilityKeys.pair(result), result.compatible);
-    }
-  }
-}
-
-/** A lookup over the answers cached so far - for code outside React's render (event handlers). */
-export function readCompatibility(queryClient: QueryClient): CompatibilityLookup {
-  return (pair) => queryClient.getQueryData<boolean>(compatibilityKeys.pair(pair));
-}
-
-/** Blocking variant for the connect handler: resolves once `pairs` are answered (or failed). */
-export async function fetchCompatibility(queryClient: QueryClient, pairs: FormatPairDto[]): Promise<void> {
-  try {
-    await ensureAnswered(queryClient, pairs);
-  } catch {
-    // an unreachable backend leaves the pairs unanswered -> unverified, never blocking
-  }
-}
-
-/**
- * Background variant for the palette ranking: answers `pairs` without ever blocking, and
- * hands back a lookup that reflects whatever is known so far. Re-renders when the batch lands.
- */
-export function useFormatCompatibility(pairs: FormatPairDto[]): CompatibilityLookup {
+export function useConnectionChecks(connections: ConnectionDto[]): Map<string, ConnectionCheckDto> {
   const queryClient = useQueryClient();
-  const keys = useMemo(() => pairs.map(pairKey).sort(), [pairs]);
-  const { dataUpdatedAt } = useQuery({
-    queryKey: [...compatibilityKeys.all, 'batch', keys],
+  const cached = (c: ConnectionDto) =>
+    queryClient.getQueryData<ConnectionCheckDto>(compatibilityKeys.connection(c));
+
+  const missing = connections.filter((c) => cached(c) === undefined);
+  // changes exactly when verdicts arrive (or edges change) - not dataUpdatedAt, which drops
+  // back to 0 once the landed batch leaves nothing missing and the key switches
+  const missingKey = missing.map(connectionKey).join('|');
+  useQuery({
+    queryKey: compatibilityKeys.batch(missing),
     queryFn: async () => {
-      await ensureAnswered(queryClient, pairs);
+      const { results } = await compatibilityService.check(missing);
+      missing.forEach((c, i) => queryClient.setQueryData(compatibilityKeys.connection(c), results[i]));
       return true;
     },
-    enabled: pairs.length > 0,
+    enabled: missing.length > 0,
     staleTime: Infinity,
-    retry: false,
   });
 
-  // dataUpdatedAt: a new identity once a batch lands, so memoised consumers recompute
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  return useMemo(() => readCompatibility(queryClient), [queryClient, dataUpdatedAt]);
+  // rebuilt when the edges change or a batch lands - the verdicts themselves live in the
+  // per-connection cache entries read here
+  return useMemo(
+    () =>
+      new Map(
+        connections.flatMap((c) => {
+          const check = cached(c);
+          return check ? [[connectionKey(c), check] as const] : [];
+        }),
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [connections, missingKey],
+  );
 }

@@ -56,7 +56,7 @@ def upgrade() -> None:
         sa.Column('default_value', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
         sa.Column('description', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
         sa.Column('direction', sqlmodel.sql.sqltypes.AutoString(), server_default=sa.text("'input'"), nullable=False),
-        sa.Column('component_id', sa.Uuid(), nullable=True),
+        sa.Column('component_id', sa.Uuid(), nullable=False),
         sa.ForeignKeyConstraint(['component_id'], ['components.id'], ondelete='CASCADE'),
         sa.PrimaryKeyConstraint('id'),
     )

@@ -31,8 +31,11 @@ class Parameter(SQLModel, table=True):
     # enum type from the Python Enum, which we deliberately avoided (see the
     # hand-written migration - VARCHAR only, no CREATE TYPE)
     direction: ParameterDirection = Field(default=ParameterDirection.INPUT, sa_column=Column(String, nullable=False))
+    # NOT NULL in the database - a parameter never outlives its component. Optional in
+    # Python only because the CWL parser and the upload previews build parameters before
+    # they belong to a component (never persisted); saving a component fills this in.
     component_id: uuid.UUID | None = Field(
-        default=None, sa_column=Column(ForeignKey("components.id", ondelete="CASCADE"), nullable=True)
+        default=None, sa_column=Column(ForeignKey("components.id", ondelete="CASCADE"), nullable=False)
     )
 
     # lazy="selectin": see the matching note on Component - required for AsyncSession safety

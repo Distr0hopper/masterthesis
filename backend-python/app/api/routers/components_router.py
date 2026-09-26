@@ -63,6 +63,7 @@ async def list_components(
     # first. Switches the list to the builder palette's order - ranked by how well each
     # component fits the canvas, before paging - and implies includeParameters
     rank_against: Annotated[list[uuid.UUID] | None, Query(alias="rankAgainst")] = None,
+    favorites_first: Annotated[bool, Query(alias="favoritesFirst")] = False,
 ) -> PaginatedResponseDtoV1[ComponentListItemDto]:
     if favorites_only and current_user is None:
         raise FavoritesRequireAuthError()
@@ -71,7 +72,11 @@ async def list_components(
     favorited_by = current_user.id if favorites_only and current_user is not None else None
     pagination = pagination_dto.to_domain()
     filter = ComponentListFilter(
-        domains=domain or [], exclude_created_by=exclude_created_by, favorited_by=favorited_by, search=search
+        domains=domain or [],
+        exclude_created_by=exclude_created_by,
+        favorited_by=favorited_by,
+        search=search,
+        favorites_first_for=current_user.id if favorites_first and current_user is not None else None,
     )
     favorited_names = await _favorited_names(favorites_service, current_user)
 

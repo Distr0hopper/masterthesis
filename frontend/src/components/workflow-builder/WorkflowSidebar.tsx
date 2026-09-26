@@ -27,14 +27,11 @@ export function WorkflowSidebar({ rankAgainst }: WorkflowSidebarProps) {
     limit: PAGE_SIZE,
     includeParameters: true,
     rankAgainst,
-    // the endpoint 401s on favoritesOnly for anonymous visitors, so the flag is gated on
-    // auth as well as on the toggle - same guard ComponentsPage uses
+    favoritesFirst: isAuthenticated,
     favoritesOnly: isAuthenticated && favoritesOnly,
   });
   const { data: domains } = useDomains();
 
-  // drives the empty-state wording: "nothing here" reads as broken when the user has
-  // actually filtered everything out
   const hasActiveFilter = Boolean(term) || selectedDomains.length > 0 || favoritesOnly;
 
   const components = data?.items ?? [];

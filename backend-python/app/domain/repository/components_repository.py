@@ -3,6 +3,8 @@ from dataclasses import dataclass, field
 from typing import Annotated
 
 from fastapi import Depends
+from sqlalchemy import case, exists
+from sqlalchemy.orm import aliased
 from sqlmodel import and_, func, or_, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -15,13 +17,13 @@ from app.infrastructure.db.session import get_db
 
 @dataclass
 class ComponentListFilter:
-    #: match components carrying ANY of these domains (union) - empty means no filter
     domains: list[str] = field(default_factory=list)
     created_by: uuid.UUID | None = None
     exclude_created_by: uuid.UUID | None = None
     favorited_by: uuid.UUID | None = None
     search: str | None = None
     status: ComponentStatus | None = None
+    favorites_first_for: uuid.UUID | None = None
 
 
 class ComponentsRepository:
@@ -77,12 +79,23 @@ class ComponentsRepository:
         count_query = select(func.count()).select_from(base_query.subquery())
         total = (await self.db.exec(count_query)).one()
 
-        items_query = (
-            base_query.order_by(Component.name, Component.version.desc())
-            .limit(pagination.limit)
-            .offset(pagination.offset)
-        )
-        result = await self.db.exec(items_query)
+        # DISTINCT ON (name) keeps the first row per name, so it must be ordered by name and
+        # then newest version first - that's what makes each row the latest version
+        latest_per_name = base_query.order_by(Component.name, Component.version.desc())
+        if filter.favorites_first_for is None:
+            items_query = latest_per_name
+        else:
+            # a different order needs an outer query: Postgres requires DISTINCT ON's
+            # expressions to lead the ORDER BY of the same query
+            latest = aliased(Component, latest_per_name.subquery())
+            is_favorite = exists().where(
+                Favorite.entity_type == FavoriteEntityType.COMPONENT,
+                Favorite.entity_ref == latest.name,
+                Favorite.user_id == filter.favorites_first_for,
+            )
+            items_query = select(latest).order_by(case((is_favorite, 0), else_=1), latest.name)
+
+        result = await self.db.exec(items_query.limit(pagination.limit).offset(pagination.offset))
         return list(result.all()), total
 
     async def find_all_filtered(self, filter: ComponentListFilter) -> list[Component]:

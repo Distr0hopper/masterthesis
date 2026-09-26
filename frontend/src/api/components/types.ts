@@ -217,5 +217,6 @@ export interface ComponentListQueryParams extends PageParams<ComponentListItemDt
   search?: string;
   includeParameters?: boolean;
   rankAgainst?: string[];
+  favoritesFirst?: boolean;
 }
 export type MyComponentsResponseDto = SplitPageResponse<ComponentListItemDto>;

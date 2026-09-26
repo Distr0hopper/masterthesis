@@ -184,6 +184,7 @@ export interface ParseWorkflowResponseDto {
   isZip: boolean;
   isSelfContained: boolean;
   workflowName: string | null;
+  description: string | null;
   stepCount: number;
   componentPreviews: WorkflowStepPreviewDto[];
   externalRefs: string[];

@@ -21,6 +21,7 @@ export interface ComponentConfigState {
 export type NameConflicts = Record<string, ExistingComponentDto | null>;
 
 function initialState(preview: WorkflowStepPreviewDto): ComponentConfigState {
+  // the description starts as the step's CWL doc: field, editable like any other input
   // an archive step whose run: filename matches a catalogue component defaults to reusing
   // it - re-importing a component the repository already holds is almost never intended
   if (preview.suggestedMatch) {
@@ -29,7 +30,7 @@ function initialState(preview: WorkflowStepPreviewDto): ComponentConfigState {
       mode: 'reuse',
       name: preview.suggestedName,
       domains: [],
-      description: '',
+      description: preview.description ?? '',
       formatLabels: {},
       reuseComponentId: componentId,
       reuseName: name,
@@ -40,7 +41,7 @@ function initialState(preview: WorkflowStepPreviewDto): ComponentConfigState {
     mode: 'create',
     name: preview.suggestedName,
     domains: [],
-    description: '',
+    description: preview.description ?? '',
     formatLabels: {},
     reuseComponentId: null,
     reuseName: null,

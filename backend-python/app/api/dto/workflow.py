@@ -77,7 +77,6 @@ class WorkflowDetailDto(CamelModel, LinkModel):
     is_favorite: bool
     status: WorkflowStatus
     source: WorkflowSource
-    #: set only for source=workflow_builder, and cleared if that draft is deleted
     draft_id: uuid.UUID | None
     cwl_content: str
     created_at: datetime
@@ -180,6 +179,8 @@ class ParseWorkflowResponseDto(CamelModel):
     #: from label: on the uploaded document  falling back to the filename of the uploaded file -
     #: minus its .cwl extension - or, for a zip, the file that actually contains class: Workflow
     workflow_name: str | None
+    #: the workflow document's own doc: field, if any
+    description: str | None
     step_count: int
     #: one per resolvable step, inline and archive alike. Steps listed in
     #: inline_only_steps or missing_external_refs have no preview.
@@ -216,9 +217,6 @@ class WorkflowCommandTypesApiV1(StrEnum):
 class WorkflowCommandExecuteRequestDto(EmptyWorkflowDescriptionToNoneMixin, CamelModel):
     command: WorkflowCommandTypesApiV1 = Field(..., description="The specific action to perform on the workflow")
     note: str | None = Field(default=None, description="Optional note for the command execution")
-    #: only read by PUBLISH - publish the workflow's still-draft components along with it.
-    #: Without it, publishing a workflow that uses draft components is refused rather than
-    #: silently making those components public.
     publish_components: bool = Field(
         default=False,
         description="PUBLISH only: also publish the workflow's draft components",

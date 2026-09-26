@@ -20,6 +20,7 @@ import {
   useParseComponent,
   useUploadComponent,
   type ComponentDetailDto,
+  type ComponentPreviewDto,
 } from '@/api/components';
 import { validateUploadDetails, type UploadDetailsErrors } from '@/api/schema';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
@@ -53,6 +54,7 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
   const [errors, setErrors] = useState<UploadDetailsErrors>({});
   const [formatLabels, setFormatLabels] = useState<FormatLabelDraft>({});
   const nameTouched = useRef(false);
+  const descriptionTouched = useRef(false);
 
   const debouncedName = useDebouncedValue(name);
   const { data: availability } = useComponentNameAvailability(debouncedName);
@@ -67,6 +69,10 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
     setFurthest((prev) => Math.max(prev, next));
   };
 
+  const applyParsed = (response: ComponentPreviewDto) => {
+    if (!descriptionTouched.current) setDescription(response.description ?? '');
+  };
+
   const handleFile = (selected: File | null) => {
     setFile(selected);
     parseMutation.reset();
@@ -76,6 +82,7 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
     setStep(1);
     setFurthest(1);
     if (selected && !nameTouched.current) setName(stripUploadExtension(selected.name));
+    if (selected) parseMutation.mutate(selected, { onSuccess: applyParsed });
   };
 
   const handleContinue = () => {
@@ -91,7 +98,12 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
       goTo(2);
       return;
     }
-    parseMutation.mutate(data.file, { onSuccess: () => goTo(2) });
+    parseMutation.mutate(data.file, {
+      onSuccess: (response) => {
+        applyParsed(response);
+        goTo(2);
+      },
+    });
   };
 
   const handleCreate = () => {
@@ -141,7 +153,6 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
     </div>
   ) : undefined;
 
-  // typed labels go straight into the preview, so the parameter tab shows what gets saved
   const previewModel = parsed
     ? componentTransformer.toPreviewDisplayModel(
         { ...parsed, parameters: withFormatLabels(parsed.parameters, formatLabels) },
@@ -171,7 +182,10 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
               domains={domains}
               onDomainsChange={setDomains}
               description={description}
-              onDescriptionChange={setDescription}
+              onDescriptionChange={(value) => {
+                descriptionTouched.current = true;
+                setDescription(value);
+              }}
               errors={errors}
               nameNotice={nameNotice}
               error={

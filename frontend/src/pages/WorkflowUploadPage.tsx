@@ -41,6 +41,7 @@ export default function WorkflowUploadPage() {
   const [errors, setErrors] = useState<UploadDetailsErrors>({});
 
   const nameTouched = useRef(false);
+  const descriptionTouched = useRef(false);
 
   const debouncedName = useDebouncedValue(name);
   const { data: nameAvailability } = useWorkflowNameAvailability(debouncedName);
@@ -62,6 +63,18 @@ export default function WorkflowUploadPage() {
     setName(value);
   };
 
+  const handleDescriptionChange = (value: string) => {
+    descriptionTouched.current = true;
+    setDescription(value);
+  };
+
+  /** Pre-fill what the parse extracted - only fields the user hasn't edited themselves. */
+  const applyParsed = (response: ParseWorkflowResponseDto) => {
+    if (!nameTouched.current && response.workflowName) setName(response.workflowName);
+    if (!descriptionTouched.current) setDescription(response.description ?? '');
+    configs.reset(response.componentPreviews);
+  };
+
   const handleFile = (selected: File | null) => {
     setFile(selected);
     parseMutation.reset();
@@ -70,6 +83,8 @@ export default function WorkflowUploadPage() {
     setStep(1);
     setFurthest(1);
     if (selected && !nameTouched.current) setName(stripUploadExtension(selected.name));
+    // parsed right away, so the extracted description is in the field while it's still on screen
+    if (selected) parseMutation.mutate(selected, { onSuccess: applyParsed });
   };
 
   const blockingIssues: string[] = [];
@@ -106,10 +121,10 @@ export default function WorkflowUploadPage() {
       return;
     }
 
+    // only reached when the parse on file select failed (or found blocking issues) - retry
     parseMutation.mutate(data.file, {
       onSuccess: (response: ParseWorkflowResponseDto) => {
-        if (!nameTouched.current && response.workflowName) setName(response.workflowName);
-        configs.reset(response.componentPreviews);
+        applyParsed(response);
         const hasBlockers =
           response.missingExternalRefs.length > 0 ||
           response.missingImports.length > 0 ||
@@ -192,7 +207,7 @@ export default function WorkflowUploadPage() {
               domains={domains}
               onDomainsChange={setDomains}
               description={description}
-              onDescriptionChange={setDescription}
+              onDescriptionChange={handleDescriptionChange}
               errors={errors}
               nameNotice={nameNotice}
               issues={blockingIssues}

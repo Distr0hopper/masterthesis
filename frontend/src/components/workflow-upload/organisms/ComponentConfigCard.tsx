@@ -145,7 +145,7 @@ export function ComponentConfigCard({
               <Textarea
                 id={`component-description-${preview.stepId}`}
                 rows={3}
-                placeholder={preview.description ?? 'Taken from the CWL doc: field when left blank'}
+                placeholder="Taken from the CWL doc: field when left blank"
                 value={config.description}
                 onChange={(e) => onChange({ description: e.target.value })}
               />

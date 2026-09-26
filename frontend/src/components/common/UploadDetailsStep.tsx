@@ -100,7 +100,7 @@ export function UploadDetailsStep({
           id="upload-description"
           value={description}
           onChange={(e) => onDescriptionChange(e.target.value)}
-          placeholder="Brief description..."
+          placeholder="Filled in from the file's doc: field once it's read - or write your own"
           rows={4}
         />
       </FormField>

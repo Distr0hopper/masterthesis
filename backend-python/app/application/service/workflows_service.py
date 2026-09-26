@@ -158,6 +158,8 @@ class WorkflowUploadPreview:
     is_zip: bool
     is_self_contained: bool
     workflow_name: str | None
+    #: the workflow document's own doc: field - pre-fills the upload form's description
+    description: str | None
     step_count: int
     component_previews: list[ComponentPreview]
     external_refs: list[str]
@@ -326,6 +328,7 @@ class WorkflowsService:
             is_self_contained=self_contained,
             workflow_name=overview.name
             or (strip_cwl_extension(upload.pipeline_filename) if upload.pipeline_filename else None),
+            description=extract_description(upload.cwl_content),
             step_count=overview.step_count,
             component_previews=await self._build_component_previews(upload, overview.cwl_version),
             external_refs=overview.external_refs,

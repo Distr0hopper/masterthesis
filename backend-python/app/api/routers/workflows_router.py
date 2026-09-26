@@ -261,6 +261,7 @@ async def parse_workflow(
         is_zip=preview.is_zip,
         is_self_contained=preview.is_self_contained,
         workflow_name=preview.workflow_name,
+        description=preview.description,
         step_count=preview.step_count,
         component_previews=[_to_workflow_step_preview_dto(c) for c in preview.component_previews],
         external_refs=preview.external_refs,

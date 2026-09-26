@@ -22,6 +22,5 @@ class User(SQLModel, table=True):
         sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     )
 
-    # lazy="selectin": see the matching note on Component - required for AsyncSession safety
-    components: list["Component"] = Relationship(back_populates="created_by", sa_relationship_kwargs={"lazy": "selectin"})
-    workflows: list["Workflow"] = Relationship(back_populates="created_by", sa_relationship_kwargs={"lazy": "selectin"})
+    components: list["Component"] = Relationship(back_populates="created_by", sa_relationship_kwargs={"lazy": "raise"})
+    workflows: list["Workflow"] = Relationship(back_populates="created_by", sa_relationship_kwargs={"lazy": "raise"})

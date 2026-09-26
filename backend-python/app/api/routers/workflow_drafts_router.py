@@ -136,6 +136,35 @@ async def export_draft(
     )
 
 
+@router.get(
+    "/{draft_id}/export/inputs",
+    response_class=Response,
+    responses={
+        **_OWNED_RESPONSES,
+        status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse, "description": "Canvas cannot be exported"},
+        status.HTTP_200_OK: {"content": {"application/yaml": {}}, "description": "CWL job file (inputs.yaml)"},
+    },
+)
+async def export_draft_inputs(
+    draft_id: uuid.UUID,
+    current_user: Annotated[User, Depends(AuthService.get_current_user)],
+    service: Annotated[WorkflowDraftService, Depends(WorkflowDraftService.get_service)],
+) -> Response:
+    """The inputs.yaml for the workflow /export produces: one placeholder per workflow input."""
+    draft = await service.get_draft(draft_id, current_user.id)
+    filename, inputs_yaml = await service.export_inputs_yaml(draft)
+
+    logger.info(f"Exported inputs of workflow draft {draft_id} as '{filename}'")
+    return Response(
+        content=inputs_yaml,
+        media_type="application/yaml",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
+    )
+
+
 @router.post(
     "/{draft_id}/sync",
     response_model=SyncedWorkflowDto,

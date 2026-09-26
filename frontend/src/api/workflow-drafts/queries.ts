@@ -59,6 +59,12 @@ export const useExportDraft = () => {
   });
 };
 
+export const useExportDraftInputs = () => {
+  return useMutation({
+    mutationFn: (id: string) => workflowDraftsService.exportInputs(id),
+  });
+};
+
 export const useSyncDraftToMyWorkflows = () => {
   const queryClient = useQueryClient();
 

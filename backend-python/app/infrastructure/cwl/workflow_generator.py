@@ -123,12 +123,18 @@ def _workflow_input_id(step_id: str, port_name: str) -> str:
     return f"{step_id}__{port_name}"
 
 
-def generate_workflow_cwl(
+def render_workflow_cwl(workflow_doc: dict[str, Any]) -> str:
+    """A document from build_workflow_document as the .cwl file's YAML."""
+    # sort_keys=False preserves the logical document order (cwlVersion -> class -> ...)
+    return yaml.dump(workflow_doc, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+
+def build_workflow_document(
     workflow_name: str,
     ordered_nodes: list[dict[str, Any]],
     edges: list[dict[str, Any]],
     ports: dict[str, PortSpec],
-) -> str:
+) -> dict[str, Any]:
     """Build the main `class: Workflow` document.
 
     Wiring comes from each edge's `sourceHandle`/`targetHandle`, which carry the real
@@ -208,7 +214,7 @@ def generate_workflow_cwl(
                 "outputSource": f"{step_id}/{port_name}",
             }
 
-    doc = {
+    return {
         "cwlVersion": CWL_VERSION,
         "class": "Workflow",
         "label": workflow_name,
@@ -217,5 +223,40 @@ def generate_workflow_cwl(
         "steps": steps,
     }
 
-    # sort_keys=False preserves the logical document order (cwlVersion -> class -> ...)
-    return yaml.dump(doc, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+def generate_workflow_inputs_yaml(workflow_name: str, workflow_doc: dict[str, Any]) -> str:
+    """A job file (inputs.yaml) for a generated workflow: one entry per workflow input,
+    with a placeholder path to fill in before `cwltool <workflow>.cwl <this file>`.
+
+    Reads the inputs of the very document build_workflow_document produced, so the two
+    files always agree. Those inputs are exactly the File ports nothing on the canvas feeds
+    (`step_x__port`); configured parameter values are already baked into the steps as
+    defaults, so they don't appear here.
+    """
+    slug = safe_workflow_slug(workflow_name)
+    lines = [
+        f"# CWL inputs for {workflow_name}",
+        "# Replace each placeholder path with your data, then run:",
+        f"#   cwltool {slug}.cwl {slug}-inputs.yaml",
+    ]
+    inputs: dict[str, dict[str, Any]] = workflow_doc.get("inputs") or {}
+    if not inputs:
+        lines += ["# Every input of this workflow is wired on the canvas - it needs no input files.", "{}"]
+        return "\n".join(lines) + "\n"
+
+    for input_id, definition in inputs.items():
+        cwl_type = str(definition.get("type", "File"))
+        step_id, _, port_name = input_id.partition("__")
+        lines.append("")
+        lines.append(f"# {port_name} of {step_id} ({cwl_type})")
+        lines.extend(_job_entry(input_id, port_name or input_id, cwl_type))
+    return "\n".join(lines) + "\n"
+
+
+def _job_entry(input_id: str, port_name: str, cwl_type: str) -> list[str]:
+    """One File input in job-file form. Arrays get one example element; optional inputs
+    are still written out, since leaving them in is harmless and easier to fill in."""
+    placeholder = f"/path/to/{port_name}"
+    if cwl_type.replace("?", "").strip().endswith("[]"):
+        return [f"{input_id}:", "  - class: File", f"    path: {placeholder}"]
+    return [f"{input_id}:", "  class: File", f"  path: {placeholder}"]

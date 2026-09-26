@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, Download } from 'lucide-react';
+import { ChevronLeft, Download, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button.tsx';
 import { Input } from '@/components/ui/input.tsx';
 import { ROUTES } from '@/lib/routes';
@@ -13,6 +13,8 @@ interface WorkflowTopBarProps {
   isSaving: boolean;
   onExport: () => void;
   isExporting: boolean;
+  onExportInputs: () => void;
+  isExportingInputs: boolean;
   updatedAt: string | null;
 }
 
@@ -41,6 +43,8 @@ export function WorkflowTopBar({
   isSaving,
   onExport,
   isExporting,
+  onExportInputs,
+  isExportingInputs,
   updatedAt,
 }: WorkflowTopBarProps) {
   const savedLabel = useRelativeTime(updatedAt);
@@ -72,7 +76,16 @@ export function WorkflowTopBar({
           <Button variant="outline" onClick={onSave} disabled={isSaving}>
             {isSaving ? 'Saving...' : 'Save'}
           </Button>
-          {/* export persists first, so it may not start while a save is in flight */}
+          {/* both exports persist first, so neither may start while a save is in flight */}
+          <Button
+            variant="outline"
+            onClick={onExportInputs}
+            disabled={isExportingInputs || isSaving}
+            title="Download an inputs.yaml with a placeholder for every input the workflow needs"
+          >
+            <FileText className="h-4 w-4" />
+            {isExportingInputs ? 'Exporting...' : 'Export inputs.yaml'}
+          </Button>
           <Button
             onClick={onExport}
             disabled={isExporting || isSaving}

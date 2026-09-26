@@ -1,7 +1,7 @@
 import json
 import logging
 import uuid
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends
 
@@ -21,8 +21,11 @@ from app.infrastructure.cwl.canvas_graph import CanvasCycleError, topological_so
 from app.infrastructure.cwl.workflow_generator import (
     PortSpec,
     assemble_cwl_zip,
+    build_workflow_document,
     cwl_filename_for,
-    generate_workflow_cwl,
+    generate_workflow_inputs_yaml,
+    render_workflow_cwl,
+    safe_workflow_slug,
 )
 
 logger = logging.getLogger("app.application.service.workflow_draft_service")
@@ -150,6 +153,28 @@ class WorkflowDraftService:
         Returns (filename, zip_bytes). Raises ExportValidationError for anything that
         makes the canvas unexportable.
         """
+        workflow_doc, components, ports = await self._build_workflow_document(draft)
+        step_files = [
+            (cwl_filename_for(spec.name), components[cid].cwl_content) for cid, spec in ports.items()
+        ]
+        filename, zip_bytes = assemble_cwl_zip(draft.name, render_workflow_cwl(workflow_doc), step_files)
+        logger.info(f"Generated archive for draft {draft.id}: {len(step_files)} step file(s)")
+        return filename, zip_bytes
+
+    async def export_inputs_yaml(self, draft: WorkflowDraft) -> tuple[str, str]:
+        """The job file for the exported workflow - one placeholder per workflow input.
+
+        Returns (filename, yaml). Built from the same document as export_to_zip, so it
+        always matches the .cwl that export produces.
+        """
+        workflow_doc, _components, _ports = await self._build_workflow_document(draft)
+        return f"{safe_workflow_slug(draft.name)}-inputs.yaml", generate_workflow_inputs_yaml(draft.name, workflow_doc)
+
+    async def _build_workflow_document(
+        self, draft: WorkflowDraft
+    ) -> tuple[dict[str, Any], dict[str, Component], dict[str, PortSpec]]:
+        """The draft's canvas as a Workflow document, plus the components and port specs it
+        was built from. Raises ExportValidationError for anything that makes it unexportable."""
         try:
             canvas = json.loads(draft.canvas_state)
         except json.JSONDecodeError as err:
@@ -172,19 +197,10 @@ class WorkflowDraftService:
         except CanvasCycleError as err:
             raise ExportValidationError(str(err)) from err
 
-        main_cwl = generate_workflow_cwl(
-            workflow_name=draft.name,
-            ordered_nodes=ordered_nodes,
-            edges=edges,
-            ports=ports,
+        workflow_doc = build_workflow_document(
+            workflow_name=draft.name, ordered_nodes=ordered_nodes, edges=edges, ports=ports
         )
-
-        step_files = [
-            (cwl_filename_for(spec.name), components[cid].cwl_content) for cid, spec in ports.items()
-        ]
-        filename, zip_bytes = assemble_cwl_zip(draft.name, main_cwl, step_files)
-        logger.info(f"Generated archive for draft {draft.id}: {len(step_files)} step file(s)")
-        return filename, zip_bytes
+        return workflow_doc, components, ports
 
     async def sync_to_my_workflows(self, draft: WorkflowDraft, user_id: uuid.UUID) -> Workflow:
         """Mirror the draft's generated archive into the user's My Workflows list.

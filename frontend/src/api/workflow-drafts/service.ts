@@ -38,6 +38,11 @@ export const workflowDraftsService = {
     return apiClient.getBlob(`${ENDPOINT}/${id}/export`, 'workflow.zip');
   },
 
+  /** The job file (inputs.yaml) matching the workflow exportZip produces. */
+  exportInputs(id: string): Promise<{ blob: Blob; filename: string }> {
+    return apiClient.getBlob(`${ENDPOINT}/${id}/export/inputs`, 'inputs.yaml');
+  },
+
   // materialises the canvas as a Workflow row in My Workflows (idempotent per draft).
   syncToMyWorkflows(id: string): Promise<SyncedWorkflowDto> {
     return apiClient.post(`${ENDPOINT}/${id}/sync`);

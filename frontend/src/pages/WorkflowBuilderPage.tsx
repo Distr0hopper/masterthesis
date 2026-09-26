@@ -36,6 +36,7 @@ import { downloadBlob } from '@/lib/download';
 import {
   useCreateDraft,
   useExportDraft,
+  useExportDraftInputs,
   useSyncDraftToMyWorkflows,
   useUpdateDraft,
   useWorkflowDraft,
@@ -60,6 +61,7 @@ export default function WorkflowBuilderPage() {
   const { mutateAsync: createDraft, isPending: isCreating } = useCreateDraft();
   const { mutateAsync: updateDraft, isPending: isUpdating } = useUpdateDraft(draftId);
   const { mutateAsync: exportDraft, isPending: isExporting } = useExportDraft();
+  const { mutateAsync: exportDraftInputs, isPending: isExportingInputs } = useExportDraftInputs();
   const { mutateAsync: syncToMyWorkflows } = useSyncDraftToMyWorkflows();
 
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
@@ -268,6 +270,20 @@ export default function WorkflowBuilderPage() {
 
   const handleExport = useCallback(() => guard(() => void runExport()), [guard, runExport]);
 
+  // no validation dialog here: its main warning - "this input will become an input of the
+  // whole workflow" - is exactly what this file is for. An empty canvas or a cycle is still
+  // rejected by the backend and shown as a toast.
+  const handleExportInputs = useCallback(async () => {
+    try {
+      const id = await persist();
+      const { blob, filename } = await exportDraftInputs(id);
+      downloadBlob(filename, blob);
+      toast.success('inputs.yaml exported.');
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Could not export the inputs of this workflow.'));
+    }
+  }, [persist, exportDraftInputs]);
+
   const handleProceedAnyway = useCallback(() => {
     setValidationOpen(false);
     void runExport();
@@ -283,6 +299,8 @@ export default function WorkflowBuilderPage() {
           isSaving={isCreating || isUpdating}
           onExport={handleExport}
           isExporting={isExporting}
+          onExportInputs={() => void handleExportInputs()}
+          isExportingInputs={isExportingInputs}
           updatedAt={draft?.updatedAt ?? null}
         />
         <div className="flex min-h-0 flex-1">

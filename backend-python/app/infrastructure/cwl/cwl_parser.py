@@ -12,7 +12,7 @@ def inject_description(cwl_content: str, description: str | None) -> str:
         doc["doc"] = description
     else:
         doc.pop("doc", None)
-    return yaml.dump(doc, default_flow_style=False, sort_keys=False, width=float("inf"))
+    return yaml.dump(doc, default_flow_style=False, sort_keys=False, width=float("inf"), allow_unicode=True)
 
 
 def inject_cwl_version(cwl_content: str, cwl_version: str | None) -> str:
@@ -23,7 +23,7 @@ def inject_cwl_version(cwl_content: str, cwl_version: str | None) -> str:
         return cwl_content
     doc: Any = load_cwl(cwl_content)
     doc["cwlVersion"] = cwl_version
-    return yaml.dump(doc, default_flow_style=False, sort_keys=False, width=float("inf"))
+    return yaml.dump(doc, default_flow_style=False, sort_keys=False, width=float("inf"), allow_unicode=True)
 
 
 def extract_description(cwl_content: str) -> str | None:
@@ -258,4 +258,4 @@ def _format_input(name: str, cwl_type: str, default_value: str | None) -> list[s
     if cwl_type == "boolean":
         value = default_value == "true" if default_value is not None else False
         return [f"{name}: {str(value).lower()}"]
-    return [f"{name}: {yaml.dump(default_value or '').strip()}"]
+    return [f"{name}: {yaml.dump(default_value or '', allow_unicode=True).strip()}"]

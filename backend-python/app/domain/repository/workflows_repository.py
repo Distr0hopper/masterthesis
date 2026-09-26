@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import Annotated
 
 from fastapi import Depends
-from sqlalchemy import String, and_, cast
+from sqlalchemy import String, and_, cast, or_
 from sqlalchemy.orm import selectinload
 from sqlmodel import func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -23,6 +23,7 @@ class WorkflowListFilter:
     search: str | None = None
     status: WorkflowStatus | None = None
     created_by: uuid.UUID | None = None
+    exclude_created_by: uuid.UUID | None = None
     favorited_by: uuid.UUID | None = None
 
 
@@ -39,6 +40,10 @@ class WorkflowsRepository:
             query = query.where(Workflow.status == filter.status)
         if filter.created_by is not None:
             query = query.where(Workflow.created_by_id == filter.created_by)
+        if filter.exclude_created_by is not None:
+            query = query.where(
+                or_(Workflow.created_by_id != filter.exclude_created_by, Workflow.created_by_id.is_(None))
+            )
         if filter.favorited_by is not None:
             query = query.join(
                 Favorite,

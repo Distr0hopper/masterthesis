@@ -1,4 +1,4 @@
-import { ComponentCard } from '@/components/component-browser/ComponentCard';
+import { ComponentCard } from '@/components/component-browse/ComponentCard';
 import { MineSection } from '@/components/common/MineSection';
 import { MyComponentCardActions } from './MyComponentCardActions';
 import type { ComponentDisplayModel } from '@/api/components';

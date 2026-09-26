@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Navigate, Routes, Route } from 'react-router-dom';
 import Header from '@/components/layout/Header';
 import { ContainerLayout } from '@/components/layout/ContainerLayout';
 import { FullBleedLayout } from '@/components/layout/FullBleedLayout';
@@ -34,7 +34,8 @@ export default function App() {
               viewport, every other page keeps the centred max-w-6xl container. */}
           <Route element={<ContainerLayout />}>
             <Route path={ROUTES.home} element={<HomePage />} />
-            <Route path={ROUTES.browse} element={<ComponentsPage />} />
+            <Route path={ROUTES.components} element={<ComponentsPage />} />
+            <Route path={ROUTES.legacyBrowse} element={<Navigate to={ROUTES.components} replace />} />
             <Route path={ROUTES.about} element={<AboutPage />} />
             <Route path={ROUTES.profile} element={<ProtectedRoute> <ProfilePage /> </ProtectedRoute>} />
             <Route path={ROUTES.componentDetail(':id')} element={<ComponentDetailPage />} />

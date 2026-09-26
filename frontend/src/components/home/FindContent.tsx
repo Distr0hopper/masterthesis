@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/components/ui/card.tsx';
 import { ROUTES } from '@/lib/routes';
 
 const FIND_CONTENT_LINKS = [
-  { label: 'Browse Components', to: ROUTES.browse, icon: LayoutGrid },
+  { label: 'Browse Components', to: ROUTES.components, icon: LayoutGrid },
   { label: 'Browse Workflows', to: ROUTES.workflows, icon: Workflow },
   { label: 'Upload a Component', to: ROUTES.componentUpload, icon: Upload },
   { label: 'Build a Workflow', to: ROUTES.builder, icon: GitMerge },

@@ -88,13 +88,17 @@ async def list_workflows(
     domain: Annotated[list[str] | None, Query(json_schema_extra={"items": {"enum": VALID_DOMAINS}})] = None,
     search: Annotated[str | None, Query()] = None,
     favorites_only: Annotated[bool, Query(alias="favoritesOnly")] = False,
+    exclude_mine: Annotated[bool, Query(alias="excludeMine")] = False,
 ) -> PaginatedResponseDtoV1[WorkflowListItemDto]:
     if favorites_only and current_user is None:
         raise FavoritesRequireAuthError()
 
     pagination = pagination_dto.to_domain()
     favorited_by = current_user.id if favorites_only and current_user is not None else None
-    filter = WorkflowListFilter(domains=domain or [], search=search, favorited_by=favorited_by)
+    exclude_created_by = current_user.id if exclude_mine and current_user is not None else None
+    filter = WorkflowListFilter(
+        domains=domain or [], search=search, favorited_by=favorited_by, exclude_created_by=exclude_created_by
+    )
     workflows, total = await workflows_service.list_workflows(filter, pagination)
 
     favorited_ids = await _favorited_ids(favorites_service, current_user)

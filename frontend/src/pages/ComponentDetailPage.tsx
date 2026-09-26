@@ -11,8 +11,8 @@ export default function ComponentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const backTo = (location.state as { from?: string } | null)?.from ?? ROUTES.browse;
-  const backLabel = backTo === ROUTES.myComponents ? 'Back to My Components' : 'Back to Browse';
+  const backTo = (location.state as { from?: string } | null)?.from ?? ROUTES.components;
+  const backLabel = backTo === ROUTES.myComponents ? 'Back to My Components' : 'Back to Components';
   const { data: model, isLoading, error } = useComponent(id ?? '');
 
   if (isLoading) {

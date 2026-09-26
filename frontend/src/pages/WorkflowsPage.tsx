@@ -3,7 +3,7 @@ import { Upload } from 'lucide-react';
 import { useDomains } from '@/api/components';
 import { useWorkflows } from '@/api/workflows';
 import { WorkflowCard } from '@/components/workflow-browse/WorkflowCard';
-import { WorkflowFilters } from '@/components/workflow-browse/WorkflowFilters';
+import { ListFilters } from '@/components/common/ListFilters';
 import { Pagination } from '@/components/common/Pagination';
 import { Button } from '@/components/ui/button.tsx';
 import { useAuthStore } from '@/store/auth.store';
@@ -17,6 +17,7 @@ export default function WorkflowsPage() {
 
   const searchTerm = getFilter('search');
   const selectedDomains = getFilterAll('domain');
+  const hideMine = searchParams.get('hideMine') === 'true';
   const favoritesOnly = searchParams.get('favoritesOnly') === 'true';
 
   const setBooleanFilter = (key: string, value: boolean) => {
@@ -33,6 +34,7 @@ export default function WorkflowsPage() {
   const { data, isLoading } = useWorkflows({
     domain: selectedDomains,
     search: searchTerm || undefined,
+    excludeMine: isAuthenticated && hideMine,
     favoritesOnly: isAuthenticated && favoritesOnly,
     limit,
     offset,
@@ -45,7 +47,7 @@ export default function WorkflowsPage() {
     <div>
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Browse Workflows</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">Workflows</h1>
           <p className="mt-1 text-slate-500">Pipelines composed of chained Components.</p>
         </div>
 
@@ -59,15 +61,18 @@ export default function WorkflowsPage() {
         )}
       </div>
 
-      <WorkflowFilters
+      <ListFilters
         searchTerm={searchTerm}
         selectedDomains={selectedDomains}
         domains={domains ?? []}
         onSearchTermChange={(value) => setFilter('search', value)}
         onDomainsChange={(value) => setFilterAll('domain', value)}
-        showFavoritesToggle={isAuthenticated}
+        showUserToggles={isAuthenticated}
         favoritesOnly={favoritesOnly}
         onFavoritesOnlyChange={(value) => setBooleanFilter('favoritesOnly', value)}
+        hideMine={hideMine}
+        onHideMineChange={(value) => setBooleanFilter('hideMine', value)}
+        itemLabel="workflows"
       />
 
       {isLoading ? (

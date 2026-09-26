@@ -15,7 +15,7 @@ interface ComponentCardProps {
   actions?: ReactNode;
 }
 
-export function ComponentCard({ component, backTo = ROUTES.browse, actions }: ComponentCardProps) {
+export function ComponentCard({ component, backTo = ROUTES.components, actions }: ComponentCardProps) {
   return (
     <Card>
       <CardContent className="flex flex-col gap-3 pt-6">

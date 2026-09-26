@@ -3,7 +3,9 @@
 // this instead of a hardcoded string literal.
 export const ROUTES = {
   home: '/',
-  browse: '/browse',
+  components: '/components',
+  /** old path of the Components page - redirects, so existing links and bookmarks keep working */
+  legacyBrowse: '/browse',
   about: '/about',
   builder: '/builder',
   builderNew: '/builder/new',

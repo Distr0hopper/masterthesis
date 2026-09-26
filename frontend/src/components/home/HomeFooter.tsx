@@ -9,8 +9,8 @@ export function HomeFooter() {
         <Link to={ROUTES.about} className="hover:text-slate-900">
           About
         </Link>
-        <Link to={ROUTES.browse} className="hover:text-slate-900">
-          Browse
+        <Link to={ROUTES.components} className="hover:text-slate-900">
+          Components
         </Link>
       </div>
     </footer>

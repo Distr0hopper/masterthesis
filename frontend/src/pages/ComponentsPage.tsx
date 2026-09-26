@@ -1,8 +1,8 @@
 import { useSearchParams, Link } from 'react-router-dom';
 import { Upload } from 'lucide-react';
 import { useComponents, useDomains } from '@/api/components';
-import { ComponentCard } from '@/components/component-browser/ComponentCard';
-import { ComponentFilters } from '@/components/component-browser/ComponentFilters';
+import { ComponentCard } from '@/components/component-browse/ComponentCard';
+import { ListFilters } from '@/components/common/ListFilters';
 import { Pagination } from '@/components/common/Pagination';
 import { Button } from '@/components/ui/button.tsx';
 import { useAuthStore } from '@/store/auth.store';
@@ -45,7 +45,10 @@ export default function ComponentsPage() {
   return (
     <div>
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-slate-900">Browse Repository</h1>
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">Components</h1>
+          <p className="mt-1 text-slate-500">Reusable CWL building blocks for your workflows.</p>
+        </div>
 
         {isAuthenticated && (
           <Button asChild className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90">
@@ -57,18 +60,18 @@ export default function ComponentsPage() {
         )}
       </div>
 
-      <ComponentFilters
+      <ListFilters
         searchTerm={searchTerm}
         selectedDomains={selectedDomains}
         domains={domains ?? []}
         onSearchTermChange={(value) => setFilter('search', value)}
         onDomainsChange={(value) => setFilterAll('domain', value)}
-        showHideMineToggle={isAuthenticated}
-        hideMine={hideMine}
-        onHideMineChange={(value) => setBooleanFilter('hideMine', value)}
-        showFavoritesToggle={isAuthenticated}
+        showUserToggles={isAuthenticated}
         favoritesOnly={favoritesOnly}
         onFavoritesOnlyChange={(value) => setBooleanFilter('favoritesOnly', value)}
+        hideMine={hideMine}
+        onHideMineChange={(value) => setBooleanFilter('hideMine', value)}
+        itemLabel="components"
       />
 
       {isLoading ? (

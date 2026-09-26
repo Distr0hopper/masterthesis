@@ -45,8 +45,11 @@ export default function Header() {
           <Link to={ROUTES.home} className={navLinkClass(pathname === ROUTES.home)}>
             Home
           </Link>
-          <Link to={ROUTES.browse} className={navLinkClass(pathname === ROUTES.browse)}>
-            Browse
+          <Link
+            to={ROUTES.components}
+            className={navLinkClass(pathname === ROUTES.components || pathname.startsWith(`${ROUTES.components}/`))}
+          >
+            Components
           </Link>
           <Link
             to={ROUTES.workflows}

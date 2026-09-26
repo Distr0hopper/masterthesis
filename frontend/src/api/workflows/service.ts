@@ -22,6 +22,7 @@ export const workflowsService = {
         domain: params.domain?.length ? params.domain : undefined,
         search: params.search || undefined,
         favoritesOnly: params.favoritesOnly || undefined,
+        excludeMine: params.excludeMine || undefined,
         limit: params.limit,
         offset: params.offset,
       },

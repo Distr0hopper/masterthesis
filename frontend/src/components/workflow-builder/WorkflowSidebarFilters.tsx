@@ -16,7 +16,7 @@ interface WorkflowSidebarFiltersProps {
 
 /**
  * Filter header for the {@link WorkflowSidebar} palette. Same three controls as the
- * /browse ComponentFilters, but stacked for the narrow rail and label-less - the section
+ * Components page's ListFilters, but stacked for the narrow rail and label-less - the section
  * header does the labelling here.
  */
 export function WorkflowSidebarFilters({

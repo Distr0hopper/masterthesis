@@ -150,6 +150,7 @@ export interface WorkflowListQueryParams extends PageParams<WorkflowListItemDto>
   domain?: string[];
   search?: string;
   favoritesOnly?: boolean;
+  excludeMine?: boolean;
 }
 
 export type MyWorkflowsResponseDto = SplitPageResponse<WorkflowListItemDto>;

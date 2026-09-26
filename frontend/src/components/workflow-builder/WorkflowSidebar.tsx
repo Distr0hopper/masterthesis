@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useDomains, useInfiniteComponents } from '@/api/components';
 import { useAuthStore } from '@/store/auth.store';
+import { useLoadMoreOnScroll } from '@/lib/useLoadMoreOnScroll';
 import { ComponentPaletteCard } from './ComponentPaletteCard.tsx';
 import { WorkflowSidebarFilters } from './WorkflowSidebarFilters.tsx';
 
@@ -36,22 +37,7 @@ export function WorkflowSidebar({ rankAgainst }: WorkflowSidebarProps) {
 
   const components = data?.items ?? [];
 
-  // load the next page once the end of the list scrolls into view
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const sentinelRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel || !hasNextPage) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !isFetchingNextPage) void fetchNextPage();
-      },
-      // start loading a little before the bottom is actually reached
-      { root: scrollRef.current, rootMargin: '200px' },
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  const { scrollRef, sentinelRef } = useLoadMoreOnScroll({ hasNextPage, isFetchingNextPage, fetchNextPage });
 
   const loadedCount = components.length;
 

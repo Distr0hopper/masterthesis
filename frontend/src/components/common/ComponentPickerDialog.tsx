@@ -3,7 +3,8 @@ import { ChevronLeft, ExternalLink, Plus } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog.tsx';
 import { Input } from '@/components/ui/input.tsx';
 import { Button } from '@/components/ui/button.tsx';
-import { useComponents } from '@/api/components';
+import { useInfiniteComponents } from '@/api/components';
+import { useLoadMoreOnScroll } from '@/lib/useLoadMoreOnScroll';
 import { ManualUploadWizard } from '@/components/component-upload/organisms/ManualUploadWizard';
 import { ROUTES } from '@/lib/routes';
 import { cn } from '@/lib/utils';
@@ -17,13 +18,17 @@ interface ComponentPickerDialogProps {
   onSelect: (componentId: string | null) => void;
 }
 
+const PAGE_SIZE = 20;
+
 export function ComponentPickerDialog({ open, onOpenChange, value, onSelect }: ComponentPickerDialogProps) {
   const [mode, setMode] = useState<'browse' | 'upload'>('browse');
   const [search, setSearch] = useState('');
   const term = search.trim();
-  // 50 matches the backend's MAX_LIMIT - this picker has no pagination UI of its own,
-  // so it asks for as many matches as the API allows in one page
-  const { data } = useComponents({ search: term || undefined, limit: 50 });
+  const { data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useInfiniteComponents({
+    search: term || undefined,
+    limit: PAGE_SIZE,
+  });
+  const { scrollRef, sentinelRef } = useLoadMoreOnScroll({ hasNextPage, isFetchingNextPage, fetchNextPage });
 
   const filtered = data?.items ?? [];
 
@@ -49,7 +54,7 @@ export function ComponentPickerDialog({ open, onOpenChange, value, onSelect }: C
           <>
             <Input placeholder="Search by name..." value={search} onChange={(e) => setSearch(e.target.value)} autoFocus />
 
-            <div className="flex flex-col gap-2 overflow-y-auto">
+            <div ref={scrollRef} className="flex flex-col gap-2 overflow-y-auto">
               <button
                 type="button"
                 onClick={() => handleSelect(null)}
@@ -96,7 +101,20 @@ export function ComponentPickerDialog({ open, onOpenChange, value, onSelect }: C
                 </div>
               ))}
 
-              {filtered.length === 0 && <p className="py-4 text-center text-sm text-slate-500">No components found.</p>}
+              {isLoading ? (
+                <p className="py-4 text-center text-sm text-slate-500">Loading components...</p>
+              ) : filtered.length === 0 ? (
+                <p className="py-4 text-center text-sm text-slate-500">No components found.</p>
+              ) : (
+                <>
+                  <div ref={sentinelRef} />
+                  <p className="pt-1 text-center text-xs text-slate-400">
+                    {isFetchingNextPage
+                      ? 'Loading more...'
+                      : `Showing ${filtered.length} of ${data?.total ?? filtered.length}${hasNextPage ? ' - scroll for more' : ''}`}
+                  </p>
+                </>
+              )}
             </div>
 
             <Button type="button" variant="outline" onClick={() => setMode('upload')}>

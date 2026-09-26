@@ -112,6 +112,7 @@ class ComponentTransformer:
             name=component.name,
             description=component.description,
             author_name=component.author_name,
+            created_by=ComponentTransformer.to_creator(component),
             repo_url=component.repo_url,
             version=component.version,
             domains=ComponentTransformer.to_domains(component),
@@ -157,19 +158,21 @@ class ComponentTransformer:
         )
 
     @staticmethod
+    def to_creator(component: Component) -> ComponentCreatorDto | None:
+        creator = component.created_by
+        if creator is None:
+            return None
+        return ComponentCreatorDto(
+            id=creator.id, email=creator.email, first_name=creator.first_name, last_name=creator.last_name
+        )
+
+    @staticmethod
     def to_detail(component: Component, is_favorite: bool, current_user: User | None) -> ComponentDetailDto:
         dto = ComponentDetailDto(
             id=component.id,
             name=component.name,
             author_name=component.author_name,
-            created_by=ComponentCreatorDto(
-                id=component.created_by.id,
-                email=component.created_by.email,
-                first_name=component.created_by.first_name,
-                last_name=component.created_by.last_name,
-            )
-            if component.created_by
-            else None,
+            created_by=ComponentTransformer.to_creator(component),
             description=component.description,
             repo_url=component.repo_url,
             repo_commit_sha=component.repo_commit_sha,

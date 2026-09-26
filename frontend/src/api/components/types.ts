@@ -148,6 +148,7 @@ export interface ComponentListItemDto extends WithHateoasLinks {
   name: string;
   description: string | null;
   authorName: string | null;
+  createdBy: ComponentCreatorDto | null;
   repoUrl: string | null;
   version: number;
   domains: ComponentDomain[];

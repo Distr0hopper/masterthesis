@@ -103,6 +103,8 @@ class ComponentListItemDto(CamelModel, LinkModel):
     name: str
     description: str | None
     author_name: str | None
+    # the uploading user - the frontend shows them when author_name is empty
+    created_by: ComponentCreatorDto | None
     repo_url: str | None
     version: int
     domains: list[str]

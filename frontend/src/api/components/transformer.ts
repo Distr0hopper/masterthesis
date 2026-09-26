@@ -85,8 +85,14 @@ export interface ComponentDetailDisplayModel extends ComponentDisplayModel {
   outputs: ParameterDisplayModel[];
 }
 
-function getAuthorDisplay(authorName: string | null, createdBy?: ComponentCreatorDto | null): string {
-  return createdBy ? getCreatorDisplay(createdBy) : (authorName ?? 'Unknown');
+/**
+ * Who a component is credited to: its author name (free text - e.g. the MoveApps author a
+ * packaged app declares), else the user who uploaded it, else "Unknown".
+ */
+function getAuthorDisplay(authorName: string | null, createdBy: ComponentCreatorDto | null): string {
+  const author = authorName?.trim();
+  if (author) return author;
+  return getCreatorDisplay(createdBy);
 }
 
 export function getDomainLabel(domain: string): string {
@@ -133,7 +139,7 @@ export const componentTransformer = {
       id: dto.id,
       name: dto.name,
       description: dto.description,
-      authorDisplay: getAuthorDisplay(dto.authorName),
+      authorDisplay: getAuthorDisplay(dto.authorName, dto.createdBy),
       repoUrl: dto.repoUrl,
       version: dto.version,
       domains: dto.domains,

@@ -262,10 +262,36 @@ class AddVersionRequestDto(EmptyRepoCommitShaToNoneMixin, EmptyDescriptionToNone
     description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
 
 
-class PackageComponentRequestDto(DomainsValidatorMixin, RepoUrlValidatorMixin, CamelModel):
+class PackageComponentRequestDto(DomainsValidatorMixin, RepoUrlValidatorMixin, EmptyDescriptionToNoneMixin, CamelModel):
     repo_url: str
     domains: list[str] = Field(json_schema_extra={"items": {"enum": VALID_DOMAINS}})
     description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
+    #: name for a new lineage (defaults to the repo name) - ignored when the repo is
+    #: already packaged, since a new version keeps its lineage's name
+    name: str | None = None
+    #: hand-written labels for the generated File ports, as reviewed in the preview
+    format_labels: list[FormatLabelDto] = []
+    #: commit the preview was generated from - packaging fails with 409 if the repo has
+    #: moved on since, so nothing unreviewed gets saved
+    expected_commit_sha: str | None = None
+
+
+class PackagePreviewRequestDto(RepoUrlValidatorMixin, CamelModel):
+    repo_url: str
+
+
+class PackagePreviewDto(ComponentPreviewDto):
+    """A GitHub repo packaged but not persisted (POST /components/package/preview)."""
+
+    repo_name: str
+    repo_url: str
+    commit_sha: str
+    author: str | None
+    #: latest version of the lineage already packaged from this repo - creating then
+    #: adds a new version to it instead of a new component
+    existing: ExistingComponentDto | None
+    #: the repo's current commit is already packaged as `existing`
+    already_packaged: bool
 
 
 class ComponentCommandTypesApiV1(StrEnum):

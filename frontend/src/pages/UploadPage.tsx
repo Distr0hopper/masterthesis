@@ -1,7 +1,6 @@
-import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs.tsx';
 import { ManualUploadWizard } from '@/components/component-upload/organisms/ManualUploadWizard';
-import { PackageFromGitHubForm } from '@/components/component-upload/organisms/PackageFromGitHubForm';
+import { PackageFromGitHubWizard } from '@/components/component-upload/organisms/PackageFromGitHubWizard';
 
 const TABS_LIST_CLASSNAME = 'w-full justify-start gap-6 rounded-none border-b bg-transparent p-0';
 const TAB_TRIGGER_CLASSNAME =
@@ -28,11 +27,7 @@ export default function UploadPage() {
         </TabsContent>
 
         <TabsContent value="github">
-          <Card className="mt-6">
-            <CardContent className="pt-6">
-              <PackageFromGitHubForm />
-            </CardContent>
-          </Card>
+          <PackageFromGitHubWizard />
         </TabsContent>
       </Tabs>
     </div>

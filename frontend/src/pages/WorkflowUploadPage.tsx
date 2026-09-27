@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button.tsx';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { UploadStepper } from '@/components/common/UploadStepper';
 import { UploadDetailsStep } from '@/components/common/UploadDetailsStep';
+import { FileDropzone } from '@/components/common/FileDropzone';
 import { ComponentConfigStep } from '@/components/workflow-upload/organisms/ComponentConfigStep';
 import { SaveWorkflowStep } from '@/components/workflow-upload/organisms/SaveWorkflowStep';
 import { useComponentConfigs } from '@/components/workflow-upload/lib/useComponentConfigs';
@@ -195,11 +196,16 @@ export default function WorkflowUploadPage() {
         <Card className="mt-6">
           <CardContent className="pt-6">
             <UploadDetailsStep
-              file={file}
-              onFileChange={handleFile}
-              accept=".zip,.cwl"
-              fileLabel="Workflow File"
-              fileHelperText="A .zip archive or a bare .cwl file, or click to browse"
+              source={
+                <FileDropzone
+                  value={file}
+                  onChange={handleFile}
+                  accept=".zip,.cwl"
+                  label="Workflow File"
+                  helperText="A .zip archive or a bare .cwl file, or click to browse"
+                  error={errors.file}
+                />
+              }
               name={name}
               onNameChange={handleNameChange}
               nameLabel="Workflow Name"

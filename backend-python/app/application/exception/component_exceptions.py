@@ -16,6 +16,14 @@ class PackagingFailedError(Exception):
         super().__init__(f"Packaging '{repo_name}' failed: {reason}")
 
 
+class PackagedCommitChangedError(Exception):
+    def __init__(self, repo_name: str, expected_commit_sha: str, commit_sha: str | None) -> None:
+        super().__init__(
+            f"'{repo_name}' changed since it was reviewed (commit {expected_commit_sha[:7]} is now "
+            f"{(commit_sha or 'unknown')[:7]}) - please review it again"
+        )
+
+
 class PackagingServiceUnavailableError(Exception):
     def __init__(self) -> None:
         super().__init__("The packaging service is currently unavailable, please try again later")

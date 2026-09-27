@@ -13,6 +13,7 @@ import type {
   MyComponentsResponseDto,
   NameAvailabilityDto,
   PackageComponentDto,
+  PackagePreviewDto,
 } from './types';
 
 const ENDPOINT = '/components';
@@ -102,6 +103,11 @@ export const componentsService = {
     const formData = new FormData();
     formData.append('cwlFile', file);
     return apiClient.post(`${ENDPOINT}/parse`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+
+  // packages the repo but persists nothing - the GitHub counterpart of parse()
+  packagePreview(repoUrl: string): Promise<PackagePreviewDto> {
+    return apiClient.post(`${ENDPOINT}/package/preview`, { repoUrl });
   },
 
   checkNameAvailability(name: string): Promise<NameAvailabilityDto> {

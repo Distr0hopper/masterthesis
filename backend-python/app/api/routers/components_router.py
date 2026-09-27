@@ -17,6 +17,8 @@ from app.api.dto.component import (
     ExistingComponentDto,
     NameAvailabilityDto,
     PackageComponentRequestDto,
+    PackagePreviewDto,
+    PackagePreviewRequestDto,
     ParseComponentRequestDto,
 )
 from app.api.dto.pagination import ListQueryPaginationDtoV1, PaginatedResponseDtoV1, build_paginated_response
@@ -256,6 +258,63 @@ async def create(
 
 
 @router.post(
+    "/package/preview",
+    response_model=PackagePreviewDto,
+    responses={
+        status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse, "description": "Invalid URL or packaging failed"},
+        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
+        status.HTTP_403_FORBIDDEN: {
+            "model": ErrorResponse,
+            "description": "The repo is already packaged as a component the caller cannot see",
+        },
+        status.HTTP_503_SERVICE_UNAVAILABLE: {"model": ErrorResponse, "description": "Packaging service unreachable"},
+    },
+)
+async def package_preview(
+    dto: PackagePreviewRequestDto,
+    current_user: Annotated[User, Depends(AuthService.get_current_user)],
+    components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
+) -> PackagePreviewDto:
+    """Package a GitHub repo without persisting it, so the user can review the generated
+    component (and label its File ports) before POST /components/package creates it.
+    Mirrors POST /components/parse."""
+    logger.info(f"Previewing package of {dto.repo_url} for user {current_user.id}")
+    preview = await components_service.preview_package(dto.repo_url)
+    validator = ComponentPermissionValidator(current_user)
+    existing = preview.existing
+    if existing is not None and not validator.can_read(existing):
+        raise ForbiddenException("This repository is already packaged as another user's component")
+
+    parsed = preview.parsed
+    return PackagePreviewDto(
+        cwl_content=parsed.cwl_content,
+        cwl_type=parsed.cwl_type,
+        description=parsed.description,
+        dockerfile_content=parsed.dockerfile_content,
+        docker_pull_reference=parsed.docker_pull_reference,
+        ontology_url=parsed.ontology_url,
+        parameters=[
+            ComponentTransformer.to_preview_parameter(p, "preview", parsed.ontology_url) for p in parsed.parameters
+        ],
+        repo_name=preview.repo_name,
+        repo_url=preview.repo_url,
+        commit_sha=preview.commit_sha,
+        author=preview.author,
+        existing=None
+        if existing is None
+        else ExistingComponentDto(
+            id=existing.id,
+            name=existing.name,
+            version=existing.version,
+            domains=ComponentTransformer.to_domains(existing),
+            status=existing.status,
+            can_add_version=validator.can_update(existing),
+        ),
+        already_packaged=preview.already_packaged,
+    )
+
+
+@router.post(
     "/package",
     response_model=ComponentDetailDto,
     status_code=status.HTTP_201_CREATED,
@@ -268,7 +327,8 @@ async def create(
         },
         status.HTTP_409_CONFLICT: {
             "model": ErrorResponse,
-            "description": "This exact commit is already packaged, or the derived name collides with an existing component",
+            "description": "This exact commit is already packaged, the name collides with an existing component, "
+            "or the repo changed since expectedCommitSha was reviewed",
         },
         status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErrorResponse, "description": "Request validation failed"},
     },
@@ -280,6 +340,7 @@ async def package(
     favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
 ) -> ComponentDetailDto:
     existing = await components_service.find_component_by_repo_url(dto.repo_url)
+    format_labels = ComponentTransformer.to_format_labels(dto.format_labels)
     logger.info(f"Packaging component from {dto.repo_url}")
 
     if existing is not None:
@@ -287,9 +348,19 @@ async def package(
         if not validator.can_update(existing):
             logger.warning(f"User {current_user.id} not permitted to package a new version of repo {dto.repo_url}")
             raise ForbiddenException("Insufficient permission to package a new version of this component")
-        component = await components_service.package_next_version(existing, dto.description)
+        component = await components_service.package_next_version(
+            existing, dto.description, format_labels, dto.expected_commit_sha
+        )
     else:
-        component = await components_service.create_from_url(dto.repo_url, dto.domains, dto.description, current_user.id)
+        component = await components_service.create_from_url(
+            dto.repo_url,
+            dto.domains,
+            dto.description,
+            current_user.id,
+            name=dto.name,
+            format_labels=format_labels,
+            expected_commit_sha=dto.expected_commit_sha,
+        )
 
     logger.info(f"Packaging complete: '{component.name}' v{component.version} ({component.id})")
     favorited_names = await _favorited_names(favorites_service, current_user)

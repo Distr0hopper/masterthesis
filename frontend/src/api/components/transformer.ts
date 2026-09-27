@@ -7,14 +7,10 @@ import type {
   ComponentPreviewDto,
   DomainDto,
   FormatLabelSource,
-  PackageComponentDto,
   ParameterDto,
 } from './types';
 import { ComponentSource, ComponentStatus, ParameterDirection } from './types';
-import type {
-  PackageComponentFormData,
-  UpdateComponentFormData,
-} from './schema';
+import type { UpdateComponentFormData } from './schema';
 import { formatDate, getCreatorDisplay } from '@/api/transformer';
 import type { WithHateoasLinks } from '@/api/types';
 import { buildDockerPullUrl } from '@/lib/dockerImage';
@@ -110,18 +106,6 @@ export function getDomainBadgeStyle(domainId: string, domains: DomainDto[]): CSS
 }
 
 export const componentTransformer = {
-  getInitialPackageFormValues(): PackageComponentFormData {
-    return { repoUrl: '', domains: [], description: '' };
-  },
-
-  formToPackageDto(form: PackageComponentFormData): PackageComponentDto {
-    return {
-      repoUrl: form.repoUrl,
-      domains: form.domains,
-      description: form.description || null,
-    };
-  },
-
   getInitialUpdateFormValues(component: ComponentDisplayModel): UpdateComponentFormData {
     return { domains: component.domains, description: component.description ?? '' };
   },
@@ -172,20 +156,28 @@ export const componentTransformer = {
    */
   toPreviewDisplayModel(
     preview: ComponentPreviewDto,
-    overrides: { name?: string; domains?: string[]; description?: string | null } = {},
+    overrides: {
+      name?: string;
+      domains?: string[];
+      description?: string | null;
+      source?: ComponentSource;
+      repoUrl?: string | null;
+      version?: number;
+    } = {},
   ): ComponentDetailDisplayModel {
     const now = new Date();
     const name = overrides.name?.trim() || 'Component';
     const domains = overrides.domains ?? [];
     const description = overrides.description?.trim() || preview.description;
     const parameters = preview.parameters.map(componentTransformer.toParameterDisplayModel);
+    const source = overrides.source ?? ComponentSource.MANUAL_UPLOAD;
     return {
       id: '',
       name,
       description,
       authorDisplay: 'You',
-      repoUrl: null,
-      version: 1,
+      repoUrl: overrides.repoUrl ?? null,
+      version: overrides.version ?? 1,
       domains,
       domainsDisplay: domains.map(getDomainLabel),
       status: ComponentStatus.DRAFT,
@@ -194,8 +186,8 @@ export const componentTransformer = {
       createdAtDisplay: formatDate(now),
       isFavorite: false,
       match: null,
-      source: ComponentSource.MANUAL_UPLOAD,
-      sourceDisplay: SOURCE_LABELS[ComponentSource.MANUAL_UPLOAD],
+      source,
+      sourceDisplay: SOURCE_LABELS[source],
       repoCommitSha: null,
       repoCommitShaShort: null,
       doi: null,

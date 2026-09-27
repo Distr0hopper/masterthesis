@@ -4,13 +4,11 @@ import { AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button.tsx';
 import { Card, CardContent } from '@/components/ui/card.tsx';
-import { Badge } from '@/components/ui/badge.tsx';
 import { UploadDetailsStep } from '@/components/common/UploadDetailsStep';
+import { FileDropzone } from '@/components/common/FileDropzone';
 import { UploadStepper } from '@/components/common/UploadStepper';
 import { ComponentLink } from '@/components/common/ComponentLink';
-import { DomainBadges } from '@/components/common/DomainBadges';
-import { ComponentTabs } from '@/components/component-detail/organisms/ComponentTabs';
-import { FormatLabelFields } from '@/components/common/FormatLabelFields';
+import { ComponentReviewStep } from '@/components/component-upload/organisms/ComponentReviewStep';
 import {
   componentTransformer,
   toFormatLabelDtos,
@@ -168,10 +166,9 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
         <Card className="mt-6">
           <CardContent className="pt-6">
             <UploadDetailsStep
-              file={file}
-              onFileChange={handleFile}
-              accept=".cwl"
-              fileLabel="CWL File"
+              source={
+                <FileDropzone value={file} onChange={handleFile} accept=".cwl" label="CWL File" error={errors.file} />
+              }
               name={name}
               onNameChange={(value) => {
                 nameTouched.current = true;
@@ -196,27 +193,14 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
         </Card>
       )}
 
-      {step === 2 && previewModel && (
-        <>
-          <Card className="mt-6">
-            <CardContent className="flex flex-col gap-3 pt-6">
-              <p className="text-sm font-medium text-slate-900">This component will be created</p>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-mono text-sm font-semibold text-slate-900">{name}</span>
-                <Badge variant="secondary">v1</Badge>
-                <DomainBadges domains={domains} />
-              </div>
-              {previewModel.description && <p className="text-sm text-slate-500">{previewModel.description}</p>}
-              <FormatLabelFields
-                parameters={parsed!.parameters}
-                value={formatLabels}
-                onChange={setFormatLabels}
-                idPrefix="upload"
-              />
-            </CardContent>
-          </Card>
-          <ComponentTabs model={previewModel} isPreview />
-        </>
+      {step === 2 && parsed && previewModel && (
+        <ComponentReviewStep
+          title="This component will be created"
+          previewModel={previewModel}
+          parameters={parsed.parameters}
+          formatLabels={formatLabels}
+          onFormatLabelsChange={setFormatLabels}
+        />
       )}
 
       {createError && (

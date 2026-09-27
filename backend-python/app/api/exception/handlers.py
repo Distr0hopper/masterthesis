@@ -11,6 +11,7 @@ from app.application.exception.component_exceptions import (
     InvalidCwlError,
     ManualUploadCannotBeRepackagedError,
     MissingCommandPayloadError,
+    PackagedCommitChangedError,
     PackagingFailedError,
     PackagingServiceUnavailableError,
 )
@@ -52,6 +53,10 @@ async def _invalid_cwl_handler(request: Request, exc: InvalidCwlError) -> JSONRe
 
 async def _packaging_failed_handler(request: Request, exc: PackagingFailedError) -> JSONResponse:
     return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
+
+
+async def _packaged_commit_changed_handler(request: Request, exc: PackagedCommitChangedError) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
 async def _packaging_service_unavailable_handler(request: Request, exc: PackagingServiceUnavailableError) -> JSONResponse:
@@ -202,6 +207,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(OtpRequestRateLimitedError, _otp_rate_limited_handler)
     app.add_exception_handler(InvalidCwlError, _invalid_cwl_handler)
     app.add_exception_handler(PackagingFailedError, _packaging_failed_handler)
+    app.add_exception_handler(PackagedCommitChangedError, _packaged_commit_changed_handler)
     app.add_exception_handler(PackagingServiceUnavailableError, _packaging_service_unavailable_handler)
     app.add_exception_handler(ManualUploadCannotBeRepackagedError, _manual_upload_cannot_be_repackaged_handler)
     app.add_exception_handler(AlreadyPackagedError, _already_packaged_handler)

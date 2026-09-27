@@ -93,6 +93,21 @@ export interface ComponentPreviewDto {
   parameters: PreviewParameterDto[];
 }
 
+/**
+ * A GitHub repo packaged without persisting it - what POST /components/package/preview
+ * returns, so the generated component can be reviewed before it is created.
+ */
+export interface PackagePreviewDto extends ComponentPreviewDto {
+  repoName: string;
+  repoUrl: string;
+  commitSha: string;
+  author: string | null;
+  /** latest version already packaged from this repo - creating adds a new version to it */
+  existing: ExistingComponentDto | null;
+  /** the repo's current commit is already packaged as `existing` */
+  alreadyPackaged: boolean;
+}
+
 /** A previewed component port - never persisted, so `id` is synthetic. */
 export interface PreviewParameterDto {
   id: string;
@@ -215,6 +230,11 @@ export interface PackageComponentDto {
   repoUrl: string;
   domains: string[];
   description?: string | null;
+  /** name for a new component - ignored when the repo is already packaged */
+  name?: string | null;
+  formatLabels?: FormatLabelDto[];
+  /** commit the reviewed preview came from - the backend rejects (409) if the repo moved on */
+  expectedCommitSha?: string | null;
 }
 
 export interface AddVersionDto {

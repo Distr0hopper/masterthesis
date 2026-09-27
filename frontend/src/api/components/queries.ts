@@ -36,6 +36,10 @@ export const useParseComponent = () => {
   return useMutation({ mutationFn: (file: File) => componentsService.parse(file) });
 };
 
+export const usePackagePreview = () => {
+  return useMutation({ mutationFn: (repoUrl: string) => componentsService.packagePreview(repoUrl) });
+};
+
 export const useComponentNameAvailability = (name: string) => {
   const trimmed = name.trim();
   return useQuery({

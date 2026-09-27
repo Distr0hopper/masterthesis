@@ -14,6 +14,7 @@ from app.application.exception.component_exceptions import (
     InvalidCwlError,
     ManualUploadCannotBeRepackagedError,
     MissingCommandPayloadError,
+    PackagedCommitChangedError,
 )
 from app.domain.compatibility.format_label import accepts_manual_format_label
 from app.domain.models.component_domain import ComponentDomain
@@ -53,6 +54,21 @@ class ParsedComponent:
     docker_pull_reference: str | None
     ontology_url: str | None
     parameters: list[Parameter]
+
+
+@dataclass
+class PackagePreview:
+    """A GitHub repo packaged but not persisted - see ComponentsService.preview_package."""
+
+    parsed: ParsedComponent
+    repo_name: str
+    repo_url: str
+    commit_sha: str
+    author: str | None
+    #: latest version of the lineage already packaged from this repo, if any
+    existing: Component | None
+    #: the repo's current commit is exactly what `existing` was packaged from
+    already_packaged: bool
 
 
 class ComponentsService:
@@ -183,8 +199,41 @@ class ComponentsService:
             cwl_content = content.decode("utf-8")
         except UnicodeDecodeError as err:
             raise InvalidCwlError("Uploaded", "File is not valid UTF-8 text") from err
+        return await self._build_preview(cwl_content, "Uploaded", ComponentSource.MANUAL_UPLOAD)
 
-        parameters = self._parse_parameters(cwl_content, "Uploaded", ComponentSource.MANUAL_UPLOAD)
+    async def preview_package(self, repo_url: str) -> PackagePreview:
+        """Package a GitHub repo without persisting it, so the generated component can be
+        reviewed (and its File ports labelled) before it is created - the packaging
+        counterpart of parse_cwl.
+
+        For a repo that's already packaged, the preview carries the latest version's hand
+        labels forward, exactly like add_manual_version does on save.
+        """
+        repo_name, cwl_content, commit_sha, description, author = await self._run_packaging(repo_url)
+        parsed = await self._build_preview(cwl_content, "CLI-generated", ComponentSource.AUTOMATED_PACKAGING)
+        if parsed.description is None:
+            parsed.description = self._truncate_description(description)
+
+        existing = await self.find_component_by_repo_url(repo_url)
+        latest = await self.find_latest_version_by_name(existing.name) if existing is not None else None
+        if latest is not None:
+            self._apply_manual_format_labels_to(
+                parsed.parameters, parsed.ontology_url, self._manual_format_labels_of(latest)
+            )
+        return PackagePreview(
+            parsed=parsed,
+            repo_name=repo_name,
+            repo_url=repo_url,
+            commit_sha=commit_sha,
+            author=author,
+            existing=latest,
+            already_packaged=latest is not None and bool(commit_sha) and latest.repo_commit_sha == commit_sha,
+        )
+
+    async def _build_preview(self, cwl_content: str, context: str, source: ComponentSource) -> ParsedComponent:
+        # source matters: _parse_parameters drops formats for packaged components, so the
+        # preview must use the same source the component will be saved with
+        parameters = self._parse_parameters(cwl_content, context, source)
         ontology_url = self.ontology_url_for(cwl_content)
         await self.resolve_format_labels(ontology_url, parameters)
         return ParsedComponent(
@@ -220,7 +269,9 @@ class ComponentsService:
 
         return await self._save_and_reload(component)
 
-    async def add_manual_version(self, component: Component) -> Component:
+    async def add_manual_version(
+        self, component: Component, format_labels: list[ManualFormatLabel] | None = None
+    ) -> Component:
         versions = await self.components_repository.find_versions_by_name(component.name)
         next_version = versions[-1].version + 1 if versions else 1
 
@@ -232,6 +283,8 @@ class ComponentsService:
             # hand labels live outside the CWL, so a new version (e.g. a MoveApps repo
             # re-packaged from GitHub) would otherwise silently lose them
             self._apply_manual_format_labels(component, self._manual_format_labels_of(versions[-1]))
+        # applied after the carried-over ones, so a reviewed label overrides (or clears) them
+        self._apply_manual_format_labels(component, format_labels or [])
         component.cwl_type = extract_cwl_type(component.cwl_content)
         component.dockerfile_content = extract_dockerfile_content(component.cwl_content)
         component.docker_pull_reference = extract_docker_pull(component.cwl_content)
@@ -250,11 +303,15 @@ class ComponentsService:
         domains: list[str],
         description_override: str | None,
         created_by_id: uuid.UUID,
+        name: str | None = None,
+        format_labels: list[ManualFormatLabel] | None = None,
+        expected_commit_sha: str | None = None,
     ) -> Component:
         repo_name, cwl_content, commit_sha, metadata_description, metadata_author = await self._run_packaging(repo_url)
+        self._check_expected_commit(repo_name, commit_sha, expected_commit_sha)
 
         component = Component(
-            name=repo_name,
+            name=(name or "").strip() or repo_name,
             author_name=metadata_author,
             created_by_id=created_by_id,
             repo_url=repo_url,
@@ -265,10 +322,17 @@ class ComponentsService:
             source=ComponentSource.AUTOMATED_PACKAGING,
             domains=[ComponentDomain(domain=d) for d in domains],
         )
-        return await self.create_manual(component, context="CLI-generated")
+        return await self.create_manual(component, context="CLI-generated", format_labels=format_labels)
 
-    async def package_next_version(self, existing: Component, description_override: str | None) -> Component:
+    async def package_next_version(
+        self,
+        existing: Component,
+        description_override: str | None,
+        format_labels: list[ManualFormatLabel] | None = None,
+        expected_commit_sha: str | None = None,
+    ) -> Component:
         repo_name, cwl_content, commit_sha, metadata_description, _ = await self._run_packaging(existing.repo_url)
+        self._check_expected_commit(repo_name, commit_sha, expected_commit_sha)
 
         if commit_sha and existing.repo_commit_sha == commit_sha:
             raise AlreadyPackagedError(repo_name, commit_sha)
@@ -284,7 +348,14 @@ class ComponentsService:
             source=existing.source,
             domains=[ComponentDomain(domain=d.domain) for d in existing.domains],
         )
-        return await self.add_manual_version(component)
+        return await self.add_manual_version(component, format_labels)
+
+    @staticmethod
+    def _check_expected_commit(repo_name: str, commit_sha: str | None, expected_commit_sha: str | None) -> None:
+        # packaging runs again on create - if the repo moved on since the preview, the
+        # user would otherwise save a CWL (and label ports) they never reviewed
+        if expected_commit_sha is not None and commit_sha != expected_commit_sha:
+            raise PackagedCommitChangedError(repo_name, expected_commit_sha, commit_sha)
 
     async def repackage_component(self, parent: Component) -> Component:
         if parent.repo_url is None:
@@ -373,10 +444,16 @@ class ComponentsService:
         return await self._save_and_reload(component)
 
     def _apply_manual_format_labels(self, component: Component, format_labels: list[ManualFormatLabel]) -> None:
+        self._apply_manual_format_labels_to(component.parameters, component.ontology_url, format_labels)
+
+    @staticmethod
+    def _apply_manual_format_labels_to(
+        parameters: list[Parameter], ontology_url: str | None, format_labels: list[ManualFormatLabel]
+    ) -> None:
         by_port = {(label.name, label.direction): label for label in format_labels}
-        for parameter in component.parameters:
+        for parameter in parameters:
             label = by_port.get((parameter.name, parameter.direction))
-            if label is None or not accepts_manual_format_label(parameter, component.ontology_url):
+            if label is None or not accepts_manual_format_label(parameter, ontology_url):
                 continue
             parameter.format_label = (label.label or "").strip() or None
 

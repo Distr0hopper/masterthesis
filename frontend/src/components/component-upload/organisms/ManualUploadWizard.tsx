@@ -4,7 +4,8 @@ import { AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button.tsx';
 import { Card, CardContent } from '@/components/ui/card.tsx';
-import { UploadDetailsStep } from '@/components/common/UploadDetailsStep';
+import { UploadSourceStep } from '@/components/common/UploadSourceStep';
+import { UploadMetadataFields } from '@/components/common/UploadMetadataFields';
 import { FileDropzone } from '@/components/common/FileDropzone';
 import { UploadStepper } from '@/components/common/UploadStepper';
 import { ComponentLink } from '@/components/common/ComponentLink';
@@ -20,15 +21,15 @@ import {
   type ComponentDetailDto,
   type ComponentPreviewDto,
 } from '@/api/components';
-import { validateUploadDetails, type UploadDetailsErrors } from '@/api/schema';
+import { validateUploadMetadata, type UploadDetailsErrors } from '@/api/schema';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { getErrorMessage } from '@/lib/errors';
 import { ROUTES } from '@/lib/routes';
 import { stripUploadExtension } from '@/lib/filename';
 
 const STEPS = [
-  { id: 1, label: 'Component' },
-  { id: 2, label: 'Review' },
+  { id: 1, label: 'Source' },
+  { id: 2, label: 'Details & review' },
 ];
 
 interface ManualUploadWizardProps {
@@ -71,6 +72,15 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
     if (!descriptionTouched.current) setDescription(response.description ?? '');
   };
 
+  const readFile = (selected: File) => {
+    parseMutation.mutate(selected, {
+      onSuccess: (response) => {
+        applyParsed(response);
+        goTo(2);
+      },
+    });
+  };
+
   const handleFile = (selected: File | null) => {
     setFile(selected);
     parseMutation.reset();
@@ -80,32 +90,23 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
     setStep(1);
     setFurthest(1);
     if (selected && !nameTouched.current) setName(stripUploadExtension(selected.name));
-    if (selected) parseMutation.mutate(selected, { onSuccess: applyParsed });
+    if (selected) readFile(selected);
   };
 
+  // back on the source step without changing it - or retrying a read that failed
   const handleContinue = () => {
-    const { data, errors: fieldErrors } = validateUploadDetails({ name, domains, file, description });
+    if (parsed) goTo(2);
+    else if (file) readFile(file);
+  };
+
+  const handleCreate = () => {
+    if (!file || !parsed || taken) return;
+    const { data, errors: fieldErrors } = validateUploadMetadata({ name, domains, description });
     if (!data) {
       setErrors(fieldErrors);
       return;
     }
     setErrors({});
-    if (taken) return;
-
-    if (parsed) {
-      goTo(2);
-      return;
-    }
-    parseMutation.mutate(data.file, {
-      onSuccess: (response) => {
-        applyParsed(response);
-        goTo(2);
-      },
-    });
-  };
-
-  const handleCreate = () => {
-    if (!file || taken) return;
     upload(
       {
         file,
@@ -113,7 +114,7 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
           name,
           domains,
           description: description || null,
-          formatLabels: parsed ? toFormatLabelDtos(parsed.parameters, formatLabels) : [],
+          formatLabels: toFormatLabelDtos(parsed.parameters, formatLabels),
         },
       },
       {
@@ -127,7 +128,6 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
   };
 
   const nameNotice = taken ? (
-
     <div className="flex items-start gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
       <span>
@@ -165,26 +165,10 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
       {step === 1 && (
         <Card className="mt-6">
           <CardContent className="pt-6">
-            <UploadDetailsStep
-              source={
-                <FileDropzone value={file} onChange={handleFile} accept=".cwl" label="CWL File" error={errors.file} />
-              }
-              name={name}
-              onNameChange={(value) => {
-                nameTouched.current = true;
-                setName(value);
-              }}
-              nameLabel="Component Name"
-              namePlaceholder="e.g. remove-outliers"
-              domains={domains}
-              onDomainsChange={setDomains}
-              description={description}
-              onDescriptionChange={(value) => {
-                descriptionTouched.current = true;
-                setDescription(value);
-              }}
-              errors={errors}
-              nameNotice={nameNotice}
+            <UploadSourceStep
+              source={<FileDropzone value={file} onChange={handleFile} accept=".cwl" label="CWL File" />}
+              isReading={parseMutation.isPending}
+              readingLabel="Reading file..."
               error={
                 parseMutation.error ? getErrorMessage(parseMutation.error, 'Could not read this file.') : undefined
               }
@@ -195,7 +179,28 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
 
       {step === 2 && parsed && previewModel && (
         <ComponentReviewStep
-          title="This component will be created"
+          title="New component"
+          details={
+            <UploadMetadataFields
+              name={name}
+              onNameChange={(value) => {
+                nameTouched.current = true;
+                setName(value);
+              }}
+              nameLabel="Component Name"
+              namePlaceholder="e.g. remove-outliers"
+              nameNotice={nameNotice}
+              domains={domains}
+              onDomainsChange={setDomains}
+              description={description}
+              onDescriptionChange={(value) => {
+                descriptionTouched.current = true;
+                setDescription(value);
+              }}
+              descriptionPlaceholder="Taken from the file's doc: field - or write your own"
+              errors={errors}
+            />
+          }
           previewModel={previewModel}
           parameters={parsed.parameters}
           formatLabels={formatLabels}
@@ -218,7 +223,7 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
         {step === 1 && (
           <Button
             onClick={handleContinue}
-            disabled={parseMutation.isPending || taken}
+            disabled={parseMutation.isPending || !file}
             className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90"
           >
             {parseMutation.isPending ? 'Reading file...' : 'Continue'}

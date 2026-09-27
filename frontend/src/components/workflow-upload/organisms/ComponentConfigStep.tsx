@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { DomainMultiSelect } from '@/components/common/DomainMultiSelect';
 import type { WorkflowStepPreviewDto, ParseWorkflowResponseDto } from '@/api/workflows';
@@ -9,6 +9,8 @@ import { ParsedWorkflowOverview } from './ParsedWorkflowOverview';
 
 interface ComponentConfigStepProps {
   parsed: ParseWorkflowResponseDto;
+  /** the workflow's own editable name/domains/description (UploadMetadataFields) */
+  workflowDetails: ReactNode;
   previews: WorkflowStepPreviewDto[];
   configs: Record<string, ComponentConfigState>;
   errors: Record<string, string>;
@@ -19,6 +21,7 @@ interface ComponentConfigStepProps {
 
 export function ComponentConfigStep({
   parsed,
+  workflowDetails,
   previews,
   configs,
   errors,
@@ -32,8 +35,15 @@ export function ComponentConfigStep({
   return (
     <div className="mt-6 flex flex-col gap-4">
       <Card>
-        <CardContent className="flex flex-col gap-4 pt-6">
+        <CardContent className="flex flex-col gap-6 pt-6">
+          <p className="text-sm font-medium text-slate-900">Workflow</p>
           <ParsedWorkflowOverview parsed={parsed} />
+          {workflowDetails}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="flex flex-col gap-4 pt-6">
           <div>
             <p className="text-sm font-medium text-slate-900">Configure components</p>
             <p className="mt-1 text-sm text-slate-500">

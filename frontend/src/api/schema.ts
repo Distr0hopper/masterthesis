@@ -13,7 +13,7 @@ export const descriptionSchema = z
 /**
  * The metadata describing every new upload - components (from a file or GitHub) and
  * workflows ask for exactly the same things, so they validate against the same rules
- * and render the same UploadDetailsStep.
+ * and render the same UploadMetadataFields.
  */
 export const uploadMetadataSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -21,21 +21,22 @@ export const uploadMetadataSchema = z.object({
   description: descriptionSchema,
 });
 
-/** The first step of a file upload: the file plus the metadata that describes it. */
-export const uploadDetailsFormSchema = uploadMetadataSchema.extend({
-  file: z.instanceof(File, { message: 'A file is required' }),
-});
-
 export type UploadMetadataFormData = z.infer<typeof uploadMetadataSchema>;
-export type UploadDetailsFormData = z.infer<typeof uploadDetailsFormSchema>;
 
 /** field name -> first validation message, for rendering inline errors */
-export type UploadDetailsErrors = Partial<Record<keyof UploadDetailsFormData, string>>;
+export type UploadDetailsErrors = Partial<Record<keyof UploadMetadataFormData, string>>;
 
-type ValidationResult<T> = { data: T; errors: null } | { data: null; errors: UploadDetailsErrors };
-
-function validate<T>(schema: z.ZodType<T>, input: unknown): ValidationResult<T> {
-  const result = schema.safeParse(input);
+/**
+ * Validate the metadata of a new upload. Returns the parsed data on success, or the
+ * per-field errors to render. Every upload gates its final "Create"/"Save" on this - the
+ * source itself is guaranteed by the flow, since step 2 needs a successful read.
+ */
+export function validateUploadMetadata(input: {
+  name: string;
+  domains: string[];
+  description: string;
+}): { data: UploadMetadataFormData; errors: null } | { data: null; errors: UploadDetailsErrors } {
+  const result = uploadMetadataSchema.safeParse({ ...input, description: input.description || undefined });
   if (result.success) return { data: result.data, errors: null };
 
   const errors: UploadDetailsErrors = {};
@@ -44,26 +45,4 @@ function validate<T>(schema: z.ZodType<T>, input: unknown): ValidationResult<T> 
     if (field && !errors[field]) errors[field] = issue.message;
   }
   return { data: null, errors };
-}
-
-/**
- * Validate the shared upload-details fields. Returns the parsed data on success, or the
- * per-field errors to render. Both file-upload pages gate their "Continue" on this.
- */
-export function validateUploadDetails(input: {
-  name: string;
-  domains: string[];
-  file: File | null;
-  description: string;
-}): ValidationResult<UploadDetailsFormData> {
-  return validate(uploadDetailsFormSchema, { ...input, description: input.description || undefined });
-}
-
-/** Like {@link validateUploadDetails}, for uploads whose source isn't a file (GitHub packaging). */
-export function validateUploadMetadata(input: {
-  name: string;
-  domains: string[];
-  description: string;
-}): ValidationResult<UploadMetadataFormData> {
-  return validate(uploadMetadataSchema, { ...input, description: input.description || undefined });
 }

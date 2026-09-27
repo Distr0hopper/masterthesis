@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button.tsx';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Input } from '@/components/ui/input.tsx';
 import { FormField } from '@/components/common/FormField';
-import { UploadDetailsStep } from '@/components/common/UploadDetailsStep';
+import { UploadSourceStep } from '@/components/common/UploadSourceStep';
+import { UploadMetadataFields } from '@/components/common/UploadMetadataFields';
 import { UploadStepper } from '@/components/common/UploadStepper';
 import { ComponentLink } from '@/components/common/ComponentLink';
 import { ComponentReviewStep } from '@/components/component-upload/organisms/ComponentReviewStep';
@@ -31,8 +32,19 @@ import { ROUTES } from '@/lib/routes';
 
 const STEPS = [
   { id: 1, label: 'Repository' },
-  { id: 2, label: 'Review' },
+  { id: 2, label: 'Details & review' },
 ];
+
+/** Why a fetched repo can't be packaged at all - shown on the source step, blocks continuing. */
+function sourceIssuesOf(preview: PackagePreviewDto | undefined): string[] {
+  if (preview?.alreadyPackaged) {
+    return [`Already up to date - commit ${preview.commitSha.slice(0, 7)} is the latest packaged version.`];
+  }
+  if (preview?.existing && !preview.existing.canAddVersion) {
+    return ['This repository is already packaged, and only its owner can add new versions.'];
+  }
+  return [];
+}
 
 const PACKAGING_HINT = (
   <>
@@ -43,8 +55,8 @@ const PACKAGING_HINT = (
 );
 
 /**
- * Package a MoveApps GitHub repo as a component - the same details -> review flow as
- * ManualUploadWizard, with the repo URL instead of a file. A repo that's already
+ * Package a MoveApps GitHub repo as a component - the same source -> details & review
+ * flow as ManualUploadWizard, with the repo URL as the source. A repo that's already
  * packaged becomes a new version of its component instead (name and domains locked).
  */
 export function PackageFromGitHubWizard() {
@@ -74,13 +86,7 @@ export function PackageFromGitHubWizard() {
   const { data: availability } = useComponentNameAvailability(debouncedName);
   const taken = !isNewVersion && availability?.available === false;
 
-  const blockingIssues: string[] = [];
-  if (preview?.alreadyPackaged) {
-    blockingIssues.push(`Already up to date - commit ${preview.commitSha.slice(0, 7)} is the latest packaged version.`);
-  } else if (existing && !existing.canAddVersion) {
-    blockingIssues.push('This repository is already packaged, and only its owner can add new versions.');
-  }
-  const blocked = blockingIssues.length > 0 || taken;
+  const sourceIssues = sourceIssuesOf(preview);
 
   const goTo = (next: number) => {
     setStep(next);
@@ -99,7 +105,7 @@ export function PackageFromGitHubWizard() {
     setFormatLabels(initialFormatLabelDraft(response.parameters));
   };
 
-  const fetchPreview = (onSuccess?: () => void) => {
+  const fetchPreview = () => {
     const result = repoUrlSchema.safeParse(repoUrl.trim());
     if (!result.success) {
       setRepoUrlError(result.error.issues[0]?.message);
@@ -110,7 +116,8 @@ export function PackageFromGitHubWizard() {
     previewMutation.mutate(result.data, {
       onSuccess: (response) => {
         applyPreview(response);
-        onSuccess?.();
+        if (sourceIssuesOf(response).length > 0) setStep(1);
+        else goTo(2);
       },
     });
   };
@@ -128,23 +135,20 @@ export function PackageFromGitHubWizard() {
     }
   };
 
+  // back on the source step without changing it - or retrying a fetch that failed
   const handleContinue = () => {
-    if (!preview) {
-      fetchPreview();
-      return;
-    }
+    if (preview && sourceIssues.length === 0) goTo(2);
+    else if (!preview) fetchPreview();
+  };
+
+  const handleCreate = () => {
+    if (!preview || sourceIssues.length > 0 || taken) return;
     const { data, errors: fieldErrors } = validateUploadMetadata({ name, domains, description });
     if (!data) {
       setErrors(fieldErrors);
       return;
     }
     setErrors({});
-    if (blocked) return;
-    goTo(2);
-  };
-
-  const handleCreate = () => {
-    if (!preview || blocked) return;
     packageComponent(
       {
         repoUrl: preview.repoUrl,
@@ -172,7 +176,7 @@ export function PackageFromGitHubWizard() {
       <span>
         This repository is already packaged as{' '}
         <ComponentLink componentId={existing.id} name={existing.name} version={existing.version} className="inline-flex" />
-        {' — '}continuing creates version {existing.version + 1}.
+        {' — '}this creates version {existing.version + 1}.
       </span>
     </div>
   ) : taken ? (
@@ -245,29 +249,12 @@ export function PackageFromGitHubWizard() {
       {step === 1 && (
         <Card className="mt-6">
           <CardContent className="pt-6">
-            <UploadDetailsStep
+            <UploadSourceStep
               source={repoSource}
               hint={PACKAGING_HINT}
-              name={name}
-              onNameChange={(value) => {
-                nameTouched.current = true;
-                setName(value);
-              }}
-              nameLabel="Component Name"
-              namePlaceholder="Filled in from the repository name once it's fetched"
-              nameReadOnly={isNewVersion}
-              domains={domains}
-              onDomainsChange={setDomains}
-              domainsReadOnly={isNewVersion}
-              description={description}
-              onDescriptionChange={(value) => {
-                descriptionTouched.current = true;
-                setDescription(value);
-              }}
-              descriptionPlaceholder="Filled in from the repository's README once it's fetched - or write your own"
-              errors={errors}
-              nameNotice={nameNotice}
-              issues={blockingIssues}
+              isReading={previewMutation.isPending}
+              readingLabel="Packaging the repository - this takes a few seconds..."
+              issues={sourceIssues}
               error={
                 previewMutation.error
                   ? getErrorMessage(previewMutation.error, 'Could not package this repository.')
@@ -280,8 +267,28 @@ export function PackageFromGitHubWizard() {
 
       {step === 2 && preview && previewModel && (
         <ComponentReviewStep
-          title={
-            existing ? `New version v${existing.version + 1} of ${existing.name}` : 'This component will be created'
+          title={existing ? `New version of ${existing.name}` : 'New component'}
+          details={
+            <UploadMetadataFields
+              name={name}
+              onNameChange={(value) => {
+                nameTouched.current = true;
+                setName(value);
+              }}
+              nameLabel="Component Name"
+              nameReadOnly={isNewVersion}
+              nameNotice={nameNotice}
+              domains={domains}
+              onDomainsChange={setDomains}
+              domainsReadOnly={isNewVersion}
+              description={description}
+              onDescriptionChange={(value) => {
+                descriptionTouched.current = true;
+                setDescription(value);
+              }}
+              descriptionPlaceholder="Taken from the repository's README - or write your own"
+              errors={errors}
+            />
           }
           previewModel={previewModel}
           parameters={preview.parameters}
@@ -294,7 +301,7 @@ export function PackageFromGitHubWizard() {
         <div className="mt-4 flex flex-wrap items-center gap-3 rounded-md bg-error px-3 py-2 text-sm text-error-foreground">
           <span>{getErrorMessage(createError, 'Could not package this component.')}</span>
           {createConflict && (
-            <Button size="sm" variant="outline" onClick={() => fetchPreview(() => goTo(2))}>
+            <Button size="sm" variant="outline" onClick={fetchPreview}>
               Fetch again
             </Button>
           )}
@@ -310,7 +317,7 @@ export function PackageFromGitHubWizard() {
         {step === 1 && (
           <Button
             onClick={handleContinue}
-            disabled={previewMutation.isPending || blocked}
+            disabled={previewMutation.isPending || !repoUrl.trim() || sourceIssues.length > 0}
             className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90"
           >
             {previewMutation.isPending ? 'Packaging...' : 'Continue'}
@@ -319,7 +326,7 @@ export function PackageFromGitHubWizard() {
         {step === 2 && (
           <Button
             onClick={handleCreate}
-            disabled={isCreating || blocked}
+            disabled={isCreating || taken}
             className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90"
           >
             {isCreating ? 'Packaging...' : isNewVersion ? 'Create Version' : 'Create Component'}

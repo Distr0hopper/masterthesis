@@ -5,10 +5,10 @@ import { AlertTriangle, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button.tsx';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { UploadStepper } from '@/components/common/UploadStepper';
-import { UploadDetailsStep } from '@/components/common/UploadDetailsStep';
+import { UploadSourceStep } from '@/components/common/UploadSourceStep';
+import { UploadMetadataFields } from '@/components/common/UploadMetadataFields';
 import { FileDropzone } from '@/components/common/FileDropzone';
 import { ComponentConfigStep } from '@/components/workflow-upload/organisms/ComponentConfigStep';
-import { SaveWorkflowStep } from '@/components/workflow-upload/organisms/SaveWorkflowStep';
 import { useComponentConfigs } from '@/components/workflow-upload/lib/useComponentConfigs';
 import {
   useCreateWorkflow,
@@ -16,17 +16,41 @@ import {
   useWorkflowNameAvailability,
   type ParseWorkflowResponseDto,
 } from '@/api/workflows';
-import { validateUploadDetails, type UploadDetailsErrors } from '@/api/schema';
+import { validateUploadMetadata, type UploadDetailsErrors } from '@/api/schema';
 import { getErrorMessage } from '@/lib/errors';
 import { ROUTES } from '@/lib/routes';
 import { stripUploadExtension } from '@/lib/filename';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
 
 const STEPS = [
-  { id: 1, label: 'Workflow' },
-  { id: 2, label: 'Components' },
-  { id: 3, label: 'Save' },
+  { id: 1, label: 'Source' },
+  { id: 2, label: 'Configure & save' },
 ];
+
+/** Problems in the uploaded file that make it impossible to continue - shown on the source step. */
+function blockersOf(parsed: ParseWorkflowResponseDto | undefined): string[] {
+  if (!parsed) return [];
+  const blockers: string[] = [];
+  if (parsed.missingExternalRefs.length) {
+    blockers.push(
+      `Missing referenced file(s) in the archive: ${parsed.missingExternalRefs.join(', ')}. Fix the archive and try again.`,
+    );
+  }
+  if (parsed.missingImports.length) {
+    blockers.push(
+      `Imported file(s) missing from the archive: ${parsed.missingImports.join(', ')}. The workflow references these type definitions and cannot run without them.`,
+    );
+  }
+  if (!parsed.isZip && parsed.externalRefs.length > 0) {
+    blockers.push(
+      `This .cwl file references step file(s) it doesn't contain: ${parsed.externalRefs.join(', ')}. Upload a .zip archive with them instead.`,
+    );
+  }
+  if (parsed.componentPreviews.length === 0) {
+    blockers.push('No components could be read from this file.');
+  }
+  return blockers;
+}
 
 export default function WorkflowUploadPage() {
   const navigate = useNavigate();
@@ -76,6 +100,15 @@ export default function WorkflowUploadPage() {
     configs.reset(response.componentPreviews);
   };
 
+  const readFile = (selected: File) => {
+    parseMutation.mutate(selected, {
+      onSuccess: (response) => {
+        applyParsed(response);
+        if (blockersOf(response).length === 0) goTo(2);
+      },
+    });
+  };
+
   const handleFile = (selected: File | null) => {
     setFile(selected);
     parseMutation.reset();
@@ -84,62 +117,27 @@ export default function WorkflowUploadPage() {
     setStep(1);
     setFurthest(1);
     if (selected && !nameTouched.current) setName(stripUploadExtension(selected.name));
-    // parsed right away, so the extracted description is in the field while it's still on screen
-    if (selected) parseMutation.mutate(selected, { onSuccess: applyParsed });
+    if (selected) readFile(selected);
   };
 
-  const blockingIssues: string[] = [];
-  if (parsed?.missingExternalRefs.length) {
-    blockingIssues.push(
-      `Missing referenced file(s) in the archive: ${parsed.missingExternalRefs.join(', ')}. Fix the archive and try again.`,
-    );
-  }
-  if (parsed?.missingImports.length) {
-    blockingIssues.push(
-      `Imported file(s) missing from the archive: ${parsed.missingImports.join(', ')}. The workflow references these type definitions and cannot run without them.`,
-    );
-  }
-  if (parsed && !parsed.isZip && parsed.externalRefs.length > 0) {
-    blockingIssues.push(
-      `This .cwl file references step file(s) it doesn't contain: ${parsed.externalRefs.join(', ')}. Upload a .zip archive with them instead.`,
-    );
-  }
-  if (parsed && parsed.componentPreviews.length === 0) {
-    blockingIssues.push('No components could be read from this file.');
-  }
+  const blockingIssues = blockersOf(parsed);
 
-  const handleContinueFromDetails = () => {
-    const { data, errors: fieldErrors } = validateUploadDetails({ name, domains, file, description });
+  // back on the source step without changing it - or retrying a read that failed
+  const handleContinue = () => {
+    if (parsed && blockingIssues.length === 0) goTo(2);
+    else if (file && !parsed) readFile(file);
+  };
+
+  const canSave = configs.isComplete && blockingIssues.length === 0 && !nameTaken;
+
+  const handleSave = () => {
+    if (!file || !parsed || !canSave) return;
+    const { data, errors: fieldErrors } = validateUploadMetadata({ name, domains, description });
     if (!data) {
       setErrors(fieldErrors);
       return;
     }
     setErrors({});
-    if (nameTaken) return;
-
-    if (parsed && blockingIssues.length === 0) {
-      goTo(2);
-      return;
-    }
-
-    // only reached when the parse on file select failed (or found blocking issues) - retry
-    parseMutation.mutate(data.file, {
-      onSuccess: (response: ParseWorkflowResponseDto) => {
-        applyParsed(response);
-        const hasBlockers =
-          response.missingExternalRefs.length > 0 ||
-          response.missingImports.length > 0 ||
-          (!response.isZip && response.externalRefs.length > 0) ||
-          response.componentPreviews.length === 0;
-        if (!hasBlockers) goTo(2);
-      },
-    });
-  };
-
-  const canSave = configs.isComplete && blockingIssues.length === 0;
-
-  const handleSave = () => {
-    if (!file || !parsed || !canSave) return;
     createMutation.mutate(
       {
         file,
@@ -195,7 +193,7 @@ export default function WorkflowUploadPage() {
       {step === 1 && (
         <Card className="mt-6">
           <CardContent className="pt-6">
-            <UploadDetailsStep
+            <UploadSourceStep
               source={
                 <FileDropzone
                   value={file}
@@ -203,19 +201,10 @@ export default function WorkflowUploadPage() {
                   accept=".zip,.cwl"
                   label="Workflow File"
                   helperText="A .zip archive or a bare .cwl file, or click to browse"
-                  error={errors.file}
                 />
               }
-              name={name}
-              onNameChange={handleNameChange}
-              nameLabel="Workflow Name"
-              namePlaceholder="e.g. thin-and-aggregate"
-              domains={domains}
-              onDomainsChange={setDomains}
-              description={description}
-              onDescriptionChange={handleDescriptionChange}
-              errors={errors}
-              nameNotice={nameNotice}
+              isReading={parseMutation.isPending}
+              readingLabel="Reading file..."
               issues={blockingIssues}
               error={
                 parseMutation.error
@@ -230,22 +219,27 @@ export default function WorkflowUploadPage() {
       {step === 2 && parsed && (
         <ComponentConfigStep
           parsed={parsed}
+          workflowDetails={
+            <UploadMetadataFields
+              name={name}
+              onNameChange={handleNameChange}
+              nameLabel="Workflow Name"
+              namePlaceholder="e.g. thin-and-aggregate"
+              nameNotice={nameNotice}
+              domains={domains}
+              onDomainsChange={setDomains}
+              description={description}
+              onDescriptionChange={handleDescriptionChange}
+              descriptionPlaceholder="Taken from the workflow's doc: field - or write your own"
+              errors={errors}
+            />
+          }
           previews={previews}
           configs={configs.configs}
           errors={configs.errors}
           onChange={configs.update}
           onApplyDomainsToAll={configs.applyDomainsToAll}
           onNameConflictChange={configs.setNameConflict}
-        />
-      )}
-
-      {step === 3 && (
-        <SaveWorkflowStep
-          name={name}
-          domains={domains}
-          description={description}
-          previews={previews}
-          configs={configs.configs}
         />
       )}
 
@@ -263,23 +257,14 @@ export default function WorkflowUploadPage() {
         )}
         {step === 1 && (
           <Button
-            onClick={handleContinueFromDetails}
-            disabled={parseMutation.isPending || nameTaken}
+            onClick={handleContinue}
+            disabled={parseMutation.isPending || !file || blockingIssues.length > 0}
             className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90"
           >
             {parseMutation.isPending ? 'Reading file...' : 'Continue'}
           </Button>
         )}
         {step === 2 && (
-          <Button
-            onClick={() => goTo(3)}
-            disabled={!configs.isComplete}
-            className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90"
-          >
-            Continue
-          </Button>
-        )}
-        {step === 3 && (
           <Button
             onClick={handleSave}
             disabled={!canSave || createMutation.isPending}

@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button.tsx';
 import { ROUTES } from '@/lib/routes';
+import { GlobalSearch } from '@/components/layout/GlobalSearch';
 
 export function HomeHero() {
   return (
@@ -17,7 +18,11 @@ export function HomeHero() {
           Workflow Language CommandLineTools, and chain them into reusable Workflows — instead of re-implementing
           scripts or hand-packaging MoveApps repositories.
         </p>
-        <div className="mt-6 flex flex-wrap gap-3">
+        {/* the same search as in the navbar, as the page's first action - the two list
+            buttons below stay as the way in for browsing without a term */}
+        <GlobalSearch size="large" className="mt-8 max-w-2xl" />
+
+        <div className="mt-4 flex flex-wrap gap-3">
           <Button asChild className="bg-white text-jmu-blue-600 hover:bg-jmu-blue-50">
             <Link to={ROUTES.components}>Browse Components</Link>
           </Button>

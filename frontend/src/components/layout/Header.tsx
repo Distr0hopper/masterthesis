@@ -1,5 +1,6 @@
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronDown, LogOut, Package, Upload, User, Workflow } from 'lucide-react';
+import { ChevronDown, LogOut, Package, Search, Upload, User, Workflow, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -10,16 +11,21 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useAuthStore } from '@/store/auth.store';
 import { ROUTES } from '@/lib/routes';
+import { GlobalSearch } from './GlobalSearch';
 
 const navLinkClass = (active: boolean) =>
   cn(
-    'text-sm font-medium transition-colors',
+    'whitespace-nowrap text-sm font-medium transition-colors',
     active ? 'text-white' : 'text-jmu-blue-200 hover:text-white',
   );
 
 export default function Header() {
   const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const { pathname } = location;
+  // below xl there's no room for the field in the bar - a button opens it underneath instead
+  const [searchOpen, setSearchOpen] = useState(false);
+  useEffect(() => setSearchOpen(false), [location.key]);
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated());
   const logout = useAuthStore((state) => state.logout);
@@ -33,15 +39,17 @@ export default function Header() {
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 h-14 border-b border-jmu-blue-800 bg-jmu-blue-600 text-white">
-      <div className="mx-auto flex h-full max-w-6xl items-center justify-between px-4">
-        <Link to={ROUTES.home} className="flex items-center gap-2.5">
+      {/* logo, nav and actions keep their size and never wrap; the search in between is the
+          one flexible part - it takes the free space up to a cap and gives it back first */}
+      <div className="mx-auto flex h-full max-w-6xl items-center gap-6 px-4">
+        <Link to={ROUTES.home} className="flex shrink-0 items-center gap-2.5">
           <img src="/icons/Icon-XS.svg" alt="" />
-          <span className="text-sm font-semibold uppercase tracking-tight">
+          <span className="whitespace-nowrap text-sm font-semibold uppercase tracking-tight">
             JMU Component Repository
           </span>
         </Link>
 
-        <nav className="flex items-center gap-6">
+        <nav className="flex shrink-0 items-center gap-6">
           <Link to={ROUTES.home} className={navLinkClass(pathname === ROUTES.home)}>
             Home
           </Link>
@@ -63,12 +71,22 @@ export default function Header() {
           >
             Workflow Builder
           </Link>
-          <Link to={ROUTES.about} className={navLinkClass(pathname === ROUTES.about)}>
-            About
-          </Link>
         </nav>
 
-        <div className="flex items-center gap-2">
+        <div className="hidden min-w-0 flex-1 justify-end xl:flex">
+          <GlobalSearch enableShortcut className="w-full min-w-32 max-w-72" />
+        </div>
+
+        <div className="ml-auto flex shrink-0 items-center gap-2 xl:ml-0">
+          <button
+            type="button"
+            onClick={() => setSearchOpen((open) => !open)}
+            className="rounded p-1.5 text-jmu-blue-100 transition-colors hover:text-white xl:hidden"
+            aria-label={searchOpen ? 'Close search' : 'Search components and workflows'}
+            aria-expanded={searchOpen}
+          >
+            {searchOpen ? <X size={16} /> : <Search size={16} />}
+          </button>
           {isAuthenticated ? (
             <>
               <DropdownMenu>
@@ -138,6 +156,12 @@ export default function Header() {
           )}
         </div>
       </div>
+
+      {searchOpen && (
+        <div className="border-b border-jmu-blue-800 bg-jmu-blue-600 px-4 py-2 xl:hidden">
+          <GlobalSearch autoFocus onClose={() => setSearchOpen(false)} className="mx-auto max-w-6xl" />
+        </div>
+      )}
     </header>
   );
 }

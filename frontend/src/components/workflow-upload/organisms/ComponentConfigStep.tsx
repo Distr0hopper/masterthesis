@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { DomainMultiSelect } from '@/components/common/DomainMultiSelect';
+import { UploadMetadataFields } from '@/components/common/UploadMetadataFields';
 import type { WorkflowStepPreviewDto, ParseWorkflowResponseDto } from '@/api/workflows';
 import type { ExistingComponentDto } from '@/api/components';
 import type { ComponentConfigState } from '../lib/useComponentConfigs';
@@ -9,8 +10,8 @@ import { ParsedWorkflowOverview } from './ParsedWorkflowOverview';
 
 interface ComponentConfigStepProps {
   parsed: ParseWorkflowResponseDto;
-  /** the workflow's own editable name/domains/description (UploadMetadataFields) */
-  workflowDetails: ReactNode;
+  /** shown under the workflow name - e.g. that it's already taken */
+  workflowNameNotice?: ReactNode;
   previews: WorkflowStepPreviewDto[];
   configs: Record<string, ComponentConfigState>;
   errors: Record<string, string>;
@@ -21,7 +22,7 @@ interface ComponentConfigStepProps {
 
 export function ComponentConfigStep({
   parsed,
-  workflowDetails,
+  workflowNameNotice,
   previews,
   configs,
   errors,
@@ -38,7 +39,13 @@ export function ComponentConfigStep({
         <CardContent className="flex flex-col gap-6 pt-6">
           <p className="text-sm font-medium text-slate-900">Workflow</p>
           <ParsedWorkflowOverview parsed={parsed} />
-          {workflowDetails}
+          {/* the workflow's own fields - from the page's FormProvider (useUploadMetadataForm) */}
+          <UploadMetadataFields
+            nameLabel="Workflow Name"
+            namePlaceholder="e.g. thin-and-aggregate"
+            nameNotice={workflowNameNotice}
+            descriptionPlaceholder="Taken from the workflow's doc: field - or write your own"
+          />
         </CardContent>
       </Card>
 
@@ -47,8 +54,8 @@ export function ComponentConfigStep({
           <div>
             <p className="text-sm font-medium text-slate-900">Configure components</p>
             <p className="mt-1 text-sm text-slate-500">
-              {creating} of {previews.length} step(s) will create a new component. The rest reuse components
-              already in the repository.
+              {creating} of {previews.length} step(s) will create a new component. The rest reuse components already in
+              the repository.
             </p>
           </div>
           <DomainMultiSelect

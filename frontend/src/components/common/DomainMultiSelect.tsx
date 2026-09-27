@@ -1,3 +1,4 @@
+import type { Ref } from 'react';
 import { Label } from '@/components/ui/label.tsx';
 import { getDomainLabel, useDomains } from '@/api/components';
 
@@ -11,6 +12,8 @@ interface DomainMultiSelectProps {
    * picker repeats (one per workflow step), so the same sentence isn't restated N times.
    */
   showHints?: boolean;
+  /** attached to the first checkbox - lets a form focus the picker on a validation error */
+  inputRef?: Ref<HTMLInputElement>;
 }
 
 export function DomainMultiSelect({
@@ -19,6 +22,7 @@ export function DomainMultiSelect({
   error,
   label = 'Domains',
   showHints = true,
+  inputRef,
 }: DomainMultiSelectProps) {
   const { data: domains } = useDomains();
 
@@ -32,13 +36,14 @@ export function DomainMultiSelect({
     <div className="flex flex-col gap-2">
       <Label>{label}</Label>
       <div className="flex flex-wrap gap-3 rounded-md border border-input p-3">
-        {domains?.map((domain) => (
+        {domains?.map((domain, index) => (
           <label
             key={domain.id}
             title={domain.description ?? undefined}
             className="flex items-center gap-2 text-sm text-slate-700"
           >
             <input
+              ref={index === 0 ? inputRef : undefined}
               type="checkbox"
               checked={value.includes(domain.id)}
               onChange={() => toggle(domain.id)}

@@ -13,7 +13,7 @@ export const descriptionSchema = z
 /**
  * The metadata describing every new upload - components (from a file or GitHub) and
  * workflows ask for exactly the same things, so they validate against the same rules
- * and render the same UploadMetadataFields.
+ * and render the same UploadMetadataFields (see useUploadMetadataForm).
  */
 export const uploadMetadataSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -23,26 +23,4 @@ export const uploadMetadataSchema = z.object({
 
 export type UploadMetadataFormData = z.infer<typeof uploadMetadataSchema>;
 
-/** field name -> first validation message, for rendering inline errors */
-export type UploadDetailsErrors = Partial<Record<keyof UploadMetadataFormData, string>>;
-
-/**
- * Validate the metadata of a new upload. Returns the parsed data on success, or the
- * per-field errors to render. Every upload gates its final "Create"/"Save" on this - the
- * source itself is guaranteed by the flow, since step 2 needs a successful read.
- */
-export function validateUploadMetadata(input: {
-  name: string;
-  domains: string[];
-  description: string;
-}): { data: UploadMetadataFormData; errors: null } | { data: null; errors: UploadDetailsErrors } {
-  const result = uploadMetadataSchema.safeParse({ ...input, description: input.description || undefined });
-  if (result.success) return { data: result.data, errors: null };
-
-  const errors: UploadDetailsErrors = {};
-  for (const issue of result.error.issues) {
-    const field = issue.path[0] as keyof UploadDetailsErrors;
-    if (field && !errors[field]) errors[field] = issue.message;
-  }
-  return { data: null, errors };
-}
+export const emptyUploadMetadata: UploadMetadataFormData = { name: '', domains: [], description: '' };

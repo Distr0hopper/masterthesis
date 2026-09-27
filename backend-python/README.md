@@ -12,22 +12,23 @@ app/
                   exception/ (HTTP handlers), util/ (endpoints.py aggregates all routers)
   infrastructure/ db/ (session, migrations), security/ (JWT, OTP-code hashing),
                   email/ (EmailSender abstraction: SMTP for local dev, Resend for production),
-                  cwl/ (CWL parsing), packaging/ (moveapps-cwl-package subprocess wrapper)
+                  cwl/ (CWL parsing), packaging/ (HTTP client for the packaging service)
   config.py, main.py
 ```
 
 ## Setup
 
 ```bash
-cp .env.example .env   # fill in JWT_SECRET (see comment in .env.example), PACKAGING_EXECUTABLE, GITHUB_TOKEN
+cp .env.example .env   # fill in JWT_SECRET (see comment in .env.example)
 docker compose up -d   # postgres + mailhog
+(cd .. && docker compose up -d packaging-service)   # packaging service on :8002
 uv run alembic upgrade head
 uv run uvicorn app.main:app --reload --port 8000
 ```
 
 API: http://localhost:8000, interactive docs: http://localhost:8000/docs
 
-Packaging (`POST /components/package`, `POST /components/{id}/versions/package`) shells out to the [`automated-packaging`](../automated-packaging) CLI — build it first and point `PACKAGING_EXECUTABLE` in `.env` at its executable.
+Packaging (`POST /components/package`, `POST /components/{id}/commands` with `REPACKAGE`) calls the [`automated-packaging`](../automated-packaging) service over HTTP (`PACKAGING_SERVICE_URL`). It runs as a container from the repo-root `docker-compose.yml`; put an optional `GITHUB_TOKEN` in the repo-root `.env` (see `../.env.example`) to avoid GitHub rate limits. If the service is down, packaging requests return 503.
 
 ## Authentication (OTP email login)
 

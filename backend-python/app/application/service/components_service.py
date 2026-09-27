@@ -1,10 +1,7 @@
 import io
-import subprocess
-import tempfile
 import uuid
 import zipfile
 from dataclasses import dataclass, replace
-from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
 from fastapi import Depends
@@ -17,7 +14,6 @@ from app.application.exception.component_exceptions import (
     InvalidCwlError,
     ManualUploadCannotBeRepackagedError,
     MissingCommandPayloadError,
-    PackagingFailedError,
 )
 from app.domain.compatibility.format_label import accepts_manual_format_label
 from app.domain.models.component_domain import ComponentDomain
@@ -38,7 +34,7 @@ from app.infrastructure.cwl.cwl_parser import (
 )
 from app.infrastructure.format_service.format_service_client import FormatServiceClient
 from app.infrastructure.format_service.ontology import resolve_ontology_url
-from app.infrastructure.packaging.packaging_cli import read_packaging_output, run_packaging_cli
+from app.infrastructure.packaging.packaging_service_client import PackagingServiceClient
 
 if TYPE_CHECKING:
     # deferred import - favorites_service.py imports ComponentsService, so importing
@@ -60,16 +56,23 @@ class ParsedComponent:
 
 
 class ComponentsService:
-    def __init__(self, components_repository: ComponentsRepository, format_service_client: FormatServiceClient):
+    def __init__(
+        self,
+        components_repository: ComponentsRepository,
+        format_service_client: FormatServiceClient,
+        packaging_client: PackagingServiceClient,
+    ):
         self.components_repository = components_repository
         self.format_service_client = format_service_client
+        self.packaging_client = packaging_client
 
     @staticmethod
     def get_service(
         components_repository: Annotated[ComponentsRepository, Depends(ComponentsRepository.get_repository)],
         format_service_client: Annotated[FormatServiceClient, Depends(FormatServiceClient.get_client)],
+        packaging_client: Annotated[PackagingServiceClient, Depends(PackagingServiceClient.get_client)],
     ) -> "ComponentsService":
-        return ComponentsService(components_repository, format_service_client)
+        return ComponentsService(components_repository, format_service_client, packaging_client)
 
     async def list_components(
         self, filter: ComponentListFilter, pagination: PaginatedList
@@ -348,16 +351,8 @@ class ComponentsService:
                 return await self.update_format_labels(component, command.format_labels)
 
     async def _run_packaging(self, repo_url: str) -> tuple[str, str, str | None, str | None, str | None]:
-        repo_name = repo_url.rstrip("/").split("/")[-1]
-        with tempfile.TemporaryDirectory(prefix="moveapps-") as tmp:
-            output_dir = Path(tmp)
-            try:
-                await run_packaging_cli(repo_url, output_dir)
-            except subprocess.CalledProcessError as err:
-                reason = err.stderr.decode().strip() if err.stderr else f"exit code {err.returncode}"
-                raise PackagingFailedError(repo_name, reason) from err
-            cwl_content, commit_sha, description, author = read_packaging_output(output_dir, repo_name)
-        return repo_name, cwl_content, commit_sha, description, author
+        result = await self.packaging_client.package(repo_url)
+        return result.repo_name, result.cwl, result.commit_sha, result.description, result.author
 
     async def update_description(self, component: Component, description: str | None) -> Component:
         component.description = description

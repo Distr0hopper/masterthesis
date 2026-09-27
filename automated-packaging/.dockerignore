@@ -1,0 +1,7 @@
+.venv
+generated
+input-files
+tests
+*.egg-info
+**/__pycache__
+.env

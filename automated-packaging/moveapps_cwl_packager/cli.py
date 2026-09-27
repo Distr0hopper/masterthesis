@@ -4,34 +4,17 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 from pathlib import Path
 
-from .generators import (
-    generate_cwl,
-    generate_dockerfile_content,
-    generate_inputs_yaml,
+from .packager import (
+    DEFAULT_WRAPPER_IMAGE,
+    InvalidRepoUrlError,
+    PackagingError,
+    package_repo,
+    parse_github_url,
+    repo_name_to_image,
 )
-from .github import GitHubClient
-
-_DEFAULT_WRAPPER_IMAGE = "moveapps-r-wrapper:latest"
-
-
-def _parse_github_url(url: str) -> tuple[str, str]:
-    m = re.match(
-        r"https?://github\.com/([^/]+)/([^/]+?)(?:\.git)?/?$", url.strip()
-    )
-    if not m:
-        raise argparse.ArgumentTypeError(
-            f"Not a valid GitHub repository URL: {url!r}\n"
-            "Expected format: https://github.com/<owner>/<repo>"
-        )
-    return m.group(1), m.group(2)
-
-
-def _repo_name_to_image(repo_name: str) -> str:
-    return repo_name.lower().replace("_", "-")
 
 
 def _print_section(title: str, content: str) -> None:
@@ -59,8 +42,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--wrapper-image",
         metavar="IMAGE",
-        default=_DEFAULT_WRAPPER_IMAGE,
-        help=f"Pre-built SDK base image to extend (default: {_DEFAULT_WRAPPER_IMAGE}). "
+        default=DEFAULT_WRAPPER_IMAGE,
+        help=f"Pre-built SDK base image to extend (default: {DEFAULT_WRAPPER_IMAGE}). "
              "Build it once with build-sdk.sh.",
     )
     parser.add_argument(
@@ -78,11 +61,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        owner, repo_name = _parse_github_url(args.repo_url)
-    except argparse.ArgumentTypeError as exc:
+        owner, repo_name = parse_github_url(args.repo_url)
+    except InvalidRepoUrlError as exc:
         parser.error(str(exc))
 
-    app_name = _repo_name_to_image(repo_name)
+    app_name = repo_name_to_image(repo_name)
     out_dir = (
         Path(args.output_dir)
         if args.output_dir
@@ -91,22 +74,15 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"Fetching repository: {owner}/{repo_name}")
 
-    client = GitHubClient(token=args.github_token)
     try:
-        contents = client.fetch_repo(owner, repo_name)
-    except Exception as exc:
-        print(f"ERROR: Could not fetch repository — {exc}", file=sys.stderr)
+        result = package_repo(args.repo_url, args.wrapper_image, args.github_token)
+    except PackagingError as exc:
+        print(f"ERROR: Could not package repository — {exc}", file=sys.stderr)
         return 1
 
-    appspec_settings = contents.appspec.get("settings", [])
-    r_packages = [d["name"] for d in contents.appspec.get("dependencies", {}).get("R", [])]
-    raw_base_url = f"https://raw.githubusercontent.com/{owner}/{repo_name}/{contents.default_branch}"
-
-    # Generate artifacts
-    dockerfile_content = generate_dockerfile_content(args.wrapper_image, raw_base_url, r_packages or None)
-    cwl_text = generate_cwl(app_name, appspec_settings, dockerfile_content)
-    app_config_dict = json.loads(contents.app_config.content)
-    inputs_yaml = generate_inputs_yaml(appspec_settings, app_config_dict)
+    cwl_text = result.cwl
+    inputs_yaml = result.inputs_yaml
+    appspec_settings = result.settings
 
     # ── Dry-run ───────────────────────────────────────────────────────────────
     if args.dry_run:
@@ -124,9 +100,9 @@ def main(argv: list[str] | None = None) -> int:
     _write(
         out_dir / "metadata.json",
         json.dumps({
-            "commitSha": contents.commit_sha,
-            "description": contents.description,
-            "author": contents.author,
+            "commitSha": result.commit_sha,
+            "description": result.description,
+            "author": result.author,
         }),
     )
 

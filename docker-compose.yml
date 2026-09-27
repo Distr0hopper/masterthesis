@@ -1,0 +1,15 @@
+services:
+  packaging-service:
+    build: ./automated-packaging
+    ports:
+      - "8002:8000" # 8001 is the SOS file format service
+    environment:
+      # Optional GitHub PAT to avoid API rate limits - set it in ./.env
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      WRAPPER_IMAGE: ${WRAPPER_IMAGE:-moveapps-r-wrapper:latest}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped

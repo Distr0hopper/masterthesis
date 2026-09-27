@@ -35,7 +35,8 @@ The shared wrapper image contains everything that is identical across all apps (
 | `build-sdk.sh`           | Builds the shared `moveapps-r-wrapper:latest` image |
 | `Dockerfile.sdk`         | Defines that image                                  |
 | `cwl-wrapper.sh`         | Runtime entry point baked into the wrapper image    |
-| `moveapps_cwl_packager/` | Python CLI that generates per-app artifacts         |
+| `moveapps_cwl_packager/` | Python CLI + HTTP service that generate per-app artifacts |
+| `Dockerfile`             | Image for the packaging service (not the R wrapper) |
 
 ### Generated per-app files (one folder per app)
 
@@ -137,7 +138,6 @@ moveapps-cwl-package <github-repo-url> [options]
 | ---------------------------- | --------------------------- | ------------------------------------------------------------------ |
 | `--output-dir PATH`          | `./<repo-name>/`            | Where to write generated files                                     |
 | `--wrapper-image IMAGE`      | `moveapps-r-wrapper:latest` | Base image to extend                                               |
-| `--docker-registry REGISTRY` | `moveapps`                  | Registry prefix for `dockerPull` — pass `""` for local-only images |
 | `--dry-run`                  | —                           | Print generated files without writing anything                     |
 | `--github-token TOKEN`       | `$GITHUB_TOKEN`             | GitHub PAT (also read from env)                                    |
 
@@ -145,9 +145,44 @@ moveapps-cwl-package <github-repo-url> [options]
 
 ```bash
 moveapps-cwl-package https://github.com/movestore/RemoveOutliers \
-    --docker-registry "" \
     --output-dir RemoveOutliers
 ```
+
+---
+
+## Packaging service (HTTP)
+
+The backend doesn't run the CLI; it calls the same logic (`packager.package_repo`) through a small FastAPI service. Start it from the repo root:
+
+```bash
+cp .env.example .env          # optional GITHUB_TOKEN
+docker compose up -d --build packaging-service
+curl localhost:8002/health    # {"status":"ok"}
+```
+
+### `POST /api/v1/package`
+
+```bash
+curl -X POST localhost:8002/api/v1/package \
+    -H 'Content-Type: application/json' \
+    -d '{"repoUrl": "https://github.com/movestore/RemoveOutliers"}'
+```
+
+Response `200`:
+
+```json
+{ "repoName": "RemoveOutliers", "cwl": "...", "inputsYaml": "...",
+  "commitSha": "…", "description": "…", "author": "…" }
+```
+
+| Status | When                                                                       |
+| ------ | -------------------------------------------------------------------------- |
+| `422`  | Not a GitHub repo URL, repo not found, or not a valid MoveApps R app      |
+| `502`  | GitHub unreachable or refused the request (e.g. rate limit — set a token) |
+
+Errors are `{"detail": "<reason>"}`. Environment: `GITHUB_TOKEN`, `WRAPPER_IMAGE` (default `moveapps-r-wrapper:latest`).
+
+Run locally without Docker: `pip install -e ".[service]"` then `uvicorn moveapps_cwl_packager.service:app --port 8002`. Tests: `pip install -e ".[service,dev]" && pytest`.
 
 ---
 

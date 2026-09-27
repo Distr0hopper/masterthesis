@@ -16,6 +16,11 @@ class PackagingFailedError(Exception):
         super().__init__(f"Packaging '{repo_name}' failed: {reason}")
 
 
+class PackagingServiceUnavailableError(Exception):
+    def __init__(self) -> None:
+        super().__init__("The packaging service is currently unavailable, please try again later")
+
+
 class AlreadyPackagedError(Exception):
     def __init__(self, repo_name: str, commit_sha: str) -> None:
         super().__init__(f"Component '{repo_name}' at commit {commit_sha} is already packaged")

@@ -21,8 +21,9 @@ class Settings(BaseSettings):
     environment: str = "local"
     auto_migrate: bool = True
 
-    packaging_executable: str
-    github_token: str | None = None
+    # Packaging service (automated-packaging, started via the root docker-compose.yml)
+    packaging_service_url: str = "http://localhost:8002/api/v1"
+    packaging_service_timeout: float = 120.0
 
     email_provider: str = "smtp"
 

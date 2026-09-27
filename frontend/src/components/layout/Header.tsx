@@ -12,6 +12,7 @@ import {
 import { useAuthStore } from '@/store/auth.store';
 import { ROUTES } from '@/lib/routes';
 import { GlobalSearch } from './GlobalSearch';
+import { loginPath } from '@/api/auth/session';
 
 const navLinkClass = (active: boolean) =>
   cn(
@@ -148,7 +149,8 @@ export default function Header() {
             </>
           ) : (
             <Link
-              to={ROUTES.login}
+              // come back to this page after logging in
+              to={loginPath({ redirect: pathname + location.search })}
               className="rounded-md bg-white px-3 py-1.5 text-sm font-medium text-jmu-blue-600 transition-colors hover:bg-jmu-blue-50"
             >
               Login

@@ -19,6 +19,7 @@ import WorkflowBuilderOverviewPage from "@/pages/WorkflowBuilderOverviewPage.tsx
 import ProfilePage from "@/pages/ProfilePage.tsx";
 import ProtectedRoute from "@/pages/ProtectedRoutes.tsx";
 import { Toaster } from "@/components/ui/sonner.tsx";
+import { SessionKeeper } from "@/api/auth/SessionKeeper";
 import { ROUTES } from "@/lib/routes";
 
 const queryClient = new QueryClient();
@@ -28,6 +29,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <Router>
         <Toaster />
+        <SessionKeeper />
         <Header />
         <Routes>
           {/* Layout routes rather than one hardcoded <main>: the builder needs the full

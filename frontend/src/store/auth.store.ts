@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type { UserResponseDto } from '@/api/users/types';
+import { isTokenExpired } from '@/lib/jwt';
 
 interface AuthState {
   token: string | null;
@@ -19,7 +20,11 @@ export const useAuthStore = create<AuthState>()(
       setToken: (token) => set({ token }),
       setAuth: (token, user) => set({ token, user }),
       logout: () => set({ token: null, user: null }),
-      isAuthenticated: () => !!get().token,
+      // an expired token is no login - it would only be rejected (see api/auth/session.ts)
+      isAuthenticated: () => {
+        const token = get().token;
+        return !!token && !isTokenExpired(token);
+      },
     }),
     {
       name: 'auth-storage',

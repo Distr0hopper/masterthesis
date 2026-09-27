@@ -1,6 +1,7 @@
 import axios, { type AxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/store/auth.store';
-import { ROUTES } from '@/lib/routes';
+import { isTokenExpired } from '@/lib/jwt';
+import { currentPath, endExpiredSession, loginPath, refreshSessionIfDue } from '@/api/auth/session';
 import type { HateoasLink } from '@/api/types';
 
 /**
@@ -19,9 +20,15 @@ const axiosInstance = axios.create({
 // Interceptor before request is send out - Attach JWT to request
 axiosInstance.interceptors.request.use((config) => {
   const token = useAuthStore.getState().token;
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  if (!token) return config;
+
+  if (isTokenExpired(token)) {
+    endExpiredSession();
+    return config;
   }
+  config.headers.Authorization = `Bearer ${token}`;
+  // every request is activity - renew the token if it's due (sliding session)
+  refreshSessionIfDue();
   return config;
 });
 
@@ -29,12 +36,13 @@ axiosInstance.interceptors.request.use((config) => {
 axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
-    // only force a redirect on session expiry (we had a token and it got rejected) —
-    // a 401 from the login call itself just means wrong credentials and should be
-    // handled by the caller, not treated as "you were logged out"
+    // a token the server rejected although it hadn't expired locally (e.g. a rotated
+    // JWT secret) - a 401 without a token (the login call itself, or a request right after
+    // the session ended) is the caller's to handle, not "you were logged out"
     if (error.response?.status === 401 && useAuthStore.getState().token) {
+      const returnTo = currentPath();
       useAuthStore.getState().logout();
-      window.location.href = ROUTES.login;
+      window.location.href = loginPath({ redirect: returnTo, expired: true });
     }
     return Promise.reject(error);
   },

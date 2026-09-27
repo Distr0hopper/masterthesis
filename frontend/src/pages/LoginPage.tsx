@@ -14,10 +14,11 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Input } from '@/components/ui/input.tsx';
 import { Button } from '@/components/ui/button.tsx';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Label } from '@/components/ui/label.tsx';
 import { getErrorMessage } from '@/lib/errors';
 import { ROUTES } from '@/lib/routes';
+import { safeRedirect } from '@/api/auth/session';
 
 function EmailStep({ onRequested }: { onRequested: (email: string, cooldownSeconds: number) => void }) {
   const { mutate, isPending } = useRequestOtp();
@@ -62,10 +63,13 @@ function CodeStep({
   email,
   initialCooldown,
   onChangeEmail,
+  redirectTo,
 }: {
   email: string;
   initialCooldown: number;
   onChangeEmail: () => void;
+  /** the page the user was sent here from - where logging in returns them */
+  redirectTo: string | null;
 }) {
   const navigate = useNavigate();
   const { mutate, isPending } = useVerifyOtp();
@@ -105,7 +109,8 @@ function CodeStep({
     const dto = authTransformer.formToVerifyOtpDto(email, data);
     mutate(dto, {
       onSuccess: (user) => {
-        navigate(user.firstName && user.lastName ? ROUTES.home : ROUTES.profile);
+        // an incomplete profile still goes first - it's needed before anything else
+        navigate(user.firstName && user.lastName ? (redirectTo ?? ROUTES.home) : ROUTES.profile, { replace: true });
       },
       onError: (error) => {
         setError('root', { message: getErrorMessage(error) });
@@ -153,12 +158,21 @@ function CodeStep({
  */
 export default function LoginPage() {
   const [requested, setRequested] = useState<{ email: string; cooldownSeconds: number } | null>(null);
+  const [searchParams] = useSearchParams();
+  const redirectTo = safeRedirect(searchParams.get('redirect'));
+  const sessionExpired = searchParams.get('reason') === 'expired';
 
   return (
     <div className="mx-auto flex min-h-[70vh] max-w-md flex-col items-center justify-center">
       <img src="/icons/Icon-S-dark.svg" alt="" />
       <h1 className="mt-4 text-2xl font-semibold text-slate-900">JMU Component Repository</h1>
       <p className="mt-1 text-slate-500">Sign in to your account</p>
+
+      {sessionExpired && (
+        <p className="mt-4 w-full rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Your session has expired. Log in again to continue where you left off.
+        </p>
+      )}
 
       <Card className="mt-6 w-full shadow-lg">
         <CardContent className="pt-6">
@@ -169,6 +183,7 @@ export default function LoginPage() {
               email={requested.email}
               initialCooldown={requested.cooldownSeconds}
               onChangeEmail={() => setRequested(null)}
+              redirectTo={redirectTo}
             />
           )}
         </CardContent>

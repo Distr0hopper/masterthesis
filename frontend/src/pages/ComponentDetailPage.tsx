@@ -5,6 +5,7 @@ import { useComponent } from '@/api/components';
 import { ComponentHeader } from '@/components/component-detail/organisms/ComponentHeader';
 import { ComponentTabs } from '@/components/component-detail/organisms/ComponentTabs';
 import { RelatedComponents } from '@/components/component-detail/organisms/RelatedComponents';
+import { UsedInWorkflows } from '@/components/component-detail/organisms/UsedInWorkflows';
 import { ROUTES } from '@/lib/routes';
 
 export default function ComponentDetailPage() {
@@ -38,6 +39,7 @@ export default function ComponentDetailPage() {
     <div>
       <ComponentHeader model={model} backTo={backTo} backLabel={backLabel} onDeleted={() => navigate(backTo)} />
       <ComponentTabs model={model} />
+      <UsedInWorkflows componentId={model.id} version={model.version} />
       <RelatedComponents />
     </div>
   );

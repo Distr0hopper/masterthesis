@@ -12,6 +12,7 @@ from app.api.dto.component import (
     ComponentDetailDto,
     ComponentListItemDto,
     ComponentPreviewDto,
+    ComponentWorkflowUsageDto,
     CreateComponentRequestDto,
     ExistingComponentDto,
     NameAvailabilityDto,
@@ -27,6 +28,7 @@ from app.application.service.auth_service import AuthService
 from app.application.service.compatibility_service import CompatibilityService
 from app.application.service.components_service import ComponentsService
 from app.application.service.favorites_service import FavoritesService
+from app.application.service.workflows_service import WorkflowsService
 from app.domain.models.component import ComponentStatus
 from app.domain.models.component_domain import VALID_DOMAINS
 from app.domain.models.user import User
@@ -364,6 +366,28 @@ async def get_versions(
     versions = await components_service.get_visible_versions(component, current_user)
     favorited_names = await _favorited_names(favorites_service, current_user)
     return [ComponentTransformer.to_list_item(v, v.name in favorited_names, current_user) for v in versions]
+
+
+@router.get(
+    "/{component_id}/workflows",
+    response_model=list[ComponentWorkflowUsageDto],
+    responses={status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Component not found"}},
+)
+async def get_workflow_usages(
+    component_id: uuid.UUID,
+    components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
+    workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
+    current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
+) -> list[ComponentWorkflowUsageDto]:
+    """The workflows that use any version of this component - only those the caller may see."""
+    component = await components_service.get_visible_component(component_id, current_user)
+    usages = await workflows_service.list_usages_of_component(component, current_user)
+    return [
+        ComponentWorkflowUsageDto(
+            id=u.workflow_id, name=u.workflow_name, status=u.workflow_status, component_versions=u.component_versions
+        )
+        for u in usages
+    ]
 
 
 @router.get(

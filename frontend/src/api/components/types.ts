@@ -1,4 +1,5 @@
 import type { PageParams, SplitPageResponse, WithHateoasLinks } from '@/api/types';
+import type { WorkflowStatus } from '@/api/workflows/types';
 
 export type ComponentDomain = string;
 
@@ -157,6 +158,16 @@ export interface ComponentListItemDto extends WithHateoasLinks {
   isFavorite: boolean;
   parameters: ParameterDto[] | null;
   match?: ComponentMatchDto | null;
+}
+
+/** A workflow using some version(s) of a component - "Used in these workflows". */
+export interface ComponentWorkflowUsageDto {
+  id: string;
+  name: string;
+  /** pending_validation only ever shows up for the viewer's own workflows */
+  status: WorkflowStatus;
+  /** which versions of the component its steps use, ascending */
+  componentVersions: number[];
 }
 
 export interface ComponentCreatorDto {

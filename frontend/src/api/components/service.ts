@@ -7,6 +7,7 @@ import type {
   ComponentListItemDto,
   ComponentListQueryParams,
   ComponentPreviewDto,
+  ComponentWorkflowUsageDto,
   CreateComponentDto,
   DomainDto,
   MyComponentsResponseDto,
@@ -53,6 +54,10 @@ export const componentsService = {
 
   getVersions(id: string): Promise<ComponentListItemDto[]> {
     return apiClient.get(`${ENDPOINT}/${id}/versions`);
+  },
+
+  getWorkflowUsages(id: string): Promise<ComponentWorkflowUsageDto[]> {
+    return apiClient.get(`${ENDPOINT}/${id}/workflows`);
   },
 
   getDownloadUrl(id: string): string {

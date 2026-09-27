@@ -20,6 +20,7 @@ export const componentKeys = {
   latest: (limit?: number) => [...componentKeys.all, 'latest', limit] as const,
   detail: (id: string) => [...componentKeys.all, 'detail', id] as const,
   versions: (id: string) => [...componentKeys.all, 'versions', id] as const,
+  workflowUsages: (id: string) => [...componentKeys.all, 'workflow-usages', id] as const,
   domains: () => ['domains'] as const,
   nameAvailability: (name: string) => [...componentKeys.all, 'name-availability', name] as const,
 };
@@ -98,6 +99,14 @@ export const useComponent = (id: string) => {
     queryFn: () => componentsService.getById(id),
     enabled: !!id,
     select: (dto) => componentTransformer.toDetailDisplayModel(dto),
+  });
+};
+
+export const useComponentWorkflowUsages = (id: string) => {
+  return useQuery({
+    queryKey: componentKeys.workflowUsages(id),
+    queryFn: () => componentsService.getWorkflowUsages(id),
+    enabled: !!id,
   });
 };
 

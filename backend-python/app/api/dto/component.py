@@ -13,6 +13,7 @@ from app.domain.compatibility.port_check import ConnectionStatus
 from app.domain.models.component import MAX_DESCRIPTION_LENGTH, ComponentSource, ComponentStatus
 from app.domain.models.component_domain import VALID_DOMAINS
 from app.domain.models.parameter import ParameterDirection
+from app.domain.models.workflow import WorkflowStatus
 
 
 class DomainsValidatorMixin:
@@ -131,6 +132,17 @@ class ComponentMatchDto(CamelModel):
     #: the canvas component whose outputs it fits - null when nothing matched
     component_id: uuid.UUID | None
     component_name: str | None
+
+
+class ComponentWorkflowUsageDto(CamelModel):
+    """A workflow using some version(s) of a component - "Used in these workflows"."""
+
+    id: uuid.UUID
+    name: str
+    #: pending_validation only ever shows up for the viewer's own workflows
+    status: WorkflowStatus
+    #: which versions of the component its steps use, ascending
+    component_versions: list[int]
 
 
 class ComponentDetailDto(CamelModel, LinkModel):

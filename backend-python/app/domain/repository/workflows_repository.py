@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 from sqlmodel import func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.domain.models.component import Component
 from app.domain.models.component_domain import DOMAIN_AGNOSTIC
 from app.domain.models.favorite import Favorite, FavoriteEntityType
 from app.domain.models.workflow import Workflow, WorkflowStatus
@@ -27,9 +28,48 @@ class WorkflowListFilter:
     favorited_by: uuid.UUID | None = None
 
 
+@dataclass(frozen=True)
+class WorkflowComponentUsage:
+    """One workflow using a component lineage - one row per version it uses."""
+
+    workflow_id: uuid.UUID
+    workflow_name: str
+    workflow_status: WorkflowStatus
+    component_version: int
+
+
 class WorkflowsRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    async def find_usages_of_component(
+        self, component_name: str, visible_to: uuid.UUID | None
+    ) -> list[WorkflowComponentUsage]:
+        """Every workflow with a step bound to any version of the component lineage
+        `component_name`, restricted to what `visible_to` may see (validated workflows,
+        plus their own pending ones). Selects columns only - loading whole workflows would
+        pull in all their steps and domains just to print a name."""
+        visible = Workflow.status == WorkflowStatus.VALIDATED
+        if visible_to is not None:
+            visible = or_(visible, Workflow.created_by_id == visible_to)
+        query = (
+            select(Workflow.id, Workflow.name, Workflow.status, Component.version)
+            .join(WorkflowStep, WorkflowStep.workflow_id == Workflow.id)
+            .join(Component, Component.id == WorkflowStep.component_id)
+            .where(Component.name == component_name, visible)
+            .distinct()
+            .order_by(Workflow.name, Component.version)
+        )
+        rows = (await self.db.exec(query)).all()
+        return [
+            WorkflowComponentUsage(
+                workflow_id=workflow_id,
+                workflow_name=name,
+                workflow_status=WorkflowStatus(status),
+                component_version=version,
+            )
+            for workflow_id, name, status, version in rows
+        ]
 
     @staticmethod
     def get_repository(db: Annotated[AsyncSession, Depends(get_db)]) -> "WorkflowsRepository":

@@ -133,6 +133,17 @@ class ComponentPreview:
 
 
 @dataclass
+class ComponentUsage:
+    """A workflow that uses some version(s) of a component lineage."""
+
+    workflow_id: uuid.UUID
+    workflow_name: str
+    workflow_status: WorkflowStatus
+    #: the lineage versions its steps are bound to - usually one, ascending
+    component_versions: list[int]
+
+
+@dataclass
 class ComponentConfig:
     """The user's decision for one step: reuse an existing Component, or create a new one
     from the previewed CWL with this name/domain/description."""
@@ -284,6 +295,27 @@ class WorkflowsService:
         """
         if await self.workflows_repository.find_latest_by_name(name, exclude_id) is not None:
             raise WorkflowNameAlreadyExistsError(name)
+
+    async def list_usages_of_component(self, component: Component, current_user: User | None) -> list[ComponentUsage]:
+        """The workflows that use any version of `component`'s lineage - the component
+        detail page's "Used in these workflows". Same visibility as get_visible_workflow:
+        validated workflows, plus the user's own pending ones."""
+        rows = await self.workflows_repository.find_usages_of_component(
+            component.name, current_user.id if current_user is not None else None
+        )
+        usages: dict[uuid.UUID, ComponentUsage] = {}
+        for row in rows:  # ordered by workflow name, then version
+            usage = usages.get(row.workflow_id)
+            if usage is None:
+                usages[row.workflow_id] = ComponentUsage(
+                    workflow_id=row.workflow_id,
+                    workflow_name=row.workflow_name,
+                    workflow_status=row.workflow_status,
+                    component_versions=[row.component_version],
+                )
+            else:
+                usage.component_versions.append(row.component_version)
+        return list(usages.values())
 
     async def get_visible_workflow(self, workflow_id: uuid.UUID, current_user: User | None) -> Workflow:
         workflow = await self.get_workflow(workflow_id)

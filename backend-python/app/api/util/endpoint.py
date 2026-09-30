@@ -14,6 +14,10 @@ class Endpoints:
         return f"{Endpoints.component_by_id(component_id)}/commands"
 
     @staticmethod
+    def component_deletion_impact_by_id(component_id: uuid.UUID) -> str:
+        return f"{Endpoints.component_by_id(component_id)}/deletion-impact"
+
+    @staticmethod
     def workflow_by_id(workflow_id: uuid.UUID) -> str:
         return f"{Endpoints.WORKFLOWS_ROOT}/{workflow_id}"
 

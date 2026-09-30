@@ -46,6 +46,7 @@ from app.domain.pagination.pagination import PaginatedList
 from app.domain.repository.components_repository import ComponentsRepository
 from app.domain.repository.workflow_draft_repository import WorkflowDraftRepository
 from app.domain.repository.workflows_repository import WorkflowListFilter, WorkflowsRepository
+from app.infrastructure.cwl.canvas_graph import canvas_component_ids
 from app.infrastructure.cwl.cwl_matcher import best_match
 from app.infrastructure.cwl.cwl_parser import (
     collect_import_targets,
@@ -141,6 +142,25 @@ class ComponentUsage:
     workflow_status: WorkflowStatus
     #: the lineage versions its steps are bound to - usually one, ascending
     component_versions: list[int]
+
+
+@dataclass(frozen=True)
+class DraftRef:
+    draft_id: uuid.UUID
+    name: str
+
+
+@dataclass
+class ComponentDeletionImpact:
+    """What deleting one component version would touch - shown before the delete.
+
+    Only what the deleter may see is named: other users' pending workflows and their
+    builder drafts are private, so those are just counted."""
+
+    workflows: list[ComponentUsage] = field(default_factory=list)
+    hidden_workflow_count: int = 0
+    own_drafts: list[DraftRef] = field(default_factory=list)
+    other_draft_count: int = 0
 
 
 @dataclass
@@ -316,6 +336,61 @@ class WorkflowsService:
             else:
                 usage.component_versions.append(row.component_version)
         return list(usages.values())
+
+    async def get_deletion_impact(self, component: Component, current_user: User) -> ComponentDeletionImpact:
+        """The workflows and builder drafts that reference exactly this component version."""
+        impact = ComponentDeletionImpact()
+
+        workflows: dict[uuid.UUID, Workflow] = {}
+        for step in await self.workflows_repository.find_steps_by_component_id(component.id):
+            if step.workflow is not None:
+                workflows[step.workflow.id] = step.workflow
+        for workflow in sorted(workflows.values(), key=lambda w: w.name):
+            if workflow.status == WorkflowStatus.VALIDATED or workflow.created_by_id == current_user.id:
+                impact.workflows.append(
+                    ComponentUsage(
+                        workflow_id=workflow.id,
+                        workflow_name=workflow.name,
+                        workflow_status=workflow.status,
+                        component_versions=[component.version],
+                    )
+                )
+            else:
+                impact.hidden_workflow_count += 1
+
+        component_id = str(component.id)
+        for draft in await self.workflow_draft_repository.find_all_mentioning(component_id):
+            if component_id not in canvas_component_ids(draft.canvas_state):
+                continue
+            if draft.created_by_id == current_user.id:
+                impact.own_drafts.append(DraftRef(draft_id=draft.id, name=draft.name))
+            else:
+                impact.other_draft_count += 1
+        impact.own_drafts.sort(key=lambda d: d.name)
+        return impact
+
+    async def detach_component(self, component_id: uuid.UUID) -> None:
+        """Unmatch every step pinned to a component version that is about to be deleted.
+
+        The FK's ON DELETE SET NULL alone would leave such steps CONFIRMED/SUGGESTED with
+        no component, and their workflow public. Deliberately never rebinds to another
+        version of the lineage - the user picks the replacement. Builder drafts need no
+        cascade: their canvas is checked for missing components whenever it is opened.
+        """
+        steps = await self.workflows_repository.find_steps_by_component_id(component_id)
+        if not steps:
+            return
+        reverted: dict[uuid.UUID, Workflow] = {}
+        for step in steps:
+            step.component_id = None
+            step.match_status = StepMatchStatus.UNMATCHED
+            step.match_score = None
+            # a public workflow with an unmatched step would be broken for everyone
+            workflow = step.workflow
+            if workflow is not None and workflow.status == WorkflowStatus.VALIDATED:
+                workflow.status = WorkflowStatus.PENDING_VALIDATION
+                reverted[workflow.id] = workflow
+        await self.workflows_repository.save_steps(steps, list(reverted.values()))
 
     async def get_visible_workflow(self, workflow_id: uuid.UUID, current_user: User | None) -> Workflow:
         workflow = await self.get_workflow(workflow_id)
@@ -877,7 +952,11 @@ class WorkflowsService:
         # one whose steps are no longer all confirmed - publishing itself is a separate,
         # explicit creator action (see publish())
         await self._revert_to_pending_if_needed(saved_step.workflow_id)
-        return saved_step
+        # the revert may have committed again, unloading step.component - reload so the
+        # caller can serialise it without a lazy load
+        reloaded = await self.workflows_repository.find_step_by_id_with_relations(saved_step.id)
+        assert reloaded is not None
+        return reloaded
 
     async def confirm_step(self, step_id: uuid.UUID) -> WorkflowStep:
         step = await self.workflows_repository.find_step_by_id(step_id)
@@ -1146,7 +1225,10 @@ class WorkflowsService:
         # only ever downgrades VALIDATED -> PENDING_VALIDATION when a step edit leaves it
         # no longer fully confirmed - never auto-promotes to VALIDATED, that only happens
         # via the explicit publish() action.
-        workflow = await self.workflows_repository.find_by_id(workflow_id)
+        # find_by_id_with_steps, not find_by_id: right after save_step()'s commit the
+        # identity-map hit has `steps` unloaded, and iterating it would lazy-load outside
+        # an async-safe context (MissingGreenlet -> 500 on picking a step's component)
+        workflow = await self.workflows_repository.find_by_id_with_steps(workflow_id)
         assert workflow is not None
         if workflow.status != WorkflowStatus.VALIDATED:
             return

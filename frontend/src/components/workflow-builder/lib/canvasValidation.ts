@@ -8,6 +8,7 @@ export type ValidationErrorType =
   | 'no_workflow_name'
   | 'disconnected_node'
   | 'unresolved_component'
+  | 'missing_component'
   | 'unconnected_input';
 
 export interface ValidationError {
@@ -28,6 +29,8 @@ export function validateCanvas(
   nodes: ComponentFlowNode[],
   edges: Edge[],
   workflowName: string,
+  /** componentIds the backend reported as deleted - see WorkflowDraftDetailDto */
+  missingComponentIds: ReadonlySet<string> = new Set(),
 ): ValidationError[] {
   const errors: ValidationError[] = [];
 
@@ -60,6 +63,12 @@ export function validateCanvas(
       errors.push({
         type: 'unresolved_component',
         message: `"${node.data.label}" has no linked component in the repository.`,
+        nodeId: node.id,
+      });
+    } else if (missingComponentIds.has(node.data.componentId)) {
+      errors.push({
+        type: 'missing_component',
+        message: `"${node.data.label}" was deleted from the repository. Remove it from the canvas or replace it with another component.`,
         nodeId: node.id,
       });
     }

@@ -31,6 +31,9 @@ class WorkflowDraftDetailDto(CamelModel):
     updated_at: datetime
     created_at: datetime
     linked_workflow_id: uuid.UUID | None = None
+    # componentIds on the canvas whose component has since been deleted - the builder
+    # flags those nodes on open instead of failing later on connect/save/export
+    missing_component_ids: list[str] = []
 
 
 class WorkflowDraftWriteRequestDto(CamelModel):

@@ -9,6 +9,8 @@ from app.api.dto.common import ErrorResponse, MyItemsResponseDtoV1, build_my_ite
 from app.api.dto.component import (
     AddVersionRequestDto,
     ComponentCommandExecuteRequestDto,
+    ComponentDeletionDraftDto,
+    ComponentDeletionImpactDto,
     ComponentDetailDto,
     ComponentListItemDto,
     ComponentPreviewDto,
@@ -462,6 +464,40 @@ async def get_workflow_usages(
 
 
 @router.get(
+    "/{component_id}/deletion-impact",
+    response_model=ComponentDeletionImpactDto,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
+        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Not the creator of this component"},
+        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Component not found"},
+    },
+)
+async def get_deletion_impact(
+    component_id: uuid.UUID,
+    current_user: Annotated[User, Depends(AuthService.get_current_user)],
+    components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
+    workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
+) -> ComponentDeletionImpactDto:
+    """The workflows and builder drafts using exactly this version - what a delete unmatches."""
+    component = await components_service.get_component(component_id)
+    if not ComponentPermissionValidator(current_user).can_delete(component):
+        raise ForbiddenException("Insufficient permission to delete this component")
+
+    impact = await workflows_service.get_deletion_impact(component, current_user)
+    return ComponentDeletionImpactDto(
+        workflows=[
+            ComponentWorkflowUsageDto(
+                id=u.workflow_id, name=u.workflow_name, status=u.workflow_status, component_versions=u.component_versions
+            )
+            for u in impact.workflows
+        ],
+        hidden_workflow_count=impact.hidden_workflow_count,
+        drafts=[ComponentDeletionDraftDto(id=d.draft_id, name=d.name) for d in impact.own_drafts],
+        other_draft_count=impact.other_draft_count,
+    )
+
+
+@router.get(
     "/{component_id}/download",
     responses={status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Component not found"}},
 )
@@ -527,6 +563,7 @@ async def remove(
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
     favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
+    workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
 ) -> None:
     component = await components_service.get_component(component_id)
 
@@ -536,6 +573,9 @@ async def remove(
         raise ForbiddenException("Insufficient permission to delete this component")
 
     versions = await components_service.get_versions(component)
+    # unmatch the steps pinned to this version first - SET NULL alone would leave them
+    # confirmed with no component and their workflow still public
+    await workflows_service.detach_component(component.id)
     await components_service.remove(component)
     logger.info(f"Deleted component {component_id}")
 

@@ -37,6 +37,12 @@ export type ComponentNodeData = {
    * A missing key means "unset" - the component's own default applies.
    */
   parameterValues: Record<string, string>;
+  /**
+   * Render-time only: the component was deleted from the repository. Derived from the
+   * draft's `missingComponentIds` on every render and never part of the page's node
+   * state, so it can never end up in a saved draft.
+   */
+  missing?: boolean;
 };
 
 export type ComponentFlowNode = Node<ComponentNodeData, 'componentNode'>;

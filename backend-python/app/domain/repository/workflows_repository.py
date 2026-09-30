@@ -183,6 +183,36 @@ class WorkflowsRepository:
     async def find_step_by_id(self, step_id: uuid.UUID) -> WorkflowStep | None:
         return await self.db.get(WorkflowStep, step_id)
 
+    async def find_step_by_id_with_relations(self, step_id: uuid.UUID) -> WorkflowStep | None:
+        """Fresh SELECT of a step with its component and workflow eagerly loaded - the
+        find_by_id_with_steps counterpart for a single step. populate_existing because the
+        step is usually already resident with attributes a later commit/refresh unloaded."""
+        query = (
+            select(WorkflowStep)
+            .where(WorkflowStep.id == step_id)
+            .options(selectinload(WorkflowStep.component), selectinload(WorkflowStep.workflow))
+            .execution_options(populate_existing=True)
+        )
+        result = await self.db.exec(query)
+        return result.first()
+
+    async def find_steps_by_component_id(self, component_id: uuid.UUID) -> list[WorkflowStep]:
+        """Every step pinned to exactly this component version (not its whole lineage -
+        that is find_usages_of_component), with its workflow loaded."""
+        query = (
+            select(WorkflowStep)
+            .where(WorkflowStep.component_id == component_id)
+            .options(selectinload(WorkflowStep.workflow))
+        )
+        result = await self.db.exec(query)
+        return list(result.all())
+
+    async def save_steps(self, steps: list[WorkflowStep], workflows: list[Workflow]) -> None:
+        """Persist several step and workflow edits in one commit, so a cascade never
+        leaves half of them applied."""
+        self.db.add_all([*steps, *workflows])
+        await self.db.commit()
+
     async def save_step(self, step: WorkflowStep) -> WorkflowStep:
         self.db.add(step)
         await self.db.commit()

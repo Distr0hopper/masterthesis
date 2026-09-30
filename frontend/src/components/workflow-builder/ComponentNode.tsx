@@ -1,5 +1,5 @@
 import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react';
-import { ExternalLink, Info, PenLine, Trash2 } from 'lucide-react';
+import { AlertTriangle, ExternalLink, Info, PenLine, Trash2 } from 'lucide-react';
 import {
   UNRESOLVED_FORMAT_HINT,
   isManualFormatLabel,
@@ -80,30 +80,41 @@ export function ComponentNode({ id, data, selected }: NodeProps<ComponentFlowNod
   const configs = configParameters(data.parameters);
   const setCount = configs.filter((p) => data.parameterValues[p.name] !== undefined).length;
 
+  const borderClass = data.missing
+    ? `border-destructive ${selected ? 'shadow-md' : ''}`
+    : selected
+      ? 'border-jmu-blue-800 shadow-md'
+      : 'border-slate-200';
+
   return (
     <div
-      className={`relative min-w-[260px] rounded-lg border bg-white shadow-sm transition-shadow ${
-        selected ? 'border-jmu-blue-800 shadow-md' : 'border-slate-200'
-      }`}
+      className={`relative min-w-[260px] rounded-lg border bg-white shadow-sm transition-shadow ${borderClass}`}
     >
-      <div className="flex items-center justify-between gap-2 rounded-t-lg bg-jmu-blue-800 py-2 pl-3 pr-2">
+      <div
+        className={`flex items-center justify-between gap-2 rounded-t-lg py-2 pl-3 pr-2 ${
+          data.missing ? 'bg-destructive' : 'bg-jmu-blue-800'
+        }`}
+      >
         <span className="break-all font-mono text-sm font-semibold text-white">{data.label}</span>
         <div className="flex shrink-0 items-center">
-          <a
-            href={ROUTES.componentDetail(data.componentId)}
-            target="_blank"
-            rel="noreferrer"
-            // `nodrag` keeps React Flow from starting a node drag on mousedown, which
-            // would otherwise swallow the click; draggable={false} stops the browser's
-            // own link drag; stopPropagation keeps the click from selecting the node
-            draggable={false}
-            className="nodrag rounded p-1 text-white/60 transition-colors hover:bg-white/20 hover:text-white"
-            aria-label={`Open ${data.label} details in a new tab`}
-            title="Open details in a new tab"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <ExternalLink size={14} />
-          </a>
+          {/* a deleted component has no detail page left to open */}
+          {!data.missing && (
+            <a
+              href={ROUTES.componentDetail(data.componentId)}
+              target="_blank"
+              rel="noreferrer"
+              // `nodrag` keeps React Flow from starting a node drag on mousedown, which
+              // would otherwise swallow the click; draggable={false} stops the browser's
+              // own link drag; stopPropagation keeps the click from selecting the node
+              draggable={false}
+              className="nodrag rounded p-1 text-white/60 transition-colors hover:bg-white/20 hover:text-white"
+              aria-label={`Open ${data.label} details in a new tab`}
+              title="Open details in a new tab"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <ExternalLink size={14} />
+            </a>
+          )}
           <button
             type="button"
             className="nodrag rounded p-1 text-white/60 transition-colors hover:bg-white/20 hover:text-white"
@@ -115,6 +126,16 @@ export function ComponentNode({ id, data, selected }: NodeProps<ComponentFlowNod
           </button>
         </div>
       </div>
+
+      {data.missing && (
+        <div
+          role="alert"
+          className="flex items-start gap-1.5 border-b border-destructive/20 bg-destructive/10 px-3 py-1.5 text-xs text-destructive"
+        >
+          <AlertTriangle size={12} className="mt-0.5 shrink-0" aria-hidden />
+          <span>Component removed from the repository. Remove this node or replace it.</span>
+        </div>
+      )}
 
       <div className="px-3 py-2">
         <DomainBadges domains={data.domains} />

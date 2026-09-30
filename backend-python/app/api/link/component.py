@@ -16,6 +16,7 @@ class ComponentLinkBuilder(BaseLinkBuilder[Component, ComponentPermissionValidat
         return {
             "self": Link(href=Endpoints.component_by_id(entity.id), method=HttpMethod.GET),
             "delete": Link(href=Endpoints.component_by_id(entity.id), method=HttpMethod.DELETE),
+            "deletionImpact": Link(href=Endpoints.component_deletion_impact_by_id(entity.id), method=HttpMethod.GET),
             "updateDescription": Link(href=Endpoints.component_commands_by_id(entity.id), method=HttpMethod.POST),
             "updateDomain": Link(href=Endpoints.component_commands_by_id(entity.id), method=HttpMethod.POST),
             "updateFormatLabels": Link(href=Endpoints.component_commands_by_id(entity.id), method=HttpMethod.POST),
@@ -30,7 +31,7 @@ class ComponentLinkBuilder(BaseLinkBuilder[Component, ComponentPermissionValidat
         match rel:
             case "self":
                 return self._validator.can_read(entity)
-            case "delete":
+            case "delete" | "deletionImpact":
                 return self._validator.can_delete(entity)
             case "updateDescription":
                 return self._validator.can_execute(entity, ComponentCommandType.UPDATE_DESCRIPTION)

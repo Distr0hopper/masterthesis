@@ -21,6 +21,7 @@ export const componentKeys = {
   detail: (id: string) => [...componentKeys.all, 'detail', id] as const,
   versions: (id: string) => [...componentKeys.all, 'versions', id] as const,
   workflowUsages: (id: string) => [...componentKeys.all, 'workflow-usages', id] as const,
+  deletionImpact: (href: string) => [...componentKeys.all, 'deletion-impact', href] as const,
   domains: () => ['domains'] as const,
   nameAvailability: (name: string) => [...componentKeys.all, 'name-availability', name] as const,
 };
@@ -111,6 +112,17 @@ export const useComponentWorkflowUsages = (id: string) => {
     queryKey: componentKeys.workflowUsages(id),
     queryFn: () => componentsService.getWorkflowUsages(id),
     enabled: !!id,
+  });
+};
+
+/** What deleting a version would unmatch - fetched only while the delete dialog is open. */
+export const useComponentDeletionImpact = (link: HateoasLink | undefined, enabled: boolean) => {
+  return useQuery({
+    queryKey: componentKeys.deletionImpact(link?.href ?? ''),
+    queryFn: () => componentsService.getDeletionImpact(link!),
+    enabled: enabled && !!link,
+    // usages change whenever someone edits a workflow - never trust a stale answer here
+    staleTime: 0,
   });
 };
 

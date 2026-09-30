@@ -57,7 +57,7 @@ async def create_draft(
         user_id=current_user.id,
     )
     logger.info(f"Created workflow draft {draft.id} for user {current_user.id}")
-    return WorkflowDraftTransformer.to_detail(draft)
+    return WorkflowDraftTransformer.to_detail(draft, missing_component_ids=await service.missing_component_ids(draft))
 
 
 @router.get("/{draft_id}", response_model=WorkflowDraftDetailDto, responses=_OWNED_RESPONSES)
@@ -68,7 +68,9 @@ async def get_draft(
 ) -> WorkflowDraftDetailDto:
     draft = await service.get_draft(draft_id, current_user.id)
     linked = await service.linked_workflow_ids({draft.id})
-    return WorkflowDraftTransformer.to_detail(draft, linked.get(draft.id))
+    return WorkflowDraftTransformer.to_detail(
+        draft, linked.get(draft.id), missing_component_ids=await service.missing_component_ids(draft)
+    )
 
 
 @router.put("/{draft_id}", response_model=WorkflowDraftDetailDto, responses=_OWNED_RESPONSES)
@@ -86,7 +88,9 @@ async def update_draft(
         node_count=dto.node_count,
     )
     logger.info(f"Updated workflow draft {draft_id}")
-    return WorkflowDraftTransformer.to_detail(updated)
+    return WorkflowDraftTransformer.to_detail(
+        updated, missing_component_ids=await service.missing_component_ids(updated)
+    )
 
 
 @router.delete("/{draft_id}", status_code=status.HTTP_204_NO_CONTENT, responses=_OWNED_RESPONSES)

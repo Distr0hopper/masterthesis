@@ -2,7 +2,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import Depends
-from sqlmodel import select
+from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.domain.models.workflow_draft import WorkflowDraft
@@ -25,6 +25,13 @@ class WorkflowDraftRepository:
             .where(WorkflowDraft.created_by_id == user_id)
             .order_by(WorkflowDraft.updated_at.desc())
         )
+        result = await self.db.exec(query)
+        return list(result.all())
+
+    async def find_all_mentioning(self, needle: str) -> list[WorkflowDraft]:
+        """Drafts whose raw canvas text contains `needle` - a cheap pre-filter only, since
+        canvas_state is opaque text; callers parse the canvas to confirm a real match."""
+        query = select(WorkflowDraft).where(col(WorkflowDraft.canvas_state).contains(needle))
         result = await self.db.exec(query)
         return list(result.all())
 

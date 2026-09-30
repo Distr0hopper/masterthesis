@@ -23,6 +23,8 @@ interface ConfirmDeleteDialogProps {
   /** Receives whether the linked entity should go too; always false without a linkedOption. */
   onConfirm: (deleteLinked: boolean) => void;
   isPending: boolean;
+  /** Extra block content under the description, e.g. a usage warning. */
+  children?: ReactNode;
 }
 
 export function ConfirmDeleteDialog({
@@ -33,6 +35,7 @@ export function ConfirmDeleteDialog({
   linkedOption,
   onConfirm,
   isPending,
+  children,
 }: ConfirmDeleteDialogProps) {
   const [deleteLinked, setDeleteLinked] = useState(false);
 
@@ -51,6 +54,9 @@ export function ConfirmDeleteDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
+
+        {/* outside DialogDescription for the same reason as the checkbox below */}
+        {children}
 
         {linkedOption && (
           // outside DialogDescription on purpose: that renders a <p>, which cannot

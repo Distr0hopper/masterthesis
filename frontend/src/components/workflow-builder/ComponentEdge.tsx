@@ -11,12 +11,15 @@ import type { ComponentEdgeData } from './types';
 
 /** dashed amber: allowed, but the formats on either end couldn't be checked */
 const UNVERIFIED_STYLE = { stroke: '#f59e0b', strokeDasharray: '6 4' };
+/** solid red: the backend rejects this connection, e.g. an endpoint's component was deleted */
+const INCOMPATIBLE_STYLE = { stroke: '#dc2626' };
 
 /**
  * A smoothstep edge with a delete button at its midpoint. Without this, a connection can
  * only be removed by selecting it and pressing Delete - undiscoverable, and awkward on a
  * thin target. A connection the backend reports as unverified is drawn dashed
- * amber with a warning badge explaining why.
+ * amber with a warning badge explaining why; an incompatible one (typically restored from
+ * a draft whose component has since been deleted) is drawn red with the reason.
  */
 export function ComponentEdge({
   id,
@@ -42,6 +45,9 @@ export function ComponentEdge({
   });
 
   const unverifiedMessage = data?.check?.status === 'unverified' ? data.check.message : undefined;
+  const incompatible = data?.check?.status === 'incompatible';
+  const incompatibleMessage = incompatible ? (data?.check?.message ?? 'These ports are incompatible.') : undefined;
+  const warningStyle = incompatible ? INCOMPATIBLE_STYLE : unverifiedMessage ? UNVERIFIED_STYLE : undefined;
 
   return (
     <>
@@ -49,13 +55,23 @@ export function ComponentEdge({
         id={id}
         path={edgePath}
         markerEnd={markerEnd}
-        style={unverifiedMessage ? { ...style, ...UNVERIFIED_STYLE } : style}
+        style={warningStyle ? { ...style, ...warningStyle } : style}
       />
 
       {/* EdgeLabelRenderer hoists this out of the SVG into a DOM overlay, so it can be a
           real <button>. That overlay is pointer-events:none, hence the explicit re-enable. */}
       <EdgeLabelRenderer>
-        {unverifiedMessage && (
+        {incompatibleMessage && (
+          <span
+            className="nodrag nopan pointer-events-auto absolute flex h-5 w-5 items-center justify-center rounded-full border border-red-300 bg-red-50 text-red-600 shadow-sm"
+            style={{ transform: `translate(-50%, -50%) translate(${labelX - 24}px, ${labelY}px)` }}
+            title={`Incompatible: ${incompatibleMessage}`}
+            aria-label="Connection incompatible"
+          >
+            <AlertTriangle size={12} />
+          </span>
+        )}
+        {!incompatible && unverifiedMessage && (
           <span
             className="nodrag nopan pointer-events-auto absolute flex h-5 w-5 items-center justify-center rounded-full border border-amber-300 bg-amber-50 text-amber-600 shadow-sm"
             style={{ transform: `translate(-50%, -50%) translate(${labelX - 24}px, ${labelY}px)` }}

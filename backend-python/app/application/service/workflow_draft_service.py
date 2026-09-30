@@ -1,4 +1,3 @@
-import json
 import logging
 import uuid
 from typing import Annotated, Any
@@ -17,7 +16,14 @@ from app.domain.models.workflow_draft import WorkflowDraft
 from app.domain.repository.components_repository import ComponentsRepository
 from app.application.service.workflows_service import WorkflowsService
 from app.domain.repository.workflow_draft_repository import WorkflowDraftRepository
-from app.infrastructure.cwl.canvas_graph import CanvasCycleError, topological_sort
+from app.infrastructure.cwl.canvas_graph import (
+    CanvasCycleError,
+    CanvasFormatError,
+    canvas_component_ids,
+    node_component_id,
+    parse_canvas,
+    topological_sort,
+)
 from app.infrastructure.cwl.workflow_generator import (
     PortSpec,
     assemble_cwl_zip,
@@ -107,12 +113,14 @@ class WorkflowDraftService:
             await self.workflows_service.delete_by_draft_id(draft.id, user_id)
         await self.repository.delete(draft)
 
-    async def _fetch_components(self, component_ids: list[str]) -> dict[str, Component]:
-        """{component_id: Component} for every id on the canvas.
+    async def missing_component_ids(self, draft: WorkflowDraft) -> list[str]:
+        """The componentIds on the draft's canvas that no longer resolve - lets the builder
+        flag deleted components as soon as a draft is opened, not only on export."""
+        _found, missing = await self._resolve_components(canvas_component_ids(draft.canvas_state))
+        return missing
 
-        Raises ExportValidationError naming the ids that no longer resolve - a component
-        deleted since the draft was saved must fail loudly, not export a broken archive.
-        """
+    async def _resolve_components(self, component_ids: list[str]) -> tuple[dict[str, Component], list[str]]:
+        """({component_id: Component}, [unresolvable ids]) for the ids on a canvas."""
         components: dict[str, Component] = {}
         missing: list[str] = []
 
@@ -127,7 +135,15 @@ class WorkflowDraftService:
                 missing.append(str(raw_id))
             else:
                 components[raw_id] = component
+        return components, missing
 
+    async def _fetch_components(self, component_ids: list[str]) -> dict[str, Component]:
+        """{component_id: Component} for every id on the canvas.
+
+        Raises ExportValidationError naming the ids that no longer resolve - a component
+        deleted since the draft was saved must fail loudly, not export a broken archive.
+        """
+        components, missing = await self._resolve_components(component_ids)
         if missing:
             raise ExportValidationError(
                 f"{len(missing)} component(s) on the canvas no longer exist in the repository"
@@ -176,20 +192,17 @@ class WorkflowDraftService:
         """The draft's canvas as a Workflow document, plus the components and port specs it
         was built from. Raises ExportValidationError for anything that makes it unexportable."""
         try:
-            canvas = json.loads(draft.canvas_state)
-        except json.JSONDecodeError as err:
-            raise ExportValidationError("The saved canvas could not be read") from err
-
-        nodes = canvas.get("nodes") or []
-        edges = canvas.get("edges") or []
+            nodes, edges = parse_canvas(draft.canvas_state)
+        except CanvasFormatError as err:
+            raise ExportValidationError(str(err)) from err
         if not nodes:
             raise ExportValidationError("Canvas is empty")
 
-        component_ids = [n.get("data", {}).get("componentId") for n in nodes]
+        component_ids = [node_component_id(n) for n in nodes]
         if not all(component_ids):
             raise ExportValidationError("One or more nodes have no linked component")
 
-        components = await self._fetch_components(component_ids)
+        components = await self._fetch_components([cid for cid in component_ids if cid is not None])
         ports = {cid: self._to_port_spec(component) for cid, component in components.items()}
 
         try:

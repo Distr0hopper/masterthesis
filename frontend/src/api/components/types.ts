@@ -185,6 +185,18 @@ export interface ComponentWorkflowUsageDto {
   componentVersions: number[];
 }
 
+/** What deleting one exact component version touches - the delete dialog's warning. */
+export interface ComponentDeletionImpactDto {
+  /** workflows the deleter may see; componentVersions is always just this version */
+  workflows: ComponentWorkflowUsageDto[];
+  /** other users' pending workflows - private, so only counted */
+  hiddenWorkflowCount: number;
+  /** the deleter's own builder drafts with this version on the canvas */
+  drafts: { id: string; name: string }[];
+  /** other users' builder drafts - private, so only counted */
+  otherDraftCount: number;
+}
+
 export interface ComponentCreatorDto {
   id: string;
   email: string;

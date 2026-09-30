@@ -145,6 +145,21 @@ class ComponentWorkflowUsageDto(CamelModel):
     component_versions: list[int]
 
 
+class ComponentDeletionDraftDto(CamelModel):
+    id: uuid.UUID
+    name: str
+
+
+class ComponentDeletionImpactDto(CamelModel):
+    """What deleting this exact version touches - the delete dialog's usage warning.
+    Other users' private workflows and drafts are only counted, never named."""
+
+    workflows: list[ComponentWorkflowUsageDto]
+    hidden_workflow_count: int
+    drafts: list[ComponentDeletionDraftDto]
+    other_draft_count: int
+
+
 class ComponentDetailDto(CamelModel, LinkModel):
     id: uuid.UUID
     name: str

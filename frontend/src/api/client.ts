@@ -1,4 +1,4 @@
-import axios, { type AxiosRequestConfig } from 'axios';
+import axios, { AxiosError, type AxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/store/auth.store';
 import { isTokenExpired } from '@/lib/jwt';
 import { currentPath, endExpiredSession, loginPath, refreshSessionIfDue } from '@/api/auth/session';
@@ -49,6 +49,17 @@ axiosInstance.interceptors.response.use(
 );
 
 // Thin wrapper that unwraps `res.data` once here, so service.ts callers get Promise<T> directly.
+async function decodeBlobErrorBody(error: unknown): Promise<void> {
+  if (!(error instanceof AxiosError) || !error.response) return;
+  const { data } = error.response;
+  if (!(data instanceof Blob) || !data.type.includes('json')) return;
+  try {
+    error.response.data = JSON.parse(await data.text());
+  } catch {
+    // not decodable - leave the Blob, getErrorMessage falls back to its generic message
+  }
+}
+
 export const apiClient = {
   baseURL: axiosInstance.defaults.baseURL,
   get: <T>(url: string, config?: AxiosRequestConfig) =>
@@ -81,7 +92,15 @@ export const apiClient = {
   // `window.location.href` navigation, which never sends custom headers) - goes through
   // this axios instance's interceptor instead of a raw browser request
   async getBlob(url: string, fallbackFilename: string): Promise<{ blob: Blob; filename: string }> {
-    const res = await axiosInstance.get<Blob>(url, { responseType: 'blob' });
+    let res;
+    try {
+      res = await axiosInstance.get<Blob>(url, { responseType: 'blob' });
+    } catch (error) {
+      // responseType 'blob' applies to error bodies too, so the backend's { detail } would
+      // arrive as an opaque Blob and getErrorMessage could only show its fallback
+      await decodeBlobErrorBody(error);
+      throw error;
+    }
     const match = (res.headers['content-disposition'] as string | undefined)?.match(/filename="?([^";]+)"?/);
     return { blob: res.data, filename: match?.[1] ?? fallbackFilename };
   },

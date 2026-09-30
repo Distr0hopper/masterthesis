@@ -19,7 +19,9 @@ class WorkflowDraftTransformer:
 
     @staticmethod
     def to_detail(
-        draft: WorkflowDraft, linked_workflow_id: uuid.UUID | None = None
+        draft: WorkflowDraft,
+        linked_workflow_id: uuid.UUID | None = None,
+        missing_component_ids: list[str] | None = None,
     ) -> WorkflowDraftDetailDto:
         return WorkflowDraftDetailDto(
             id=draft.id,
@@ -29,4 +31,5 @@ class WorkflowDraftTransformer:
             updated_at=draft.updated_at,
             created_at=draft.created_at,
             linked_workflow_id=linked_workflow_id,
+            missing_component_ids=missing_component_ids or [],
         )

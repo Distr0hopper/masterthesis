@@ -3,6 +3,7 @@ import type { HateoasLink, MineQueryParams, PageResponse } from '@/api/types';
 import type {
   AddVersionDto,
   ComponentCommandExecuteRequest,
+  ComponentDeletionImpactDto,
   ComponentDetailDto,
   ComponentListItemDto,
   ComponentListQueryParams,
@@ -92,6 +93,10 @@ export const componentsService = {
 
   package(dto: PackageComponentDto): Promise<ComponentDetailDto> {
     return apiClient.post(`${ENDPOINT}/package`, dto);
+  },
+
+  getDeletionImpact(link: HateoasLink): Promise<ComponentDeletionImpactDto> {
+    return apiClient.request(link);
   },
 
   delete(link: HateoasLink): Promise<void> {

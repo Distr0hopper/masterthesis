@@ -40,6 +40,19 @@ describe('validateCanvas', () => {
     expect(types(errors)).toEqual(['no_nodes']);
   });
 
+  it('flags a node whose component was deleted, as a blocking error naming it', () => {
+    const errors = validateCanvas([node('a', 'thin-data'), node('b', 'kept')], [edge('a', 'b')], 'wf', new Set(['c-a']));
+    const missing = errors.filter((e) => e.type === 'missing_component');
+    expect(missing).toHaveLength(1);
+    expect(missing[0]).toMatchObject({ nodeId: 'a' });
+    expect(missing[0].message).toContain('thin-data');
+    expect(isBlocking(missing[0])).toBe(true);
+  });
+
+  it('reports no deleted component when none are missing', () => {
+    expect(types(validateCanvas([node('a', 'x')], [], 'wf'))).not.toContain('missing_component');
+  });
+
   it('rejects the placeholder name', () => {
     const errors = validateCanvas([node('a', 'x')], [], DEFAULT_WORKFLOW_NAME);
     expect(types(errors)).toContain('no_workflow_name');

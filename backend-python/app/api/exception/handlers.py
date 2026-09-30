@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 
 from app.api.dto.common import ErrorResponse
 from app.api.exception.exceptions import ForbiddenException
@@ -199,7 +200,18 @@ async def _extracted_component_name_collision_handler(request: Request, exc: Ext
     return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
+async def _integrity_error_handler(request: Request, exc: IntegrityError) -> JSONResponse:
+    # a concurrent change (e.g. a component deleted between lookup and save) - a conflict
+    # the client can retry after reloading, not a server error. The DB message is not
+    # echoed back: it would leak table/constraint names.
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content=ErrorResponse(detail="The data changed while saving - please reload and try again").model_dump(),
+    )
+
+
 def register_exception_handlers(app: FastAPI) -> None:
+    app.add_exception_handler(IntegrityError, _integrity_error_handler)
     app.add_exception_handler(InvalidTokenError, _invalid_token_handler)
     app.add_exception_handler(InvalidOtpCodeError, _invalid_otp_code_handler)
     app.add_exception_handler(OtpCodeExpiredError, _otp_code_expired_handler)

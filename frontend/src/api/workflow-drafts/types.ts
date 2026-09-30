@@ -15,6 +15,8 @@ export interface WorkflowDraftDetailDto {
   updatedAt: string;
   createdAt: string;
   linkedWorkflowId: string | null;
+  /** componentIds on the canvas whose component has since been deleted */
+  missingComponentIds: string[];
 }
 
 export interface WriteWorkflowDraftDto {

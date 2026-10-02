@@ -44,7 +44,7 @@ export function ParsedWorkflowOverview({ parsed }: ParsedWorkflowOverviewProps) 
                 matches {preview.suggestedMatch.name} v{preview.suggestedMatch.version}
               </Badge>
             ) : (
-              <Badge variant="secondary">new component</Badge>
+              <Badge variant="secondary">new tool</Badge>
             )}
           </li>
         ))}
@@ -57,7 +57,7 @@ export function ParsedWorkflowOverview({ parsed }: ParsedWorkflowOverviewProps) 
           </li>
         ))}
         {parsed.componentPreviews.length === 0 && parsed.inlineOnlySteps.length === 0 && (
-          <li className="px-3 py-2 text-sm text-slate-500">No components could be read from this file.</li>
+          <li className="px-3 py-2 text-sm text-slate-500">No tools could be read from this file.</li>
         )}
       </ul>
 

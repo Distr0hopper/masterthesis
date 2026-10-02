@@ -3,6 +3,7 @@ import uuid
 
 class Endpoints:
     COMPONENTS_ROOT = "/components"
+    TOOLS_ROOT = "/tools"
     WORKFLOWS_ROOT = "/workflows"
 
     @staticmethod
@@ -18,12 +19,16 @@ class Endpoints:
         return f"{Endpoints.component_by_id(component_id)}/deletion-impact"
 
     @staticmethod
-    def workflow_by_id(workflow_id: uuid.UUID) -> str:
-        return f"{Endpoints.WORKFLOWS_ROOT}/{workflow_id}"
+    def component_download_by_id(component_id: uuid.UUID) -> str:
+        return f"{Endpoints.component_by_id(component_id)}/download"
 
     @staticmethod
-    def workflow_commands_by_id(workflow_id: uuid.UUID) -> str:
-        return f"{Endpoints.workflow_by_id(workflow_id)}/commands"
+    def tool_commands_by_id(tool_id: uuid.UUID) -> str:
+        return f"{Endpoints.TOOLS_ROOT}/{tool_id}/commands"
+
+    @staticmethod
+    def tool_versions_by_id(tool_id: uuid.UUID) -> str:
+        return f"{Endpoints.TOOLS_ROOT}/{tool_id}/versions"
 
     @staticmethod
     def workflow_step_by_id(step_id: uuid.UUID) -> str:

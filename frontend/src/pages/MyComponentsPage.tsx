@@ -1,14 +1,23 @@
 import { Link } from 'react-router-dom';
-import { useMyComponents } from '@/api/components';
+import { useMyComponents, type ComponentKind } from '@/api/components';
 import { ComponentSection } from '@/components/component-mine/organisms/ComponentSection';
 import { Pagination } from '@/components/common/Pagination';
 import { useSplitPageParams } from '@/lib/useSplitPageParams';
-import { ROUTES } from '@/lib/routes';
+import { KIND_ROUTES, ROUTES } from '@/lib/routes';
+import { KIND_COPY } from '@/lib/componentKinds';
 
-export default function MyComponentsPage() {
+interface MyComponentsPageProps {
+  kind: ComponentKind;
+}
+
+/** The caller's own components of one kind - My Tools or My Workflows. */
+export default function MyComponentsPage({ kind }: MyComponentsPageProps) {
+  const copy = KIND_COPY[kind];
+  const routes = KIND_ROUTES[kind];
   const { limit, published, unpublished } = useSplitPageParams();
 
   const { data, isLoading } = useMyComponents({
+    kind,
     limit,
     publishedOffset: published.offset,
     unpublishedOffset: unpublished.offset,
@@ -20,19 +29,26 @@ export default function MyComponentsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-slate-900">My Components</h1>
-      <p className="mt-1 text-slate-500">
-        Components you've uploaded or packaged, including drafts that are still only visible to you.
-      </p>
+      <h1 className="text-2xl font-semibold text-slate-900">My {copy.plural}</h1>
+      <p className="mt-1 text-slate-500">{copy.mineSubtitle}</p>
 
       {isLoading ? (
-        <p className="mt-8 text-slate-500">Loading components...</p>
+        <p className="mt-8 text-slate-500">Loading {copy.pluralLower}...</p>
       ) : isEmpty ? (
         <p className="mt-8 text-slate-500">
-          You haven't uploaded any components yet.{' '}
-          <Link to={ROUTES.componentUpload} className="font-semibold text-jmu-blue-800 hover:underline">
+          You don't have any {copy.pluralLower} yet.{' '}
+          <Link to={routes.upload} className="font-semibold text-jmu-blue-800 hover:underline">
             Upload one
           </Link>
+          {kind === 'workflow' && (
+            <>
+              {' '}
+              or{' '}
+              <Link to={ROUTES.builder} className="font-semibold text-jmu-blue-800 hover:underline">
+                build one in the Workflow Builder
+              </Link>
+            </>
+          )}
           .
         </p>
       ) : (
@@ -40,9 +56,10 @@ export default function MyComponentsPage() {
           {unpublishedTotal > 0 && (
             <>
               <ComponentSection
-                title="Unpublished Components"
+                title={`Unpublished ${copy.plural}`}
                 components={data?.unpublished.items ?? []}
                 total={unpublishedTotal}
+                backTo={routes.mine}
               />
               <Pagination
                 totalItems={unpublishedTotal}
@@ -56,9 +73,10 @@ export default function MyComponentsPage() {
           {publishedTotal > 0 && (
             <>
               <ComponentSection
-                title="Published Components"
+                title={`Published ${copy.plural}`}
                 components={data?.published.items ?? []}
                 total={publishedTotal}
+                backTo={routes.mine}
               />
               <Pagination
                 totalItems={publishedTotal}

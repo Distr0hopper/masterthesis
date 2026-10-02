@@ -80,6 +80,17 @@ describe('serializeCanvasState', () => {
 });
 
 describe('parseCanvasState', () => {
+  it('reads a node saved before nesting existed as running a tool', () => {
+    const parsed = parseCanvasState(canvas());
+    expect(parsed?.nodes.map((n) => n.data.kind)).toEqual(['tool', 'tool']);
+  });
+
+  it('keeps a node that runs a nested workflow', () => {
+    const nested = { ...node('w'), data: { ...node('w').data, kind: 'workflow' } };
+    const parsed = parseCanvasState(JSON.stringify({ nodes: [nested], edges: [] }));
+    expect(parsed?.nodes[0].data.kind).toBe('workflow');
+  });
+
   it('returns null for unreadable JSON', () => {
     expect(parseCanvasState('')).toBeNull();
     expect(parseCanvasState('{ not json')).toBeNull();

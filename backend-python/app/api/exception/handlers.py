@@ -7,6 +7,7 @@ from app.api.exception.exceptions import ForbiddenException
 from app.application.exception.auth_exceptions import InvalidTokenError
 from app.application.exception.component_exceptions import (
     AlreadyPackagedError,
+    ComponentKindMismatchError,
     ComponentNameAlreadyExistsError,
     ComponentNotFoundError,
     InvalidCwlError,
@@ -25,6 +26,7 @@ from app.application.exception.workflow_draft_exceptions import (
 )
 from app.application.exception.workflow_exceptions import (
     ConflictingAuxiliaryFileError,
+    ConflictingStepFileError,
     DuplicateExtractedComponentNameError,
     ExtractedComponentNameCollisionError,
     InvalidComponentConfigError,
@@ -32,11 +34,12 @@ from app.application.exception.workflow_exceptions import (
     InvalidWorkflowArchiveError,
     InvalidWorkflowCwlError,
     MissingImportedFileError,
+    NestedWorkflowsNotReadyError,
+    PublishedWorkflowStepsLockedError,
     UnconfiguredWorkflowStepError,
     UnpublishableWorkflowComponentsError,
+    WorkflowCycleError,
     WorkflowHasUnpublishedComponentsError,
-    WorkflowNameAlreadyExistsError,
-    WorkflowNotFoundError,
     WorkflowNotReadyToPublishError,
     WorkflowStepNotFoundError,
     WorkflowStepNotMatchedError,
@@ -112,8 +115,22 @@ async def _favorites_require_auth_handler(request: Request, exc: FavoritesRequir
     return JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
-async def _workflow_not_found_handler(request: Request, exc: WorkflowNotFoundError) -> JSONResponse:
-    return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content=ErrorResponse(detail=str(exc)).model_dump())
+async def _component_kind_mismatch_handler(request: Request, exc: ComponentKindMismatchError) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=ErrorResponse(detail=str(exc)).model_dump())
+
+
+async def _nested_workflows_not_ready_handler(request: Request, exc: NestedWorkflowsNotReadyError) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
+
+
+async def _workflow_cycle_handler(request: Request, exc: WorkflowCycleError) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=ErrorResponse(detail=str(exc)).model_dump())
+
+
+async def _published_workflow_steps_locked_handler(
+    request: Request, exc: PublishedWorkflowStepsLockedError
+) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
 async def _workflow_step_not_found_handler(request: Request, exc: WorkflowStepNotFoundError) -> JSONResponse:
@@ -158,14 +175,12 @@ async def _conflicting_auxiliary_file_handler(
     return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
+async def _conflicting_step_file_handler(request: Request, exc: ConflictingStepFileError) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=ErrorResponse(detail=str(exc)).model_dump())
+
+
 async def _missing_imported_file_handler(request: Request, exc: MissingImportedFileError) -> JSONResponse:
     return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
-
-
-async def _workflow_name_already_exists_handler(
-    request: Request, exc: WorkflowNameAlreadyExistsError
-) -> JSONResponse:
-    return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
 async def _workflow_has_unpublished_components_handler(
@@ -227,7 +242,10 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(ComponentNotFoundError, _component_not_found_handler)
     app.add_exception_handler(ForbiddenException, _forbidden_handler)
     app.add_exception_handler(FavoritesRequireAuthError, _favorites_require_auth_handler)
-    app.add_exception_handler(WorkflowNotFoundError, _workflow_not_found_handler)
+    app.add_exception_handler(ComponentKindMismatchError, _component_kind_mismatch_handler)
+    app.add_exception_handler(NestedWorkflowsNotReadyError, _nested_workflows_not_ready_handler)
+    app.add_exception_handler(WorkflowCycleError, _workflow_cycle_handler)
+    app.add_exception_handler(PublishedWorkflowStepsLockedError, _published_workflow_steps_locked_handler)
     app.add_exception_handler(WorkflowStepNotFoundError, _workflow_step_not_found_handler)
     app.add_exception_handler(InvalidWorkflowArchiveError, _invalid_workflow_archive_handler)
     app.add_exception_handler(InvalidWorkflowCwlError, _invalid_workflow_cwl_handler)
@@ -238,8 +256,8 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(ExportValidationError, _export_validation_handler)
     app.add_exception_handler(MissingCommandPayloadError, _missing_command_payload_handler)
     app.add_exception_handler(ConflictingAuxiliaryFileError, _conflicting_auxiliary_file_handler)
+    app.add_exception_handler(ConflictingStepFileError, _conflicting_step_file_handler)
     app.add_exception_handler(MissingImportedFileError, _missing_imported_file_handler)
-    app.add_exception_handler(WorkflowNameAlreadyExistsError, _workflow_name_already_exists_handler)
     app.add_exception_handler(
         WorkflowHasUnpublishedComponentsError, _workflow_has_unpublished_components_handler
     )

@@ -2,8 +2,10 @@ import uuid
 
 
 class ComponentNotFoundError(Exception):
-    def __init__(self, component_id: uuid.UUID) -> None:
-        super().__init__(f"Component {component_id} not found")
+    def __init__(self, component_id: uuid.UUID, kind: str = "Component") -> None:
+        # kind names what the caller asked for - /tools/{id} with a workflow's id is a
+        # "Tool ... not found", even though a component with that id exists
+        super().__init__(f"{kind} {component_id} not found")
 
 
 class InvalidCwlError(Exception):
@@ -40,8 +42,18 @@ class ManualUploadCannotBeRepackagedError(Exception):
 
 
 class ComponentNameAlreadyExistsError(Exception):
-    def __init__(self, name: str) -> None:
-        super().__init__(f"A component named '{name}' already exists - add a new version instead of creating a new component")
+    """Names are the lineage key, unique across tools and workflows alike."""
+
+    def __init__(self, name: str, hint: str = "add a new version instead of creating a new component") -> None:
+        self.name = name
+        super().__init__(f"A component named '{name}' already exists - {hint}")
+
+
+class ComponentKindMismatchError(Exception):
+    """A new version must keep its lineage's kind - a lineage never mixes tools and workflows."""
+
+    def __init__(self, name: str, kind: str) -> None:
+        super().__init__(f"'{name}' is a {kind} - a new version of it must be a {kind} too")
 
 
 class MissingCommandPayloadError(Exception):

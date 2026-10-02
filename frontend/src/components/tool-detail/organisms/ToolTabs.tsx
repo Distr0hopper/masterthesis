@@ -4,11 +4,11 @@ import { Badge } from '@/components/ui/badge.tsx';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs.tsx';
 import { componentsService } from '@/api/components';
-import type { ComponentDetailDisplayModel } from '@/api/components';
+import type { ToolDetailDisplayModel } from '@/api/tools';
 import { cn } from '@/lib/utils';
 import { CodeBlock } from '@/components/common/CodeBlock';
-import { ParameterTable } from '../common/ParameterTable';
-import { ComponentOverview } from './ComponentOverview';
+import { ParameterTable } from '@/components/component-detail/common/ParameterTable';
+import { ToolOverview } from './ToolOverview';
 
 const TABS_LIST_CLASSNAME = 'w-full justify-start gap-6 rounded-none border-b bg-transparent p-0';
 const TAB_TRIGGER_CLASSNAME =
@@ -21,17 +21,18 @@ interface TabConfig {
   badge?: number;
 }
 
-interface ComponentTabsProps {
-  model: ComponentDetailDisplayModel;
+interface ToolTabsProps {
+  model: ToolDetailDisplayModel;
   /**
-   * Render a component that isn't persisted yet (a workflow-upload preview). Its `id` is
-   * a placeholder, so the CWL tab downloads the in-memory content as a client-side blob
-   * instead of pointing at a component download endpoint that would 404.
+   * Render a tool that isn't persisted yet (an upload preview). Its `id` is a placeholder,
+   * so the CWL tab downloads the in-memory content as a client-side blob instead of
+   * pointing at a download endpoint that would 404.
    */
   isPreview?: boolean;
 }
 
-export function ComponentTabs({ model, isPreview = false }: ComponentTabsProps) {
+/** What only a tool shows: its CWL, its container and its ports. */
+export function ToolTabs({ model, isPreview = false }: ToolTabsProps) {
   const tabs: TabConfig[] = [
     { value: 'overview', label: 'Overview', icon: Eye },
     { value: 'cwl', label: 'CWL Definition', icon: FileCode },
@@ -53,7 +54,7 @@ export function ComponentTabs({ model, isPreview = false }: ComponentTabsProps) 
           </TabsList>
 
           <TabsContent value="overview" className="pt-4">
-            <ComponentOverview model={model} />
+            <ToolOverview model={model} />
           </TabsContent>
 
           <TabsContent value="cwl" className="pt-4">
@@ -79,7 +80,7 @@ export function ComponentTabs({ model, isPreview = false }: ComponentTabsProps) 
                 <span className="font-mono text-sm font-semibold text-slate-900">{model.dockerPullReference}</span>
               </a>
             ) : (
-              <p className="text-sm text-slate-500">No Dockerfile available for this component.</p>
+              <p className="text-sm text-slate-500">No Dockerfile available for this tool.</p>
             )}
           </TabsContent>
 

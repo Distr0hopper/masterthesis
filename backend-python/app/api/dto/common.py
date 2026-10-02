@@ -8,7 +8,7 @@ class ErrorResponse(CamelModel):
 
 
 class MyItemsResponseDtoV1[T](CamelModel):
-    """The "my <entity>" response shape, shared by GET /workflows/mine and GET /components/mine.
+    """The "my components" response shape of GET /components/mine.
 
     Two independently paginated buckets rather than one list the client splits: a single
     page of mixed-status rows can't be split into two correct sections once pagination is

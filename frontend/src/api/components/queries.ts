@@ -1,51 +1,39 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toListDisplayModel, toSplitDisplayModel } from '@/api/helpers';
-import { componentsService } from './service';
-import { componentTransformer } from './transformer';
-import { ComponentCommand } from './types';
-import type {
-  AddVersionDto,
-  ComponentListQueryParams,
-  CreateComponentDto,
-  FormatLabelDto,
-  PackageComponentDto,
-} from './types';
 import { useCommandMutation } from '@/api/useCommandMutation';
-import type { HateoasLink, MineQueryParams } from '@/api/types';
+import type { HateoasLink } from '@/api/types';
+import { componentsService } from './service';
+import { componentTransformer } from './variants';
+import { ComponentCommand } from './types';
+import type { ComponentKind, ComponentListQueryParams, MyComponentsQueryParams } from './types';
 
+/** One cache root for both kinds - any mutation of either invalidates `componentKeys.all`. */
 export const componentKeys = {
   all: ['components'] as const,
   lists: (params: ComponentListQueryParams) => [...componentKeys.all, 'list', params] as const,
-  mine: (params: MineQueryParams) => [...componentKeys.all, 'mine', params] as const,
-  latest: (limit?: number) => [...componentKeys.all, 'latest', limit] as const,
+  mine: (params: MyComponentsQueryParams) => [...componentKeys.all, 'mine', params] as const,
+  latest: (limit?: number, kind?: ComponentKind) => [...componentKeys.all, 'latest', limit, kind ?? null] as const,
   detail: (id: string) => [...componentKeys.all, 'detail', id] as const,
   versions: (id: string) => [...componentKeys.all, 'versions', id] as const,
-  workflowUsages: (id: string) => [...componentKeys.all, 'workflow-usages', id] as const,
+  usages: (id: string) => [...componentKeys.all, 'usages', id] as const,
   deletionImpact: (href: string) => [...componentKeys.all, 'deletion-impact', href] as const,
   domains: () => ['domains'] as const,
-  nameAvailability: (name: string) => [...componentKeys.all, 'name-availability', name] as const,
+  nameAvailability: (name: string, excludeId?: string) =>
+    [...componentKeys.all, 'name-availability', name, excludeId ?? null] as const,
 };
 
 /**
- * Whether `name` is still free for a new component lineage.
+ * Whether `name` is still free for a new lineage - of either kind, names are one key.
  *
  * Used while configuring an upload so a collision is resolved (rename, or reuse the
  * existing component) before anything is written - rather than surfacing as a 409 after
  * the whole file has been submitted. Callers are expected to debounce `name` themselves.
  */
-export const useParseComponent = () => {
-  return useMutation({ mutationFn: (file: File) => componentsService.parse(file) });
-};
-
-export const usePackagePreview = () => {
-  return useMutation({ mutationFn: (repoUrl: string) => componentsService.packagePreview(repoUrl) });
-};
-
-export const useComponentNameAvailability = (name: string) => {
+export const useComponentNameAvailability = (name: string, excludeId?: string) => {
   const trimmed = name.trim();
   return useQuery({
-    queryKey: componentKeys.nameAvailability(trimmed),
-    queryFn: () => componentsService.checkNameAvailability(trimmed),
+    queryKey: componentKeys.nameAvailability(trimmed, excludeId),
+    queryFn: () => componentsService.checkNameAvailability(trimmed, excludeId),
     enabled: trimmed.length > 0,
     staleTime: 30_000,
   });
@@ -82,7 +70,7 @@ export const useInfiniteComponents = (params: Omit<ComponentListQueryParams, 'of
   });
 };
 
-export const useMyComponents = (params: MineQueryParams) => {
+export const useMyComponents = (params: MyComponentsQueryParams) => {
   return useQuery({
     queryKey: componentKeys.mine(params),
     queryFn: () => componentsService.getMine(params),
@@ -90,10 +78,10 @@ export const useMyComponents = (params: MineQueryParams) => {
   });
 };
 
-export const useLatestComponents = (limit?: number) => {
+export const useLatestComponents = (limit?: number, kind?: ComponentKind) => {
   return useQuery({
-    queryKey: componentKeys.latest(limit),
-    queryFn: () => componentsService.getLatest(limit),
+    queryKey: componentKeys.latest(limit, kind),
+    queryFn: () => componentsService.getLatest(limit, kind),
     select: (dtos) => componentTransformer.toListDisplayModels(dtos),
   });
 };
@@ -107,10 +95,11 @@ export const useComponent = (id: string) => {
   });
 };
 
-export const useComponentWorkflowUsages = (id: string) => {
+/** The workflows running this component - its parents in the composite. */
+export const useComponentUsages = (id: string) => {
   return useQuery({
-    queryKey: componentKeys.workflowUsages(id),
-    queryFn: () => componentsService.getWorkflowUsages(id),
+    queryKey: componentKeys.usages(id),
+    queryFn: () => componentsService.getUsages(id),
     enabled: !!id,
   });
 };
@@ -143,57 +132,33 @@ export const useDomains = () => {
   });
 };
 
-export const useUploadComponent = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ file, dto }: { file: File; dto: CreateComponentDto }) =>
-      componentsService.upload(file, dto),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: componentKeys.all });
-    },
-  });
-};
-
-export const useAddManualVersion = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ id, file, dto }: { id: string; file: File; dto: AddVersionDto }) =>
-      componentsService.addManualVersion(id, file, dto),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: componentKeys.all });
-      queryClient.invalidateQueries({ queryKey: componentKeys.versions(variables.id) });
-    },
-  });
-};
-
-export const usePackageComponent = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (dto: PackageComponentDto) => componentsService.package(dto),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: componentKeys.all });
-    },
-  });
-};
+export interface DeleteComponentVariables {
+  link: HateoasLink;
+  /** workflows only - also delete the builder canvas it was synced from */
+  deleteLinkedDraft?: boolean;
+}
 
 export const useDeleteComponent = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (link: HateoasLink) => componentsService.delete(link),
+    mutationFn: ({ link, deleteLinkedDraft = false }: DeleteComponentVariables) =>
+      componentsService.delete(link, deleteLinkedDraft),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: componentKeys.all });
     },
   });
 };
 
+export const useDownloadComponent = () => {
+  return useMutation({ mutationFn: (id: string) => componentsService.download(id) });
+};
 
 export const usePublishComponent = () =>
-  useCommandMutation(componentKeys.all, (link: HateoasLink) =>
-    componentsService.executeCommand(link, { command: ComponentCommand.PUBLISH }),
+  useCommandMutation(
+    componentKeys.all,
+    ({ link, publishComponents }: { link: HateoasLink; publishComponents?: boolean }) =>
+      componentsService.executeCommand(link, { command: ComponentCommand.PUBLISH, publishComponents }),
   );
 
 export const useUnpublishComponent = () =>
@@ -209,13 +174,6 @@ export const useUpdateComponentDescription = () =>
 export const useUpdateComponentDomains = () =>
   useCommandMutation(componentKeys.all, ({ link, domains }: { link: HateoasLink; domains: string[] }) =>
     componentsService.executeCommand(link, { command: ComponentCommand.UPDATE_DOMAIN, domains }),
-  );
-
-export const useUpdateComponentFormatLabels = () =>
-  useCommandMutation(
-    componentKeys.all,
-    ({ link, formatLabels }: { link: HateoasLink; formatLabels: FormatLabelDto[] }) =>
-      componentsService.executeCommand(link, { command: ComponentCommand.UPDATE_FORMAT_LABELS, formatLabels }),
   );
 
 export const useToggleFavorite = () =>

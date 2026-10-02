@@ -1,28 +1,35 @@
 import type { CSSProperties } from 'react';
 import type {
   ComponentCreatorDto,
-  ComponentDetailDto,
-  ComponentListItemDto,
+  ComponentDetailBaseDto,
+  ComponentKind,
+  ComponentListItemBaseDto,
   ComponentMatchDto,
-  ComponentPreviewDto,
   DomainDto,
   FormatLabelSource,
   ParameterDto,
 } from './types';
 import { ComponentSource, ComponentStatus, ParameterDirection } from './types';
-import type { UpdateComponentFormData } from './schema';
 import { formatDate, getCreatorDisplay } from '@/api/transformer';
 import type { WithHateoasLinks } from '@/api/types';
-import { buildDockerPullUrl } from '@/lib/dockerImage';
 
-const SOURCE_LABELS: Record<ComponentSource, string> = {
+// The shared half of every display model. Kind-specific transformers (api/tools,
+// api/workflows) build on these helpers; api/components/variants dispatches between them.
+
+export const SOURCE_LABELS: Record<ComponentSource, string> = {
   [ComponentSource.AUTOMATED_PACKAGING]: 'Packaged from GitHub',
   [ComponentSource.MANUAL_UPLOAD]: 'Manual upload',
+  [ComponentSource.WORKFLOW_BUILDER]: 'Built in Workflow Builder',
 };
 
-const COMPONENT_STATUS_LABELS: Record<ComponentStatus, string> = {
+export const STATUS_LABELS: Record<ComponentStatus, string> = {
   [ComponentStatus.DRAFT]: 'Draft',
   [ComponentStatus.PUBLISHED]: 'Published',
+};
+
+export const KIND_LABELS: Record<ComponentKind, string> = {
+  tool: 'Tool',
+  workflow: 'Workflow',
 };
 
 const DIRECTION_LABELS: Record<ParameterDirection, string> = {
@@ -30,12 +37,14 @@ const DIRECTION_LABELS: Record<ParameterDirection, string> = {
   [ParameterDirection.OUTPUT]: 'Output',
 };
 
-export interface ComponentDisplayModel extends WithHateoasLinks {
+/** What every list display model carries, whatever the kind. */
+export interface ComponentDisplayModelBase extends WithHateoasLinks {
+  kind: ComponentKind;
+  kindDisplay: string;
   id: string;
   name: string;
   description: string | null;
   authorDisplay: string;
-  repoUrl: string | null;
   version: number;
   domains: string[];
   domainsDisplay: string[];
@@ -44,8 +53,24 @@ export interface ComponentDisplayModel extends WithHateoasLinks {
   createdAt: Date;
   createdAtDisplay: string;
   isFavorite: boolean;
+  /** the component's ports - a workflow's are its own inputs/outputs */
   parameters: ParameterDisplayModel[];
   match: ComponentMatchDto | null;
+}
+
+/** What every detail display model carries on top, whatever the kind. */
+export interface ComponentDetailFields {
+  source: ComponentSource;
+  sourceDisplay: string;
+  repoUrl: string | null;
+  repoCommitSha: string | null;
+  repoCommitShaShort: string | null;
+  doi: string | null;
+  cwlContent: string;
+  updatedAt: Date;
+  updatedAtDisplay: string;
+  inputs: ParameterDisplayModel[];
+  outputs: ParameterDisplayModel[];
 }
 
 export interface ParameterDisplayModel {
@@ -63,29 +88,11 @@ export interface ParameterDisplayModel {
   directionDisplay: string;
 }
 
-export interface ComponentDetailDisplayModel extends ComponentDisplayModel {
-  source: ComponentSource;
-  sourceDisplay: string;
-  repoCommitSha: string | null;
-  repoCommitShaShort: string | null;
-  doi: string | null;
-  cwlContent: string;
-  cwlType: string | null;
-  dockerfileContent: string | null;
-  dockerPullReference: string | null;
-  dockerPullUrl: string | null;
-  updatedAt: Date;
-  updatedAtDisplay: string;
-  parameters: ParameterDisplayModel[];
-  inputs: ParameterDisplayModel[];
-  outputs: ParameterDisplayModel[];
-}
-
 /**
  * Who a component is credited to: its author name (free text - e.g. the MoveApps author a
  * packaged app declares), else the user who uploaded it, else "Unknown".
  */
-function getAuthorDisplay(authorName: string | null, createdBy: ComponentCreatorDto | null): string {
+export function getAuthorDisplay(authorName: string | null, createdBy: ComponentCreatorDto | null): string {
   const author = authorName?.trim();
   if (author) return author;
   return getCreatorDisplay(createdBy);
@@ -105,126 +112,59 @@ export function getDomainBadgeStyle(domainId: string, domains: DomainDto[]): CSS
   return { borderColor: color, color, backgroundColor: `${color}1A` };
 }
 
-export const componentTransformer = {
-  getInitialUpdateFormValues(component: ComponentDisplayModel): UpdateComponentFormData {
-    return { domains: component.domains, description: component.description ?? '' };
-  },
+export function toParameterDisplayModel(parameter: ParameterDto): ParameterDisplayModel {
+  return {
+    ...parameter,
+    directionDisplay: DIRECTION_LABELS[parameter.direction],
+  };
+}
 
-  toParameterDisplayModel(parameter: ParameterDto): ParameterDisplayModel {
-    return {
-      ...parameter,
-      directionDisplay: DIRECTION_LABELS[parameter.direction],
-    };
-  },
+export function splitPorts(parameters: ParameterDisplayModel[]): Pick<ComponentDetailFields, 'inputs' | 'outputs'> {
+  return {
+    inputs: parameters.filter((p) => p.direction === ParameterDirection.INPUT),
+    outputs: parameters.filter((p) => p.direction === ParameterDirection.OUTPUT),
+  };
+}
 
-  toDisplayModel(dto: ComponentListItemDto): ComponentDisplayModel {
-    const createdAt = new Date(dto.createdAt);
-    return {
-      id: dto.id,
-      name: dto.name,
-      description: dto.description,
-      authorDisplay: getAuthorDisplay(dto.authorName, dto.createdBy),
-      repoUrl: dto.repoUrl,
-      version: dto.version,
-      domains: dto.domains,
-      domainsDisplay: dto.domains.map(getDomainLabel),
-      status: dto.status,
-      statusDisplay: COMPONENT_STATUS_LABELS[dto.status],
-      createdAt,
-      createdAtDisplay: formatDate(createdAt),
-      isFavorite: dto.isFavorite,
-      parameters: dto.parameters?.map(componentTransformer.toParameterDisplayModel) ?? [],
-      match: dto.match ?? null,
-      _links: dto._links,
-    };
-  },
+/** The base list display fields of any component DTO. */
+export function toDisplayModelBase(dto: ComponentListItemBaseDto): ComponentDisplayModelBase {
+  const createdAt = new Date(dto.createdAt);
+  return {
+    kind: dto.kind,
+    kindDisplay: KIND_LABELS[dto.kind],
+    id: dto.id,
+    name: dto.name,
+    description: dto.description,
+    authorDisplay: getAuthorDisplay(dto.authorName, dto.createdBy),
+    version: dto.version,
+    domains: dto.domains,
+    domainsDisplay: dto.domains.map(getDomainLabel),
+    status: dto.status,
+    statusDisplay: STATUS_LABELS[dto.status],
+    createdAt,
+    createdAtDisplay: formatDate(createdAt),
+    isFavorite: dto.isFavorite,
+    parameters: dto.parameters?.map(toParameterDisplayModel) ?? [],
+    match: dto.match ?? null,
+    _links: dto._links,
+  };
+}
 
-  toListDisplayModels(dtos: ComponentListItemDto[]): ComponentDisplayModel[] {
-    // self-reference by name, not `this` - toListDisplayModel() passes this method
-    // around as a bare function reference, which would drop a `this` binding
-    return dtos.map((dto) => componentTransformer.toDisplayModel(dto));
-  },
-
-  /**
-   * A detail display model for a component that does NOT exist yet, so the same
-   * read-only ComponentTabs used on the detail page can preview a workflow upload's
-   * steps before anything is saved.
-   *
-   * The identity fields are placeholders: `id` is empty (ComponentTabs must be rendered
-   * with `isPreview` so it never builds a server download URL from it), `version` is 1
-   * and `status` is DRAFT because that is what creating this component would produce.
-   */
-  toPreviewDisplayModel(
-    preview: ComponentPreviewDto,
-    overrides: {
-      name?: string;
-      domains?: string[];
-      description?: string | null;
-      source?: ComponentSource;
-      repoUrl?: string | null;
-      version?: number;
-    } = {},
-  ): ComponentDetailDisplayModel {
-    const now = new Date();
-    const name = overrides.name?.trim() || 'Component';
-    const domains = overrides.domains ?? [];
-    const description = overrides.description?.trim() || preview.description;
-    const parameters = preview.parameters.map(componentTransformer.toParameterDisplayModel);
-    const source = overrides.source ?? ComponentSource.MANUAL_UPLOAD;
-    return {
-      id: '',
-      name,
-      description,
-      authorDisplay: 'You',
-      repoUrl: overrides.repoUrl ?? null,
-      version: overrides.version ?? 1,
-      domains,
-      domainsDisplay: domains.map(getDomainLabel),
-      status: ComponentStatus.DRAFT,
-      statusDisplay: COMPONENT_STATUS_LABELS[ComponentStatus.DRAFT],
-      createdAt: now,
-      createdAtDisplay: formatDate(now),
-      isFavorite: false,
-      match: null,
-      source,
-      sourceDisplay: SOURCE_LABELS[source],
-      repoCommitSha: null,
-      repoCommitShaShort: null,
-      doi: null,
-      cwlContent: preview.cwlContent,
-      cwlType: preview.cwlType,
-      dockerfileContent: preview.dockerfileContent,
-      dockerPullReference: preview.dockerPullReference,
-      dockerPullUrl: preview.dockerPullReference ? buildDockerPullUrl(preview.dockerPullReference) : null,
-      updatedAt: now,
-      updatedAtDisplay: formatDate(now),
-      parameters,
-      inputs: parameters.filter((p) => p.direction === ParameterDirection.INPUT),
-      outputs: parameters.filter((p) => p.direction === ParameterDirection.OUTPUT),
-    };
-  },
-
-  toDetailDisplayModel(dto: ComponentDetailDto): ComponentDetailDisplayModel {
-    const updatedAt = new Date(dto.updatedAt);
-    const parameters = dto.parameters.map(this.toParameterDisplayModel);
-    return {
-      ...this.toDisplayModel(dto),
-      authorDisplay: getAuthorDisplay(dto.authorName, dto.createdBy),
-      source: dto.source,
-      sourceDisplay: SOURCE_LABELS[dto.source],
-      repoCommitSha: dto.repoCommitSha,
-      repoCommitShaShort: dto.repoCommitSha ? dto.repoCommitSha.slice(0, 8) : null,
-      doi: dto.doi,
-      cwlContent: dto.cwlContent,
-      cwlType: dto.cwlType,
-      dockerfileContent: dto.dockerfileContent,
-      dockerPullReference: dto.dockerPullReference,
-      dockerPullUrl: dto.dockerPullReference ? buildDockerPullUrl(dto.dockerPullReference) : null,
-      updatedAt,
-      updatedAtDisplay: formatDate(updatedAt),
-      parameters,
-      inputs: parameters.filter((p) => p.direction === ParameterDirection.INPUT),
-      outputs: parameters.filter((p) => p.direction === ParameterDirection.OUTPUT),
-    };
-  },
-};
+/** The detail fields shared by both kinds. */
+export function toDetailFields(dto: ComponentDetailBaseDto): ComponentDetailFields & { parameters: ParameterDisplayModel[] } {
+  const updatedAt = new Date(dto.updatedAt);
+  const parameters = dto.parameters.map(toParameterDisplayModel);
+  return {
+    source: dto.source,
+    sourceDisplay: SOURCE_LABELS[dto.source],
+    repoUrl: dto.repoUrl,
+    repoCommitSha: dto.repoCommitSha,
+    repoCommitShaShort: dto.repoCommitSha ? dto.repoCommitSha.slice(0, 8) : null,
+    doi: dto.doi,
+    cwlContent: dto.cwlContent,
+    updatedAt,
+    updatedAtDisplay: formatDate(updatedAt),
+    parameters,
+    ...splitPorts(parameters),
+  };
+}

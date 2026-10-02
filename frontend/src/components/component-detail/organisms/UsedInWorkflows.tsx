@@ -2,8 +2,7 @@ import { Link } from 'react-router-dom';
 import { Workflow } from 'lucide-react';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Card, CardContent } from '@/components/ui/card.tsx';
-import { useComponentWorkflowUsages } from '@/api/components';
-import { WorkflowStatus } from '@/api/workflows';
+import { ComponentStatus, useComponentUsages } from '@/api/components';
 import { ROUTES } from '@/lib/routes';
 
 interface UsedInWorkflowsProps {
@@ -11,8 +10,9 @@ interface UsedInWorkflowsProps {
   version: number;
 }
 
+/** The workflows running this component - a tool, or a workflow nested in them. */
 export function UsedInWorkflows({ componentId, version }: UsedInWorkflowsProps) {
-  const { data: usages, isLoading } = useComponentWorkflowUsages(componentId);
+  const { data: usages, isLoading } = useComponentUsages(componentId);
 
   return (
     <Card className="mt-6">
@@ -36,14 +36,15 @@ export function UsedInWorkflows({ componentId, version }: UsedInWorkflowsProps) 
                   >
                     {usage.name}
                   </Link>
+                  <span className="text-xs text-slate-500">v{usage.version}</span>
                   {otherVersions.length > 0 && (
                     <Badge variant="secondary" title="The component version this workflow's steps use">
                       uses {usage.componentVersions.map((v) => `v${v}`).join(', ')}
                     </Badge>
                   )}
-                  {usage.status === WorkflowStatus.PENDING_VALIDATION && (
+                  {usage.status === ComponentStatus.DRAFT && (
                     <Badge variant="outline" className="border-amber-300 text-amber-700" title="Only visible to you">
-                      Pending validation
+                      Draft
                     </Badge>
                   )}
                 </li>

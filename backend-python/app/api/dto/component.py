@@ -1,59 +1,46 @@
+"""DTOs shared by every kind of component - the composite's uniform view.
+
+The kind-specific variants (tool.py, workflow.py) extend the base classes here; the unions
+an endpoint returns when it serves both kinds live in component_variants.py.
+"""
+
 import uuid
 from datetime import datetime
 from enum import StrEnum
-from urllib.parse import urlparse
 
-from fastapi import UploadFile
-from pydantic import Field, Json, field_validator
+from pydantic import Field, field_validator
 
 from app.api.dto.base import CamelModel
 from app.api.link.model import LinkModel
 from app.domain.compatibility.format_label import FormatLabelSource
 from app.domain.compatibility.port_check import ConnectionStatus
-from app.domain.models.component import MAX_DESCRIPTION_LENGTH, ComponentSource, ComponentStatus
+from app.domain.models.component import MAX_DESCRIPTION_LENGTH, ComponentKind, ComponentSource, ComponentStatus
 from app.domain.models.component_domain import VALID_DOMAINS
 from app.domain.models.parameter import ParameterDirection
-from app.domain.models.workflow import WorkflowStatus
+
+
+def _validate_domain_list(value: list[str]) -> list[str]:
+    if not value:
+        raise ValueError("at least one domain is required")
+    invalid = [d for d in value if d not in VALID_DOMAINS]
+    if invalid:
+        raise ValueError(f"domains must each be one of {VALID_DOMAINS}, got invalid: {invalid}")
+    seen: set[str] = set()
+    return [d for d in value if not (d in seen or seen.add(d))]
 
 
 class DomainsValidatorMixin:
-    """Shared by DTOs where `domains` is required - Update has its own (domains is optional there)."""
+    """Shared by DTOs where `domains` is required - the command DTO has its own (domains is optional there)."""
 
     @field_validator("domains")
     @classmethod
     def validate_domains(cls, value: list[str]) -> list[str]:
-        if not value:
-            raise ValueError("at least one domain is required")
-        invalid = [d for d in value if d not in VALID_DOMAINS]
-        if invalid:
-            raise ValueError(f"domains must each be one of {VALID_DOMAINS}, got invalid: {invalid}")
-        seen: set[str] = set()
-        return [d for d in value if not (d in seen or seen.add(d))]
-
-
-class RepoUrlValidatorMixin:
-    @field_validator("repo_url")
-    @classmethod
-    def validate_repo_url(cls, value: str | None) -> str | None:
-        if value is not None:
-            parsed = urlparse(value)
-            if not (parsed.scheme and parsed.netloc):
-                raise ValueError("repoUrl must be a valid URL")
-        return value
-
-
-class EmptyRepoCommitShaToNoneMixin:
-    # a blank Swagger/form field arrives as "", not omitted - without this, "" (not NULL)
-    # gets stored and collides with the partial unique index on (name, repo_commit_sha)
-    @field_validator("repo_commit_sha", mode="before")
-    @classmethod
-    def empty_repo_commit_sha_to_none(cls, value: str | None) -> str | None:
-        return None if value == "" else value
+        return _validate_domain_list(value)
 
 
 class EmptyDescriptionToNoneMixin:
-    # same blank-Swagger/form-field issue as above - an empty description must fall back
-    # to the CWL's own `doc:` field (see ComponentsService.create_manual /
+    # a blank Swagger/form field arrives as "", not omitted - an empty description must
+    # fall back to the CWL's own `doc:` field (see ToolsService.create_manual /
     # add_manual_version, which only auto-extract when description is None), not get
     # stored as "" verbatim
     @field_validator("description", mode="before")
@@ -75,6 +62,8 @@ class FormatLabelDto(CamelModel):
 
 
 class ParameterDto(CamelModel):
+    """One port of a component - a tool's input/output, or a workflow's own."""
+
     id: uuid.UUID
     name: str
     cwl_type: str
@@ -92,34 +81,29 @@ class ParameterDto(CamelModel):
     direction: ParameterDirection
 
 
+class PreviewParameterDto(CamelModel):
+    """A previewed port. Deliberately NOT ParameterDto: that carries a real uuid primary
+    key, and these are never persisted - the id here is a synthetic, stable-within-one-
+    response string that only exists to give the UI a list key."""
+
+    id: str
+    name: str
+    cwl_type: str
+    default_value: str | None
+    description: str | None
+    format: str | None
+    format_label: str | None
+    ontology_url: str | None
+    format_label_source: FormatLabelSource | None
+    accepts_manual_format_label: bool
+    direction: ParameterDirection
+
+
 class ComponentCreatorDto(CamelModel):
     id: uuid.UUID
     email: str
     first_name: str | None
     last_name: str | None
-
-
-class ComponentListItemDto(CamelModel, LinkModel):
-    id: uuid.UUID
-    name: str
-    description: str | None
-    author_name: str | None
-    # the uploading user - the frontend shows them when author_name is empty
-    created_by: ComponentCreatorDto | None
-    repo_url: str | None
-    version: int
-    domains: list[str]
-    status: ComponentStatus
-    created_at: datetime
-    is_favorite: bool
-    # opt-in only (`?includeParameters=true`), hence None rather than []: browse/home/mine
-    # never read it and shouldn't pay for it, while the workflow builder needs the ports of
-    # every listed component at once to rank its palette. Costs no extra query - the
-    # relationship is already lazy="selectin", so these rows are loaded either way.
-    parameters: list[ParameterDto] | None = None
-    # only present when the request passed `rankAgainst` - how this component fits the
-    # builder canvas it was ranked against (null: nothing on the canvas fits it)
-    match: "ComponentMatchDto | None" = None
 
 
 class ComponentMatchDto(CamelModel):
@@ -134,13 +118,64 @@ class ComponentMatchDto(CamelModel):
     component_name: str | None
 
 
-class ComponentWorkflowUsageDto(CamelModel):
-    """A workflow using some version(s) of a component - "Used in these workflows"."""
+class ComponentListItemBaseDto(CamelModel, LinkModel):
+    """What every list row carries, whatever the kind - see ToolListItemDto / WorkflowListItemDto."""
+
+    kind: ComponentKind
+    id: uuid.UUID
+    name: str
+    description: str | None
+    author_name: str | None
+    # the uploading user - the frontend shows them when author_name is empty
+    created_by: ComponentCreatorDto | None
+    version: int
+    domains: list[str]
+    status: ComponentStatus
+    created_at: datetime
+    is_favorite: bool
+    # opt-in only (`?includeParameters=true`), hence None rather than []: browse/home/mine
+    # never read it and shouldn't pay for it, while the workflow builder needs the ports of
+    # every listed component at once to rank its palette. Costs no extra query - the
+    # relationship is already lazy="selectin", so these rows are loaded either way.
+    parameters: list[ParameterDto] | None = None
+    # only present when the request passed `rankAgainst` - how this component fits the
+    # builder canvas it was ranked against (null: nothing on the canvas fits it)
+    match: ComponentMatchDto | None = None
+
+
+class ComponentDetailBaseDto(CamelModel, LinkModel):
+    """What every detail view carries, whatever the kind - see ToolDetailDto / WorkflowDetailDto."""
+
+    kind: ComponentKind
+    id: uuid.UUID
+    name: str
+    author_name: str | None
+    created_by: ComponentCreatorDto | None
+    description: str | None
+    repo_url: str | None
+    repo_commit_sha: str | None
+    doi: str | None
+    version: int
+    cwl_content: str
+    ontology_url: str | None
+    domains: list[str]
+    source: ComponentSource
+    status: ComponentStatus
+    #: the component's ports - a workflow's are its own inputs/outputs
+    parameters: list[ParameterDto]
+    created_at: datetime
+    updated_at: datetime
+    is_favorite: bool
+
+
+class ComponentUsageDto(CamelModel):
+    """A workflow version running some version(s) of a component - "Used in these workflows"."""
 
     id: uuid.UUID
     name: str
-    #: pending_validation only ever shows up for the viewer's own workflows
-    status: WorkflowStatus
+    version: int
+    #: draft only ever shows up for the viewer's own workflows
+    status: ComponentStatus
     #: which versions of the component its steps use, ascending
     component_versions: list[int]
 
@@ -154,93 +189,30 @@ class ComponentDeletionImpactDto(CamelModel):
     """What deleting this exact version touches - the delete dialog's usage warning.
     Other users' private workflows and drafts are only counted, never named."""
 
-    workflows: list[ComponentWorkflowUsageDto]
+    workflows: list[ComponentUsageDto]
     hidden_workflow_count: int
     drafts: list[ComponentDeletionDraftDto]
     other_draft_count: int
-
-
-class ComponentDetailDto(CamelModel, LinkModel):
-    id: uuid.UUID
-    name: str
-    author_name: str | None
-    created_by: ComponentCreatorDto | None
-    description: str | None
-    repo_url: str | None
-    repo_commit_sha: str | None
-    doi: str | None
-    version: int
-    cwl_content: str
-    cwl_type: str | None
-    dockerfile_content: str | None
-    docker_pull_reference: str | None
-    ontology_url: str | None
-    domains: list[str]
-    source: ComponentSource
-    status: ComponentStatus
-    parameters: list[ParameterDto]
-    created_at: datetime
-    updated_at: datetime
-    is_favorite: bool
-
-
-class PreviewParameterDto(CamelModel):
-    """A previewed component port. Deliberately NOT ParameterDto: that carries a real
-    uuid primary key, and these are never persisted - the id here is a synthetic,
-    stable-within-one-response string that only exists to give the UI a list key."""
-
-    id: str
-    name: str
-    cwl_type: str
-    default_value: str | None
-    description: str | None
-    format: str | None
-    format_label: str | None
-    # the owning component's ontology (Component.ontology_url), repeated per port so the
-    # builder can tell from a port alone whether two formats are comparable
-    ontology_url: str | None
-    #: where format_label came from - null when there is neither label nor ontology format
-    format_label_source: FormatLabelSource | None
-    #: whether a hand-written label may be set on this port (UPDATE_FORMAT_LABELS, upload)
-    accepts_manual_format_label: bool
-    direction: ParameterDirection
-
-
-class ComponentPreviewDto(CamelModel):
-    """Everything read out of a CWL document without persisting it.
-
-    Shared by both upload flows: /components/parse returns exactly this, and the workflow
-    upload's per-step ComponentPreviewDto extends it with the step it came from.
-    """
-
-    description: str | None
-    cwl_content: str
-    cwl_type: str | None
-    dockerfile_content: str | None
-    docker_pull_reference: str | None
-    ontology_url: str | None
-    parameters: list[PreviewParameterDto]
-
-
-class ParseComponentRequestDto(CamelModel):
-    cwl_file: UploadFile
 
 
 class ExistingComponentDto(CamelModel):
     """The component currently holding a name, returned when that name is taken."""
 
     id: uuid.UUID
+    kind: ComponentKind
     name: str
     version: int
     domains: list[str]
     status: ComponentStatus
+    created_at: datetime
     can_add_version: bool
 
 
 class NameAvailabilityDto(CamelModel):
-    """Whether a component name can still be claimed. Lets a caller warn (and offer to
-    reuse the existing component) while the user is typing, instead of only failing with
-    a 409 after the whole upload has been submitted."""
+    """Whether a name can still be claimed for a new lineage - of either kind, since names
+    are one key across tools and workflows. Lets a caller warn (and offer to reuse the
+    existing component) while the user is typing, instead of only failing with a 409
+    after the whole upload has been submitted."""
 
     name: str
     available: bool
@@ -248,76 +220,13 @@ class NameAvailabilityDto(CamelModel):
     existing: ExistingComponentDto | None
 
 
-class CreateComponentRequestDto(
-    DomainsValidatorMixin, RepoUrlValidatorMixin, EmptyRepoCommitShaToNoneMixin, EmptyDescriptionToNoneMixin, CamelModel
-):
-    name: str
-    # json_schema_extra adds the enum purely so Swagger UI renders a dropdown -
-    # the actual type stays plain str, validated for real by DomainsValidatorMixin.
-    # Repeated multipart field, exactly like CreateWorkflowRequestDto.domains.
-    domains: list[str] = Field(json_schema_extra={"items": {"enum": VALID_DOMAINS}})
-    cwl_file: UploadFile
-    author_name: str | None = None
-    repo_url: str | None = None
-    repo_commit_sha: str | None = None
-    description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
-    #: hand-written labels for File ports without an ontology format - one multipart form
-    #: field carrying a JSON-encoded array, like CreateWorkflowRequestDto.component_configs.
-    format_labels: Json[list[FormatLabelDto]] = Field(default="[]", validate_default=True)
-
-    @field_validator("repo_url", mode="before")
-    @classmethod
-    def empty_repo_url_to_none(cls, value: str | None) -> str | None:
-        return None if value == "" else value
-
-
-class AddVersionRequestDto(EmptyRepoCommitShaToNoneMixin, EmptyDescriptionToNoneMixin, CamelModel):
-    cwl_file: UploadFile
-    repo_commit_sha: str | None = None
-    description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
-
-
-class PackageComponentRequestDto(DomainsValidatorMixin, RepoUrlValidatorMixin, EmptyDescriptionToNoneMixin, CamelModel):
-    repo_url: str
-    domains: list[str] = Field(json_schema_extra={"items": {"enum": VALID_DOMAINS}})
-    description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
-    #: name for a new lineage (defaults to the repo name) - ignored when the repo is
-    #: already packaged, since a new version keeps its lineage's name
-    name: str | None = None
-    #: hand-written labels for the generated File ports, as reviewed in the preview
-    format_labels: list[FormatLabelDto] = []
-    #: commit the preview was generated from - packaging fails with 409 if the repo has
-    #: moved on since, so nothing unreviewed gets saved
-    expected_commit_sha: str | None = None
-
-
-class PackagePreviewRequestDto(RepoUrlValidatorMixin, CamelModel):
-    repo_url: str
-
-
-class PackagePreviewDto(ComponentPreviewDto):
-    """A GitHub repo packaged but not persisted (POST /components/package/preview)."""
-
-    repo_name: str
-    repo_url: str
-    commit_sha: str
-    author: str | None
-    #: latest version of the lineage already packaged from this repo - creating then
-    #: adds a new version to it instead of a new component
-    existing: ExistingComponentDto | None
-    #: the repo's current commit is already packaged as `existing`
-    already_packaged: bool
-
-
 class ComponentCommandTypesApiV1(StrEnum):
     ADD_FAVORITE = "ADD_FAVORITE"
     REMOVE_FAVORITE = "REMOVE_FAVORITE"
-    REPACKAGE = "REPACKAGE"
     PUBLISH = "PUBLISH"
     UNPUBLISH = "UNPUBLISH"
     UPDATE_DESCRIPTION = "UPDATE_DESCRIPTION"
     UPDATE_DOMAIN = "UPDATE_DOMAIN"
-    UPDATE_FORMAT_LABELS = "UPDATE_FORMAT_LABELS"
 
 
 class ComponentCommandExecuteRequestDto(EmptyDescriptionToNoneMixin, CamelModel):
@@ -333,21 +242,12 @@ class ComponentCommandExecuteRequestDto(EmptyDescriptionToNoneMixin, CamelModel)
         json_schema_extra={"items": {"enum": VALID_DOMAINS}},
         description="New domains; only used by the UPDATE_DOMAIN command",
     )
-    format_labels: list[FormatLabelDto] | None = Field(
-        default=None,
-        description="Hand-written labels for File ports without an ontology format; only used by the "
-        "UPDATE_FORMAT_LABELS command",
+    publish_components: bool = Field(
+        default=False,
+        description="PUBLISH of a workflow only: also publish the draft components it runs, at any depth",
     )
 
     @field_validator("domains")
     @classmethod
     def validate_domains(cls, value: list[str] | None) -> list[str] | None:
-        if value is None:
-            return None
-        if not value:
-            raise ValueError("at least one domain is required")
-        invalid = [d for d in value if d not in VALID_DOMAINS]
-        if invalid:
-            raise ValueError(f"domains must each be one of {VALID_DOMAINS}, got invalid: {invalid}")
-        seen: set[str] = set()
-        return [d for d in value if not (d in seen or seen.add(d))]
+        return None if value is None else _validate_domain_list(value)

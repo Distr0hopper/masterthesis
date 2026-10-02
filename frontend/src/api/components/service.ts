@@ -1,28 +1,27 @@
 import { apiClient } from '../client';
-import type { HateoasLink, MineQueryParams, PageResponse } from '@/api/types';
+import type { HateoasLink, PageResponse } from '@/api/types';
 import type {
-  AddVersionDto,
   ComponentCommandExecuteRequest,
   ComponentDeletionImpactDto,
   ComponentDetailDto,
+  ComponentKind,
   ComponentListItemDto,
   ComponentListQueryParams,
-  ComponentPreviewDto,
-  ComponentWorkflowUsageDto,
-  CreateComponentDto,
+  ComponentUsageDto,
   DomainDto,
+  MyComponentsQueryParams,
   MyComponentsResponseDto,
   NameAvailabilityDto,
-  PackageComponentDto,
-  PackagePreviewDto,
 } from './types';
 
 const ENDPOINT = '/components';
 
+/** Everything that works the same for a tool and a workflow - the composite's uniform API. */
 export const componentsService = {
   getAll(params: ComponentListQueryParams): Promise<PageResponse<ComponentListItemDto>> {
     return apiClient.get(ENDPOINT, {
       params: {
+        kind: params.kind,
         domain: params.domain?.length ? params.domain : undefined,
         excludeMine: params.excludeMine || undefined,
         favoritesOnly: params.favoritesOnly || undefined,
@@ -36,9 +35,10 @@ export const componentsService = {
     });
   },
 
-  getMine(params: MineQueryParams): Promise<MyComponentsResponseDto> {
+  getMine(params: MyComponentsQueryParams): Promise<MyComponentsResponseDto> {
     return apiClient.get(`${ENDPOINT}/mine`, {
       params: {
+        kind: params.kind,
         limit: params.limit,
         publishedOffset: params.publishedOffset,
         unpublishedOffset: params.unpublishedOffset,
@@ -46,8 +46,8 @@ export const componentsService = {
     });
   },
 
-  getLatest(limit?: number): Promise<ComponentListItemDto[]> {
-    return apiClient.get(`${ENDPOINT}/latest`, { params: { limit } });
+  getLatest(limit?: number, kind?: ComponentKind): Promise<ComponentListItemDto[]> {
+    return apiClient.get(`${ENDPOINT}/latest`, { params: { limit, kind } });
   },
 
   getById(id: string): Promise<ComponentDetailDto> {
@@ -58,65 +58,34 @@ export const componentsService = {
     return apiClient.get(`${ENDPOINT}/${id}/versions`);
   },
 
-  getWorkflowUsages(id: string): Promise<ComponentWorkflowUsageDto[]> {
-    return apiClient.get(`${ENDPOINT}/${id}/workflows`);
+  /** The workflows running this component - a tool, or a nested workflow. */
+  getUsages(id: string): Promise<ComponentUsageDto[]> {
+    return apiClient.get(`${ENDPOINT}/${id}/usages`);
   },
 
   getDownloadUrl(id: string): string {
     return `${apiClient.baseURL}${ENDPOINT}/${id}/download`;
   },
 
-  getBundleUrl(id: string): string {
-    return `${apiClient.baseURL}${ENDPOINT}/${id}/bundle`;
-  },
-
-  upload(file: File, dto: CreateComponentDto): Promise<ComponentDetailDto> {
-    const formData = new FormData();
-    formData.append('cwlFile', file);
-    formData.append('name', dto.name);
-    dto.domains.forEach((domain) => formData.append('domains', domain));
-    if (dto.authorName) formData.append('authorName', dto.authorName);
-    if (dto.description) formData.append('description', dto.description);
-    if (dto.formatLabels?.length) formData.append('formatLabels', JSON.stringify(dto.formatLabels));
-    return apiClient.post(ENDPOINT, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-  },
-
-  addManualVersion(id: string, file: File, dto: AddVersionDto): Promise<ComponentDetailDto> {
-    const formData = new FormData();
-    formData.append('cwlFile', file);
-    if (dto.repoCommitSha) formData.append('repoCommitSha', dto.repoCommitSha);
-    if (dto.description) formData.append('description', dto.description);
-    return apiClient.post(`${ENDPOINT}/${id}/versions`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-  },
-
-  package(dto: PackageComponentDto): Promise<ComponentDetailDto> {
-    return apiClient.post(`${ENDPOINT}/package`, dto);
+  // getBlob, not a plain link: a draft is only downloadable with the Authorization header
+  download(id: string): Promise<{ blob: Blob; filename: string }> {
+    return apiClient.getBlob(`${ENDPOINT}/${id}/download`, 'component');
   },
 
   getDeletionImpact(link: HateoasLink): Promise<ComponentDeletionImpactDto> {
     return apiClient.request(link);
   },
 
-  delete(link: HateoasLink): Promise<void> {
-    return apiClient.request(link);
+  /** deleteLinkedDraft: workflows only - also delete the builder canvas it was synced from */
+  delete(link: HateoasLink, deleteLinkedDraft = false): Promise<void> {
+    return apiClient.request(link, undefined, {
+      params: deleteLinkedDraft ? { deleteLinkedDraft: true } : undefined,
+    });
   },
 
-  // detection/parsing only - the backend never persists anything from this call
-  parse(file: File): Promise<ComponentPreviewDto> {
-    const formData = new FormData();
-    formData.append('cwlFile', file);
-    return apiClient.post(`${ENDPOINT}/parse`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-  },
-
-  // packages the repo but persists nothing - the GitHub counterpart of parse()
-  packagePreview(repoUrl: string): Promise<PackagePreviewDto> {
-    return apiClient.post(`${ENDPOINT}/package/preview`, { repoUrl });
-  },
-
-  checkNameAvailability(name: string): Promise<NameAvailabilityDto> {
-    return apiClient.get(`${ENDPOINT}/name-availability`, { params: { name } });
+  /** excludeId: a component trivially holds its own name - leave its lineage out of the check */
+  checkNameAvailability(name: string, excludeId?: string): Promise<NameAvailabilityDto> {
+    return apiClient.get(`${ENDPOINT}/name-availability`, { params: { name, excludeId } });
   },
 
   getDomains(): Promise<DomainDto[]> {

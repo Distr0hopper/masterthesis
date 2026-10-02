@@ -9,12 +9,12 @@ import { Textarea } from '@/components/ui/textarea.tsx';
 import { ComponentPickerDialog } from '@/components/common/ComponentPickerDialog';
 import { ComponentLink } from '@/components/common/ComponentLink';
 import { DefinitionDisclosure } from '@/components/common/DefinitionDisclosure';
-import { ComponentTabs } from '@/components/component-detail/organisms/ComponentTabs';
+import { ToolTabs } from '@/components/tool-detail/organisms/ToolTabs';
 import { DomainMultiSelect } from '@/components/common/DomainMultiSelect';
 import { FormatLabelFields } from '@/components/common/FormatLabelFields';
 import { ComponentOrigin, type WorkflowStepPreviewDto } from '@/api/workflows';
+import { toolTransformer } from '@/api/tools';
 import {
-  componentTransformer,
   withFormatLabels,
   useComponent,
   useComponentNameAvailability,
@@ -57,7 +57,8 @@ export function ComponentConfigCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reused?.id, reused?.name, reused?.version]);
 
-  const model = componentTransformer.toPreviewDisplayModel(
+  // a step's own CWL always previews as the tool it would become
+  const model = toolTransformer.toPreviewDisplayModel(
     { ...preview, parameters: withFormatLabels(preview.parameters, config.formatLabels) },
     {
       name: config.name,
@@ -114,7 +115,7 @@ export function ComponentConfigCard({
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 <span className="flex flex-wrap items-center gap-1">
                   This name is already taken by
-                  <ComponentLink componentId={taken.id} name={taken.name} version={taken.version} />
+                  <ComponentLink componentId={taken.id} kind={taken.kind} name={taken.name} version={taken.version} />
                 </span>
                 <Button
                   type="button"
@@ -190,7 +191,7 @@ export function ComponentConfigCard({
         {error && <p className="text-sm text-error-foreground">{error}</p>}
 
         <DefinitionDisclosure open={expanded} onOpenChange={setExpanded} label="extracted definition">
-          <ComponentTabs model={model} isPreview />
+          <ToolTabs model={model} isPreview />
         </DefinitionDisclosure>
       </CardContent>
     </Card>

@@ -1,5 +1,4 @@
 import { useLatestComponents } from '@/api/components';
-import { useLatestWorkflows } from '@/api/workflows';
 import { useStats } from '@/api/stats';
 import { HomeHero } from '@/components/home/HomeHero';
 import { HomeStats } from '@/components/home/HomeStats';
@@ -12,10 +11,9 @@ import { HomeFooter } from '@/components/home/HomeFooter';
 
 export default function HomePage() {
   const { data: stats } = useStats();
-  const { data: latestComponents, isLoading: isLoadingComponents } = useLatestComponents(6);
-  const { data: latestWorkflows, isLoading: isLoadingWorkflows } = useLatestWorkflows(6);
-  const latestItems = toLatestAdditionItems(latestComponents ?? [], latestWorkflows ?? [], 6);
-  const isLoadingLatest = isLoadingComponents || isLoadingWorkflows;
+  // one list across both kinds - the backend already orders it newest first
+  const { data: latestComponents, isLoading: isLoadingLatest } = useLatestComponents(6);
+  const latestItems = toLatestAdditionItems(latestComponents ?? []);
 
   return (
     <div className="-mx-4 -mt-8">

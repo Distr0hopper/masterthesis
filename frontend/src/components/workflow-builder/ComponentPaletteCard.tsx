@@ -27,6 +27,7 @@ export function ComponentPaletteCard({ component }: ComponentPaletteCardProps) {
       onDragStart={(e) => {
         const payload: ComponentDragPayload = {
           componentId: component.id,
+          kind: component.kind,
           componentName: component.name,
           domains: component.domains,
           parameters: component.parameters,

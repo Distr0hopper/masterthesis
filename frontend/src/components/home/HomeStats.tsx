@@ -6,8 +6,8 @@ interface HomeStatsProps {
 }
 
 const STAT_ITEMS: { label: string; getValue: (stats: StatsDto) => number }[] = [
-  { label: 'Components published', getValue: (stats) => stats.componentsPublished },
-  { label: 'Workflows composed', getValue: (stats) => stats.workflowsComposed },
+  { label: 'Tools published', getValue: (stats) => stats.toolsPublished },
+  { label: 'Workflows published', getValue: (stats) => stats.workflowsPublished },
   { label: 'Contributors', getValue: (stats) => stats.contributors },
 ];
 

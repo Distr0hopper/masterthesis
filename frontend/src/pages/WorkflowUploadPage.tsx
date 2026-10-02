@@ -12,15 +12,11 @@ import { useUploadMetadataForm } from '@/components/common/useUploadMetadataForm
 import { FileDropzone } from '@/components/common/FileDropzone';
 import { ComponentConfigStep } from '@/components/workflow-upload/organisms/ComponentConfigStep';
 import { useComponentConfigs } from '@/components/workflow-upload/lib/useComponentConfigs';
-import {
-  useCreateWorkflow,
-  useParseWorkflow,
-  useWorkflowNameAvailability,
-  type ParseWorkflowResponseDto,
-} from '@/api/workflows';
+import { useComponentNameAvailability } from '@/api/components';
+import { useCreateWorkflow, useParseWorkflow, type ParseWorkflowResponseDto } from '@/api/workflows';
 import type { UploadMetadataFormData } from '@/api/schema';
 import { getErrorMessage } from '@/lib/errors';
-import { ROUTES } from '@/lib/routes';
+import { ROUTES, componentDetailRoute } from '@/lib/routes';
 import { stripUploadExtension } from '@/lib/filename';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
 
@@ -49,7 +45,7 @@ function blockersOf(parsed: ParseWorkflowResponseDto | undefined): string[] {
     );
   }
   if (parsed.componentPreviews.length === 0) {
-    blockers.push('No components could be read from this file.');
+    blockers.push('No tools could be read from this file.');
   }
   return blockers;
 }
@@ -65,7 +61,8 @@ export default function WorkflowUploadPage() {
 
   const name = useWatch({ control: form.control, name: 'name' });
   const debouncedName = useDebouncedValue(name);
-  const { data: nameAvailability } = useWorkflowNameAvailability(debouncedName);
+  // names are one key across tools and workflows, so a tool can hold it too
+  const { data: nameAvailability } = useComponentNameAvailability(debouncedName);
 
   const nameTaken = nameAvailability?.available === false;
   const nameTakenBy = nameTaken ? nameAvailability?.existing : null;
@@ -139,9 +136,9 @@ export default function WorkflowUploadPage() {
       <span>
         {nameTakenBy ? (
           <>
-            A workflow named{' '}
+            {nameTakenBy.kind === 'tool' ? 'A tool' : 'A workflow'} named{' '}
             <a
-              href={ROUTES.workflowDetail(nameTakenBy.id)}
+              href={componentDetailRoute(nameTakenBy.kind, nameTakenBy.id)}
               target="_blank"
               rel="noreferrer"
               title="Open it in a new tab"
@@ -165,7 +162,7 @@ export default function WorkflowUploadPage() {
         <h1 className="text-2xl font-semibold text-slate-900">Upload Workflow</h1>
         <p className="mt-1 text-slate-500">
           Upload a .zip archive (with a pipeline CWL file and the step CWL files it references), or a single
-          self-contained .cwl file with its steps embedded inline. Every step is configured as a component before the
+          self-contained .cwl file with its steps embedded inline. Every step is configured as a tool before the
           workflow is saved.
         </p>
 

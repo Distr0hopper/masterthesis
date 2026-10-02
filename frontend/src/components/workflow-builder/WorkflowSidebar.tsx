@@ -23,6 +23,9 @@ export function WorkflowSidebar({ rankAgainst }: WorkflowSidebarProps) {
   // the pages arrive in their final order and each item carries its `match`.
   // includeParameters: a dropped card becomes a node, which needs the component's ports.
   const { data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useInfiniteComponents({
+    // tools only for now: the backend already exports and syncs a canvas nesting a
+    // workflow, so offering workflows here is what enables nesting in the builder
+    kind: 'tool',
     search: term || undefined,
     domain: selectedDomains,
     limit: PAGE_SIZE,
@@ -59,7 +62,7 @@ export function WorkflowSidebar({ rankAgainst }: WorkflowSidebarProps) {
           <p className="text-sm text-slate-500">Loading components...</p>
         ) : components.length === 0 ? (
           <p className="text-sm text-slate-500">
-            {hasActiveFilter ? 'No components match these filters.' : 'No components found.'}
+            {hasActiveFilter ? 'No tools match these filters.' : 'No tools found.'}
           </p>
         ) : (
           <>

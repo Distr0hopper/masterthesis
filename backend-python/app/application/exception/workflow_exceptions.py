@@ -1,11 +1,6 @@
 import uuid
 
 
-class WorkflowNotFoundError(Exception):
-    def __init__(self, workflow_id: uuid.UUID) -> None:
-        super().__init__(f"Workflow {workflow_id} not found")
-
-
 class WorkflowStepNotFoundError(Exception):
     def __init__(self, step_id: uuid.UUID) -> None:
         super().__init__(f"Workflow step {step_id} not found")
@@ -38,6 +33,19 @@ class ConflictingAuxiliaryFileError(Exception):
         )
 
 
+class ConflictingStepFileError(Exception):
+    """Two different step documents of one workflow tree claim the same file name - e.g. a
+    nested workflow running another version of a tool its parent also runs. Every `run:`
+    reference resolves in one flat archive, which cannot hold both."""
+
+    def __init__(self, path: str) -> None:
+        self.path = path
+        super().__init__(
+            f"Two different step documents of this workflow are both named '{path}' - the archive cannot hold "
+            "both (does a nested workflow use another version of a tool this workflow uses too?)"
+        )
+
+
 class MissingImportedFileError(Exception):
     """A $import/$include target is not in the archive. Saving anyway would store a
     workflow whose CWL references a file nothing can produce - broken only at run time."""
@@ -47,15 +55,6 @@ class MissingImportedFileError(Exception):
         super().__init__(
             f"Imported file(s) not found in archive: {', '.join(paths)} - add them and try again"
         )
-
-
-class WorkflowNameAlreadyExistsError(Exception):
-    """Workflow names are globally unique (uq_workflows_name) - unlike Component there is
-    no version lineage to tell two same-named workflows apart."""
-
-    def __init__(self, name: str) -> None:
-        self.name = name
-        super().__init__(f"A workflow named '{name}' already exists - choose a different name")
 
 
 class WorkflowHasUnpublishedComponentsError(Exception):
@@ -84,6 +83,35 @@ class UnpublishableWorkflowComponentsError(Exception):
 class WorkflowNotReadyToPublishError(Exception):
     def __init__(self, workflow_id: uuid.UUID) -> None:
         super().__init__(f"Workflow {workflow_id} cannot be published until every step is confirmed")
+
+
+class NestedWorkflowsNotReadyError(Exception):
+    """A nested workflow publishes along with its parent, so it has to be publishable too."""
+
+    def __init__(self, names: list[str]) -> None:
+        self.names = names
+        super().__init__(
+            f"Nested workflow(s) {', '.join(names)} still have unconfirmed steps - confirm them before "
+            "publishing this workflow"
+        )
+
+
+class WorkflowCycleError(Exception):
+    """A step may run another workflow, but never one that (eventually) runs this one."""
+
+    def __init__(self, workflow_name: str, child_name: str) -> None:
+        super().__init__(
+            f"'{child_name}' cannot be a step of '{workflow_name}' - it already contains '{workflow_name}', "
+            "so the workflow would contain itself"
+        )
+
+
+class PublishedWorkflowStepsLockedError(Exception):
+    """A published workflow is what other users see and nest - its steps only change after
+    it is unpublished, or as a new version."""
+
+    def __init__(self, workflow_id: uuid.UUID) -> None:
+        super().__init__(f"Workflow {workflow_id} is published - unpublish it before changing its steps")
 
 
 class UnconfiguredWorkflowStepError(Exception):

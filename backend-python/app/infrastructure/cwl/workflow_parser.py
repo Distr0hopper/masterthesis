@@ -7,13 +7,6 @@ import yaml  # dump only - reads go through load_cwl (PyYAML rejects valid CWL v
 from app.infrastructure.cwl.yaml_io import YAMLError, load_cwl
 
 
-@dataclass
-class ParsedWorkflowStep:
-    step_id: str  # the key under `steps:`, e.g. "step_remove_outliers"
-    run_reference: str  # the `run:` value, e.g. "remove-outliers.cwl"
-    order: int
-
-
 def is_workflow_cwl(cwl_content: str) -> bool:
     try:
         doc: Any = load_cwl(cwl_content)
@@ -34,37 +27,6 @@ def find_workflow_file(files: dict[str, str]) -> tuple[str, str]:
         names = ", ".join(name for name, _ in matches)
         raise ValueError(f"Multiple CWL files with class: Workflow found ({names}); expected exactly one")
     return matches[0]
-
-
-def extract_workflow_steps(cwl_content: str) -> list[ParsedWorkflowStep]:
-    """Parses a `class: Workflow` CWL document and returns its steps in declaration order.
-
-    Raises ValueError if `class` is not `Workflow`, `steps:` is missing/malformed, or a
-    step's `run:` isn't a plain filename string (inline embedded tools under `run:` are
-    out of scope - the workflow upload must reference separate .cwl files by name)."""
-    try:
-        doc: Any = load_cwl(cwl_content)
-    except YAMLError as err:
-        raise ValueError(f"YAML parse error: {err}") from err
-
-    if not isinstance(doc, dict):
-        raise ValueError("CWL document must be a mapping")
-    if doc.get("class") != "Workflow":
-        raise ValueError(f"class is '{doc.get('class')}', expected 'Workflow'")
-
-    steps = doc.get("steps")
-    if not isinstance(steps, dict) or not steps:
-        raise ValueError("Workflow has no steps")
-
-    parsed: list[ParsedWorkflowStep] = []
-    for order, (step_id, definition) in enumerate(steps.items()):
-        if not isinstance(definition, dict) or "run" not in definition:
-            raise ValueError(f"Step '{step_id}' is missing a 'run:' reference")
-        run_value = definition["run"]
-        if not isinstance(run_value, str):
-            raise ValueError(f"Step '{step_id}' has a non-filename 'run:' value (inline tools are not supported)")
-        parsed.append(ParsedWorkflowStep(step_id=step_id, run_reference=run_value, order=order))
-    return parsed
 
 
 def normalize_steps(steps: Any) -> list[tuple[str, dict]]:
@@ -153,9 +115,8 @@ def is_self_contained(cwl_content: str) -> bool:
 def read_workflow_overview(cwl_content: str) -> WorkflowOverview:
     """Step count, external step references and the workflow's own name/doc.
 
-    Same validation as extract_workflow_steps (raises ValueError with an equivalent
-    message on the same problems), except this does NOT reject inline `run:` mappings -
-    step_count always comes from an independent len(steps), never derived by summing
+    Raises ValueError for anything that is not a readable `class: Workflow` with steps,
+    but does NOT reject inline `run:` mappings - step_count always comes from an independent len(steps), never derived by summing
     external_refs/extracted-components counts, since a step whose inline `run:` isn't a
     CommandLineTool (see inline_only_steps) would otherwise silently vanish from
     both.
@@ -251,8 +212,7 @@ def extract_inline_components(cwl_content: str) -> list[ExtractedComponent]:
 
 def extract_step_definitions(cwl_content: str) -> list[tuple[str, dict]]:
     """Steps of a `class: Workflow` document in declaration order, tolerant of inline
-    `run:` mappings (unlike extract_workflow_steps, which is strict-external-only and
-    stays reserved for the zip-upload/Builder-sync path). Callers are expected to have
+    `run:` mappings. Callers are expected to have
     already validated the document is a Workflow (e.g. via read_workflow_overview) -
     this re-parses independently, matching this module's existing per-function reparse
     convention, and only raises ValueError for YAML/steps-shape problems.

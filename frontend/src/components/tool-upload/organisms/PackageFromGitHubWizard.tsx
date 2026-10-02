@@ -13,20 +13,22 @@ import { UploadStepper } from '@/components/common/UploadStepper';
 import { ComponentLink } from '@/components/common/ComponentLink';
 import { useUploadWizard } from '@/components/common/useUploadWizard';
 import { useUploadMetadataForm } from '@/components/common/useUploadMetadataForm';
-import { ComponentReviewStep } from '@/components/component-upload/organisms/ComponentReviewStep';
+import { ToolReviewStep } from './ToolReviewStep';
 import {
   ComponentSource,
-  componentTransformer,
   initialFormatLabelDraft,
-  repoUrlSchema,
   toFormatLabelDtos,
   useComponentNameAvailability,
-  usePackageComponent,
-  usePackagePreview,
   withFormatLabels,
   type FormatLabelDraft,
-  type PackagePreviewDto,
 } from '@/api/components';
+import {
+  repoUrlSchema,
+  toolTransformer,
+  usePackagePreview,
+  usePackageTool,
+  type PackagePreviewDto,
+} from '@/api/tools';
 import type { UploadMetadataFormData } from '@/api/schema';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { getErrorMessage } from '@/lib/errors';
@@ -57,9 +59,9 @@ const PACKAGING_HINT = (
 );
 
 /**
- * Package a MoveApps GitHub repo as a component - the same source -> details & review
+ * Package a MoveApps GitHub repo as a tool - the same source -> details & review
  * flow as ManualUploadWizard, with the repo URL as the source. A repo that's already
- * packaged becomes a new version of its component instead (name and domains locked).
+ * packaged becomes a new version of its tool instead (name and domains locked).
  */
 export function PackageFromGitHubWizard() {
   const navigate = useNavigate();
@@ -69,7 +71,7 @@ export function PackageFromGitHubWizard() {
     isPending: isCreating,
     error: createError,
     reset: resetCreate,
-  } = usePackageComponent();
+  } = usePackageTool();
 
   const wizard = useUploadWizard();
   const { form, prefill } = useUploadMetadataForm();
@@ -126,7 +128,7 @@ export function PackageFromGitHubWizard() {
     // a different repo invalidates everything read from the previous one
     if (previewMutation.data || previewMutation.error) {
       if (existing) {
-        // the locked values belonged to that repo's component - don't carry them over
+        // the locked values belonged to that repo's tool - don't carry them over
         form.setValue('name', '');
         form.setValue('domains', []);
       }
@@ -158,7 +160,7 @@ export function PackageFromGitHubWizard() {
       {
         onSuccess: (created) => {
           toast.success(isNewVersion ? `${created.name} v${created.version} packaged` : `${created.name} packaged`);
-          navigate(ROUTES.componentDetail(created.id));
+          navigate(ROUTES.toolDetail(created.id));
         },
       },
     );
@@ -174,6 +176,7 @@ export function PackageFromGitHubWizard() {
         This repository is already packaged as{' '}
         <ComponentLink
           componentId={existing.id}
+          kind={existing.kind}
           name={existing.name}
           version={existing.version}
           className="inline-flex"
@@ -190,6 +193,7 @@ export function PackageFromGitHubWizard() {
             This name is already taken by{' '}
             <ComponentLink
               componentId={availability.existing.id}
+              kind={availability.existing.kind}
               name={availability.existing.name}
               version={availability.existing.version}
               className="inline-flex"
@@ -204,7 +208,7 @@ export function PackageFromGitHubWizard() {
   ) : undefined;
 
   const previewModel = preview
-    ? componentTransformer.toPreviewDisplayModel(
+    ? toolTransformer.toPreviewDisplayModel(
         { ...preview, parameters: withFormatLabels(preview.parameters, formatLabels) },
         {
           name,
@@ -269,8 +273,8 @@ export function PackageFromGitHubWizard() {
         )}
 
         {wizard.step === 2 && preview && previewModel && (
-          <ComponentReviewStep
-            title={existing ? `New version of ${existing.name}` : 'New component'}
+          <ToolReviewStep
+            title={existing ? `New version of ${existing.name}` : 'New tool'}
             locked={isNewVersion}
             nameNotice={nameNotice}
             descriptionPlaceholder="Taken from the repository's README - or write your own"
@@ -283,7 +287,7 @@ export function PackageFromGitHubWizard() {
 
         {createError && (
           <div className="mt-4 flex flex-wrap items-center gap-3 rounded-md bg-error px-3 py-2 text-sm text-error-foreground">
-            <span>{getErrorMessage(createError, 'Could not package this component.')}</span>
+            <span>{getErrorMessage(createError, 'Could not package this tool.')}</span>
             {createConflict && (
               <Button size="sm" variant="outline" onClick={fetchPreview}>
                 Fetch again
@@ -313,7 +317,7 @@ export function PackageFromGitHubWizard() {
               disabled={isCreating || taken}
               className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90"
             >
-              {isCreating ? 'Packaging...' : isNewVersion ? 'Create Version' : 'Create Component'}
+              {isCreating ? 'Packaging...' : isNewVersion ? 'Create Version' : 'Create Tool'}
             </Button>
           )}
         </div>

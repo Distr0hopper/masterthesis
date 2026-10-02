@@ -5,11 +5,15 @@ import { Input } from '@/components/ui/input.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { useInfiniteComponents } from '@/api/components';
 import { useLoadMoreOnScroll } from '@/lib/useLoadMoreOnScroll';
-import { ManualUploadWizard } from '@/components/component-upload/organisms/ManualUploadWizard';
-import { ROUTES } from '@/lib/routes';
+import { ManualUploadWizard } from '@/components/tool-upload/organisms/ManualUploadWizard';
+import { componentDetailRoute } from '@/lib/routes';
 import { cn } from '@/lib/utils';
 import { DomainBadges } from '@/components/common/DomainBadges';
 
+/**
+ * Picks the component a workflow step runs - a tool, or another workflow to nest (the
+ * backend rejects one that would make the workflow contain itself).
+ */
 interface ComponentPickerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -47,7 +51,7 @@ export function ComponentPickerDialog({ open, onOpenChange, value, onSelect }: C
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="flex max-h-[80vh] flex-col">
         <DialogHeader>
-          <DialogTitle>{mode === 'browse' ? 'Select a Component' : 'Upload New Component'}</DialogTitle>
+          <DialogTitle>{mode === 'browse' ? 'Select a Component' : 'Upload New Tool'}</DialogTitle>
         </DialogHeader>
 
         {mode === 'browse' ? (
@@ -82,6 +86,14 @@ export function ComponentPickerDialog({ open, onOpenChange, value, onSelect }: C
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-sm font-semibold text-slate-900">{component.name}</span>
                       <span className="text-xs text-slate-500">v{component.version}</span>
+                      {component.kind === 'workflow' && (
+                        <span
+                          className="rounded border px-1.5 text-xs text-slate-500"
+                          title="Picking it nests this whole workflow as one step"
+                        >
+                          Workflow
+                        </span>
+                      )}
                       <span className="ml-auto flex flex-wrap gap-1">
                         <DomainBadges domains={component.domains} />
                       </span>
@@ -90,7 +102,7 @@ export function ComponentPickerDialog({ open, onOpenChange, value, onSelect }: C
                   </button>
 
                   <a
-                    href={ROUTES.componentDetail(component.id)}
+                    href={componentDetailRoute(component.kind, component.id)}
                     target="_blank"
                     rel="noreferrer"
                     title="View component details"
@@ -118,7 +130,7 @@ export function ComponentPickerDialog({ open, onOpenChange, value, onSelect }: C
             </div>
 
             <Button type="button" variant="outline" onClick={() => setMode('upload')}>
-              <Plus className="mr-1 h-4 w-4" /> Upload New Component
+              <Plus className="mr-1 h-4 w-4" /> Upload New Tool
             </Button>
           </>
         ) : (

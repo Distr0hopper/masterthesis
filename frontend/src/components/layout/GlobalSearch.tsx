@@ -31,7 +31,7 @@ function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 /**
- * Navbar search across components and workflows. Results stay grouped by type - the two
+ * Navbar search across tools and workflows. Results stay grouped by kind - the two
  * lists are kept apart on purpose - and each group links to its full, filtered list.
  */
 export function GlobalSearch({ size = 'compact', autoFocus, enableShortcut, onClose, className }: GlobalSearchProps) {
@@ -48,7 +48,7 @@ export function GlobalSearch({ size = 'compact', autoFocus, enableShortcut, onCl
 
   const debouncedTerm = useDebouncedValue(term, 250);
   const search = debouncedTerm.trim();
-  const { components, workflows, isFetching, isReady } = useGlobalSearch(search);
+  const { tools, workflows, isFetching, isReady } = useGlobalSearch(search);
 
   const hideResults = () => {
     setOpen(false);
@@ -95,13 +95,13 @@ export function GlobalSearch({ size = 'compact', autoFocus, enableShortcut, onCl
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [enableShortcut]);
 
-  const componentsListUrl = `${ROUTES.components}?search=${encodeURIComponent(search)}`;
+  const toolsListUrl = `${ROUTES.tools}?search=${encodeURIComponent(search)}`;
   const workflowsListUrl = `${ROUTES.workflows}?search=${encodeURIComponent(search)}`;
 
   // one flat list, in display order, so the arrow keys can walk across both groups
-  const componentEntries: Entry[] = components.items.map((c) => ({
+  const toolEntries: Entry[] = tools.items.map((c) => ({
     key: `c-${c.id}`,
-    to: ROUTES.componentDetail(c.id),
+    to: ROUTES.toolDetail(c.id),
     content: (
       <ResultLine icon={<Package className="h-4 w-4" />} title={c.name} meta={`v${c.version}`} detail={c.description} />
     ),
@@ -129,7 +129,7 @@ export function GlobalSearch({ size = 'compact', autoFocus, enableShortcut, onCl
   });
 
   const groups = [
-    { title: 'Components', entries: componentEntries, all: showAll('components', components.total, componentsListUrl, 'c-all') },
+    { title: 'Tools', entries: toolEntries, all: showAll('tools', tools.total, toolsListUrl, 'c-all') },
     { title: 'Workflows', entries: workflowEntries, all: showAll('workflows', workflows.total, workflowsListUrl, 'w-all') },
   ].filter((group) => group.entries.length > 0);
   const flat = groups.flatMap((group) => [...group.entries, group.all]);

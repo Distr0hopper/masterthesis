@@ -1,8 +1,6 @@
 import { z } from 'zod';
 import { descriptionSchema } from '@/api/schema';
 
-export const repoUrlSchema = z.url('Invalid repository URL');
-
 export const updateComponentFormSchema = z.object({
   description: descriptionSchema,
   domains: z.array(z.string()).min(1, 'At least one domain is required').optional(),

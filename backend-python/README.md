@@ -6,7 +6,8 @@ FastAPI REST API for storing and managing CWL-based workflow components. Layered
 
 ```
 app/
-  domain/         models/ (SQLModel entities), repository/ (DB CRUD), exception/ (domain-invariant errors)
+  domain/         models/ (SQLModel entities), repository/ (DB CRUD), exception/ (domain-invariant errors),
+                  composite/ (pure tree operations over the Component composite), compatibility/ (port rules)
   application/    service/ (use-case orchestration), exception/ (use-case-level errors)
   api/            dto/, transformer/ (domain <-> dto), routers/, permission/ (authorization checks),
                   exception/ (HTTP handlers), util/ (endpoints.py aggregates all routers)
@@ -28,7 +29,22 @@ uv run uvicorn app.main:app --reload --port 8000
 
 API: http://localhost:8000, interactive docs: http://localhost:8000/docs
 
-Packaging (`POST /components/package`, `POST /components/{id}/commands` with `REPACKAGE`) calls the [`automated-packaging`](../automated-packaging) service over HTTP (`PACKAGING_SERVICE_URL`). It runs as a container from the repo-root `docker-compose.yml`; put an optional `GITHUB_TOKEN` in the repo-root `.env` (see `../.env.example`) to avoid GitHub rate limits. If the service is down, packaging requests return 503.
+## The Component composite
+
+Modelled on CWL, where `CommandLineTool`, `ExpressionTool` and `Workflow` are all a `Process`:
+a **Component** is the abstract node, a **Tool** is a leaf, and a **Workflow** is a composite
+whose steps each run another Component - a tool, or (nested) another workflow.
+
+- Tables: `components` holds what both kinds share (name+version lineage, CWL, ports, domains,
+  files, status), discriminated by `kind`; `tools` and `workflows` are 1:1 detail rows. SQLModel
+  cannot map a table class that subclasses another table class, so this is composition rather
+  than Python inheritance.
+- A `workflow_steps` row is an edge of the composite: `workflow_id` is the parent,
+  `component_id` the child of either kind. Binding a step rejects cycles by lineage.
+- API: `/components` serves every shared operation polymorphically (responses discriminated by
+  `kind`); `/tools` and `/workflows` hold only what one kind has.
+
+Packaging (`POST /tools/package`, `POST /tools/{id}/commands` with `REPACKAGE`) calls the [`automated-packaging`](../automated-packaging) service over HTTP (`PACKAGING_SERVICE_URL`). It runs as a container from the repo-root `docker-compose.yml`; put an optional `GITHUB_TOKEN` in the repo-root `.env` (see `../.env.example`) to avoid GitHub rate limits. If the service is down, packaging requests return 503.
 
 ## Authentication (OTP email login)
 

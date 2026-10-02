@@ -16,7 +16,7 @@ interface WorkflowSidebarFiltersProps {
 
 /**
  * Filter header for the {@link WorkflowSidebar} palette. Same three controls as the
- * Components page's ListFilters, but stacked for the narrow rail and label-less - the section
+ * Tools page's ListFilters, but stacked for the narrow rail and label-less - the section
  * header does the labelling here.
  */
 export function WorkflowSidebarFilters({
@@ -31,7 +31,7 @@ export function WorkflowSidebarFilters({
 }: WorkflowSidebarFiltersProps) {
   return (
     <div className="flex flex-col gap-3 border-b border-slate-200 p-4">
-      <span className="text-xs uppercase tracking-wide text-slate-500">Components</span>
+      <span className="text-xs uppercase tracking-wide text-slate-500">Tools</span>
       <Input
         placeholder="Search by name..."
         value={search}

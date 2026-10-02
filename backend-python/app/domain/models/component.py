@@ -10,16 +10,30 @@ if TYPE_CHECKING:
     from app.domain.models.component_domain import ComponentDomain
     from app.domain.models.component_file import ComponentFile
     from app.domain.models.parameter import Parameter
+    from app.domain.models.tool import Tool
     from app.domain.models.user import User
+    from app.domain.models.workflow import Workflow
+    from app.domain.models.workflow_step import WorkflowStep
+
+
+class ComponentKind(str, Enum):
+    """Which child of the composite a Component is - CWL's Process subclasses, narrowed to
+    the two this repository models. A Tool is a leaf (CommandLineTool / ExpressionTool),
+    a Workflow is a composite whose steps run other Components."""
+
+    TOOL = "tool"
+    WORKFLOW = "workflow"
 
 
 class ComponentSource(str, Enum):
     AUTOMATED_PACKAGING = "automated_packaging"
     MANUAL_UPLOAD = "manual_upload"
+    #: workflows only - generated from a builder canvas (see Workflow.draft_id)
+    WORKFLOW_BUILDER = "workflow_builder"
 
 
 class ComponentStatus(str, Enum):
-    """Mirrors WorkflowStatus - a component is staged privately until its creator publishes it."""
+    """A component is staged privately until its creator publishes it."""
 
     DRAFT = "draft"
     PUBLISHED = "published"
@@ -29,6 +43,18 @@ MAX_DESCRIPTION_LENGTH = 2000
 
 
 class Component(SQLModel, table=True):
+    """The abstract node of the composite - CWL's `Process`.
+
+    Everything a Tool and a Workflow have in common lives here: identity, the name+version
+    lineage, the CWL document, its ports (parameters), domains, auxiliary files and the
+    publication status. What only one kind has lives in its 1:1 detail row, `tool` or
+    `workflow`, exactly one of which is set (matching `kind`).
+
+    SQLModel cannot map a table class that subclasses another table class, so the
+    hierarchy is expressed as composition plus the `kind` discriminator rather than as
+    Python inheritance.
+    """
+
     __tablename__ = "components"
     __table_args__ = (
         UniqueConstraint("name", "version", name="uq_components_name_version"),
@@ -42,6 +68,10 @@ class Component(SQLModel, table=True):
     )
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    # explicit String column, same convention as source/status - never a native PG enum
+    kind: ComponentKind = Field(sa_column=Column(String, nullable=False))
+    # the lineage key: every version of a component shares it, and it is unique across
+    # both kinds, so a lineage never mixes tools and workflows
     name: str
     author_name: str | None = None
     created_by_id: uuid.UUID | None = Field(default=None, sa_column=Column(ForeignKey("users.id"), nullable=True))
@@ -50,28 +80,20 @@ class Component(SQLModel, table=True):
     repo_commit_sha: str | None = None
     doi: str | None = None
     version: int = 1
+    # the raw CWL document - a CommandLineTool/ExpressionTool for a tool, the pipeline
+    # (class: Workflow) for a workflow
     cwl_content: str = Field(sa_column=Column(Text, nullable=False))
-    # both derived from cwl_content at write time (see cwl_parser.extract_cwl_type /
-    # extract_dockerfile_content) - nullable because manual uploads or repos without a
-    # DockerRequirement legitimately have no Dockerfile
-    cwl_type: str | None = None
-    dockerfile_content: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
-    # also derived from cwl_content (see cwl_parser.extract_docker_pull) - mutually exclusive
-    # with dockerfile_content per the CWL spec (DockerRequirement has either dockerFile or
-    # dockerPull);
-    docker_pull_reference: str | None = None
-    # also derived from cwl_content: the ontology its parameters' `format`s belong to -
-    # the `$schemas` URL, normalized so every EDAM release maps to one configured
-    # ontology (see format_service.ontology.resolve_ontology_url). Two ports are only
-    # comparable via the format service when both components share it; None when the
-    # CWL declares no $schemas.
+    # derived from cwl_content: the ontology its parameters' `format`s belong to - the
+    # `$schemas` URL, normalized so every EDAM release maps to one configured ontology
+    # (see format_service.ontology.resolve_ontology_url). Two ports are only comparable via
+    # the format service when both components share it; None when the CWL declares no $schemas.
     ontology_url: str | None = None
     # explicit String column: SQLModel would otherwise infer a native Postgres
     # enum type from the Python Enum
     source: ComponentSource = Field(default=ComponentSource.MANUAL_UPLOAD, sa_column=Column(String, nullable=False))
     # Per *version row*, not per lineage: only PUBLISHED rows are publicly visible/listed (see
-    # ComponentsService.list_components / get_visible_component), so a still-draft v2 never
-    # hides an already-published v1 from the browse list.
+    # ComponentsService.is_visible), so a still-draft v2 never hides an already-published v1
+    # from the browse list.
     status: ComponentStatus = Field(default=ComponentStatus.DRAFT, sa_column=Column(String, nullable=False))
     created_at: datetime = Field(sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False))
     updated_at: datetime = Field(
@@ -97,3 +119,40 @@ class Component(SQLModel, table=True):
         back_populates="component",
         sa_relationship_kwargs={"lazy": "selectin", "cascade": "all, delete-orphan", "passive_deletes": True},
     )
+    # the kind-specific parts - one-to-one, so uselist=False
+    tool: Optional["Tool"] = Relationship(
+        back_populates="component",
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "uselist": False,
+            "cascade": "all, delete-orphan",
+            "passive_deletes": True,
+        },
+    )
+    workflow: Optional["Workflow"] = Relationship(
+        back_populates="component",
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "uselist": False,
+            "cascade": "all, delete-orphan",
+            "passive_deletes": True,
+        },
+    )
+
+    @property
+    def is_tool(self) -> bool:
+        return self.kind == ComponentKind.TOOL
+
+    @property
+    def is_workflow(self) -> bool:
+        return self.kind == ComponentKind.WORKFLOW
+
+    @property
+    def steps(self) -> list["WorkflowStep"]:
+        """A workflow's steps in order - always [] for a tool, the leaf of the composite."""
+        return self.workflow.steps if self.workflow is not None else []
+
+    @property
+    def children(self) -> list["Component"]:
+        """The components this one is composed of - one per bound step, in step order."""
+        return [step.component for step in self.steps if step.component is not None]

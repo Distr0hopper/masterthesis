@@ -84,7 +84,10 @@ function normalizeNode(node: ComponentFlowNode): ComponentFlowNode {
     }
   }
 
-  return { ...node, data: { ...node.data, domains: readDomains(data), parameterValues } };
+  // every node ran a tool until workflows could be nested - an older canvas carries no kind
+  const kind = data.kind === 'workflow' ? 'workflow' : 'tool';
+
+  return { ...node, data: { ...node.data, kind, domains: readDomains(data), parameterValues } };
 }
 
 /** What the editor sends to the API: the whole canvas as one JSON string. */

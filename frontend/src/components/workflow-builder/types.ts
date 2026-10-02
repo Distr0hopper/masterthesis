@@ -1,5 +1,5 @@
 import type { Node } from '@xyflow/react';
-import type { ParameterDisplayModel } from '@/api/components';
+import type { ComponentKind, ParameterDisplayModel } from '@/api/components';
 import type { ConnectionCheckDto } from '@/api/compatibility';
 
 /**
@@ -9,6 +9,8 @@ import type { ConnectionCheckDto } from '@/api/compatibility';
  */
 export type ComponentDragPayload = {
   componentId: string;
+  /** a node runs a tool or - nested - a whole workflow; both expose their ports the same way */
+  kind: ComponentKind;
   componentName: string;
   domains: string[];
   parameters: ParameterDisplayModel[];
@@ -27,6 +29,8 @@ export const COMPONENT_EDGE_TYPE = 'componentEdge';
 
 export type ComponentNodeData = {
   componentId: string;
+  /** what the node runs - a tool, or (nested) a workflow. Canvases saved before nesting existed are tools. */
+  kind: ComponentKind;
   label: string;
   domains: string[];
   /** drives the sidebar ranking and edge validation in lib/portKinds.ts */

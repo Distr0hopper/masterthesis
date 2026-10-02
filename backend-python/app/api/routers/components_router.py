@@ -1,28 +1,21 @@
+"""/components - the composite's uniform API: every operation that works the same for a
+tool and a workflow. Kind-specific operations live under /tools and /workflows."""
+
 import logging
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import Response
 
 from app.api.dto.common import ErrorResponse, MyItemsResponseDtoV1, build_my_items_response
 from app.api.dto.component import (
-    AddVersionRequestDto,
     ComponentCommandExecuteRequestDto,
-    ComponentDeletionDraftDto,
     ComponentDeletionImpactDto,
-    ComponentDetailDto,
-    ComponentListItemDto,
-    ComponentPreviewDto,
-    ComponentWorkflowUsageDto,
-    CreateComponentRequestDto,
-    ExistingComponentDto,
+    ComponentUsageDto,
     NameAvailabilityDto,
-    PackageComponentRequestDto,
-    PackagePreviewDto,
-    PackagePreviewRequestDto,
-    ParseComponentRequestDto,
 )
+from app.api.dto.component_variants import ComponentDetailDto, ComponentListItemDto
 from app.api.dto.pagination import ListQueryPaginationDtoV1, PaginatedResponseDtoV1, build_paginated_response
 from app.api.exception.exceptions import ForbiddenException
 from app.api.permission.component_permission_validator import ComponentPermissionValidator
@@ -31,9 +24,7 @@ from app.application.exception.favorites_exceptions import FavoritesRequireAuthE
 from app.application.service.auth_service import AuthService
 from app.application.service.compatibility_service import CompatibilityService
 from app.application.service.components_service import ComponentsService
-from app.application.service.favorites_service import FavoritesService
-from app.application.service.workflows_service import WorkflowsService
-from app.domain.models.component import ComponentStatus
+from app.domain.models.component import ComponentKind, ComponentStatus
 from app.domain.models.component_domain import VALID_DOMAINS
 from app.domain.models.user import User
 from app.domain.pagination.pagination import DEFAULT_LIMIT, MAX_LIMIT, PaginatedList
@@ -42,20 +33,15 @@ from app.domain.repository.components_repository import ComponentListFilter
 router = APIRouter(prefix="/components", tags=["components"])
 logger = logging.getLogger("app.api.routers.components_router")
 
-MAX_CWL_FILE_SIZE = 1024 * 1024
-
-
-async def _favorited_names(favorites_service: FavoritesService, user: User | None) -> set[str]:
-    return await favorites_service.get_favorited_component_names(user.id) if user is not None else set()
-
 
 @router.get("", response_model=PaginatedResponseDtoV1[ComponentListItemDto])
 async def list_components(
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
     compatibility_service: Annotated[CompatibilityService, Depends(CompatibilityService.get_service)],
-    favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
     current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
     pagination_dto: Annotated[ListQueryPaginationDtoV1, Depends()],
+    # omitted lists both kinds - tools and workflows side by side
+    kind: Annotated[ComponentKind | None, Query()] = None,
     # repeatable: ?domain=a&domain=b selects both. json_schema_extra adds the enum purely
     # so Swagger UI renders a dropdown for each value
     domain: Annotated[list[str] | None, Query(json_schema_extra={"items": {"enum": VALID_DOMAINS}})] = None,
@@ -78,13 +64,14 @@ async def list_components(
     favorited_by = current_user.id if favorites_only and current_user is not None else None
     pagination = pagination_dto.to_domain()
     filter = ComponentListFilter(
+        kind=kind,
         domains=domain or [],
         exclude_created_by=exclude_created_by,
         favorited_by=favorited_by,
         search=search,
         favorites_first_for=current_user.id if favorites_first and current_user is not None else None,
     )
-    favorited_names = await _favorited_names(favorites_service, current_user)
+    favorited_names = await components_service.favorited_names(current_user)
 
     if rank_against is not None:
         candidates = await components_service.list_all_components(filter)
@@ -98,7 +85,6 @@ async def list_components(
         return build_paginated_response(ranked_items, total, pagination)
 
     components, total = await components_service.list_components(filter, pagination)
-
     items = [
         ComponentTransformer.to_list_item(c, c.name in favorited_names, current_user, include_parameters)
         for c in components
@@ -113,8 +99,8 @@ async def list_components(
 )
 async def list_my_components(
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
-    favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
+    kind: Annotated[ComponentKind | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
     published_offset: Annotated[int, Query(alias="publishedOffset", ge=0)] = 0,
     unpublished_offset: Annotated[int, Query(alias="unpublishedOffset", ge=0)] = 0,
@@ -122,21 +108,21 @@ async def list_my_components(
     published_pagination = PaginatedList(limit=limit, offset=published_offset)
     unpublished_pagination = PaginatedList(limit=limit, offset=unpublished_offset)
 
-    published_components, published_total = await components_service.list_my_components_by_status(
-        current_user.id, ComponentStatus.PUBLISHED, published_pagination
+    published, published_total = await components_service.list_my_components_by_status(
+        current_user.id, ComponentStatus.PUBLISHED, kind, published_pagination
     )
-    unpublished_components, unpublished_total = await components_service.list_my_components_by_status(
-        current_user.id, ComponentStatus.DRAFT, unpublished_pagination
+    unpublished, unpublished_total = await components_service.list_my_components_by_status(
+        current_user.id, ComponentStatus.DRAFT, kind, unpublished_pagination
     )
-    favorited_names = await _favorited_names(favorites_service, current_user)
+    favorited_names = await components_service.favorited_names(current_user)
 
-    def to_items(components: list) -> list[ComponentListItemDto]:
+    def to_items(components: list) -> list:
         return [ComponentTransformer.to_list_item(c, c.name in favorited_names, current_user) for c in components]
 
     return build_my_items_response(
-        (to_items(published_components), published_total),
+        (to_items(published), published_total),
         published_pagination,
-        (to_items(unpublished_components), unpublished_total),
+        (to_items(unpublished), unpublished_total),
         unpublished_pagination,
     )
 
@@ -144,50 +130,13 @@ async def list_my_components(
 @router.get("/latest", response_model=list[ComponentListItemDto])
 async def list_latest_components(
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
-    favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
     current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
+    kind: Annotated[ComponentKind | None, Query()] = None,
     limit: int = 6,
 ) -> list[ComponentListItemDto]:
-    components = await components_service.get_latest_components(limit)
-    favorited_names = await _favorited_names(favorites_service, current_user)
+    components = await components_service.get_latest_components(limit, kind)
+    favorited_names = await components_service.favorited_names(current_user)
     return [ComponentTransformer.to_list_item(c, c.name in favorited_names, current_user) for c in components]
-
-
-@router.post(
-    "/parse",
-    response_model=ComponentPreviewDto,
-    responses={
-        status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse, "description": "Invalid CWL or file too large"},
-        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
-    },
-)
-async def parse_component(
-    dto: Annotated[ParseComponentRequestDto, Form(media_type="multipart/form-data")],
-    current_user: Annotated[User, Depends(AuthService.get_current_user)],
-    components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
-) -> ComponentPreviewDto:
-    """Read an uploaded .cwl without persisting it, so the user can review the component
-    before creating it. Mirrors POST /workflows/parse."""
-    content = await dto.cwl_file.read()
-    if len(content) > MAX_CWL_FILE_SIZE:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            f"Validation failed (expected size to be less than {MAX_CWL_FILE_SIZE} bytes)",
-        )
-
-    logger.info(f"Parsing component upload '{dto.cwl_file.filename}' for user {current_user.id}")
-    parsed = await components_service.parse_cwl(content)
-    return ComponentPreviewDto(
-        cwl_content=parsed.cwl_content,
-        cwl_type=parsed.cwl_type,
-        description=parsed.description,
-        dockerfile_content=parsed.dockerfile_content,
-        docker_pull_reference=parsed.docker_pull_reference,
-        ontology_url=parsed.ontology_url,
-        parameters=[
-            ComponentTransformer.to_preview_parameter(p, "preview", parsed.ontology_url) for p in parsed.parameters
-        ],
-    )
 
 
 @router.get("/name-availability", response_model=NameAvailabilityDto)
@@ -195,217 +144,26 @@ async def check_name_availability(
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
     current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
     name: Annotated[str, Query(min_length=1)],
+    # a component trivially holds its own name - a rename check leaves its lineage out
+    exclude_id: Annotated[uuid.UUID | None, Query(alias="excludeId")] = None,
 ) -> NameAvailabilityDto:
-    """Whether `name` is still free for a new component lineage.
+    """Whether `name` is still free for a new lineage - of either kind.
 
-    `available` reflects the whole catalogue, since component names are globally unique.
-    `existing` is only filled in when the caller may actually see that component - a name
-    held by somebody else's draft still reads as taken, just without details.
+    `available` reflects the whole catalogue, since names are globally unique across tools
+    and workflows. `existing` is only filled in when the caller may actually see that
+    component - a name held by somebody else's draft still reads as taken, just without
+    details.
 
     NOTE: must stay declared above GET /{component_id} - FastAPI matches routes in
     declaration order, and "name-availability" would otherwise be parsed as a component id.
     """
-    taken = await components_service.find_latest_version_by_name(name) is not None
-    existing = await components_service.find_visible_latest_version_by_name(name, current_user)
+    taken = await components_service.find_latest_version_by_name(name, exclude_id) is not None
+    existing = await components_service.find_visible_latest_version_by_name(name, current_user, exclude_id)
     return NameAvailabilityDto(
         name=name,
         available=not taken,
-        existing=None
-        if existing is None
-        else ExistingComponentDto(
-            id=existing.id,
-            name=existing.name,
-            version=existing.version,
-            domains=ComponentTransformer.to_domains(existing),
-            status=existing.status,
-            can_add_version=ComponentPermissionValidator(current_user).can_update(existing),
-        ),
+        existing=None if existing is None else ComponentTransformer.to_existing(existing, current_user),
     )
-
-
-@router.post(
-    "",
-    response_model=ComponentDetailDto,
-    status_code=status.HTTP_201_CREATED,
-    responses={
-        status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse, "description": "Invalid CWL content or file too large"},
-        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
-        status.HTTP_409_CONFLICT: {"model": ErrorResponse, "description": "A component with this name already exists"},
-        status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErrorResponse, "description": "Request validation failed"},
-    },
-)
-async def create(
-    dto: Annotated[CreateComponentRequestDto, Form(media_type="multipart/form-data")],
-    current_user: Annotated[User, Depends(AuthService.get_current_user)],
-    components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
-) -> ComponentDetailDto:
-    validator = ComponentPermissionValidator(current_user)
-    if not validator.can_create():
-        raise ForbiddenException("Insufficient permission to create a component")
-
-    content = await dto.cwl_file.read()
-    if len(content) > MAX_CWL_FILE_SIZE:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            f"Validation failed (expected size to be less than {MAX_CWL_FILE_SIZE} bytes)",
-        )
-
-    logger.info(f"Creating component '{dto.name}' for user {current_user.id}")
-    component = ComponentTransformer.from_create_dto(dto, content.decode("utf-8"), current_user.id)
-    created = await components_service.create_manual(
-        component, format_labels=ComponentTransformer.to_format_labels(dto.format_labels)
-    )
-    logger.info(f"Created component {created.id} ('{created.name}' v{created.version})")
-    return ComponentTransformer.to_detail(created, is_favorite=False, current_user=current_user)
-
-
-@router.post(
-    "/package/preview",
-    response_model=PackagePreviewDto,
-    responses={
-        status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse, "description": "Invalid URL or packaging failed"},
-        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
-        status.HTTP_403_FORBIDDEN: {
-            "model": ErrorResponse,
-            "description": "The repo is already packaged as a component the caller cannot see",
-        },
-        status.HTTP_503_SERVICE_UNAVAILABLE: {"model": ErrorResponse, "description": "Packaging service unreachable"},
-    },
-)
-async def package_preview(
-    dto: PackagePreviewRequestDto,
-    current_user: Annotated[User, Depends(AuthService.get_current_user)],
-    components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
-) -> PackagePreviewDto:
-    """Package a GitHub repo without persisting it, so the user can review the generated
-    component (and label its File ports) before POST /components/package creates it.
-    Mirrors POST /components/parse."""
-    logger.info(f"Previewing package of {dto.repo_url} for user {current_user.id}")
-    preview = await components_service.preview_package(dto.repo_url)
-    validator = ComponentPermissionValidator(current_user)
-    existing = preview.existing
-    if existing is not None and not validator.can_read(existing):
-        raise ForbiddenException("This repository is already packaged as another user's component")
-
-    parsed = preview.parsed
-    return PackagePreviewDto(
-        cwl_content=parsed.cwl_content,
-        cwl_type=parsed.cwl_type,
-        description=parsed.description,
-        dockerfile_content=parsed.dockerfile_content,
-        docker_pull_reference=parsed.docker_pull_reference,
-        ontology_url=parsed.ontology_url,
-        parameters=[
-            ComponentTransformer.to_preview_parameter(p, "preview", parsed.ontology_url) for p in parsed.parameters
-        ],
-        repo_name=preview.repo_name,
-        repo_url=preview.repo_url,
-        commit_sha=preview.commit_sha,
-        author=preview.author,
-        existing=None
-        if existing is None
-        else ExistingComponentDto(
-            id=existing.id,
-            name=existing.name,
-            version=existing.version,
-            domains=ComponentTransformer.to_domains(existing),
-            status=existing.status,
-            can_add_version=validator.can_update(existing),
-        ),
-        already_packaged=preview.already_packaged,
-    )
-
-
-@router.post(
-    "/package",
-    response_model=ComponentDetailDto,
-    status_code=status.HTTP_201_CREATED,
-    responses={
-        status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse, "description": "Invalid URL or packaging failed"},
-        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
-        status.HTTP_403_FORBIDDEN: {
-            "model": ErrorResponse,
-            "description": "Not the creator of this lineage (only applies when repoUrl already exists)",
-        },
-        status.HTTP_409_CONFLICT: {
-            "model": ErrorResponse,
-            "description": "This exact commit is already packaged, the name collides with an existing component, "
-            "or the repo changed since expectedCommitSha was reviewed",
-        },
-        status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErrorResponse, "description": "Request validation failed"},
-    },
-)
-async def package(
-    dto: PackageComponentRequestDto,
-    current_user: Annotated[User, Depends(AuthService.get_current_user)],
-    components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
-    favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
-) -> ComponentDetailDto:
-    existing = await components_service.find_component_by_repo_url(dto.repo_url)
-    format_labels = ComponentTransformer.to_format_labels(dto.format_labels)
-    logger.info(f"Packaging component from {dto.repo_url}")
-
-    if existing is not None:
-        validator = ComponentPermissionValidator(current_user)
-        if not validator.can_update(existing):
-            logger.warning(f"User {current_user.id} not permitted to package a new version of repo {dto.repo_url}")
-            raise ForbiddenException("Insufficient permission to package a new version of this component")
-        component = await components_service.package_next_version(
-            existing, dto.description, format_labels, dto.expected_commit_sha
-        )
-    else:
-        component = await components_service.create_from_url(
-            dto.repo_url,
-            dto.domains,
-            dto.description,
-            current_user.id,
-            name=dto.name,
-            format_labels=format_labels,
-            expected_commit_sha=dto.expected_commit_sha,
-        )
-
-    logger.info(f"Packaging complete: '{component.name}' v{component.version} ({component.id})")
-    favorited_names = await _favorited_names(favorites_service, current_user)
-    return ComponentTransformer.to_detail(component, component.name in favorited_names, current_user)
-
-
-@router.post(
-    "/{component_id}/versions",
-    response_model=ComponentDetailDto,
-    status_code=status.HTTP_201_CREATED,
-    responses={
-        status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse, "description": "Invalid CWL content or file too large"},
-        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
-        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Not the creator of this component"},
-        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Component not found"},
-    },
-)
-async def add_version(
-    component_id: uuid.UUID,
-    dto: Annotated[AddVersionRequestDto, Form(media_type="multipart/form-data")],
-    current_user: Annotated[User, Depends(AuthService.get_current_user)],
-    components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
-    favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
-) -> ComponentDetailDto:
-    parent = await components_service.get_component(component_id)
-
-    validator = ComponentPermissionValidator(current_user)
-    if not validator.can_update(parent):
-        logger.warning(f"User {current_user.id} not permitted to add version to component {component_id}")
-        raise ForbiddenException("Insufficient permission to add a version to this component")
-
-    content = await dto.cwl_file.read()
-    if len(content) > MAX_CWL_FILE_SIZE:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            f"Validation failed (expected size to be less than {MAX_CWL_FILE_SIZE} bytes)",
-        )
-
-    draft = ComponentTransformer.from_add_version_dto(parent, dto, content.decode("utf-8"))
-    component = await components_service.add_manual_version(draft)
-    logger.info(f"Added version {component.version} to component '{parent.name}' ({component.id})")
-    favorited_names = await _favorited_names(favorites_service, current_user)
-    return ComponentTransformer.to_detail(component, component.name in favorited_names, current_user)
 
 
 @router.get(
@@ -416,11 +174,10 @@ async def add_version(
 async def get_component(
     component_id: uuid.UUID,
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
-    favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
     current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
 ) -> ComponentDetailDto:
     component = await components_service.get_visible_component(component_id, current_user)
-    favorited_names = await _favorited_names(favorites_service, current_user)
+    favorited_names = await components_service.favorited_names(current_user)
     return ComponentTransformer.to_detail(component, component.name in favorited_names, current_user)
 
 
@@ -432,35 +189,29 @@ async def get_component(
 async def get_versions(
     component_id: uuid.UUID,
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
-    favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
     current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
 ) -> list[ComponentListItemDto]:
     component = await components_service.get_visible_component(component_id, current_user)
     versions = await components_service.get_visible_versions(component, current_user)
-    favorited_names = await _favorited_names(favorites_service, current_user)
+    favorited_names = await components_service.favorited_names(current_user)
     return [ComponentTransformer.to_list_item(v, v.name in favorited_names, current_user) for v in versions]
 
 
 @router.get(
-    "/{component_id}/workflows",
-    response_model=list[ComponentWorkflowUsageDto],
+    "/{component_id}/usages",
+    response_model=list[ComponentUsageDto],
     responses={status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Component not found"}},
 )
-async def get_workflow_usages(
+async def get_usages(
     component_id: uuid.UUID,
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
-    workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
     current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
-) -> list[ComponentWorkflowUsageDto]:
-    """The workflows that use any version of this component - only those the caller may see."""
+) -> list[ComponentUsageDto]:
+    """The workflows running any version of this component - a tool, or a nested
+    workflow - only those the caller may see."""
     component = await components_service.get_visible_component(component_id, current_user)
-    usages = await workflows_service.list_usages_of_component(component, current_user)
-    return [
-        ComponentWorkflowUsageDto(
-            id=u.workflow_id, name=u.workflow_name, status=u.workflow_status, component_versions=u.component_versions
-        )
-        for u in usages
-    ]
+    usages = await components_service.list_usages(component, current_user)
+    return [ComponentTransformer.to_usage(u) for u in usages]
 
 
 @router.get(
@@ -476,42 +227,38 @@ async def get_deletion_impact(
     component_id: uuid.UUID,
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
-    workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
 ) -> ComponentDeletionImpactDto:
     """The workflows and builder drafts using exactly this version - what a delete unmatches."""
     component = await components_service.get_component(component_id)
     if not ComponentPermissionValidator(current_user).can_delete(component):
         raise ForbiddenException("Insufficient permission to delete this component")
 
-    impact = await workflows_service.get_deletion_impact(component, current_user)
-    return ComponentDeletionImpactDto(
-        workflows=[
-            ComponentWorkflowUsageDto(
-                id=u.workflow_id, name=u.workflow_name, status=u.workflow_status, component_versions=u.component_versions
-            )
-            for u in impact.workflows
-        ],
-        hidden_workflow_count=impact.hidden_workflow_count,
-        drafts=[ComponentDeletionDraftDto(id=d.draft_id, name=d.name) for d in impact.own_drafts],
-        other_draft_count=impact.other_draft_count,
-    )
+    impact = await components_service.get_deletion_impact(component, current_user)
+    return ComponentTransformer.to_deletion_impact(impact)
 
 
 @router.get(
     "/{component_id}/download",
-    responses={status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Component not found"}},
+    responses={
+        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Component not found"},
+        status.HTTP_409_CONFLICT: {
+            "model": ErrorResponse,
+            "description": "Two documents of the workflow's tree need the same file name",
+        },
+    },
 )
 async def download(
     component_id: uuid.UUID,
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
     current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
 ) -> Response:
+    """A tool as its .cwl document; a workflow as a zip of its whole tree."""
     component = await components_service.get_visible_component(component_id, current_user)
-    filename, content = await components_service.get_cwl_download(component)
+    file = await components_service.get_download(component)
     return Response(
-        content=content,
-        media_type="application/yaml",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        content=file.content,
+        media_type=file.media_type,
+        headers={"Content-Disposition": f'attachment; filename="{file.filename}"'},
     )
 
 
@@ -521,11 +268,16 @@ async def download(
     responses={
         status.HTTP_400_BAD_REQUEST: {
             "model": ErrorResponse,
-            "description": "Command is missing a payload field it requires (e.g. UPDATE_DOMAIN without domains)",
+            "description": "Command is missing a payload field it requires (e.g. UPDATE_DOMAIN without domains), "
+            "or a workflow is not ready to publish",
         },
         status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
         status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Insufficient permission for this command"},
         status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Component not found"},
+        status.HTTP_409_CONFLICT: {
+            "model": ErrorResponse,
+            "description": "PUBLISH of a workflow that still runs draft components",
+        },
         status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErrorResponse, "description": "Unknown command"},
     },
 )
@@ -534,7 +286,6 @@ async def execute_command(
     dto: ComponentCommandExecuteRequestDto,
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
-    favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
 ) -> ComponentDetailDto:
     component = await components_service.get_visible_component(component_id, current_user)
     command = ComponentTransformer.to_domain_command(dto)
@@ -544,14 +295,15 @@ async def execute_command(
         logger.warning(f"User {current_user.id} not permitted to execute {command.type} on component {component_id}")
         raise ForbiddenException(f"Insufficient permission to execute {command.type} on this component")
 
-    updated = await components_service.execute_command(component, command, current_user.id, favorites_service)
-    logger.info(f"Executed command {command.type} on component {component_id}")
-    favorited_names = await _favorited_names(favorites_service, current_user)
+    updated = await components_service.execute_command(component, command, current_user.id)
+    logger.info(f"Executed command {command.type} on {ComponentKind(updated.kind).value} {component_id}")
+    favorited_names = await components_service.favorited_names(current_user)
     return ComponentTransformer.to_detail(updated, updated.name in favorited_names, current_user)
 
 
 @router.delete(
     "/{component_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
     responses={
         status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
         status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Not the creator of this component"},
@@ -562,8 +314,8 @@ async def remove(
     component_id: uuid.UUID,
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
-    favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
-    workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
+    # workflows only: also delete the builder draft this workflow was synced from
+    delete_linked_draft: Annotated[bool, Query(alias="deleteLinkedDraft")] = False,
 ) -> None:
     component = await components_service.get_component(component_id)
 
@@ -572,30 +324,6 @@ async def remove(
         logger.warning(f"User {current_user.id} not permitted to delete component {component_id}")
         raise ForbiddenException("Insufficient permission to delete this component")
 
-    versions = await components_service.get_versions(component)
-    # unmatch the steps pinned to this version first - SET NULL alone would leave them
-    # confirmed with no component and their workflow still public
-    await workflows_service.detach_component(component.id)
-    await components_service.remove(component)
-    logger.info(f"Deleted component {component_id}")
-
-    if len(versions) == 1:
-        await favorites_service.remove_all_favorites(component.name)
-
-
-@router.get(
-    "/{component_id}/bundle",
-    responses={status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Component not found"}},
-)
-async def bundle(
-    component_id: uuid.UUID,
-    components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
-    current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
-) -> Response:
-    component = await components_service.get_visible_component(component_id, current_user)
-    filename, content = await components_service.get_bundle(component)
-    return Response(
-        content=content,
-        media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+    kind = ComponentKind(component.kind).value
+    deleted_draft = await components_service.remove(component, current_user.id, delete_linked_draft)
+    logger.info(f"Deleted {kind} {component_id}{' and its builder draft' if deleted_draft else ''}")

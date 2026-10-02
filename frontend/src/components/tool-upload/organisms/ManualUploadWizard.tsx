@@ -11,17 +11,14 @@ import { UploadStepper } from '@/components/common/UploadStepper';
 import { ComponentLink } from '@/components/common/ComponentLink';
 import { useUploadWizard } from '@/components/common/useUploadWizard';
 import { useUploadMetadataForm } from '@/components/common/useUploadMetadataForm';
-import { ComponentReviewStep } from '@/components/component-upload/organisms/ComponentReviewStep';
+import { ToolReviewStep } from './ToolReviewStep';
 import {
-  componentTransformer,
   toFormatLabelDtos,
   withFormatLabels,
   type FormatLabelDraft,
   useComponentNameAvailability,
-  useParseComponent,
-  useUploadComponent,
-  type ComponentDetailDto,
 } from '@/api/components';
+import { toolTransformer, useParseTool, useUploadTool, type ToolDetailDto } from '@/api/tools';
 import type { UploadMetadataFormData } from '@/api/schema';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { getErrorMessage } from '@/lib/errors';
@@ -37,13 +34,13 @@ interface ManualUploadWizardProps {
   // when provided, replaces the default post-upload navigation - used to embed this in
   // contexts like the workflow step picker, where navigating away would abandon
   // whatever page it was opened from
-  onSuccess?: (created: ComponentDetailDto) => void;
+  onSuccess?: (created: ToolDetailDto) => void;
 }
 
 export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
   const navigate = useNavigate();
-  const parseMutation = useParseComponent();
-  const { mutate: upload, isPending: isCreating, error: createError, reset: resetCreate } = useUploadComponent();
+  const parseMutation = useParseTool();
+  const { mutate: upload, isPending: isCreating, error: createError, reset: resetCreate } = useUploadTool();
   const wizard = useUploadWizard();
   const { form, prefill } = useUploadMetadataForm();
 
@@ -103,7 +100,7 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
         onSuccess: (created) => {
           toast.success(`${created.name} created`);
           if (onSuccess) onSuccess(created);
-          else navigate(ROUTES.componentDetail(created.id));
+          else navigate(ROUTES.toolDetail(created.id));
         },
       },
     );
@@ -118,6 +115,7 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
             This name is already taken by{' '}
             <ComponentLink
               componentId={takenBy.id}
+              kind={takenBy.kind}
               name={takenBy.name}
               version={takenBy.version}
               className="inline-flex"
@@ -134,7 +132,7 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
   ) : undefined;
 
   const previewModel = parsed
-    ? componentTransformer.toPreviewDisplayModel(
+    ? toolTransformer.toPreviewDisplayModel(
         {
           ...parsed,
           parameters: withFormatLabels(parsed.parameters, formatLabels),
@@ -164,8 +162,8 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
         )}
 
         {wizard.step === 2 && parsed && previewModel && (
-          <ComponentReviewStep
-            title="New component"
+          <ToolReviewStep
+            title="New tool"
             nameNotice={nameNotice}
             descriptionPlaceholder="Taken from the file's doc: field - or write your own"
             previewModel={previewModel}
@@ -177,7 +175,7 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
 
         {createError && (
           <p className="mt-4 rounded-md bg-error px-3 py-2 text-sm text-error-foreground">
-            {getErrorMessage(createError, 'Could not create this component.')}
+            {getErrorMessage(createError, 'Could not create this tool.')}
           </p>
         )}
 
@@ -202,7 +200,7 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
               disabled={isCreating || taken}
               className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90"
             >
-              {isCreating ? 'Creating...' : 'Create Component'}
+              {isCreating ? 'Creating...' : 'Create Tool'}
             </Button>
           )}
         </div>

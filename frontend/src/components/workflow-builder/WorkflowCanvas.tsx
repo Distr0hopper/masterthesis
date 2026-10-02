@@ -82,6 +82,7 @@ export function WorkflowCanvas({
         position: screenToFlowPosition({ x: event.clientX, y: event.clientY }),
         data: {
           componentId: payload.componentId,
+          kind: payload.kind,
           label: payload.componentName,
           domains: payload.domains,
           parameters: payload.parameters,

@@ -12,11 +12,9 @@ router = APIRouter(prefix="/stats", tags=["stats"])
 async def get_stats(
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
 ) -> StatsDto:
-    components_published, contributors = await components_service.get_stats()
+    stats = await components_service.get_stats()
     return StatsDto(
-        components_published=components_published,
-        # hardcoded: there's no workflow concept anywhere in this backend yet (no model,
-        # no table, no endpoints) - real zero rather than fabricating a number
-        workflows_composed=0,
-        contributors=contributors,
+        tools_published=stats.tools_published,
+        workflows_published=stats.workflows_published,
+        contributors=stats.contributors,
     )

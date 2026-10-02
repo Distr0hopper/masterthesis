@@ -16,7 +16,7 @@ import { getErrorMessage } from '@/lib/errors';
 import { ComponentPickerDialog } from '@/components/common/ComponentPickerDialog';
 import { ComponentLink } from '@/components/common/ComponentLink';
 import { DefinitionDisclosure } from '@/components/common/DefinitionDisclosure';
-import { ComponentTabs } from '@/components/component-detail/organisms/ComponentTabs';
+import { ComponentDefinition } from '@/components/component-detail/organisms/ComponentDefinition';
 import { useComponent } from '@/api/components';
 
 const STATUS_BADGE_VARIANT: Record<StepMatchStatus, 'secondary' | 'default' | 'destructive'> = {
@@ -38,7 +38,7 @@ export function StepMatchCard({ step }: StepMatchCardProps) {
   const { data: component } = useComponent(showDefinition && step.componentId ? step.componentId : '');
   const { mutate: updateComponent, isPending: isUpdating } = useUpdateWorkflowStepComponent();
   const { mutate: confirmStep, isPending: isConfirming } = useConfirmWorkflowStep();
-  // an inline step (ExpressionTool / nested Workflow) never had a component to pick
+  // an inline step (an embedded ExpressionTool / Workflow) never had a component to pick
   const isInline = step.matchStatus === StepMatchStatus.INLINE;
   const canUpdate = !isInline && hasUpdateLink(step._links);
   const canConfirm = !isInline && hasConfirmLink(step._links);
@@ -87,9 +87,15 @@ export function StepMatchCard({ step }: StepMatchCardProps) {
             <div className="flex items-center justify-between gap-2 rounded-md border border-input px-3 py-2">
               <ComponentLink
                 componentId={step.componentId}
+                kind={step.component?.kind}
                 name={step.componentName ?? 'Component'}
                 version={step.componentVersion}
               />
+              {step.component?.kind === 'workflow' && (
+                <Badge variant="outline" title="This step runs a whole workflow">
+                  Nested workflow
+                </Badge>
+              )}
               {canUpdate && (
                 <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={() => setPickerOpen(true)}>
                   Change
@@ -113,7 +119,7 @@ export function StepMatchCard({ step }: StepMatchCardProps) {
         {step.componentId && (
           <DefinitionDisclosure open={showDefinition} onOpenChange={setShowDefinition}>
             {component ? (
-              <ComponentTabs model={component} />
+              <ComponentDefinition model={component} />
             ) : (
               <p className="text-sm text-slate-500">Loading definition...</p>
             )}

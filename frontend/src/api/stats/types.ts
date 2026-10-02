@@ -1,5 +1,7 @@
 export interface StatsDto {
-  componentsPublished: number;
-  workflowsComposed: number;
+  /** distinct published tool lineages */
+  toolsPublished: number;
+  /** distinct published workflow lineages */
+  workflowsPublished: number;
   contributors: number;
 }

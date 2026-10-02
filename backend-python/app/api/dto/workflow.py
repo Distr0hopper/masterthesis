@@ -1,41 +1,32 @@
+"""DTOs only a workflow - the composite - has: its steps and its upload flow."""
+
 import uuid
-from datetime import datetime
 from enum import StrEnum
+from typing import Literal
 
 from fastapi import UploadFile
-from pydantic import Field, Json, field_validator, model_validator
+from pydantic import Field, Json, model_validator
 
 from app.api.dto.base import CamelModel
-from app.api.dto.component import ComponentCreatorDto, ComponentPreviewDto, FormatLabelDto
+from app.api.dto.component import (
+    ComponentDetailBaseDto,
+    ComponentListItemBaseDto,
+    DomainsValidatorMixin,
+    EmptyDescriptionToNoneMixin,
+    FormatLabelDto,
+)
+from app.api.dto.tool import ToolPreviewDto
 from app.api.link.model import LinkModel
-from app.domain.models.component import ComponentStatus
+from app.domain.models.component import MAX_DESCRIPTION_LENGTH, ComponentKind, ComponentSource, ComponentStatus
 from app.domain.models.component_domain import VALID_DOMAINS
-from app.domain.models.workflow import MAX_DESCRIPTION_LENGTH, WorkflowSource, WorkflowStatus
 from app.domain.models.workflow_step import StepMatchStatus
 
 
-class WorkflowDomainsValidatorMixin:
-    @field_validator("domains")
-    @classmethod
-    def validate_domains(cls, value: list[str]) -> list[str]:
-        if not value:
-            raise ValueError("at least one domain is required")
-        invalid = [d for d in value if d not in VALID_DOMAINS]
-        if invalid:
-            raise ValueError(f"domains must each be one of {VALID_DOMAINS}, got invalid: {invalid}")
-        seen: set[str] = set()
-        return [d for d in value if not (d in seen or seen.add(d))]
-
-
-class EmptyWorkflowDescriptionToNoneMixin:
-    @field_validator("description", mode="before")
-    @classmethod
-    def empty_description_to_none(cls, value: str | None) -> str | None:
-        return None if value == "" else value
-
-
 class ComponentSummaryDto(CamelModel):
+    """The child a step runs - a tool, or a nested workflow."""
+
     id: uuid.UUID
+    kind: ComponentKind
     name: str
     version: int
     domains: list[str]
@@ -53,41 +44,25 @@ class WorkflowStepDto(CamelModel, LinkModel):
     match_score: float | None
 
 
-class WorkflowListItemDto(CamelModel, LinkModel):
-    id: uuid.UUID
-    name: str
-    description: str | None
-    domains: list[str]
+class WorkflowListItemDto(ComponentListItemBaseDto):
+    kind: Literal[ComponentKind.WORKFLOW] = ComponentKind.WORKFLOW
     step_count: int
-    is_favorite: bool
-    status: WorkflowStatus
-    source: WorkflowSource
+    source: ComponentSource
     #: set only for source=workflow_builder, and cleared if that draft is deleted
     draft_id: uuid.UUID | None
-    created_at: datetime
 
 
-class WorkflowDetailDto(CamelModel, LinkModel):
-    id: uuid.UUID
-    name: str
-    description: str | None
-    domains: list[str]
-    created_by: ComponentCreatorDto | None
+class WorkflowDetailDto(ComponentDetailBaseDto):
+    kind: Literal[ComponentKind.WORKFLOW] = ComponentKind.WORKFLOW
     steps: list[WorkflowStepDto]
-    is_favorite: bool
-    status: WorkflowStatus
-    source: WorkflowSource
     draft_id: uuid.UUID | None
-    cwl_content: str
-    created_at: datetime
-    updated_at: datetime
 
 
 class ComponentConfigDto(CamelModel):
     """The user's decision for one previewed step, keyed by WorkflowStepPreviewDto.step_id.
 
     Exactly one branch: reuse_component_id binds the step to an existing catalogue
-    Component, or name+domain create a new one from that step's CWL.
+    component, or name+domain create a new tool from that step's CWL.
     """
 
     step_id: str
@@ -114,7 +89,7 @@ class ComponentConfigDto(CamelModel):
         return self
 
 
-class CreateWorkflowRequestDto(WorkflowDomainsValidatorMixin, EmptyWorkflowDescriptionToNoneMixin, CamelModel):
+class CreateWorkflowRequestDto(DomainsValidatorMixin, EmptyDescriptionToNoneMixin, CamelModel):
     name: str
     domains: list[str] = Field(json_schema_extra={"items": {"enum": VALID_DOMAINS}})
     # may be a bare .cwl file or a .zip archive - the endpoint detects which
@@ -122,22 +97,8 @@ class CreateWorkflowRequestDto(WorkflowDomainsValidatorMixin, EmptyWorkflowDescr
     description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
     #: one entry per workflow step - every step must be configured before the workflow can
     #: be created (the service rejects any that isn't). One multipart form field carrying
+    #: a JSON-encoded array.
     component_configs: Json[list[ComponentConfigDto]] = Field(default="[]", validate_default=True)
-
-
-class ExistingWorkflowDto(CamelModel):
-    """The workflow currently holding a name, returned when that name is in use."""
-
-    id: uuid.UUID
-    name: str
-    created_at: datetime
-
-
-class WorkflowNameAvailabilityDto(CamelModel):
-
-    name: str
-    available: bool
-    existing: ExistingWorkflowDto | None
 
 
 class ParseWorkflowRequestDto(CamelModel):
@@ -145,10 +106,11 @@ class ParseWorkflowRequestDto(CamelModel):
     file: UploadFile
 
 
-class ComponentMatchDto(CamelModel):
+class StepComponentMatchDto(CamelModel):
     """An existing component a step could bind to instead of creating a new one."""
 
     component_id: uuid.UUID
+    kind: ComponentKind
     name: str
     version: int
     domains: list[str]
@@ -156,9 +118,9 @@ class ComponentMatchDto(CamelModel):
     score: float | None
 
 
-class WorkflowStepPreviewDto(ComponentPreviewDto):
-    """One workflow step rendered as the Component it would become, so the user can review
-    and configure it before the workflow is saved."""
+class WorkflowStepPreviewDto(ToolPreviewDto):
+    """One workflow step rendered as the tool it would become, so the user can review and
+    configure it before the workflow is saved."""
 
     step_id: str
     #: "inline" (an inline CommandLineTool) or "archive" (a .cwl file from the uploaded zip)
@@ -167,9 +129,9 @@ class WorkflowStepPreviewDto(ComponentPreviewDto):
     run_reference: str | None
     suggested_name: str
     #: an existing component that already holds suggested_name - the user must rename or reuse
-    name_conflict: ComponentMatchDto | None
-    #: archive origin only - the catalogue component this step's run: filename matches
-    suggested_match: ComponentMatchDto | None
+    name_conflict: StepComponentMatchDto | None
+    #: archive origin only - the catalogue tool this step's run: filename matches
+    suggested_match: StepComponentMatchDto | None
 
 
 class ParseWorkflowResponseDto(CamelModel):
@@ -189,7 +151,7 @@ class ParseWorkflowResponseDto(CamelModel):
     external_refs: list[str]
     #: steps whose run: is an inline mapping but not class: CommandLineTool (e.g. an inline
     #: ExpressionTool or sub-Workflow). They stay embedded in the saved pipeline and never
-    #: become Components, so they need no configuration - informational, not blocking.
+    #: become components, so they need no configuration - informational, not blocking.
     inline_only_steps: list[str]
     #: external_refs not found among the zip's own .cwl files - always [] for a bare
     #: .cwl upload, since there's nothing to cross-check against
@@ -202,31 +164,9 @@ class ParseWorkflowResponseDto(CamelModel):
 
 
 class UpdateWorkflowStepRequestDto(CamelModel):
-    # explicit null clears the match back to unmatched
+    #: the component the step runs - a tool or another workflow; explicit null clears the
+    #: match back to unmatched
     component_id: uuid.UUID | None
-
-
-class WorkflowCommandTypesApiV1(StrEnum):
-    ADD_FAVORITE = "ADD_FAVORITE"
-    REMOVE_FAVORITE = "REMOVE_FAVORITE"
-    PUBLISH = "PUBLISH"
-    UNPUBLISH = "UNPUBLISH"
-    UPDATE_DESCRIPTION = "UPDATE_DESCRIPTION"
-
-
-class WorkflowCommandExecuteRequestDto(EmptyWorkflowDescriptionToNoneMixin, CamelModel):
-    command: WorkflowCommandTypesApiV1 = Field(..., description="The specific action to perform on the workflow")
-    note: str | None = Field(default=None, description="Optional note for the command execution")
-    publish_components: bool = Field(
-        default=False,
-        description="PUBLISH only: also publish the workflow's draft components",
-    )
-    # only read by UPDATE_DESCRIPTION - the new description to store (blank/omitted clears it)
-    description: str | None = Field(
-        default=None,
-        max_length=MAX_DESCRIPTION_LENGTH,
-        description="New description; only used by the UPDATE_DESCRIPTION command",
-    )
 
 
 class WorkflowStepCommandTypesApiV1(StrEnum):

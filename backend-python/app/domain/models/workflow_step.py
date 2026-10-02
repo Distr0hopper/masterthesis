@@ -17,17 +17,29 @@ class StepMatchStatus(str, Enum):
     INLINE = "inline"
 
 
+#: step states that need no further action before a workflow can be published - either the
+#: user confirmed the component, or the step runs inline and never had one to confirm
+SETTLED_STEP_STATUSES = {StepMatchStatus.CONFIRMED, StepMatchStatus.INLINE}
+
+
 class WorkflowStep(SQLModel, table=True):
+    """One step of a workflow - the edge of the composite, from a Workflow to the child
+    Component it runs."""
+
     __tablename__ = "workflow_steps"
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    workflow_id: uuid.UUID = Field(sa_column=Column(ForeignKey("workflows.id", ondelete="CASCADE"), nullable=False))
+    # the parent - references the workflow detail row, so a step can only ever belong to a
+    # component of kind WORKFLOW
+    workflow_id: uuid.UUID = Field(
+        sa_column=Column(ForeignKey("workflows.component_id", ondelete="CASCADE"), nullable=False)
+    )
     step_id: str  # the CWL step key, e.g. "step_remove_outliers"
     run_reference: str  # the raw `run:` value, e.g. "remove-outliers.cwl"
     step_order: int
-    # pinned to one specific Component *version* row (not "latest of lineage") for
-    # reproducibility - ondelete SET NULL (not CASCADE like Parameter) because a step
-    # merely references a Component, it isn't owned by it
+    # the child - any Component, a Tool or (nested) another Workflow. Pinned to one specific
+    # *version* row (not "latest of lineage") for reproducibility - ondelete SET NULL (not
+    # CASCADE like Parameter) because a step merely references a Component, it isn't owned by it
     component_id: uuid.UUID | None = Field(
         default=None, sa_column=Column(ForeignKey("components.id", ondelete="SET NULL"), nullable=True)
     )
@@ -41,3 +53,8 @@ class WorkflowStep(SQLModel, table=True):
 
     workflow: Optional["Workflow"] = Relationship(back_populates="steps", sa_relationship_kwargs={"lazy": "selectin"})
     component: Optional["Component"] = Relationship(sa_relationship_kwargs={"lazy": "selectin"})
+
+    @property
+    def parent(self) -> Optional["Component"]:
+        """The workflow Component this step belongs to."""
+        return self.workflow.component if self.workflow is not None else None

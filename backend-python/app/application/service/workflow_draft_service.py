@@ -9,12 +9,13 @@ from app.application.exception.workflow_draft_exceptions import (
     WorkflowDraftForbiddenError,
     WorkflowDraftNotFoundError,
 )
+from app.application.service.components_service import ComponentsService
+from app.application.service.workflows_service import StepBinding, WorkflowsService
+from app.domain.composite.tree import ConflictingTreeFileError, auxiliary_files, step_files
 from app.domain.models.component import Component
 from app.domain.models.parameter import ParameterDirection
-from app.domain.models.workflow import Workflow
 from app.domain.models.workflow_draft import WorkflowDraft
 from app.domain.repository.components_repository import ComponentsRepository
-from app.application.service.workflows_service import WorkflowsService
 from app.domain.repository.workflow_draft_repository import WorkflowDraftRepository
 from app.infrastructure.cwl.canvas_graph import (
     CanvasCycleError,
@@ -27,6 +28,7 @@ from app.infrastructure.cwl.canvas_graph import (
 from app.infrastructure.cwl.workflow_generator import (
     PortSpec,
     assemble_cwl_zip,
+    assign_step_ids,
     build_workflow_document,
     cwl_filename_for,
     generate_workflow_inputs_yaml,
@@ -46,25 +48,28 @@ class WorkflowDraftService:
         self,
         repository: WorkflowDraftRepository,
         components_repository: ComponentsRepository,
+        components_service: ComponentsService,
         workflows_service: WorkflowsService,
     ):
         self.repository = repository
         self.components_repository = components_repository
+        self.components_service = components_service
         self.workflows_service = workflows_service
 
     @staticmethod
     def get_service(
         repository: Annotated[WorkflowDraftRepository, Depends(WorkflowDraftRepository.get_repository)],
         components_repository: Annotated[ComponentsRepository, Depends(ComponentsRepository.get_repository)],
+        components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
         workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
     ) -> "WorkflowDraftService":
-        return WorkflowDraftService(repository, components_repository, workflows_service)
+        return WorkflowDraftService(repository, components_repository, components_service, workflows_service)
 
     async def list_my_drafts(self, user_id: uuid.UUID) -> list[WorkflowDraft]:
         return await self.repository.find_all_by_user(user_id)
 
     async def linked_workflow_ids(self, draft_ids: set[uuid.UUID]) -> dict[uuid.UUID, uuid.UUID]:
-        """{draft_id: workflow_id} for the drafts synced to a My Workflows entry."""
+        """{draft_id: newest workflow version id} for the drafts synced to a My Workflows entry."""
         return await self.workflows_service.linked_workflow_ids(draft_ids)
 
     async def get_draft(self, draft_id: uuid.UUID, user_id: uuid.UUID) -> WorkflowDraft:
@@ -108,9 +113,10 @@ class WorkflowDraftService:
         self, draft: WorkflowDraft, user_id: uuid.UUID, delete_linked_workflow: bool = False
     ) -> None:
         # by default the FK is ON DELETE SET NULL, so the synced My Workflows copy just
-        # loses its "edit in builder" link and stays. The user can opt to drop it too.
+        # loses its "edit in builder" link and stays. The user can opt to drop it too -
+        # every version synced from this canvas.
         if delete_linked_workflow:
-            await self.workflows_service.delete_by_draft_id(draft.id, user_id)
+            await self.components_service.remove_synced_from_draft(draft.id, user_id)
         await self.repository.delete(draft)
 
     async def missing_component_ids(self, draft: WorkflowDraft) -> list[str]:
@@ -152,6 +158,7 @@ class WorkflowDraftService:
 
     @staticmethod
     def _to_port_spec(component: Component) -> PortSpec:
+        # uniform over the composite: a nested workflow exposes its ports exactly like a tool
         spec = PortSpec(name=component.name)
         for parameter in component.parameters:
             if parameter.direction == ParameterDirection.OUTPUT:
@@ -166,15 +173,34 @@ class WorkflowDraftService:
     async def export_to_zip(self, draft: WorkflowDraft) -> tuple[str, bytes]:
         """Generate the main Workflow CWL plus one file per step, zipped.
 
+        A node running a workflow brings its whole tree along - the nested pipeline, the
+        step documents below it and anything they import - since its own `run:` lines
+        resolve next to it in the archive.
+
         Returns (filename, zip_bytes). Raises ExportValidationError for anything that
         makes the canvas unexportable.
         """
         workflow_doc, components, ports = await self._build_workflow_document(draft)
-        step_files = [
-            (cwl_filename_for(spec.name), components[cid].cwl_content) for cid, spec in ports.items()
-        ]
-        filename, zip_bytes = assemble_cwl_zip(draft.name, render_workflow_cwl(workflow_doc), step_files)
-        logger.info(f"Generated archive for draft {draft.id}: {len(step_files)} step file(s)")
+        files: dict[str, str] = {}
+        extras: dict[str, str] = {}
+        try:
+            for cid, spec in ports.items():
+                component = components[cid]
+                documents = [(cwl_filename_for(spec.name), component.cwl_content), *step_files(component)]
+                for name, content in documents:
+                    if files.setdefault(name, content) != content:
+                        raise ConflictingTreeFileError(name)
+                for path, content in auxiliary_files(component):
+                    if extras.setdefault(path, content) != content:
+                        raise ConflictingTreeFileError(path)
+        except ConflictingTreeFileError as err:
+            raise ExportValidationError(
+                f"Two different documents on the canvas need the file name '{err.path}' - rename one of them"
+            ) from err
+        filename, zip_bytes = assemble_cwl_zip(
+            draft.name, render_workflow_cwl(workflow_doc), sorted(files.items()), sorted(extras.items())
+        )
+        logger.info(f"Generated archive for draft {draft.id}: {len(files)} step file(s)")
         return filename, zip_bytes
 
     async def export_inputs_yaml(self, draft: WorkflowDraft) -> tuple[str, str]:
@@ -203,6 +229,8 @@ class WorkflowDraftService:
             raise ExportValidationError("One or more nodes have no linked component")
 
         components = await self._fetch_components([cid for cid in component_ids if cid is not None])
+        for component in components.values():
+            await self.components_service.load_tree(component)
         ports = {cid: self._to_port_spec(component) for cid, component in components.items()}
 
         try:
@@ -211,26 +239,45 @@ class WorkflowDraftService:
             raise ExportValidationError(str(err)) from err
 
         workflow_doc = build_workflow_document(
-            workflow_name=draft.name, ordered_nodes=ordered_nodes, edges=edges, ports=ports
+            workflow_name=draft.name,
+            ordered_nodes=ordered_nodes,
+            edges=edges,
+            ports=ports,
+            has_subworkflows=any(c.is_workflow for c in components.values()),
         )
         return workflow_doc, components, ports
 
-    async def sync_to_my_workflows(self, draft: WorkflowDraft, user_id: uuid.UUID) -> Workflow:
+    async def sync_to_my_workflows(self, draft: WorkflowDraft, user_id: uuid.UUID) -> Component:
         """Mirror the draft's generated archive into the user's My Workflows list.
 
         Not the same as making a workflow public - that stays a separate, explicit action
         on the My Workflows page (WorkflowsService.publish). This only materialises the
-        canvas as a PENDING_VALIDATION Workflow row.
+        canvas as a DRAFT workflow.
 
         Deliberately separate from export: downloading a file should not create rows.
         Idempotent per draft - the Builder calls this on every Save, so the first call
-        creates the Workflow and later ones re-sync it in place (see
+        creates the workflow and later ones re-sync it (see
         WorkflowsService.upsert_from_draft) rather than piling up near-duplicates.
+
+        Each step is bound to exactly the component its node was dropped from - the canvas
+        already knows, so nothing is matched by file name.
         """
-        _filename, zip_bytes = await self.export_to_zip(draft)
+        workflow_doc, _components, ports = await self._build_workflow_document(draft)
+        nodes, edges = parse_canvas(draft.canvas_state)
+        ordered_nodes = topological_sort(nodes, edges)
+        step_ids = assign_step_ids(ordered_nodes, ports)
+        bindings = [
+            StepBinding(
+                step_id=step_ids[node["id"]],
+                run_reference=cwl_filename_for(ports[node_component_id(node)].name),
+                component_id=uuid.UUID(node_component_id(node)),
+            )
+            for node in ordered_nodes
+        ]
 
         workflow = await self.workflows_service.upsert_from_draft(
-            zip_bytes=zip_bytes,
+            pipeline_content=render_workflow_cwl(workflow_doc),
+            bindings=bindings,
             name=draft.name,
             # the link the UI follows back into the builder, and the key this upsert is on
             draft_id=draft.id,

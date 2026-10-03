@@ -1,25 +1,20 @@
-import type { ComponentSummaryDto, WorkflowDetailDto, WorkflowListItemDto, WorkflowStepDto } from './types';
-import { StepMatchStatus, WorkflowSource, WorkflowStatus } from './types';
-import type { UpdateWorkflowDescriptionFormData } from './schema';
-import { getDomainLabel } from '@/api/components';
-import { formatDate, getCreatorDisplay } from '@/api/transformer';
+import type { ComponentKind, ComponentSource } from '@/api/components/types';
+import {
+  toDetailFields,
+  toDisplayModelBase,
+  type ComponentDetailFields,
+  type ComponentDisplayModelBase,
+} from '@/api/components/transformer';
 import type { WithHateoasLinks } from '@/api/types';
+import type { ComponentSummaryDto, WorkflowDetailDto, WorkflowListItemDto, WorkflowStepDto } from './types';
+import { StepMatchStatus } from './types';
+import { SOURCE_LABELS } from '@/api/components/transformer';
 
 const MATCH_STATUS_LABELS: Record<StepMatchStatus, string> = {
   [StepMatchStatus.SUGGESTED]: 'Suggested match — please confirm',
   [StepMatchStatus.CONFIRMED]: 'Confirmed',
   [StepMatchStatus.UNMATCHED]: 'Not matched',
   [StepMatchStatus.INLINE]: 'Runs inline',
-};
-
-const WORKFLOW_SOURCE_LABELS: Record<WorkflowSource, string> = {
-  [WorkflowSource.WORKFLOW_BUILDER]: 'Built in Workflow Builder',
-  [WorkflowSource.MANUAL_UPLOAD]: 'Uploaded archive',
-};
-
-const WORKFLOW_STATUS_LABELS: Record<WorkflowStatus, string> = {
-  [WorkflowStatus.PENDING_VALIDATION]: 'Pending validation',
-  [WorkflowStatus.VALIDATED]: 'Validated',
 };
 
 export interface WorkflowStepDisplayModel extends WithHateoasLinks {
@@ -36,38 +31,21 @@ export interface WorkflowStepDisplayModel extends WithHateoasLinks {
   matchScore: number | null;
 }
 
-export interface WorkflowDisplayModel extends WithHateoasLinks {
-  id: string;
-  name: string;
-  description: string | null;
-  domains: string[];
-  domainsDisplay: string[];
+/** A workflow - the composite - as the UI shows it in a list. */
+export interface WorkflowDisplayModel extends ComponentDisplayModelBase {
+  kind: typeof ComponentKind.WORKFLOW;
   stepCount: number;
-  isFavorite: boolean;
-  status: WorkflowStatus;
-  statusDisplay: string;
-  source: WorkflowSource;
+  source: ComponentSource;
   sourceDisplay: string;
   /** the builder draft this came from, when it is still available */
   draftId: string | null;
-  createdAt: Date;
-  createdAtDisplay: string;
 }
 
-export interface WorkflowDetailDisplayModel extends WorkflowDisplayModel {
-  createdById: string | null;
-  createdByDisplay: string;
+export interface WorkflowDetailDisplayModel extends WorkflowDisplayModel, ComponentDetailFields {
   steps: WorkflowStepDisplayModel[];
-  cwlContent: string;
-  updatedAt: Date;
-  updatedAtDisplay: string;
 }
 
 export const workflowTransformer = {
-  getInitialUpdateDescriptionFormValues(workflow: WorkflowDetailDisplayModel): UpdateWorkflowDescriptionFormData {
-    return { description: workflow.description ?? '' };
-  },
-
   toStepDisplayModel(dto: WorkflowStepDto): WorkflowStepDisplayModel {
     // a manually-touched selection always has matchScore === null (backend clears it on
     // any PATCH), so this distinguishes "algorithm guessed this" from "you picked this"
@@ -89,42 +67,24 @@ export const workflowTransformer = {
   },
 
   toDisplayModel(dto: WorkflowListItemDto): WorkflowDisplayModel {
-    const createdAt = new Date(dto.createdAt);
     return {
-      id: dto.id,
-      name: dto.name,
-      description: dto.description,
-      domains: dto.domains,
-      domainsDisplay: dto.domains.map(getDomainLabel),
+      ...toDisplayModelBase(dto),
+      kind: dto.kind,
       stepCount: dto.stepCount,
-      isFavorite: dto.isFavorite,
-      status: dto.status,
-      statusDisplay: WORKFLOW_STATUS_LABELS[dto.status],
       source: dto.source,
-      sourceDisplay: WORKFLOW_SOURCE_LABELS[dto.source],
+      sourceDisplay: SOURCE_LABELS[dto.source],
       draftId: dto.draftId,
-      createdAt,
-      createdAtDisplay: formatDate(createdAt),
-      _links: dto._links,
     };
   },
 
-  toListDisplayModels(dtos: WorkflowListItemDto[]): WorkflowDisplayModel[] {
-    // self-reference by name, not `this` - toListDisplayModel() passes this method
-    // around as a bare function reference, which would drop a `this` binding
-    return dtos.map((dto) => workflowTransformer.toDisplayModel(dto));
-  },
-
   toDetailDisplayModel(dto: WorkflowDetailDto): WorkflowDetailDisplayModel {
-    const updatedAt = new Date(dto.updatedAt);
     return {
-      ...this.toDisplayModel({ ...dto, stepCount: dto.steps.length }),
-      createdById: dto.createdBy?.id ?? null,
-      createdByDisplay: getCreatorDisplay(dto.createdBy),
-      steps: dto.steps.map(this.toStepDisplayModel),
-      cwlContent: dto.cwlContent,
-      updatedAt,
-      updatedAtDisplay: formatDate(updatedAt),
+      ...toDisplayModelBase(dto),
+      ...toDetailFields(dto),
+      kind: dto.kind,
+      stepCount: dto.steps.length,
+      draftId: dto.draftId,
+      steps: dto.steps.map(workflowTransformer.toStepDisplayModel),
     };
   },
 };

@@ -1,18 +1,12 @@
 import uuid
 import zipfile
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from io import BytesIO
-from typing import TYPE_CHECKING, Annotated
+from typing import Annotated
 
 from fastapi import Depends
 
-from app.application.commands.commands import (
-    ManualFormatLabel,
-    WorkflowCommand,
-    WorkflowCommandType,
-    WorkflowStepCommand,
-    WorkflowStepCommandType,
-)
+from app.application.commands.commands import ManualFormatLabel, WorkflowStepCommand, WorkflowStepCommandType
 from app.application.exception.component_exceptions import ComponentNotFoundError
 from app.application.exception.workflow_exceptions import (
     DuplicateExtractedComponentNameError,
@@ -21,32 +15,24 @@ from app.application.exception.workflow_exceptions import (
     InvalidExtractedComponentNameError,
     InvalidWorkflowArchiveError,
     InvalidWorkflowCwlError,
-    ConflictingAuxiliaryFileError,
     MissingImportedFileError,
+    PublishedWorkflowStepsLockedError,
     UnconfiguredWorkflowStepError,
-    UnpublishableWorkflowComponentsError,
-    WorkflowHasUnpublishedComponentsError,
-    WorkflowNameAlreadyExistsError,
-    WorkflowNotFoundError,
-    WorkflowNotReadyToPublishError,
+    WorkflowCycleError,
     WorkflowStepNotFoundError,
     WorkflowStepNotMatchedError,
 )
 from app.application.service.components_service import ComponentsService
-from app.domain.models.component import Component, ComponentSource, ComponentStatus
+from app.application.service.tools_service import ToolsService
+from app.domain.composite.tree import would_create_cycle
+from app.domain.models.component import Component, ComponentKind, ComponentSource, ComponentStatus
 from app.domain.models.component_domain import ComponentDomain
 from app.domain.models.component_file import ComponentFile
 from app.domain.models.parameter import Parameter
-from app.domain.models.user import User
-from app.domain.models.workflow import Workflow, WorkflowSource, WorkflowStatus
-from app.domain.models.workflow_domain import WorkflowDomain
-from app.domain.models.workflow_file import WorkflowFile
+from app.domain.models.workflow import Workflow
 from app.domain.models.workflow_step import StepMatchStatus, WorkflowStep
-from app.domain.pagination.pagination import PaginatedList
 from app.domain.repository.components_repository import ComponentsRepository
-from app.domain.repository.workflow_draft_repository import WorkflowDraftRepository
-from app.domain.repository.workflows_repository import WorkflowListFilter, WorkflowsRepository
-from app.infrastructure.cwl.canvas_graph import canvas_component_ids
+from app.domain.repository.workflows_repository import WorkflowsRepository
 from app.infrastructure.cwl.cwl_matcher import best_match
 from app.infrastructure.cwl.cwl_parser import (
     collect_import_targets,
@@ -57,39 +43,16 @@ from app.infrastructure.cwl.cwl_parser import (
     extract_parameters,
     inject_cwl_version,
 )
-from app.infrastructure.cwl.workflow_generator import assemble_cwl_zip, cwl_filename_for
+from app.infrastructure.cwl.workflow_generator import cwl_filename_for
 from app.infrastructure.cwl.workflow_parser import (
     externalize_inline_steps,
     extract_inline_components,
     extract_step_definitions,
-    extract_workflow_steps,
     find_workflow_file,
     is_self_contained,
     read_workflow_overview,
     strip_cwl_extension,
 )
-
-
-def _merge_auxiliary_files(sources: list[list]) -> list[tuple[str, str]]:
-    """One (path, content) list from several file collections.
-
-    The same type file legitimately arrives from the workflow and from each component that
-    imports it - identical content, so de-duplication is right. Genuinely different content
-    under one path has no correct answer, so it fails loudly rather than picking a winner.
-    """
-    merged: dict[str, str] = {}
-    for files in sources:
-        for file in files:
-            existing = merged.get(file.path)
-            if existing is not None and existing != file.content:
-                raise ConflictingAuxiliaryFileError(file.path)
-            merged[file.path] = file.content
-    return sorted(merged.items())
-
-
-#: step states that need no further action before a workflow can be published - either the
-#: user confirmed the component, or the step runs inline and never had one to confirm
-_SETTLED_STEP_STATUSES = {StepMatchStatus.CONFIRMED, StepMatchStatus.INLINE}
 
 #: an inline `run: {class: CommandLineTool}` lifted out of a self-contained workflow
 COMPONENT_ORIGIN_INLINE = "inline"
@@ -104,6 +67,8 @@ class ComponentMatch:
     scored it against the step's run: filename (suggested_match)."""
 
     component_id: uuid.UUID
+    #: a name conflict may be held by a workflow; a suggested match is always a tool
+    kind: ComponentKind
     name: str
     version: int
     domains: list[str]
@@ -131,36 +96,6 @@ class ComponentPreview:
     parameters: list[Parameter]
     name_conflict: ComponentMatch | None
     suggested_match: ComponentMatch | None
-
-
-@dataclass
-class ComponentUsage:
-    """A workflow that uses some version(s) of a component lineage."""
-
-    workflow_id: uuid.UUID
-    workflow_name: str
-    workflow_status: WorkflowStatus
-    #: the lineage versions its steps are bound to - usually one, ascending
-    component_versions: list[int]
-
-
-@dataclass(frozen=True)
-class DraftRef:
-    draft_id: uuid.UUID
-    name: str
-
-
-@dataclass
-class ComponentDeletionImpact:
-    """What deleting one component version would touch - shown before the delete.
-
-    Only what the deleter may see is named: other users' pending workflows and their
-    builder drafts are private, so those are just counted."""
-
-    workflows: list[ComponentUsage] = field(default_factory=list)
-    hidden_workflow_count: int = 0
-    own_drafts: list[DraftRef] = field(default_factory=list)
-    other_draft_count: int = 0
 
 
 @dataclass
@@ -227,177 +162,41 @@ class WorkflowUploadContent:
         return None if self.files is None else set(self.files)
 
 
-if TYPE_CHECKING:
-    # deferred import - favorites_service.py imports WorkflowsService, so importing
-    # FavoritesService here at module load time would create a circular import
-    from app.application.service.favorites_service import FavoritesService
+@dataclass(frozen=True)
+class StepBinding:
+    """One builder-canvas node as a workflow step: the canvas already says exactly which
+    component version runs there, so nothing is matched or guessed."""
+
+    step_id: str
+    run_reference: str
+    component_id: uuid.UUID
 
 
 class WorkflowsService:
+    """What only a workflow - the composite - does: being uploaded together with the tools
+    its steps run, being synced from a builder canvas, and having its steps bound to child
+    components. Everything shared with tools is ComponentsService's."""
+
     def __init__(
         self,
-        workflows_repository: WorkflowsRepository,
         components_repository: ComponentsRepository,
+        workflows_repository: WorkflowsRepository,
         components_service: ComponentsService,
-        workflow_draft_repository: WorkflowDraftRepository,
+        tools_service: ToolsService,
     ):
-        self.workflows_repository = workflows_repository
         self.components_repository = components_repository
+        self.workflows_repository = workflows_repository
         self.components_service = components_service
-        self.workflow_draft_repository = workflow_draft_repository
+        self.tools_service = tools_service
 
     @staticmethod
     def get_service(
-        workflows_repository: Annotated[WorkflowsRepository, Depends(WorkflowsRepository.get_repository)],
         components_repository: Annotated[ComponentsRepository, Depends(ComponentsRepository.get_repository)],
+        workflows_repository: Annotated[WorkflowsRepository, Depends(WorkflowsRepository.get_repository)],
         components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
-        workflow_draft_repository: Annotated[
-            WorkflowDraftRepository, Depends(WorkflowDraftRepository.get_repository)
-        ],
+        tools_service: Annotated[ToolsService, Depends(ToolsService.get_service)],
     ) -> "WorkflowsService":
-        return WorkflowsService(
-            workflows_repository, components_repository, components_service, workflow_draft_repository
-        )
-
-    async def list_workflows(
-        self, filter: WorkflowListFilter, pagination: PaginatedList
-    ) -> tuple[list[Workflow], int]:
-        # browse-list callers always see only VALIDATED workflows - enforced here rather
-        # than trusted from an arbitrary caller-supplied filter, so a public browse
-        # request can never leak pending workflows regardless of what the router builds
-        filter = replace(filter, status=WorkflowStatus.VALIDATED, created_by=None)
-        return await self.workflows_repository.find_paginated(filter, pagination)
-
-    async def list_my_workflows_by_status(
-        self, created_by_id: uuid.UUID, status: WorkflowStatus, pagination: PaginatedList
-    ) -> tuple[list[Workflow], int]:
-        filter = WorkflowListFilter(created_by=created_by_id, status=status)
-        return await self.workflows_repository.find_paginated(filter, pagination)
-
-    async def get_latest_workflows(self, limit: int) -> list[Workflow]:
-        # mirrors ComponentsService.get_latest_components - sort/slice in Python over the
-        # already-fetched (VALIDATED-only) list rather than a SQL ORDER BY + LIMIT
-        workflows = await self.workflows_repository.find_all()
-        return sorted(workflows, key=lambda w: w.created_at, reverse=True)[:limit]
-
-    async def get_workflow(self, workflow_id: uuid.UUID) -> Workflow:
-        workflow = await self.workflows_repository.find_by_id(workflow_id)
-        if workflow is None:
-            raise WorkflowNotFoundError(workflow_id)
-        return workflow
-
-    async def find_latest_by_name(self, name: str, exclude_id: uuid.UUID | None = None) -> Workflow | None:
-        return await self.workflows_repository.find_latest_by_name(name, exclude_id)
-
-    async def find_visible_latest_by_name(
-        self, name: str, current_user: User | None, exclude_id: uuid.UUID | None = None
-    ) -> Workflow | None:
-        """The workflow holding this name, but only if the caller may see it.
-
-        A pending workflow is owner-only, so naming it to another user would both leak it
-        and hand them a link they cannot open. The name is taken either way -
-        uq_workflows_name is global - so only the description is withheld, never the
-        collision itself.
-        """
-        existing = await self.workflows_repository.find_latest_by_name(name, exclude_id)
-        if existing is None:
-            return None
-        is_owner = current_user is not None and current_user.id == existing.created_by_id
-        if existing.status == WorkflowStatus.PENDING_VALIDATION and not is_owner:
-            return None
-        return existing
-
-    async def _require_name_available(self, name: str, exclude_id: uuid.UUID | None = None) -> None:
-        """Enforces uq_workflows_name in the service, so a collision comes back as a clean
-        409 rather than an IntegrityError from the database.
-
-        `exclude_id` is what lets a builder draft re-sync keep the name it already has.
-        """
-        if await self.workflows_repository.find_latest_by_name(name, exclude_id) is not None:
-            raise WorkflowNameAlreadyExistsError(name)
-
-    async def list_usages_of_component(self, component: Component, current_user: User | None) -> list[ComponentUsage]:
-        """The workflows that use any version of `component`'s lineage - the component
-        detail page's "Used in these workflows". Same visibility as get_visible_workflow:
-        validated workflows, plus the user's own pending ones."""
-        rows = await self.workflows_repository.find_usages_of_component(
-            component.name, current_user.id if current_user is not None else None
-        )
-        usages: dict[uuid.UUID, ComponentUsage] = {}
-        for row in rows:  # ordered by workflow name, then version
-            usage = usages.get(row.workflow_id)
-            if usage is None:
-                usages[row.workflow_id] = ComponentUsage(
-                    workflow_id=row.workflow_id,
-                    workflow_name=row.workflow_name,
-                    workflow_status=row.workflow_status,
-                    component_versions=[row.component_version],
-                )
-            else:
-                usage.component_versions.append(row.component_version)
-        return list(usages.values())
-
-    async def get_deletion_impact(self, component: Component, current_user: User) -> ComponentDeletionImpact:
-        """The workflows and builder drafts that reference exactly this component version."""
-        impact = ComponentDeletionImpact()
-
-        workflows: dict[uuid.UUID, Workflow] = {}
-        for step in await self.workflows_repository.find_steps_by_component_id(component.id):
-            if step.workflow is not None:
-                workflows[step.workflow.id] = step.workflow
-        for workflow in sorted(workflows.values(), key=lambda w: w.name):
-            if workflow.status == WorkflowStatus.VALIDATED or workflow.created_by_id == current_user.id:
-                impact.workflows.append(
-                    ComponentUsage(
-                        workflow_id=workflow.id,
-                        workflow_name=workflow.name,
-                        workflow_status=workflow.status,
-                        component_versions=[component.version],
-                    )
-                )
-            else:
-                impact.hidden_workflow_count += 1
-
-        component_id = str(component.id)
-        for draft in await self.workflow_draft_repository.find_all_mentioning(component_id):
-            if component_id not in canvas_component_ids(draft.canvas_state):
-                continue
-            if draft.created_by_id == current_user.id:
-                impact.own_drafts.append(DraftRef(draft_id=draft.id, name=draft.name))
-            else:
-                impact.other_draft_count += 1
-        impact.own_drafts.sort(key=lambda d: d.name)
-        return impact
-
-    async def detach_component(self, component_id: uuid.UUID) -> None:
-        """Unmatch every step pinned to a component version that is about to be deleted.
-
-        The FK's ON DELETE SET NULL alone would leave such steps CONFIRMED/SUGGESTED with
-        no component, and their workflow public. Deliberately never rebinds to another
-        version of the lineage - the user picks the replacement. Builder drafts need no
-        cascade: their canvas is checked for missing components whenever it is opened.
-        """
-        steps = await self.workflows_repository.find_steps_by_component_id(component_id)
-        if not steps:
-            return
-        reverted: dict[uuid.UUID, Workflow] = {}
-        for step in steps:
-            step.component_id = None
-            step.match_status = StepMatchStatus.UNMATCHED
-            step.match_score = None
-            # a public workflow with an unmatched step would be broken for everyone
-            workflow = step.workflow
-            if workflow is not None and workflow.status == WorkflowStatus.VALIDATED:
-                workflow.status = WorkflowStatus.PENDING_VALIDATION
-                reverted[workflow.id] = workflow
-        await self.workflows_repository.save_steps(steps, list(reverted.values()))
-
-    async def get_visible_workflow(self, workflow_id: uuid.UUID, current_user: User | None) -> Workflow:
-        workflow = await self.get_workflow(workflow_id)
-        is_owner = current_user is not None and current_user.id == workflow.created_by_id
-        if workflow.status == WorkflowStatus.PENDING_VALIDATION and not is_owner:
-            raise WorkflowNotFoundError(workflow_id)
-        return workflow
+        return WorkflowsService(components_repository, workflows_repository, components_service, tools_service)
 
     async def parse_workflow_upload(self, content: bytes, filename: str | None = None) -> WorkflowUploadPreview:
         """Analyse an uploaded workflow file without persisting anything - auto-detects
@@ -459,9 +258,9 @@ class WorkflowsService:
         """
         inline_by_step_id = {c.step_id: c for c in extract_inline_components(upload.cwl_content)}
 
-        # one query, reused for every archive step's fuzzy match - latest version per
-        # lineage, the same candidate pool create_from_upload and _parse_zip_into_steps use
-        all_components = await self.components_repository.find_all()
+        # one query, reused for every archive step's fuzzy match - the latest version of
+        # every tool lineage, since an archive's step files are tools
+        all_components = await self.components_repository.find_all(kind=ComponentKind.TOOL)
         candidates = [(c.id, c.name) for c in all_components]
         by_id = {c.id: c for c in all_components}
 
@@ -492,7 +291,7 @@ class WorkflowsService:
                 origin, run_reference = COMPONENT_ORIGIN_INLINE, None
                 suggested_name = inline.suggested_name
 
-            existing_versions = await self.components_repository.find_versions_by_name(suggested_name)
+            existing = await self.components_repository.find_latest_by_name(suggested_name)
             parameters = self._safe_extract_parameters(cwl_content)
             ontology_url = self.components_service.ontology_url_for(cwl_content)
             await self.components_service.resolve_format_labels(ontology_url, parameters)
@@ -509,7 +308,7 @@ class WorkflowsService:
                     docker_pull_reference=extract_docker_pull(cwl_content),
                     ontology_url=ontology_url,
                     parameters=parameters,
-                    name_conflict=self._to_component_match(existing_versions[-1], None) if existing_versions else None,
+                    name_conflict=self._to_component_match(existing, None) if existing is not None else None,
                     suggested_match=suggested_match,
                 )
             )
@@ -519,6 +318,7 @@ class WorkflowsService:
     def _to_component_match(component: Component, score: float | None) -> ComponentMatch:
         return ComponentMatch(
             component_id=component.id,
+            kind=ComponentKind(component.kind),
             name=component.name,
             version=component.version,
             domains=sorted(d.domain for d in component.domains),
@@ -529,7 +329,7 @@ class WorkflowsService:
     def _safe_extract_parameters(cwl_content: str) -> list[Parameter]:
         """Preview-only: a step file whose ports don't parse still deserves to be shown
         (with its CWL and Docker tabs intact) rather than failing the whole upload. The
-        real parse happens again in ComponentsService.create_manual, which does raise."""
+        real parse happens again in ToolsService.create_manual, which does raise."""
         try:
             return extract_parameters(cwl_content)
         except ValueError:
@@ -570,7 +370,7 @@ class WorkflowsService:
         treatment: a domain, a non-blank name, no duplicate name within this upload, and
         no collision with the catalogue (the user is offered the reuse branch instead).
 
-        Necessary because ComponentsService.create_manual commits immediately per call
+        Necessary because ToolsService.create_manual commits immediately per call
         (no shared transaction across N creates), so the common failure mode (a name
         collision) must fail atomically up front rather than being discovered mid-loop
         after earlier components are already permanently persisted. This matters more now
@@ -599,88 +399,9 @@ class WorkflowsService:
             config = configs[step_id]
             if config.is_reuse or config.name is None:
                 continue
-            existing_versions = await self.components_repository.find_versions_by_name(config.name)
-            if existing_versions:
+            # names are one key across both kinds, so a workflow's name collides too
+            if await self.components_repository.find_latest_by_name(config.name) is not None:
                 raise ExtractedComponentNameCollisionError(config.name)
-
-    async def _parse_zip_into_steps(self, zip_bytes: bytes) -> tuple[str, list[WorkflowStep]]:
-        """(pipeline CWL, fresh WorkflowStep rows) from an archive.
-
-        Every step is fuzzy-matched against the current component catalogue. The returned
-        steps are unsaved and unattached - the caller owns them into a Workflow.
-        """
-        files = self._extract_zip_files(zip_bytes)
-
-        try:
-            _pipeline_filename, pipeline_content = find_workflow_file(files)
-        except ValueError as err:
-            raise InvalidWorkflowArchiveError(str(err)) from err
-
-        try:
-            parsed_steps = extract_workflow_steps(pipeline_content)
-        except ValueError as err:
-            raise InvalidWorkflowArchiveError(str(err)) from err
-
-        missing = [s.run_reference for s in parsed_steps if s.run_reference not in files]
-        if missing:
-            raise InvalidWorkflowArchiveError(f"Referenced step file(s) not found in archive: {', '.join(missing)}")
-
-        # latest version per lineage of every existing Component - the fuzzy matcher
-        # compares against lineage names, but the id returned still pins one specific version
-        all_components = await self.components_repository.find_all()
-        candidates = [(c.id, c.name) for c in all_components]
-
-        steps: list[WorkflowStep] = []
-        for parsed in parsed_steps:
-            match = best_match(parsed.run_reference, candidates)
-            if match is not None:
-                component_id, _name, score = match
-                steps.append(
-                    WorkflowStep(
-                        step_id=parsed.step_id,
-                        run_reference=parsed.run_reference,
-                        step_order=parsed.order,
-                        component_id=component_id,
-                        match_status=StepMatchStatus.SUGGESTED,
-                        match_score=score,
-                    )
-                )
-            else:
-                steps.append(
-                    WorkflowStep(
-                        step_id=parsed.step_id,
-                        run_reference=parsed.run_reference,
-                        step_order=parsed.order,
-                        match_status=StepMatchStatus.UNMATCHED,
-                    )
-                )
-
-        return pipeline_content, steps
-
-    async def create_from_zip(
-        self,
-        zip_bytes: bytes,
-        name: str,
-        description: str | None,
-        domains: list[str],
-        created_by_id: uuid.UUID,
-        source: WorkflowSource = WorkflowSource.MANUAL_UPLOAD,
-        draft_id: uuid.UUID | None = None,
-    ) -> Workflow:
-        await self._require_name_available(name)
-        pipeline_content, steps = await self._parse_zip_into_steps(zip_bytes)
-
-        workflow = Workflow(
-            name=name,
-            description=description,
-            created_by_id=created_by_id,
-            cwl_content=pipeline_content,
-            steps=steps,
-            domains=[WorkflowDomain(domain=d) for d in domains],
-            source=source,
-            draft_id=draft_id,
-        )
-        return await self._save_and_reload(workflow)
 
     async def create_from_upload(
         self,
@@ -691,7 +412,7 @@ class WorkflowsService:
         domains: list[str],
         component_configs: dict[str, ComponentConfig],
         created_by_id: uuid.UUID,
-    ) -> Workflow:
+    ) -> Component:
         """Persists any of the 3 manual-upload shapes (external-only zip, self-contained
         bare .cwl, or a zip mixing both) as a real Workflow.
 
@@ -701,7 +422,7 @@ class WorkflowsService:
         step's CWL. Nothing is auto-created behind the user's back and nothing is left to
         post-save fuzzy triage - an unconfigured step is an error, not a guess.
         """
-        await self._require_name_available(name)
+        await self.components_service.require_name_available(name)
         upload = self._load_upload_content(content, filename)
 
         try:
@@ -821,6 +542,7 @@ class WorkflowsService:
                 fallback_description = extract_description(cwl_content)
 
             component = Component(
+                kind=ComponentKind.TOOL,
                 name=config.name,
                 domains=[ComponentDomain(domain=d) for d in (config.domains or [])],
                 cwl_content=cwl_content,
@@ -829,7 +551,7 @@ class WorkflowsService:
                 description=config.description or fallback_description,
                 # a component stands alone in the catalogue, so it carries its own imports
                 # rather than relying on the workflow it arrived with still being around
-                files=self._files_for(cwl_content, auxiliary, ComponentFile),
+                files=self._files_for(cwl_content, auxiliary),
             )
             step = WorkflowStep(
                 step_id=step_id,
@@ -844,101 +566,160 @@ class WorkflowsService:
         # only create Components once every validation above has passed - create_manual
         # commits immediately per call, so this loop is the point of no return
         for step, component, format_labels in pending_components:
-            created = await self.components_service.create_manual(component, format_labels=format_labels)
+            created = await self.tools_service.create_manual(component, format_labels=format_labels)
             step.component_id = created.id
             # also link the ORM relationship object itself (not just the FK id) - the
-            # later commit()+refresh() in _save_and_reload expires every object in the
+            # later commit()+refresh() in save_and_reload expires every object in the
             # session, and without this, serialising step.component afterwards would
             # attempt a genuine lazy load outside of any async-safe context and crash
             # with MissingGreenlet
             step.component = created
 
-        workflow = Workflow(
+        return await self._create_workflow(
             name=name,
             description=description,
+            domains=domains,
             created_by_id=created_by_id,
-            cwl_content=pipeline_content,
+            pipeline_content=pipeline_content,
             steps=steps,
-            domains=[WorkflowDomain(domain=d) for d in domains],
-            source=WorkflowSource.MANUAL_UPLOAD,
-            files=self._files_for(pipeline_content, auxiliary, WorkflowFile),
+            source=ComponentSource.MANUAL_UPLOAD,
+            files=self._files_for(pipeline_content, auxiliary),
         )
-        return await self._save_and_reload(workflow)
 
     async def upsert_from_draft(
         self,
-        zip_bytes: bytes,
+        pipeline_content: str,
+        bindings: list[StepBinding],
         name: str,
         draft_id: uuid.UUID,
         created_by_id: uuid.UUID,
-    ) -> Workflow:
-        """Keep exactly one Workflow in sync with a Builder draft.
+    ) -> Component:
+        """Keep a workflow lineage in sync with a builder draft.
 
-        First publish of a draft creates the row; every later Save re-generates its CWL
-        and steps in place. Re-syncing always drops the workflow back to
-        PENDING_VALIDATION - the content changed, so its confirmed step matches (and any
-        VALIDATED/public status) no longer describe it and it needs re-checking. The
-        existing row is only reused when the caller owns it; anything else falls through
-        to a fresh row.
+        The first sync of a draft creates version 1; every later Save re-generates the
+        newest version's CWL and steps - in place while it is still a DRAFT, or as the
+        next version once it is PUBLISHED, since a published version is what other users
+        see (and nest) and must not change under them. The lineage is only reused when the
+        caller owns it; anything else falls through to a fresh one.
         """
-        existing = await self.workflows_repository.find_by_draft_id(draft_id)
-        if existing is None or existing.created_by_id != created_by_id:
-            return await self.create_from_zip(
-                zip_bytes=zip_bytes,
+        steps = [
+            WorkflowStep(
+                step_id=binding.step_id,
+                run_reference=binding.run_reference,
+                step_order=order,
+                component_id=binding.component_id,
+                # the user placed exactly this component on the canvas - nothing to confirm
+                match_status=StepMatchStatus.CONFIRMED,
+            )
+            for order, binding in enumerate(bindings)
+        ]
+
+        latest = await self.workflows_repository.find_latest_by_draft_id(draft_id)
+        if latest is None or latest.created_by_id != created_by_id:
+            await self.components_service.require_name_available(name)
+            return await self._create_workflow(
                 name=name,
                 description=None,
                 domains=[],
                 created_by_id=created_by_id,
-                source=WorkflowSource.WORKFLOW_BUILDER,
+                pipeline_content=pipeline_content,
+                steps=steps,
+                source=ComponentSource.WORKFLOW_BUILDER,
                 draft_id=draft_id,
             )
 
-        # excludes itself: re-syncing a draft keeps the workflow's own name
-        await self._require_name_available(name, exclude_id=existing.id)
-        pipeline_content, steps = await self._parse_zip_into_steps(zip_bytes)
-        existing.name = name
-        existing.cwl_content = pipeline_content
-        # cascade="all, delete-orphan" on Workflow.steps deletes the replaced rows
-        existing.steps = steps
-        existing.status = WorkflowStatus.PENDING_VALIDATION
-        return await self._save_and_reload(existing)
+        if latest.name != name:
+            # the name is the lineage key, so a renamed canvas renames every version
+            await self.components_service.require_name_available(name, exclude_id=latest.id)
+            await self.components_repository.rename_lineage(latest.name, name)
+            latest = await self.components_repository.find_by_id_fresh(latest.id)
+            assert latest is not None
+        await self._require_acyclic(latest, [b.component_id for b in bindings])
+
+        if latest.status == ComponentStatus.DRAFT:
+            latest.cwl_content = pipeline_content
+            # cascade="all, delete-orphan" on Workflow.steps / Component.parameters deletes
+            # the replaced rows
+            latest.workflow.steps = steps
+            await self.components_service.assign_ports(latest, "Workflow")
+            return await self.components_service.save_and_reload(latest)
+
+        versions = await self.components_repository.find_versions_by_name(latest.name)
+        return await self._create_workflow(
+            name=latest.name,
+            description=latest.description,
+            domains=[d.domain for d in latest.domains],
+            created_by_id=created_by_id,
+            pipeline_content=pipeline_content,
+            steps=steps,
+            source=ComponentSource.WORKFLOW_BUILDER,
+            draft_id=draft_id,
+            version=versions[-1].version + 1,
+        )
+
+    async def _create_workflow(
+        self,
+        name: str,
+        description: str | None,
+        domains: list[str],
+        created_by_id: uuid.UUID,
+        pipeline_content: str,
+        steps: list[WorkflowStep],
+        source: ComponentSource,
+        files: list[ComponentFile] | None = None,
+        draft_id: uuid.UUID | None = None,
+        version: int = 1,
+    ) -> Component:
+        workflow = Component(
+            kind=ComponentKind.WORKFLOW,
+            name=name,
+            version=version,
+            description=description,
+            created_by_id=created_by_id,
+            cwl_content=pipeline_content,
+            source=source,
+            domains=[ComponentDomain(domain=d) for d in domains],
+            files=files or [],
+            workflow=Workflow(steps=steps, draft_id=draft_id),
+        )
+        # a workflow's ports are its own inputs/outputs - what a parent sees when nesting it
+        await self.components_service.assign_ports(workflow, "Workflow")
+        return await self.components_service.save_and_reload(workflow)
+
+    async def _require_acyclic(self, parent: Component, child_ids: list[uuid.UUID]) -> None:
+        """Raises WorkflowCycleError when one of the children (eventually) runs `parent`."""
+        for child in await self.components_repository.find_by_ids(list(dict.fromkeys(child_ids))):
+            if not child.is_workflow:
+                continue
+            await self.components_service.load_tree(child)
+            if would_create_cycle(parent, child):
+                raise WorkflowCycleError(parent.name, child.name)
 
     async def linked_workflow_ids(self, draft_ids: set[uuid.UUID]) -> dict[uuid.UUID, uuid.UUID]:
-        """{draft_id: workflow_id} for the drafts that have a synced Workflow in My Workflows."""
+        """{draft_id: newest workflow version id} for the drafts synced to My Workflows."""
         workflows = await self.workflows_repository.find_all_by_draft_ids(draft_ids)
-        return {w.draft_id: w.id for w in workflows if w.draft_id is not None}
+        return {w.workflow.draft_id: w.id for w in workflows if w.workflow is not None and w.workflow.draft_id}
 
-    async def delete_by_draft_id(self, draft_id: uuid.UUID, owner_id: uuid.UUID) -> bool:
-        """Delete the Workflow synced from this draft, if one exists and the user owns it.
-
-        Returns whether a row was removed. Used by the draft-delete flow when the user
-        opts to also drop the My Workflows copy.
-        """
-        workflow = await self.workflows_repository.find_by_draft_id(draft_id)
-        if workflow is None or workflow.created_by_id != owner_id:
-            return False
-        await self.workflows_repository.delete(workflow)
-        return True
-
-    async def get_step_with_workflow(self, step_id: uuid.UUID) -> tuple[WorkflowStep, Workflow]:
+    async def get_step_with_workflow(self, step_id: uuid.UUID) -> tuple[WorkflowStep, Component]:
         step = await self.workflows_repository.find_step_by_id(step_id)
-        if step is None:
+        if step is None or step.parent is None:
             raise WorkflowStepNotFoundError(step_id)
-        workflow = await self.get_workflow(step.workflow_id)
-        return step, workflow
+        return step, step.parent
 
     async def update_step_component(self, step_id: uuid.UUID, component_id: uuid.UUID | None) -> WorkflowStep:
-        step = await self.workflows_repository.find_step_by_id(step_id)
-        if step is None:
-            raise WorkflowStepNotFoundError(step_id)
+        step, workflow = await self.get_step_with_workflow(step_id)
+        self._require_steps_editable(workflow)
 
         # selecting a candidate here never confirms it - only confirm_step() does. A
         # manually-touched selection also has no algorithmic confidence value, so
         # match_score is always cleared, whether a component was picked or cleared.
         if component_id is not None:
-            component = await self.components_repository.find_by_id(component_id)
-            if component is None:
+            # a tool, or - nested - another workflow, as long as that one does not
+            # (eventually) run this workflow itself
+            child = await self.components_repository.find_by_id(component_id)
+            if child is None:
                 raise ComponentNotFoundError(component_id)
+            await self._require_acyclic(workflow, [child.id])
             step.component_id = component_id
             step.match_status = StepMatchStatus.SUGGESTED
             step.match_score = None
@@ -948,150 +729,42 @@ class WorkflowsService:
             step.match_score = None
 
         saved_step = await self.workflows_repository.save_step(step)
-        # a step edit can never re-publish a workflow, only un-publish an already-published
-        # one whose steps are no longer all confirmed - publishing itself is a separate,
-        # explicit creator action (see publish())
-        await self._revert_to_pending_if_needed(saved_step.workflow_id)
-        # the revert may have committed again, unloading step.component - reload so the
-        # caller can serialise it without a lazy load
+        # the commit unloaded step.component - reload so the caller can serialise it
+        # without a lazy load
         reloaded = await self.workflows_repository.find_step_by_id_with_relations(saved_step.id)
         assert reloaded is not None
         return reloaded
 
     async def confirm_step(self, step_id: uuid.UUID) -> WorkflowStep:
-        step = await self.workflows_repository.find_step_by_id(step_id)
-        if step is None:
-            raise WorkflowStepNotFoundError(step_id)
+        step, workflow = await self.get_step_with_workflow(step_id)
+        self._require_steps_editable(workflow)
         if step.component_id is None:
             raise WorkflowStepNotMatchedError(step_id)
 
         step.match_status = StepMatchStatus.CONFIRMED
-        return await self.workflows_repository.save_step(step)
+        saved_step = await self.workflows_repository.save_step(step)
+        reloaded = await self.workflows_repository.find_step_by_id_with_relations(saved_step.id)
+        assert reloaded is not None
+        return reloaded
 
-    async def publish(
-        self, workflow: Workflow, current_user_id: uuid.UUID, publish_components: bool = False
-    ) -> Workflow:
-        """Make a workflow public.
-
-        A public workflow whose steps point at draft components would be broken for every
-        other user - drafts are owner-only - so every component it uses must be published
-        too. `publish_components` opts into publishing them as part of this action;
-        without it the draft components are reported and nothing is changed.
-        """
-        if workflow.status == WorkflowStatus.VALIDATED:
-            return workflow
-        if not all(s.match_status in _SETTLED_STEP_STATUSES for s in workflow.steps):
-            raise WorkflowNotReadyToPublishError(workflow.id)
-
-        drafts = [
-            step.component
-            for step in workflow.steps
-            if step.component is not None and step.component.status == ComponentStatus.DRAFT
-        ]
-        if drafts:
-            foreign = sorted({c.name for c in drafts if c.created_by_id != current_user_id})
-            if foreign:
-                raise UnpublishableWorkflowComponentsError(foreign)
-            if not publish_components:
-                raise WorkflowHasUnpublishedComponentsError(sorted({c.name for c in drafts}))
-            for component in drafts:
-                await self.components_service.publish(component)
-
-        workflow.status = WorkflowStatus.VALIDATED
-        return await self.workflows_repository.save(workflow)
-
-    async def unpublish(self, workflow: Workflow) -> Workflow:
-        """Inverse of publish - returns the workflow to PENDING_VALIDATION, where only its
-        creator can see it. Same end state as the automatic downgrade in
-        _revert_to_pending_if_needed, but triggered explicitly rather than by a step edit.
-        Idempotent: an already-pending workflow is returned untouched.
-        """
-        if workflow.status == WorkflowStatus.PENDING_VALIDATION:
-            return workflow
-        workflow.status = WorkflowStatus.PENDING_VALIDATION
-        return await self.workflows_repository.save(workflow)
-
-    async def update_description(self, workflow: Workflow, description: str | None) -> Workflow:
-        workflow.description = description
-        return await self.workflows_repository.save(workflow)
-
-    async def execute_command(
-        self,
-        workflow: Workflow,
-        command: WorkflowCommand,
-        current_user_id: uuid.UUID,
-        favorites_service: "FavoritesService",
-    ) -> Workflow:
-        match command.type:
-            case WorkflowCommandType.ADD_FAVORITE:
-                await favorites_service.add_workflow_favorite(current_user_id, workflow.id)
-                return workflow
-            case WorkflowCommandType.REMOVE_FAVORITE:
-                await favorites_service.remove_workflow_favorite(current_user_id, workflow.id)
-                return workflow
-            case WorkflowCommandType.PUBLISH:
-                return await self.publish(workflow, current_user_id, command.publish_components)
-            case WorkflowCommandType.UNPUBLISH:
-                return await self.unpublish(workflow)
-            case WorkflowCommandType.UPDATE_DESCRIPTION:
-                return await self.update_description(workflow, command.description)
+    @staticmethod
+    def _require_steps_editable(workflow: Component) -> None:
+        # a published workflow is what other users see and nest - rebinding a step under
+        # them would silently change it; the creator unpublishes first instead
+        if workflow.status == ComponentStatus.PUBLISHED:
+            raise PublishedWorkflowStepsLockedError(workflow.id)
 
     async def execute_step_command(self, step: WorkflowStep, command: WorkflowStepCommand) -> WorkflowStep:
         match command.type:
             case WorkflowStepCommandType.CONFIRM:
                 return await self.confirm_step(step.id)
 
-    async def remove(
-        self, workflow: Workflow, deleted_by_id: uuid.UUID, delete_linked_draft: bool = False
-    ) -> bool:
-        """Delete a workflow, optionally taking the builder canvas it was synced from with it.
-
-        Returns whether a linked draft was deleted too. The mirror of
-        WorkflowDraftService.delete_draft's delete_linked_workflow: both directions of the
-        draft <-> workflow link are opt-in, so neither side's delete silently destroys the
-        other. Without it the draft survives as an orphan - still openable, but no longer
-        offering "edit in builder" from a workflow that no longer exists.
-
-        The workflow is deleted first: it is what the user actually asked to remove, so
-        failing to reach the draft afterwards must not leave that undone.
-        """
-        # read before the row goes away - the FK is ON DELETE SET NULL on the workflow side,
-        # so nothing else recovers which draft this came from
-        draft_id = workflow.draft_id
-        await self.workflows_repository.delete(workflow)
-
-        if not delete_linked_draft or draft_id is None:
-            return False
-
-        draft = await self.workflow_draft_repository.find_by_id(draft_id)
-        if draft is None or draft.created_by_id != deleted_by_id:
-            return False
-
-        await self.workflow_draft_repository.delete(draft)
-        return True
-
-    async def get_download(self, workflow: Workflow) -> tuple[str, bytes]:
-        # same archive layout and naming as the builder's "Export CWL" (assemble_cwl_zip).
-        # Step files keep their stored run_reference - that is what the pipeline's `run:`
-        # lines point at, so they cannot be renamed here.
-        step_files = [
-            (step.run_reference, step.component.cwl_content)
-            for step in workflow.steps
-            if step.component is not None
-        ]
-        # the pipeline's own imports plus every component's - a step tool may import a
-        # type the pipeline itself never mentions
-        sources = [workflow.files, *(s.component.files for s in workflow.steps if s.component is not None)]
-        return assemble_cwl_zip(
-            workflow.name, workflow.cwl_content, step_files, _merge_auxiliary_files(sources)
-        )
-
     #: plausible $import/$include targets - all text, so an unrelated binary in the archive
     #: never has to be decoded just to be ignored
     _AUX_EXTENSIONS = (".yml", ".yaml", ".json")
 
     @staticmethod
-    def _files_for(cwl_content: str, auxiliary: dict[str, str], model: type) -> list:
+    def _files_for(cwl_content: str, auxiliary: dict[str, str]) -> list[ComponentFile]:
         """The auxiliary rows one document needs, transitively.
 
         Only what this document reaches: a workflow that imports nothing gets no rows even
@@ -1105,7 +778,7 @@ class WorkflowsService:
                 continue
             needed[target] = auxiliary[target]
             pending.extend(collect_import_targets(auxiliary[target]))
-        return [model(path=path, content=content) for path, content in sorted(needed.items())]
+        return [ComponentFile(path=path, content=content) for path, content in sorted(needed.items())]
 
     def _extract_zip_aux_files(self, zip_bytes: bytes) -> dict[str, str]:
         """The archive's non-.cwl text files, keyed by path relative to the archive root.
@@ -1220,25 +893,3 @@ class WorkflowsService:
                 return result
         except zipfile.BadZipFile as err:
             raise InvalidWorkflowArchiveError("Not a valid zip archive") from err
-
-    async def _revert_to_pending_if_needed(self, workflow_id: uuid.UUID) -> None:
-        # only ever downgrades VALIDATED -> PENDING_VALIDATION when a step edit leaves it
-        # no longer fully confirmed - never auto-promotes to VALIDATED, that only happens
-        # via the explicit publish() action.
-        # find_by_id_with_steps, not find_by_id: right after save_step()'s commit the
-        # identity-map hit has `steps` unloaded, and iterating it would lazy-load outside
-        # an async-safe context (MissingGreenlet -> 500 on picking a step's component)
-        workflow = await self.workflows_repository.find_by_id_with_steps(workflow_id)
-        assert workflow is not None
-        if workflow.status != WorkflowStatus.VALIDATED:
-            return
-        all_confirmed = all(s.match_status == StepMatchStatus.CONFIRMED for s in workflow.steps)
-        if not all_confirmed:
-            workflow.status = WorkflowStatus.PENDING_VALIDATION
-            await self.workflows_repository.save(workflow)
-
-    async def _save_and_reload(self, workflow: Workflow) -> Workflow:
-        saved = await self.workflows_repository.save(workflow)
-        reloaded = await self.workflows_repository.find_by_id_with_steps(saved.id)
-        assert reloaded is not None
-        return reloaded

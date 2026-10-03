@@ -22,7 +22,8 @@ _BOOL_TYPES = {"boolean"}
 
 @dataclass
 class PortSpec:
-    """The parts of a Component the generator needs, resolved from the DB."""
+    """The parts of a Component the generator needs, resolved from the DB - a tool or,
+    nested, a workflow: both expose their ports the same way."""
 
     name: str
     #: parameter name -> cwl type, for File-typed inputs
@@ -129,17 +130,33 @@ def render_workflow_cwl(workflow_doc: dict[str, Any]) -> str:
     return yaml.dump(workflow_doc, default_flow_style=False, sort_keys=False, allow_unicode=True)
 
 
+def assign_step_ids(ordered_nodes: list[dict[str, Any]], ports: dict[str, PortSpec]) -> dict[str, str]:
+    """{node id: CWL step id} - named after each node's component, suffixed where two
+    nodes reuse the same component, so step ids stay unique."""
+    step_ids: dict[str, str] = {}
+    for node in ordered_nodes:
+        component_name = ports[node["data"]["componentId"]].name
+        step_id = step_id_for(component_name)
+        if step_id in step_ids.values():
+            suffix = sum(1 for existing in step_ids.values() if existing.startswith(step_id)) + 1
+            step_id = f"{step_id}_{suffix}"
+        step_ids[node["id"]] = step_id
+    return step_ids
+
+
 def build_workflow_document(
     workflow_name: str,
     ordered_nodes: list[dict[str, Any]],
     edges: list[dict[str, Any]],
     ports: dict[str, PortSpec],
+    has_subworkflows: bool = False,
 ) -> dict[str, Any]:
     """Build the main `class: Workflow` document.
 
     Wiring comes from each edge's `sourceHandle`/`targetHandle`, which carry the real
     parameter names - the canvas has one handle per port, so a connection already says
-    exactly which output feeds which input.
+    exactly which output feeds which input. `has_subworkflows` declares the requirement
+    CWL needs before a step may run another workflow.
     """
     # (target node, target port) -> (source node, source port)
     incoming: dict[tuple[str, str], tuple[str, str]] = {}
@@ -157,15 +174,7 @@ def build_workflow_document(
         incoming[(target, target_handle)] = (source, source_handle)
         consumed.add((source, source_handle))
 
-    step_ids: dict[str, str] = {}
-    for node in ordered_nodes:
-        component_name = ports[node["data"]["componentId"]].name
-        step_id = step_id_for(component_name)
-        # two nodes may reuse the same component; suffix so step ids stay unique
-        if step_id in step_ids.values():
-            suffix = sum(1 for existing in step_ids.values() if existing.startswith(step_id)) + 1
-            step_id = f"{step_id}_{suffix}"
-        step_ids[node["id"]] = step_id
+    step_ids = assign_step_ids(ordered_nodes, ports)
 
     workflow_inputs: dict[str, Any] = {}
     steps: dict[str, Any] = {}
@@ -214,14 +223,14 @@ def build_workflow_document(
                 "outputSource": f"{step_id}/{port_name}",
             }
 
-    return {
+    document: dict[str, Any] = {
         "cwlVersion": CWL_VERSION,
         "class": "Workflow",
         "label": workflow_name,
-        "inputs": workflow_inputs,
-        "outputs": workflow_outputs,
-        "steps": steps,
     }
+    if has_subworkflows:
+        document["requirements"] = [{"class": "SubworkflowFeatureRequirement"}]
+    return {**document, "inputs": workflow_inputs, "outputs": workflow_outputs, "steps": steps}
 
 
 def generate_workflow_inputs_yaml(workflow_name: str, workflow_doc: dict[str, Any]) -> str:

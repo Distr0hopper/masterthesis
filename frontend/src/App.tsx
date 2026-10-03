@@ -5,12 +5,9 @@ import { ContainerLayout } from '@/components/layout/ContainerLayout';
 import { FullBleedLayout } from '@/components/layout/FullBleedLayout';
 import ComponentsPage from '@/pages/ComponentsPage';
 import ComponentDetailPage from '@/pages/ComponentDetailPage';
-import UploadPage from '@/pages/UploadPage';
+import ToolUploadPage from '@/pages/ToolUploadPage';
 import MyComponentsPage from '@/pages/MyComponentsPage';
-import WorkflowsPage from '@/pages/WorkflowsPage';
-import WorkflowDetailPage from '@/pages/WorkflowDetailPage';
 import WorkflowUploadPage from '@/pages/WorkflowUploadPage';
-import MyWorkflowsPage from '@/pages/MyWorkflowsPage';
 import LoginPage from '@/pages/LoginPage';
 import HomePage from "@/pages/HomePage.tsx";
 import AboutPage from "@/pages/AboutPage.tsx";
@@ -36,17 +33,26 @@ export default function App() {
               viewport, every other page keeps the centred max-w-6xl container. */}
           <Route element={<ContainerLayout />}>
             <Route path={ROUTES.home} element={<HomePage />} />
-            <Route path={ROUTES.components} element={<ComponentsPage />} />
-            <Route path={ROUTES.legacyBrowse} element={<Navigate to={ROUTES.components} replace />} />
             <Route path={ROUTES.about} element={<AboutPage />} />
             <Route path={ROUTES.profile} element={<ProtectedRoute> <ProfilePage /> </ProtectedRoute>} />
-            <Route path={ROUTES.componentDetail(':id')} element={<ComponentDetailPage />} />
-            <Route path={ROUTES.componentUpload} element={<ProtectedRoute> <UploadPage /> </ProtectedRoute>} />
-            <Route path={ROUTES.myComponents} element={<ProtectedRoute> <MyComponentsPage /> </ProtectedRoute>} />
-            <Route path={ROUTES.workflows} element={<WorkflowsPage />} />
+
+            {/* one page per concern, parameterised by the kind of component it shows */}
+            <Route path={ROUTES.tools} element={<ComponentsPage key="tool" kind="tool" />} />
+            <Route path={ROUTES.toolUpload} element={<ProtectedRoute> <ToolUploadPage /> </ProtectedRoute>} />
+            <Route path={ROUTES.toolDetail(':id')} element={<ComponentDetailPage key="tool" kind="tool" />} />
+            <Route path={ROUTES.myTools} element={<ProtectedRoute> <MyComponentsPage key="tool" kind="tool" /> </ProtectedRoute>} />
+            <Route path={ROUTES.workflows} element={<ComponentsPage key="workflow" kind="workflow" />} />
             <Route path={ROUTES.workflowUpload} element={<ProtectedRoute> <WorkflowUploadPage /> </ProtectedRoute>} />
-            <Route path={ROUTES.workflowDetail(':id')} element={<WorkflowDetailPage />} />
-            <Route path={ROUTES.myWorkflows} element={<ProtectedRoute> <MyWorkflowsPage /> </ProtectedRoute>} />
+            <Route path={ROUTES.workflowDetail(':id')} element={<ComponentDetailPage key="workflow" kind="workflow" />} />
+            <Route path={ROUTES.myWorkflows} element={<ProtectedRoute> <MyComponentsPage key="workflow" kind="workflow" /> </ProtectedRoute>} />
+
+            {/* old paths from before tools were split from components - existing links keep working */}
+            <Route path={ROUTES.legacyBrowse} element={<Navigate to={ROUTES.tools} replace />} />
+            <Route path={ROUTES.legacyComponents} element={<Navigate to={ROUTES.tools} replace />} />
+            <Route path={ROUTES.legacyMyComponents} element={<Navigate to={ROUTES.myTools} replace />} />
+            <Route path={ROUTES.legacyComponentUpload} element={<Navigate to={ROUTES.toolUpload} replace />} />
+            {/* resolves the kind, then redirects to /tools/:id or /workflows/:id */}
+            <Route path={ROUTES.componentDetail(':id')} element={<ComponentDetailPage />} />
             <Route path={ROUTES.login} element={<LoginPage />} />
             <Route path={ROUTES.builder} element={<WorkflowBuilderOverviewPage />} />
           </Route>

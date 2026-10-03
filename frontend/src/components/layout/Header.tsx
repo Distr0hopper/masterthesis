@@ -55,10 +55,10 @@ export default function Header() {
             Home
           </Link>
           <Link
-            to={ROUTES.components}
-            className={navLinkClass(pathname === ROUTES.components || pathname.startsWith(`${ROUTES.components}/`))}
+            to={ROUTES.tools}
+            className={navLinkClass(pathname === ROUTES.tools || pathname.startsWith(`${ROUTES.tools}/`))}
           >
-            Components
+            Tools
           </Link>
           <Link
             to={ROUTES.workflows}
@@ -98,9 +98,9 @@ export default function Header() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-48">
                   <DropdownMenuItem asChild>
-                    <Link to={ROUTES.componentUpload} className="cursor-pointer text-slate-900">
+                    <Link to={ROUTES.toolUpload} className="cursor-pointer text-slate-900">
                       <Package size={14} className="text-slate-500" />
-                      Upload Component
+                      Upload Tool
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
@@ -128,9 +128,9 @@ export default function Header() {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link to={ROUTES.myComponents} className="cursor-pointer text-slate-900">
+                    <Link to={ROUTES.myTools} className="cursor-pointer text-slate-900">
                       <Package size={14} className="text-slate-500" />
-                      My Components
+                      My Tools
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>

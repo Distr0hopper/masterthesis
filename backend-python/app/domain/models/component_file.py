@@ -9,7 +9,12 @@ if TYPE_CHECKING:
 
 
 class ComponentFile(SQLModel, table=True):
-    """An auxiliary file this component's CWL cannot do without - see WorkflowFile.
+    """An auxiliary file this component's CWL cannot do without - a $import/$include
+    target, typically SchemaDefRequirement type definitions.
+
+    Keyed by the path exactly as the document writes it (`types/spatial.yml`), because that
+    is the path that has to resolve when the archive is written back out. Flattening it to
+    a basename would leave the $import pointing at nothing.
 
     A component is a standalone catalogue entry, so a tool that imports type definitions
     has to carry them itself; the workflow it arrived with is not guaranteed to be around.

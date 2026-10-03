@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { cn } from '@/lib/utils';
-import type { ComponentDetailDisplayModel } from '@/api/components';
-import { ParameterList } from '../common/ParameterList';
+import type { ToolDetailDisplayModel } from '@/api/tools';
+import { ParameterList } from '@/components/component-detail/common/ParameterList';
 
 interface StatCardProps {
   label: string;
@@ -21,11 +21,11 @@ function StatCard({ label, value, valueClassName }: StatCardProps) {
   );
 }
 
-interface ComponentOverviewProps {
-  model: ComponentDetailDisplayModel;
+interface ToolOverviewProps {
+  model: ToolDetailDisplayModel;
 }
 
-export function ComponentOverview({ model }: ComponentOverviewProps) {
+export function ToolOverview({ model }: ToolOverviewProps) {
   const stats: StatCardProps[] = [
     { label: 'CWL Type', value: model.cwlType ?? '—', valueClassName: 'font-mono' },
     { label: 'Parameters', value: model.parameters.length, valueClassName: 'text-xl' },

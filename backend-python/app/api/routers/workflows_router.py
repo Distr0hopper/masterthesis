@@ -1,40 +1,31 @@
+"""/workflows - what only a workflow, the composite, has: being uploaded together with
+the tools its steps run, and binding those steps to child components. Listing, reading,
+publishing and deleting are shared with tools under /components."""
+
 import logging
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Query, status
-from fastapi.responses import Response
+from fastapi import APIRouter, Depends, Form, HTTPException, status
 
-from app.api.dto.common import ErrorResponse, MyItemsResponseDtoV1, build_my_items_response
-from app.api.dto.pagination import ListQueryPaginationDtoV1, PaginatedResponseDtoV1, build_paginated_response
+from app.api.dto.common import ErrorResponse
 from app.api.dto.workflow import (
-    ComponentMatchDto,
-    ExistingWorkflowDto,
-    WorkflowStepPreviewDto,
     CreateWorkflowRequestDto,
     ParseWorkflowRequestDto,
     ParseWorkflowResponseDto,
     UpdateWorkflowStepRequestDto,
-    WorkflowCommandExecuteRequestDto,
     WorkflowDetailDto,
-    WorkflowListItemDto,
-    WorkflowNameAvailabilityDto,
     WorkflowStepCommandExecuteRequestDto,
     WorkflowStepDto,
 )
 from app.api.exception.exceptions import ForbiddenException
-from app.api.permission.workflow_permission_validator import WorkflowPermissionValidator
+from app.api.permission.component_permission_validator import ComponentPermissionValidator
 from app.api.transformer.component_transformer import ComponentTransformer
+from app.api.transformer.parameter_transformer import ParameterTransformer
 from app.api.transformer.workflow_transformer import WorkflowTransformer
-from app.application.exception.favorites_exceptions import FavoritesRequireAuthError
 from app.application.service.auth_service import AuthService
-from app.application.service.favorites_service import FavoritesService
-from app.application.service.workflows_service import ComponentConfig, ComponentMatch, ComponentPreview, WorkflowsService
-from app.domain.models.component_domain import VALID_DOMAINS
+from app.application.service.workflows_service import ComponentConfig, WorkflowsService
 from app.domain.models.user import User
-from app.domain.models.workflow import WorkflowStatus
-from app.domain.pagination.pagination import DEFAULT_LIMIT, MAX_LIMIT, PaginatedList
-from app.domain.repository.workflows_repository import WorkflowListFilter
 
 router = APIRouter(prefix="/workflows", tags=["workflows"])
 logger = logging.getLogger("app.api.routers.workflows_router")
@@ -42,139 +33,12 @@ logger = logging.getLogger("app.api.routers.workflows_router")
 MAX_WORKFLOW_ZIP_SIZE = 10 * 1024 * 1024
 
 
-def _to_component_match_dto(match: ComponentMatch | None) -> ComponentMatchDto | None:
-    if match is None:
-        return None
-    return ComponentMatchDto(
-        component_id=match.component_id,
-        name=match.name,
-        version=match.version,
-        domains=match.domains,
-        score=match.score,
-    )
-
-
-def _to_workflow_step_preview_dto(preview: ComponentPreview) -> WorkflowStepPreviewDto:
-    return WorkflowStepPreviewDto(
-        step_id=preview.step_id,
-        origin=preview.origin,
-        run_reference=preview.run_reference,
-        suggested_name=preview.suggested_name,
-        description=preview.description,
-        cwl_content=preview.cwl_content,
-        cwl_type=preview.cwl_type,
-        dockerfile_content=preview.dockerfile_content,
-        docker_pull_reference=preview.docker_pull_reference,
-        ontology_url=preview.ontology_url,
-        parameters=[
-            ComponentTransformer.to_preview_parameter(parameter, preview.step_id, preview.ontology_url)
-            for parameter in preview.parameters
-        ],
-        name_conflict=_to_component_match_dto(preview.name_conflict),
-        suggested_match=_to_component_match_dto(preview.suggested_match),
-    )
-
-
-async def _favorited_ids(favorites_service: FavoritesService, user: User | None) -> set[str]:
-    return await favorites_service.get_favorited_workflow_ids(user.id) if user is not None else set()
-
-
-@router.get("", response_model=PaginatedResponseDtoV1[WorkflowListItemDto])
-async def list_workflows(
-    workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
-    favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
-    current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
-    pagination_dto: Annotated[ListQueryPaginationDtoV1, Depends()],
-    domain: Annotated[list[str] | None, Query(json_schema_extra={"items": {"enum": VALID_DOMAINS}})] = None,
-    search: Annotated[str | None, Query()] = None,
-    favorites_only: Annotated[bool, Query(alias="favoritesOnly")] = False,
-    exclude_mine: Annotated[bool, Query(alias="excludeMine")] = False,
-) -> PaginatedResponseDtoV1[WorkflowListItemDto]:
-    if favorites_only and current_user is None:
-        raise FavoritesRequireAuthError()
-
-    pagination = pagination_dto.to_domain()
-    favorited_by = current_user.id if favorites_only and current_user is not None else None
-    exclude_created_by = current_user.id if exclude_mine and current_user is not None else None
-    filter = WorkflowListFilter(
-        domains=domain or [], search=search, favorited_by=favorited_by, exclude_created_by=exclude_created_by
-    )
-    workflows, total = await workflows_service.list_workflows(filter, pagination)
-
-    favorited_ids = await _favorited_ids(favorites_service, current_user)
-    items = [WorkflowTransformer.to_list_item(w, str(w.id) in favorited_ids, current_user) for w in workflows]
-    return build_paginated_response(items, total, pagination)
-
-
-@router.get(
-    "/mine",
-    response_model=MyItemsResponseDtoV1[WorkflowListItemDto],
-    responses={status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"}},
-)
-async def list_my_workflows(
-    current_user: Annotated[User, Depends(AuthService.get_current_user)],
-    workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
-    favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
-    limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
-    published_offset: Annotated[int, Query(alias="publishedOffset", ge=0)] = 0,
-    unpublished_offset: Annotated[int, Query(alias="unpublishedOffset", ge=0)] = 0,
-) -> MyItemsResponseDtoV1[WorkflowListItemDto]:
-    published_pagination = PaginatedList(limit=limit, offset=published_offset)
-    unpublished_pagination = PaginatedList(limit=limit, offset=unpublished_offset)
-
-    published_workflows, published_total = await workflows_service.list_my_workflows_by_status(
-        current_user.id, WorkflowStatus.VALIDATED, published_pagination
-    )
-    unpublished_workflows, unpublished_total = await workflows_service.list_my_workflows_by_status(
-        current_user.id, WorkflowStatus.PENDING_VALIDATION, unpublished_pagination
-    )
-
-    favorited_ids = await _favorited_ids(favorites_service, current_user)
-    return build_my_items_response(
-        (
-            [WorkflowTransformer.to_list_item(w, str(w.id) in favorited_ids, current_user) for w in published_workflows],
-            published_total,
-        ),
-        published_pagination,
-        (
-            [
-                WorkflowTransformer.to_list_item(w, str(w.id) in favorited_ids, current_user)
-                for w in unpublished_workflows
-            ],
-            unpublished_total,
-        ),
-        unpublished_pagination,
-    )
-
-
-@router.get("/latest", response_model=list[WorkflowListItemDto])
-async def list_latest_workflows(
-    workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
-    favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
-    current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
-    limit: int = 6,
-) -> list[WorkflowListItemDto]:
-    workflows = await workflows_service.get_latest_workflows(limit)
-    favorited_ids = await _favorited_ids(favorites_service, current_user)
-    return [WorkflowTransformer.to_list_item(w, str(w.id) in favorited_ids, current_user) for w in workflows]
-
-
-@router.get("/name-availability", response_model=WorkflowNameAvailabilityDto)
-async def check_workflow_name_availability(
-    workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
-    current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
-    name: Annotated[str, Query(min_length=1)],
-    exclude_id: Annotated[uuid.UUID | None, Query(alias="excludeId")] = None,
-) -> WorkflowNameAvailabilityDto:
-    taken = await workflows_service.find_latest_by_name(name, exclude_id) is not None
-    existing = await workflows_service.find_visible_latest_by_name(name, current_user, exclude_id)
-    return WorkflowNameAvailabilityDto(
-        name=name,
-        available=not taken,
-        existing=None
-        if existing is None
-        else ExistingWorkflowDto(id=existing.id, name=existing.name, created_at=existing.created_at),
-    )
+def _require_size(content: bytes) -> None:
+    if len(content) > MAX_WORKFLOW_ZIP_SIZE:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Validation failed (expected size to be less than {MAX_WORKFLOW_ZIP_SIZE} bytes)",
+        )
 
 
 @router.post(
@@ -189,7 +53,7 @@ async def check_workflow_name_availability(
         status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
         status.HTTP_409_CONFLICT: {
             "model": ErrorResponse,
-            "description": "A configured component's name already exists",
+            "description": "The workflow's or a configured tool's name already exists",
         },
         status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErrorResponse, "description": "Request validation failed"},
     },
@@ -199,16 +63,11 @@ async def create(
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
     workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
 ) -> WorkflowDetailDto:
-    validator = WorkflowPermissionValidator(current_user)
-    if not validator.can_create():
+    if not ComponentPermissionValidator(current_user).can_create():
         raise ForbiddenException("Insufficient permission to create a workflow")
 
     content = await dto.file.read()
-    if len(content) > MAX_WORKFLOW_ZIP_SIZE:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            f"Validation failed (expected size to be less than {MAX_WORKFLOW_ZIP_SIZE} bytes)",
-        )
+    _require_size(content)
 
     configs_by_step = {
         c.step_id: ComponentConfig(
@@ -217,7 +76,7 @@ async def create(
             name=c.name,
             domains=c.domains,
             description=c.description,
-            format_labels=ComponentTransformer.to_format_labels(c.format_labels),
+            format_labels=ParameterTransformer.to_format_labels(c.format_labels),
         )
         for c in dto.component_configs
     }
@@ -232,7 +91,7 @@ async def create(
         current_user.id,
     )
     logger.info(f"Created workflow {workflow.id} ('{workflow.name}') with {len(workflow.steps)} steps")
-    return WorkflowTransformer.to_detail(workflow, False, current_user)
+    return ComponentTransformer.to_detail(workflow, False, current_user)
 
 
 @router.post(
@@ -252,11 +111,7 @@ async def parse_workflow(
     workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
 ) -> ParseWorkflowResponseDto:
     content = await dto.file.read()
-    if len(content) > MAX_WORKFLOW_ZIP_SIZE:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            f"Validation failed (expected size to be less than {MAX_WORKFLOW_ZIP_SIZE} bytes)",
-        )
+    _require_size(content)
 
     logger.info(f"Parsing workflow upload '{dto.file.filename}' for user {current_user.id}")
     preview = await workflows_service.parse_workflow_upload(content, dto.file.filename)
@@ -267,46 +122,12 @@ async def parse_workflow(
         workflow_name=preview.workflow_name,
         description=preview.description,
         step_count=preview.step_count,
-        component_previews=[_to_workflow_step_preview_dto(c) for c in preview.component_previews],
+        component_previews=[WorkflowTransformer.to_step_preview(c) for c in preview.component_previews],
         external_refs=preview.external_refs,
         inline_only_steps=preview.inline_only_steps,
         missing_external_refs=preview.missing_external_refs,
         auxiliary_files=preview.auxiliary_files,
         missing_imports=preview.missing_imports,
-    )
-
-
-@router.get(
-    "/{workflow_id}",
-    response_model=WorkflowDetailDto,
-    responses={status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Workflow not found"}},
-)
-async def get_workflow(
-    workflow_id: uuid.UUID,
-    workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
-    favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
-    current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
-) -> WorkflowDetailDto:
-    workflow = await workflows_service.get_visible_workflow(workflow_id, current_user)
-    favorited_ids = await _favorited_ids(favorites_service, current_user)
-    return WorkflowTransformer.to_detail(workflow, str(workflow.id) in favorited_ids, current_user)
-
-
-@router.get(
-    "/{workflow_id}/download",
-    responses={status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Workflow not found"}},
-)
-async def download(
-    workflow_id: uuid.UUID,
-    workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
-    current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
-) -> Response:
-    workflow = await workflows_service.get_visible_workflow(workflow_id, current_user)
-    filename, content = await workflows_service.get_download(workflow)
-    return Response(
-        content=content,
-        media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
@@ -317,6 +138,10 @@ async def download(
         status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
         status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Not the creator of this workflow"},
         status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Step or component not found"},
+        status.HTTP_409_CONFLICT: {
+            "model": ErrorResponse,
+            "description": "The workflow is published, or the component would make it contain itself",
+        },
     },
 )
 async def update_step(
@@ -325,10 +150,10 @@ async def update_step(
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
     workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
 ) -> WorkflowStepDto:
+    """Bind a step to a component - a tool, or another workflow to nest."""
     _step, workflow = await workflows_service.get_step_with_workflow(step_id)
 
-    validator = WorkflowPermissionValidator(current_user)
-    if not validator.can_update(workflow):
+    if not ComponentPermissionValidator(current_user).can_update(workflow):
         logger.warning(f"User {current_user.id} not permitted to update step {step_id}")
         raise ForbiddenException("Insufficient permission to update this workflow's step")
 
@@ -345,6 +170,7 @@ async def update_step(
         status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
         status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Insufficient permission for this command"},
         status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Step not found"},
+        status.HTTP_409_CONFLICT: {"model": ErrorResponse, "description": "The workflow is published"},
         status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErrorResponse, "description": "Unknown command"},
     },
 )
@@ -357,72 +183,11 @@ async def execute_step_command(
     step, workflow = await workflows_service.get_step_with_workflow(step_id)
     command = WorkflowTransformer.to_domain_step_command(dto)
 
-    validator = WorkflowPermissionValidator(current_user)
-    if not validator.can_execute_step(workflow, command.type):
+    # ownership only - a published workflow's locked steps are the service's 409, not a 403
+    if not ComponentPermissionValidator(current_user).can_update(workflow):
         logger.warning(f"User {current_user.id} not permitted to execute {command.type} on step {step_id}")
         raise ForbiddenException(f"Insufficient permission to execute {command.type} on this step")
 
     updated = await workflows_service.execute_step_command(step, command)
     logger.info(f"Executed command {command.type} on step {step_id}")
     return WorkflowTransformer.to_step(updated, current_user)
-
-
-@router.post(
-    "/{workflow_id}/commands",
-    response_model=WorkflowDetailDto,
-    responses={
-        status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse, "description": "Not every step is confirmed yet"},
-        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
-        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Insufficient permission for this command"},
-        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Workflow not found"},
-        status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErrorResponse, "description": "Unknown command"},
-    },
-)
-async def execute_command(
-    workflow_id: uuid.UUID,
-    dto: WorkflowCommandExecuteRequestDto,
-    current_user: Annotated[User, Depends(AuthService.get_current_user)],
-    workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
-    favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
-) -> WorkflowDetailDto:
-    workflow = await workflows_service.get_workflow(workflow_id)
-    command = WorkflowTransformer.to_domain_command(dto)
-
-    validator = WorkflowPermissionValidator(current_user)
-    if not validator.can_execute(workflow, command.type):
-        logger.warning(f"User {current_user.id} not permitted to execute {command.type} on workflow {workflow_id}")
-        raise ForbiddenException(f"Insufficient permission to execute {command.type} on this workflow")
-
-    updated = await workflows_service.execute_command(workflow, command, current_user.id, favorites_service)
-    logger.info(f"Executed command {command.type} on workflow {workflow_id}")
-
-    favorited_ids = await _favorited_ids(favorites_service, current_user)
-    return WorkflowTransformer.to_detail(updated, str(updated.id) in favorited_ids, current_user)
-
-
-@router.delete(
-    "/{workflow_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
-        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Not the creator of this workflow"},
-        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Workflow not found"},
-    },
-)
-async def remove(
-    workflow_id: uuid.UUID,
-    current_user: Annotated[User, Depends(AuthService.get_current_user)],
-    workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
-    favorites_service: Annotated[FavoritesService, Depends(FavoritesService.get_service)],
-    delete_linked_draft: Annotated[bool, Query(alias="deleteLinkedDraft")] = False,
-) -> None:
-    workflow = await workflows_service.get_workflow(workflow_id)
-
-    validator = WorkflowPermissionValidator(current_user)
-    if not validator.can_delete(workflow):
-        logger.warning(f"User {current_user.id} not permitted to delete workflow {workflow_id}")
-        raise ForbiddenException("Insufficient permission to delete this workflow")
-
-    await favorites_service.remove_all_workflow_favorites(workflow.id)
-    deleted_draft = await workflows_service.remove(workflow, current_user.id, delete_linked_draft)
-    logger.info(f"Deleted workflow {workflow_id}{' and its builder draft' if deleted_draft else ''}")

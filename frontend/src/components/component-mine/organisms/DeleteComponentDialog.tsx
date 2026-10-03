@@ -4,13 +4,14 @@ import { AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { ConfirmDeleteDialog } from '@/components/common/ConfirmDeleteDialog';
 import {
+  ComponentSource,
+  ComponentStatus,
   useComponentDeletionImpact,
   useDeleteComponent,
   type ComponentDeletionImpactDto,
   type ComponentDisplayModel,
 } from '@/api/components';
 import { getLink } from '@/api/permissions';
-import { WorkflowStatus, workflowKeys } from '@/api/workflows';
 import { draftKeys } from '@/api/workflow-drafts';
 import { getErrorMessage } from '@/lib/errors';
 import { ROUTES } from '@/lib/routes';
@@ -43,15 +44,15 @@ function UsageWarning({ impact }: { impact: ComponentDeletionImpactDto }) {
         <div>
           <p>
             Used by {plural(workflowCount, 'workflow')}. Their steps will be unmatched, and published workflows are
-            reverted to pending validation until a new component is picked.
+            reverted to drafts until a new component is picked.
           </p>
           <ul className="mt-1 list-disc space-y-0.5 pl-5">
             {impact.workflows.map((workflow) => (
               <li key={workflow.id}>
                 <Link to={ROUTES.workflowDetail(workflow.id)} className="underline" target="_blank" rel="noreferrer">
-                  {workflow.name}
+                  {workflow.name} v{workflow.version}
                 </Link>
-                {workflow.status === WorkflowStatus.VALIDATED && ' (published)'}
+                {workflow.status === ComponentStatus.PUBLISHED && ' (published)'}
               </li>
             ))}
             {impact.hiddenWorkflowCount > 0 && (
@@ -83,6 +84,11 @@ function UsageWarning({ impact }: { impact: ComponentDeletionImpactDto }) {
   );
 }
 
+/**
+ * Deleting one version of either kind. Both can be in use - a tool by workflows, a
+ * workflow by the workflows nesting it - so both get the usage warning. A builder
+ * workflow additionally offers to take the canvas it was synced from along.
+ */
 export function DeleteComponentDialog({ component, open, onOpenChange, onDeleted }: DeleteComponentDialogProps) {
   const queryClient = useQueryClient();
   const { mutate, isPending } = useDeleteComponent();
@@ -91,22 +97,33 @@ export function DeleteComponentDialog({ component, open, onOpenChange, onDeleted
     open,
   );
 
-  const handleDelete = () => {
-    mutate(getLink(component._links, 'delete')!, {
-      onSuccess: () => {
-        toast.success(`${component.name} v${component.version} deleted`);
-        // the delete unmatched workflow steps and left drafts with a removed component, so
-        // every cached workflow or draft view is stale now. Invalidated here, not in
-        // useDeleteComponent: api/workflows already imports api/components
-        queryClient.invalidateQueries({ queryKey: workflowKeys.all });
-        queryClient.invalidateQueries({ queryKey: draftKeys.all });
-        onOpenChange(false);
-        onDeleted?.();
+  // only offer the cascade when there is something on the other side to delete: the
+  // workflow came from the builder and its draft still exists (draftId is ON DELETE SET
+  // NULL, so a draft already deleted from the builder leaves this null)
+  const hasLinkedDraft =
+    component.kind === 'workflow' &&
+    component.source === ComponentSource.WORKFLOW_BUILDER &&
+    component.draftId !== null;
+
+  const handleDelete = (deleteLinkedDraft: boolean) => {
+    mutate(
+      { link: getLink(component._links, 'delete')!, deleteLinkedDraft },
+      {
+        onSuccess: () => {
+          toast.success(
+            deleteLinkedDraft
+              ? `${component.name} v${component.version} and its builder canvas deleted`
+              : `${component.name} v${component.version} deleted`,
+          );
+          // the delete unmatched workflow steps and left drafts with a removed component,
+          // so every cached draft view is stale now
+          queryClient.invalidateQueries({ queryKey: draftKeys.all });
+          onOpenChange(false);
+          onDeleted?.();
+        },
+        onError: (error) => toast.error(getErrorMessage(error)),
       },
-      onError: (error) => {
-        toast.error(getErrorMessage(error));
-      },
-    });
+    );
   };
 
   return (
@@ -116,9 +133,22 @@ export function DeleteComponentDialog({ component, open, onOpenChange, onDeleted
       title={`Delete ${component.name}?`}
       description={
         <>
-          This will permanently delete version {component.version}. If this is the only version, the component will be
-          removed from the repository entirely. This action cannot be undone.
+          This will permanently delete version {component.version}. If this is the only version, the{' '}
+          {component.kindDisplay.toLowerCase()} will be removed from the repository entirely. This action cannot be
+          undone.
         </>
+      }
+      linkedOption={
+        hasLinkedDraft
+          ? {
+              label: (
+                <>
+                  Also delete its canvas in the <span className="font-medium">Workflow Builder</span>. Leave unchecked
+                  to keep editing it there - saving again will create a new copy here.
+                </>
+              ),
+            }
+          : undefined
       }
       onConfirm={handleDelete}
       isPending={isPending}

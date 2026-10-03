@@ -3,19 +3,20 @@ import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
 import { FormatLabelFields } from '@/components/common/FormatLabelFields';
 import { UploadMetadataFields } from '@/components/common/UploadMetadataFields';
-import { ComponentTabs } from '@/components/component-detail/organisms/ComponentTabs';
-import type { ComponentDetailDisplayModel, FormatLabelDraft, PreviewParameterDto } from '@/api/components';
+import { ToolTabs } from '@/components/tool-detail/organisms/ToolTabs';
+import type { FormatLabelDraft, PreviewParameterDto } from '@/api/components';
+import type { ToolDetailDisplayModel } from '@/api/tools';
 
-interface ComponentReviewStepProps {
-  /** e.g. "New component" or "New version of remove-outliers" */
+interface ToolReviewStepProps {
+  /** e.g. "New tool" or "New version of remove-outliers" */
   title: ReactNode;
   /** name and domains shown but not editable - a new version keeps its lineage's */
   locked?: boolean;
-  /** shown under the name - e.g. that it's taken, or which component gets the new version */
+  /** shown under the name - e.g. that it's taken, or which tool gets the new version */
   nameNotice?: ReactNode;
   descriptionPlaceholder?: string;
   /** the preview with the current details and draft labels applied (withFormatLabels) */
-  previewModel: ComponentDetailDisplayModel;
+  previewModel: ToolDetailDisplayModel;
   /** the raw preview ports - which of them accept a hand label */
   parameters: PreviewParameterDto[];
   formatLabels: FormatLabelDraft;
@@ -23,12 +24,12 @@ interface ComponentReviewStepProps {
 }
 
 /**
- * The last step before a component is created: everything that gets saved - details and
+ * The last step before a tool is created: everything that gets saved - details and
  * hand labels for File ports without an ontology format - editable next to the live
- * component preview. Shared by the manual-upload and the GitHub-packaging wizard; must
+ * tool preview. Shared by the manual-upload and the GitHub-packaging wizard; must
  * render inside the wizard's FormProvider (useUploadMetadataForm).
  */
-export function ComponentReviewStep({
+export function ToolReviewStep({
   title,
   locked = false,
   nameNotice,
@@ -37,7 +38,7 @@ export function ComponentReviewStep({
   parameters,
   formatLabels,
   onFormatLabelsChange,
-}: ComponentReviewStepProps) {
+}: ToolReviewStepProps) {
   return (
     <>
       <Card className="mt-6">
@@ -47,7 +48,7 @@ export function ComponentReviewStep({
             <Badge variant="secondary">v{previewModel.version}</Badge>
           </div>
           <UploadMetadataFields
-            nameLabel="Component Name"
+            nameLabel="Tool Name"
             namePlaceholder="e.g. remove-outliers"
             nameReadOnly={locked}
             nameNotice={nameNotice}
@@ -62,7 +63,7 @@ export function ComponentReviewStep({
           />
         </CardContent>
       </Card>
-      <ComponentTabs model={previewModel} isPreview />
+      <ToolTabs model={previewModel} isPreview />
     </>
   );
 }

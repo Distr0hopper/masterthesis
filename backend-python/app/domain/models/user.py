@@ -7,7 +7,6 @@ from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from app.domain.models.component import Component
-    from app.domain.models.workflow import Workflow
 
 
 class User(SQLModel, table=True):
@@ -23,4 +22,3 @@ class User(SQLModel, table=True):
     )
 
     components: list["Component"] = Relationship(back_populates="created_by", sa_relationship_kwargs={"lazy": "raise"})
-    workflows: list["Workflow"] = Relationship(back_populates="created_by", sa_relationship_kwargs={"lazy": "raise"})

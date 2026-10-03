@@ -1,5 +1,17 @@
-import type { PageParams, SplitPageResponse, WithHateoasLinks } from '@/api/types';
-import type { WorkflowStatus } from '@/api/workflows/types';
+import type { MineQueryParams, PageParams, SplitPageResponse, WithHateoasLinks } from '@/api/types';
+import type { ToolDetailDto, ToolListItemDto } from '@/api/tools/types';
+import type { WorkflowDetailDto, WorkflowListItemDto } from '@/api/workflows/types';
+
+/**
+ * Which child of the composite a component is - CWL's Process subclasses, narrowed to the
+ * two this repository models. A tool is a leaf (CommandLineTool / ExpressionTool), a
+ * workflow is a composite whose steps run other components.
+ */
+export const ComponentKind = {
+  TOOL: 'tool',
+  WORKFLOW: 'workflow',
+} as const;
+export type ComponentKind = (typeof ComponentKind)[keyof typeof ComponentKind];
 
 export type ComponentDomain = string;
 
@@ -12,6 +24,8 @@ export interface DomainDto {
 export const ComponentSource = {
   AUTOMATED_PACKAGING: 'automated_packaging',
   MANUAL_UPLOAD: 'manual_upload',
+  /** workflows only - generated from a builder canvas */
+  WORKFLOW_BUILDER: 'workflow_builder',
 } as const;
 export type ComponentSource = (typeof ComponentSource)[keyof typeof ComponentSource];
 
@@ -47,6 +61,7 @@ export const ParameterDirection = {
 } as const;
 export type ParameterDirection = (typeof ParameterDirection)[keyof typeof ParameterDirection];
 
+/** One port of a component - a tool's input/output, or a workflow's own. */
 export interface ParameterDto {
   id: string;
   name: string;
@@ -61,54 +76,7 @@ export interface ParameterDto {
   direction: ParameterDirection;
 }
 
-/** The component currently holding a name, returned when that name is taken. */
-export interface ExistingComponentDto {
-  id: string;
-  name: string;
-  version: number;
-  domains: ComponentDomain[];
-  status: ComponentStatus;
-  canAddVersion: boolean;
-}
-
-/** Whether a component name can still be claimed for a new lineage. */
-export interface NameAvailabilityDto {
-  name: string;
-  available: boolean;
-  existing: ExistingComponentDto | null;
-}
-
-/**
- * A component read out of a CWL document without persisting it - what
- * POST /components/parse returns. Also the shared base of the workflow flow's
- * WorkflowStepPreviewDto, which adds the step the CWL came from.
- */
-export interface ComponentPreviewDto {
-  description: string | null;
-  cwlContent: string;
-  cwlType: string | null;
-  dockerfileContent: string | null;
-  dockerPullReference: string | null;
-  ontologyUrl: string | null;
-  parameters: PreviewParameterDto[];
-}
-
-/**
- * A GitHub repo packaged without persisting it - what POST /components/package/preview
- * returns, so the generated component can be reviewed before it is created.
- */
-export interface PackagePreviewDto extends ComponentPreviewDto {
-  repoName: string;
-  repoUrl: string;
-  commitSha: string;
-  author: string | null;
-  /** latest version already packaged from this repo - creating adds a new version to it */
-  existing: ExistingComponentDto | null;
-  /** the repo's current commit is already packaged as `existing` */
-  alreadyPackaged: boolean;
-}
-
-/** A previewed component port - never persisted, so `id` is synthetic. */
+/** A previewed port - never persisted, so `id` is synthetic. */
 export interface PreviewParameterDto {
   id: string;
   name: string;
@@ -123,32 +91,6 @@ export interface PreviewParameterDto {
   direction: ParameterDirection;
 }
 
-export const ComponentCommand = {
-  ADD_FAVORITE: 'ADD_FAVORITE',
-  REMOVE_FAVORITE: 'REMOVE_FAVORITE',
-  REPACKAGE: 'REPACKAGE',
-  PUBLISH: 'PUBLISH',
-  UNPUBLISH: 'UNPUBLISH',
-  UPDATE_DESCRIPTION: 'UPDATE_DESCRIPTION',
-  UPDATE_DOMAIN: 'UPDATE_DOMAIN',
-  UPDATE_FORMAT_LABELS: 'UPDATE_FORMAT_LABELS',
-} as const;
-export type ComponentCommand = (typeof ComponentCommand)[keyof typeof ComponentCommand];
-
-export type ComponentCommandExecuteRequest =
-  | {
-      command:
-        | typeof ComponentCommand.ADD_FAVORITE
-        | typeof ComponentCommand.REMOVE_FAVORITE
-        | typeof ComponentCommand.REPACKAGE
-        | typeof ComponentCommand.PUBLISH
-        | typeof ComponentCommand.UNPUBLISH;
-      note?: string;
-    }
-  | { command: typeof ComponentCommand.UPDATE_DESCRIPTION; note?: string; description: string | null }
-  | { command: typeof ComponentCommand.UPDATE_DOMAIN; note?: string; domains: ComponentDomain[] }
-  | { command: typeof ComponentCommand.UPDATE_FORMAT_LABELS; note?: string; formatLabels: FormatLabelDto[] };
-
 /**
  * A hand-written label for a File port whose format no ontology covers (e.g. "RDS"), so the
  * builder can show it on the port. Display only - it never verifies a connection.
@@ -159,13 +101,64 @@ export interface FormatLabelDto {
   label: string | null;
 }
 
-export interface ComponentListItemDto extends WithHateoasLinks {
+export interface ComponentCreatorDto {
+  id: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+}
+
+/** The component currently holding a name, returned when that name is taken. */
+export interface ExistingComponentDto {
+  id: string;
+  kind: ComponentKind;
+  name: string;
+  version: number;
+  domains: ComponentDomain[];
+  status: ComponentStatus;
+  createdAt: string;
+  /** only ever true for a tool lineage you own - a workflow's versions come from the builder */
+  canAddVersion: boolean;
+}
+
+/** Whether a name can still be claimed for a new lineage - of either kind, names are one key. */
+export interface NameAvailabilityDto {
+  name: string;
+  available: boolean;
+  existing: ExistingComponentDto | null;
+}
+
+/** A workflow version running some version(s) of a component - "Used in these workflows". */
+export interface ComponentUsageDto {
+  id: string;
+  name: string;
+  version: number;
+  /** draft only ever shows up for the viewer's own workflows */
+  status: ComponentStatus;
+  /** which versions of the component its steps use, ascending */
+  componentVersions: number[];
+}
+
+/** What deleting one exact component version touches - the delete dialog's warning. */
+export interface ComponentDeletionImpactDto {
+  /** workflows the deleter may see; componentVersions is always just this version */
+  workflows: ComponentUsageDto[];
+  /** other users' draft workflows - private, so only counted */
+  hiddenWorkflowCount: number;
+  /** the deleter's own builder drafts with this version on the canvas */
+  drafts: { id: string; name: string }[];
+  /** other users' builder drafts - private, so only counted */
+  otherDraftCount: number;
+}
+
+/** What every list row carries, whatever the kind - see ToolListItemDto / WorkflowListItemDto. */
+export interface ComponentListItemBaseDto extends WithHateoasLinks {
+  kind: ComponentKind;
   id: string;
   name: string;
   description: string | null;
   authorName: string | null;
   createdBy: ComponentCreatorDto | null;
-  repoUrl: string | null;
   version: number;
   domains: ComponentDomain[];
   status: ComponentStatus;
@@ -175,36 +168,9 @@ export interface ComponentListItemDto extends WithHateoasLinks {
   match?: ComponentMatchDto | null;
 }
 
-/** A workflow using some version(s) of a component - "Used in these workflows". */
-export interface ComponentWorkflowUsageDto {
-  id: string;
-  name: string;
-  /** pending_validation only ever shows up for the viewer's own workflows */
-  status: WorkflowStatus;
-  /** which versions of the component its steps use, ascending */
-  componentVersions: number[];
-}
-
-/** What deleting one exact component version touches - the delete dialog's warning. */
-export interface ComponentDeletionImpactDto {
-  /** workflows the deleter may see; componentVersions is always just this version */
-  workflows: ComponentWorkflowUsageDto[];
-  /** other users' pending workflows - private, so only counted */
-  hiddenWorkflowCount: number;
-  /** the deleter's own builder drafts with this version on the canvas */
-  drafts: { id: string; name: string }[];
-  /** other users' builder drafts - private, so only counted */
-  otherDraftCount: number;
-}
-
-export interface ComponentCreatorDto {
-  id: string;
-  email: string;
-  firstName: string | null;
-  lastName: string | null;
-}
-
-export interface ComponentDetailDto extends WithHateoasLinks {
+/** What every detail view carries, whatever the kind - see ToolDetailDto / WorkflowDetailDto. */
+export interface ComponentDetailBaseDto extends WithHateoasLinks {
+  kind: ComponentKind;
   id: string;
   name: string;
   authorName: string | null;
@@ -215,9 +181,6 @@ export interface ComponentDetailDto extends WithHateoasLinks {
   doi: string | null;
   version: number;
   cwlContent: string;
-  cwlType: string | null;
-  dockerfileContent: string | null;
-  dockerPullReference: string | null;
   ontologyUrl: string | null;
   domains: ComponentDomain[];
   source: ComponentSource;
@@ -228,33 +191,42 @@ export interface ComponentDetailDto extends WithHateoasLinks {
   isFavorite: boolean;
 }
 
-export interface CreateComponentDto {
-  name: string;
-  domains: string[];
-  authorName?: string;
-  repoUrl?: string;
-  repoCommitSha?: string;
-  description?: string | null;
-  formatLabels?: FormatLabelDto[];
-}
+/** A row of a list serving both kinds - narrow it on `kind`. */
+export type ComponentListItemDto = ToolListItemDto | WorkflowListItemDto;
+/** A detail view of either kind - narrow it on `kind`. */
+export type ComponentDetailDto = ToolDetailDto | WorkflowDetailDto;
 
-export interface PackageComponentDto {
-  repoUrl: string;
-  domains: string[];
-  description?: string | null;
-  /** name for a new component - ignored when the repo is already packaged */
-  name?: string | null;
-  formatLabels?: FormatLabelDto[];
-  /** commit the reviewed preview came from - the backend rejects (409) if the repo moved on */
-  expectedCommitSha?: string | null;
-}
+/** The commands every component understands - POST /components/{id}/commands. */
+export const ComponentCommand = {
+  ADD_FAVORITE: 'ADD_FAVORITE',
+  REMOVE_FAVORITE: 'REMOVE_FAVORITE',
+  PUBLISH: 'PUBLISH',
+  UNPUBLISH: 'UNPUBLISH',
+  UPDATE_DESCRIPTION: 'UPDATE_DESCRIPTION',
+  UPDATE_DOMAIN: 'UPDATE_DOMAIN',
+} as const;
+export type ComponentCommand = (typeof ComponentCommand)[keyof typeof ComponentCommand];
 
-export interface AddVersionDto {
-  repoCommitSha?: string;
-  description?: string;
-}
+export type ComponentCommandExecuteRequest =
+  | {
+      command:
+        | typeof ComponentCommand.ADD_FAVORITE
+        | typeof ComponentCommand.REMOVE_FAVORITE
+        | typeof ComponentCommand.UNPUBLISH;
+      note?: string;
+    }
+  | {
+      command: typeof ComponentCommand.PUBLISH;
+      note?: string;
+      /** workflows only: also publish the draft components it runs, at any depth */
+      publishComponents?: boolean;
+    }
+  | { command: typeof ComponentCommand.UPDATE_DESCRIPTION; note?: string; description: string | null }
+  | { command: typeof ComponentCommand.UPDATE_DOMAIN; note?: string; domains: ComponentDomain[] };
 
 export interface ComponentListQueryParams extends PageParams<ComponentListItemDto> {
+  /** omitted lists both kinds */
+  kind?: ComponentKind;
   domain?: ComponentDomain[];
   excludeMine?: boolean;
   favoritesOnly?: boolean;
@@ -263,4 +235,9 @@ export interface ComponentListQueryParams extends PageParams<ComponentListItemDt
   rankAgainst?: string[];
   favoritesFirst?: boolean;
 }
+
+export interface MyComponentsQueryParams extends MineQueryParams {
+  kind?: ComponentKind;
+}
+
 export type MyComponentsResponseDto = SplitPageResponse<ComponentListItemDto>;

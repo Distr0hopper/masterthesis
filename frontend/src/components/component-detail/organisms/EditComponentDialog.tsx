@@ -13,11 +13,11 @@ import {
   updateComponentFormSchema,
   useUpdateComponentDescription,
   useUpdateComponentDomains,
-  useUpdateComponentFormatLabels,
   type ComponentDetailDisplayModel,
   type FormatLabelDraft,
   type UpdateComponentFormData,
 } from '@/api/components';
+import { useUpdateToolFormatLabels } from '@/api/tools';
 import { canUpdateFormatLabels, getLink } from '@/api/permissions';
 import { getErrorMessage } from '@/lib/errors';
 import { DomainMultiSelect } from '@/components/common/DomainMultiSelect';
@@ -32,7 +32,8 @@ interface EditComponentDialogProps {
 export function EditComponentDialog({ component, open, onOpenChange }: EditComponentDialogProps) {
   const { mutateAsync: updateDescription } = useUpdateComponentDescription();
   const { mutateAsync: updateDomains } = useUpdateComponentDomains();
-  const { mutateAsync: updateFormatLabels } = useUpdateComponentFormatLabels();
+  // tools only - the link is absent on a workflow, so its section never renders
+  const { mutateAsync: updateFormatLabels } = useUpdateToolFormatLabels();
   const [formatLabels, setFormatLabels] = useState<FormatLabelDraft>({});
 
   // fresh from the component on every open - a cancelled edit must not linger

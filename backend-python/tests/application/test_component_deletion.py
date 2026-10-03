@@ -1,15 +1,16 @@
-"""Deleting a component version cascades into the workflows and drafts that use it."""
+"""Deleting a component version - a tool or a nested workflow - cascades into the
+workflows and drafts that use it."""
 
 import asyncio
 import json
 import uuid
 
 from app.application.exception.workflow_draft_exceptions import ExportValidationError
+from app.application.service.components_service import ComponentsService
 from app.application.service.workflow_draft_service import WorkflowDraftService
-from app.application.service.workflows_service import WorkflowsService
-from app.domain.models.component import Component
+from app.domain.models.component import Component, ComponentKind, ComponentStatus
 from app.domain.models.user import User
-from app.domain.models.workflow import Workflow, WorkflowStatus
+from app.domain.models.workflow import Workflow
 from app.domain.models.workflow_draft import WorkflowDraft
 from app.domain.models.workflow_step import StepMatchStatus, WorkflowStep
 
@@ -20,12 +21,12 @@ STRANGER = uuid.uuid4()
 class FakeWorkflowsRepository:
     def __init__(self, steps: list[WorkflowStep]):
         self.steps = steps
-        self.saved: tuple[list[WorkflowStep], list[Workflow]] | None = None
+        self.saved: tuple[list[WorkflowStep], list[Component]] | None = None
 
     async def find_steps_by_component_id(self, component_id: uuid.UUID) -> list[WorkflowStep]:
         return [s for s in self.steps if s.component_id == component_id]
 
-    async def save_steps(self, steps: list[WorkflowStep], workflows: list[Workflow]) -> None:
+    async def save_steps(self, steps: list[WorkflowStep], workflows: list[Component]) -> None:
         self.saved = (steps, workflows)
 
 
@@ -46,14 +47,20 @@ class FakeComponentsRepository:
 
 
 def component() -> Component:
-    return Component(id=uuid.uuid4(), name="thin-data", version=2, cwl_content="", created_by_id=OWNER)
+    return Component(
+        id=uuid.uuid4(), kind=ComponentKind.TOOL, name="thin-data", version=2, cwl_content="", created_by_id=OWNER
+    )
 
 
-def workflow(name: str, status: WorkflowStatus, created_by: uuid.UUID = OWNER) -> Workflow:
-    return Workflow(id=uuid.uuid4(), name=name, cwl_content="", status=status, created_by_id=created_by)
+def workflow(name: str, status: ComponentStatus, created_by: uuid.UUID = OWNER) -> Component:
+    wf = Component(
+        id=uuid.uuid4(), kind=ComponentKind.WORKFLOW, name=name, cwl_content="", status=status, created_by_id=created_by
+    )
+    wf.workflow = Workflow(component_id=wf.id)
+    return wf
 
 
-def step(wf: Workflow, component_id: uuid.UUID | None, status: StepMatchStatus) -> WorkflowStep:
+def step(wf: Component, component_id: uuid.UUID | None, status: StepMatchStatus) -> WorkflowStep:
     s = WorkflowStep(
         id=uuid.uuid4(),
         workflow_id=wf.id,
@@ -64,7 +71,7 @@ def step(wf: Workflow, component_id: uuid.UUID | None, status: StepMatchStatus) 
         match_status=status,
         match_score=0.9,
     )
-    s.workflow = wf
+    s.workflow = wf.workflow
     return s
 
 
@@ -73,31 +80,32 @@ def draft(owner: uuid.UUID, *component_ids: uuid.UUID, name: str = "draft") -> W
     return WorkflowDraft(id=uuid.uuid4(), name=name, canvas_state=json.dumps({"nodes": nodes}), created_by_id=owner)
 
 
-def service(steps: list[WorkflowStep], drafts: list[WorkflowDraft] | None = None) -> WorkflowsService:
-    return WorkflowsService(
+def service(steps: list[WorkflowStep], drafts: list[WorkflowDraft] | None = None) -> ComponentsService:
+    return ComponentsService(
+        None,  # type: ignore[arg-type]
         FakeWorkflowsRepository(steps),  # type: ignore[arg-type]
-        None,  # type: ignore[arg-type]
-        None,  # type: ignore[arg-type]
         FakeDraftRepository(drafts or []),  # type: ignore[arg-type]
+        None,  # type: ignore[arg-type]
+        None,  # type: ignore[arg-type]
     )
 
 
 def test_detach_unmatches_steps_and_unpublishes_their_workflows() -> None:
     target = component()
-    published = workflow("public", WorkflowStatus.VALIDATED)
-    pending = workflow("pending", WorkflowStatus.PENDING_VALIDATION)
+    published = workflow("public", ComponentStatus.PUBLISHED)
+    pending = workflow("pending", ComponentStatus.DRAFT)
     confirmed = step(published, target.id, StepMatchStatus.CONFIRMED)
     suggested = step(pending, target.id, StepMatchStatus.SUGGESTED)
     unrelated = step(published, uuid.uuid4(), StepMatchStatus.CONFIRMED)
     svc = service([confirmed, suggested, unrelated])
 
-    asyncio.run(svc.detach_component(target.id))
+    asyncio.run(svc.detach(target.id))
 
     for s in (confirmed, suggested):
         assert (s.component_id, s.match_status, s.match_score) == (None, StepMatchStatus.UNMATCHED, None)
     assert unrelated.match_status == StepMatchStatus.CONFIRMED
-    assert published.status == WorkflowStatus.PENDING_VALIDATION
-    assert pending.status == WorkflowStatus.PENDING_VALIDATION
+    assert published.status == ComponentStatus.DRAFT
+    assert pending.status == ComponentStatus.DRAFT
     saved_steps, saved_workflows = svc.workflows_repository.saved  # type: ignore[attr-defined]
     assert saved_steps == [confirmed, suggested]
     assert saved_workflows == [published]
@@ -105,15 +113,15 @@ def test_detach_unmatches_steps_and_unpublishes_their_workflows() -> None:
 
 def test_detach_without_usages_writes_nothing() -> None:
     svc = service([])
-    asyncio.run(svc.detach_component(uuid.uuid4()))
+    asyncio.run(svc.detach(uuid.uuid4()))
     assert svc.workflows_repository.saved is None  # type: ignore[attr-defined]
 
 
 def test_deletion_impact_names_only_what_the_deleter_may_see() -> None:
     target = component()
-    public = workflow("b-public", WorkflowStatus.VALIDATED, created_by=STRANGER)
-    mine = workflow("a-mine", WorkflowStatus.PENDING_VALIDATION)
-    private = workflow("private", WorkflowStatus.PENDING_VALIDATION, created_by=STRANGER)
+    public = workflow("b-public", ComponentStatus.PUBLISHED, created_by=STRANGER)
+    mine = workflow("a-mine", ComponentStatus.DRAFT)
+    private = workflow("private", ComponentStatus.DRAFT, created_by=STRANGER)
     steps = [
         step(public, target.id, StepMatchStatus.CONFIRMED),
         step(public, target.id, StepMatchStatus.CONFIRMED),  # same workflow twice
@@ -148,7 +156,7 @@ def test_deletion_impact_names_only_what_the_deleter_may_see() -> None:
 
 
 def draft_service(components: list[Component]) -> WorkflowDraftService:
-    return WorkflowDraftService(None, FakeComponentsRepository(components), None)  # type: ignore[arg-type]
+    return WorkflowDraftService(None, FakeComponentsRepository(components), None, None)  # type: ignore[arg-type]
 
 
 def test_missing_component_ids_lists_only_deleted_components() -> None:

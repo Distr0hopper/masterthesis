@@ -24,8 +24,8 @@ interface ConfirmPublishDialogProps {
  * passes through - it never sees the upload form's checks.
  *
  * Draft components are a hard blocker: a public workflow pointing at owner-only drafts is
- * broken for everyone else. (Duplicate names are handled at upload time instead - they
- * cannot reach this point, since workflow names are unique.)
+ * broken for everyone else - tools and nested workflows alike. Only the direct children
+ * are listed; the backend checks the whole tree and names any deeper drafts itself.
  */
 export function ConfirmPublishDialog({
   open,
@@ -63,6 +63,7 @@ export function ConfirmPublishDialog({
                 <li key={component.id} className="flex items-center justify-between gap-2 px-3 py-2">
                   <ComponentLink
                     componentId={component.id}
+                    kind={component.kind}
                     name={component.name}
                     version={component.version}
                   />

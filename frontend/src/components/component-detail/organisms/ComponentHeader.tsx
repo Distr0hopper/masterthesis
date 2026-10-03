@@ -1,18 +1,29 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, Download, ExternalLink, Globe, GlobeLock, Pencil, Trash2 } from 'lucide-react';
+import {
+  ChevronLeft,
+  Download,
+  ExternalLink,
+  Globe,
+  GlobeLock,
+  Pencil,
+  Trash2,
+  Workflow as WorkflowIcon,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import {
+  ComponentSource,
   ComponentStatus,
-  componentsService,
+  useDownloadComponent,
   usePublishComponent,
   useUnpublishComponent,
   type ComponentDetailDisplayModel,
 } from '@/api/components';
-import { ComponentFavoriteButton } from '@/components/ComponentFavoriteButton';
+import { toolsService } from '@/api/tools';
+import { StepMatchStatus, type ComponentSummaryDto } from '@/api/workflows';
 import {
   canFavorite,
   canDelete as hasDeleteLink,
@@ -24,9 +35,12 @@ import {
   getLink,
 } from '@/api/permissions';
 import { getErrorMessage } from '@/lib/errors';
+import { downloadBlob } from '@/lib/download';
+import { ComponentFavoriteButton } from '@/components/ComponentFavoriteButton';
 import { DeleteComponentDialog } from '@/components/component-mine/organisms/DeleteComponentDialog';
-import { EditComponentDialog } from './EditComponentDialog';
+import { ConfirmPublishDialog } from '@/components/workflow-detail/organisms/ConfirmPublishDialog';
 import { DomainBadges } from '@/components/common/DomainBadges';
+import { EditComponentDialog } from './EditComponentDialog';
 
 interface ComponentHeaderProps {
   model: ComponentDetailDisplayModel;
@@ -35,30 +49,86 @@ interface ComponentHeaderProps {
   onDeleted: () => void;
 }
 
+const DRAFT_NOTICE: Record<ComponentDetailDisplayModel['kind'], string> = {
+  tool: 'This tool is a draft and is only visible to you. Publish it to make it public and available in the Workflow Builder.',
+  workflow:
+    'This workflow is a draft and is only visible to you. Confirm every step below, then click Publish to make it public.',
+};
+
+/** The draft children a workflow's publish would have to take along - its direct steps' components. */
+function draftChildren(model: ComponentDetailDisplayModel): ComponentSummaryDto[] {
+  if (model.kind !== 'workflow') return [];
+  return model.steps
+    .map((step) => step.component)
+    .filter(
+      (component): component is ComponentSummaryDto =>
+        component !== null && component.status === ComponentStatus.DRAFT,
+    );
+}
+
 export function ComponentHeader({ model, backTo, backLabel, onDeleted }: ComponentHeaderProps) {
   const { mutate: publishComponent, isPending: isPublishing } = usePublishComponent();
   const { mutate: unpublishComponent, isPending: isUnpublishing } = useUnpublishComponent();
+  const { mutate: downloadComponent, isPending: isDownloading } = useDownloadComponent();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [publishDialogOpen, setPublishDialogOpen] = useState(false);
 
+  const isWorkflow = model.kind === 'workflow';
   const canDelete = hasDeleteLink(model._links);
   const canEdit =
     hasUpdateDescriptionLink(model._links) ||
     hasUpdateDomainLink(model._links) ||
     hasUpdateFormatLabelsLink(model._links);
+  // a workflow publishes only once every step is settled - a tool has none to settle
+  const allStepsSettled =
+    !isWorkflow ||
+    model.steps.every(
+      (step) => step.matchStatus === StepMatchStatus.CONFIRMED || step.matchStatus === StepMatchStatus.INLINE,
+    );
   const canPublish = hasPublishLink(model._links) && model.status === ComponentStatus.DRAFT;
   const canUnpublish = hasUnpublishLink(model._links) && model.status === ComponentStatus.PUBLISHED;
 
+  // only the direct children are listed here; the backend checks the whole tree and names
+  // any deeper drafts in its answer
+  const drafts = draftChildren(model);
+  const blockedByOthers = drafts.filter((component) => !component.canPublish);
+
+  const doPublish = (publishComponents = false) => {
+    publishComponent(
+      { link: getLink(model._links, 'publish')!, publishComponents },
+      {
+        onSuccess: () => {
+          setPublishDialogOpen(false);
+          toast.success(
+            publishComponents && drafts.length > 0
+              ? `${model.kindDisplay} published, along with the draft components it runs`
+              : `${model.kindDisplay} published`,
+          );
+        },
+        onError: (error) => toast.error(getErrorMessage(error)),
+      },
+    );
+  };
+
   const handlePublish = () => {
-    publishComponent(getLink(model._links, 'publish')!, {
-      onSuccess: () => toast.success('Component published'),
-      onError: (error) => toast.error(getErrorMessage(error)),
-    });
+    if (drafts.length > 0) {
+      setPublishDialogOpen(true);
+      return;
+    }
+    doPublish();
   };
 
   const handleUnpublish = () => {
     unpublishComponent(getLink(model._links, 'unpublish')!, {
-      onSuccess: () => toast.success('Component unpublished'),
+      onSuccess: () => toast.success(`${model.kindDisplay} unpublished`),
+      onError: (error) => toast.error(getErrorMessage(error)),
+    });
+  };
+
+  const handleDownload = () => {
+    downloadComponent(model.id, {
+      onSuccess: ({ blob, filename }) => downloadBlob(filename, blob),
       onError: (error) => toast.error(getErrorMessage(error)),
     });
   };
@@ -71,26 +141,45 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
 
       {model.status === ComponentStatus.DRAFT && (
         <div className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          This component is a draft and is only visible to you. Publish it to make it public and available in
-          the Workflow Builder.
+          {DRAFT_NOTICE[model.kind]}
         </div>
       )}
 
       <Card className="mt-4">
         <CardContent className="flex flex-col gap-3 pt-6">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <DomainBadges domains={model.domains} />
+
+              {isWorkflow && (
+                <Badge variant="secondary" className="w-fit gap-1">
+                  {model.source === ComponentSource.WORKFLOW_BUILDER && <WorkflowIcon className="h-3 w-3" aria-hidden />}
+                  {model.sourceDisplay}
+                </Badge>
+              )}
+
+              <Badge variant="outline" className="w-fit" title="Version of this lineage">
+                v{model.version}
+              </Badge>
 
               {canFavorite(model._links) && <ComponentFavoriteButton links={model._links!} isFavorite={model.isFavorite} />}
             </div>
 
             <div className="flex items-center gap-2">
-              <Button asChild variant="outline" size="sm">
-                <a href={componentsService.getBundleUrl(model.id)}>
+              {model.kind === 'tool' ? (
+                // the run bundle: the .cwl, an inputs.yaml template and its imported files
+                <Button asChild variant="outline" size="sm">
+                  <a href={toolsService.getBundleUrl(model.id)}>
+                    <Download className="mr-1 h-4 w-4" /> Download
+                  </a>
+                </Button>
+              ) : (
+                // the whole tree: the pipeline, every step document below it - nested
+                // workflows included - and everything they import
+                <Button variant="outline" size="sm" onClick={handleDownload} disabled={isDownloading}>
                   <Download className="mr-1 h-4 w-4" /> Download
-                </a>
-              </Button>
+                </Button>
+              )}
 
               {canEdit && (
                 <Button variant="outline" size="sm" onClick={() => setEditDialogOpen(true)}>
@@ -103,7 +192,8 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
                   size="sm"
                   className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90"
                   onClick={handlePublish}
-                  disabled={isPublishing}
+                  disabled={isPublishing || !allStepsSettled}
+                  title={allStepsSettled ? undefined : 'Confirm every step before publishing'}
                 >
                   <Globe className="mr-1 h-4 w-4" /> Publish
                 </Button>
@@ -115,7 +205,7 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
                   size="sm"
                   onClick={handleUnpublish}
                   disabled={isUnpublishing}
-                  title="Hide this component from the public list and the Workflow Builder again"
+                  title={`Hide this ${model.kindDisplay.toLowerCase()} from the public list and the Workflow Builder again`}
                 >
                   <GlobeLock className="mr-1 h-4 w-4" /> Unpublish
                 </Button>
@@ -163,6 +253,16 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
         onDeleted={onDeleted}
       />
       <EditComponentDialog component={model} open={editDialogOpen} onOpenChange={setEditDialogOpen} />
+      {isWorkflow && (
+        <ConfirmPublishDialog
+          open={publishDialogOpen}
+          onOpenChange={setPublishDialogOpen}
+          draftComponents={drafts}
+          blockedByOthers={blockedByOthers}
+          onConfirm={doPublish}
+          isPending={isPublishing}
+        />
+      )}
     </>
   );
 }

@@ -29,7 +29,7 @@ DOMAIN_AGNOSTIC = "domain_agnostic"
 
 
 class ComponentDomain(SQLModel, table=True):
-    """One of a component's domains - the exact shape of WorkflowDomain."""
+    """One of a component's domains - tools and workflows alike."""
 
     __tablename__ = "component_domains"
 

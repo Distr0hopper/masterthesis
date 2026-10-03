@@ -1,9 +1,12 @@
 import { ExternalLink } from 'lucide-react';
-import { ROUTES } from '@/lib/routes';
+import type { ComponentKind } from '@/api/components';
+import { ROUTES, componentDetailRoute } from '@/lib/routes';
 import { cn } from '@/lib/utils';
 
 interface ComponentLinkProps {
   componentId: string;
+  /** when unknown, the link goes through /components/:id, which resolves the kind */
+  kind?: ComponentKind;
   name: string;
   version?: number | null;
   className?: string;
@@ -13,10 +16,10 @@ interface ComponentLinkProps {
  * A component's name, linking to its detail page in a new tab - so a step's binding can
  * be checked without losing whatever page (upload wizard, workflow detail) it sits on.
  */
-export function ComponentLink({ componentId, name, version, className }: ComponentLinkProps) {
+export function ComponentLink({ componentId, kind, name, version, className }: ComponentLinkProps) {
   return (
     <a
-      href={ROUTES.componentDetail(componentId)}
+      href={kind ? componentDetailRoute(kind, componentId) : ROUTES.componentDetail(componentId)}
       target="_blank"
       rel="noreferrer"
       title="Open details in a new tab"

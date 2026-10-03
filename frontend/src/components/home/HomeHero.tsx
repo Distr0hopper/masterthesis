@@ -24,7 +24,7 @@ export function HomeHero() {
 
         <div className="mt-4 flex flex-wrap gap-3">
           <Button asChild className="bg-white text-jmu-blue-600 hover:bg-jmu-blue-50">
-            <Link to={ROUTES.components}>Browse Components</Link>
+            <Link to={ROUTES.tools}>Browse Tools</Link>
           </Button>
           <Button asChild variant="outline" className="border-white bg-transparent text-white hover:bg-white/10">
             <Link to={ROUTES.workflows}>Browse Workflows</Link>

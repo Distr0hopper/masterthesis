@@ -3,9 +3,9 @@ import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
 import type { LatestAdditionItem } from './latestAdditionItem';
 
-const BADGE_CLASSNAME: Record<LatestAdditionItem['badgeLabel'], string> = {
-  Component: 'border-emerald-300 text-emerald-700',
-  Workflow: 'border-jmu-blue-300 text-jmu-blue-700',
+const BADGE_CLASSNAME: Record<LatestAdditionItem['kind'], string> = {
+  tool: 'border-emerald-300 text-emerald-700',
+  workflow: 'border-jmu-blue-300 text-jmu-blue-700',
 };
 
 interface LatestAdditionsProps {
@@ -26,7 +26,7 @@ export function LatestAdditions({ items, isLoading }: LatestAdditionsProps) {
           ) : (
             items.map((item) => (
               <Link
-                key={`${item.badgeLabel}-${item.id}`}
+                key={item.id}
                 to={item.href}
                 className="flex items-center justify-between px-6 py-4 hover:bg-slate-50"
               >
@@ -34,7 +34,7 @@ export function LatestAdditions({ items, isLoading }: LatestAdditionsProps) {
                   <p className="font-mono font-semibold text-slate-900">{item.name}</p>
                   <p className="mt-0.5 text-sm text-slate-500">{item.subtitle}</p>
                 </div>
-                <Badge variant="outline" className={BADGE_CLASSNAME[item.badgeLabel]}>
+                <Badge variant="outline" className={BADGE_CLASSNAME[item.kind]}>
                   {item.badgeLabel}
                 </Badge>
               </Link>

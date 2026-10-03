@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth.store';
-import { workflowKeys } from '@/api/workflows';
+import { componentKeys } from '@/api/components/queries';
 import { workflowDraftsService } from './service';
 import type { WriteWorkflowDraftDto } from './types';
 
@@ -70,7 +70,7 @@ export const useSyncDraftToMyWorkflows = () => {
 
   return useMutation({
     mutationFn: (id: string) => workflowDraftsService.syncToMyWorkflows(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: workflowKeys.all }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: componentKeys.all }),
   });
 };
 
@@ -85,7 +85,7 @@ export const useDeleteDraft = () => {
       queryClient.invalidateQueries({ queryKey: draftKeys.lists() });
       // the My Workflows lists change when the linked workflow is dropped too
       if (deleteLinkedWorkflow) {
-        queryClient.invalidateQueries({ queryKey: workflowKeys.all });
+        queryClient.invalidateQueries({ queryKey: componentKeys.all });
       }
     },
   });

@@ -17,6 +17,9 @@ class WorkflowDraft(SQLModel, table=True):
     """
 
     __tablename__ = "workflow_drafts"
+    # fetch the server-generated timestamps via RETURNING on flush - otherwise they stay
+    # expired and reading one would lazy-load, which an AsyncSession cannot do
+    __mapper_args__ = {"eager_defaults": True}
     # every read of this table is "my drafts, newest first"; declared here rather than
     # only in the migration so autogenerate does not keep proposing to drop it
     __table_args__ = (Index("ix_workflow_drafts_created_by_id", "created_by_id", "updated_at"),)

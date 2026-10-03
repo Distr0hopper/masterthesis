@@ -11,6 +11,9 @@ if TYPE_CHECKING:
 
 class User(SQLModel, table=True):
     __tablename__ = "users"
+    # fetch the server-generated timestamps via RETURNING on flush - otherwise they stay
+    # expired and reading one would lazy-load, which an AsyncSession cannot do
+    __mapper_args__ = {"eager_defaults": True}
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     email: str = Field(unique=True, index=True)

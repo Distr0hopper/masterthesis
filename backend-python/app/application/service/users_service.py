@@ -2,19 +2,23 @@ from typing import Annotated
 
 from fastapi import Depends
 
+from app.application.unit_of_work import UnitOfWork
 from app.domain.models.user import User
-from app.domain.repository.users_repository import UsersRepository
+from app.infrastructure.db.unit_of_work import SqlUnitOfWork
 
 
 class UsersService:
-    def __init__(self, users_repository: UsersRepository):
-        self.users_repository = users_repository
+    def __init__(self, uow: UnitOfWork):
+        self.uow = uow
 
     @staticmethod
     def get_service(
-        users_repository: Annotated[UsersRepository, Depends(UsersRepository.get_repository)],
+        uow: Annotated[UnitOfWork, Depends(SqlUnitOfWork.get_unit_of_work)],
     ) -> "UsersService":
-        return UsersService(users_repository)
+        return UsersService(uow)
 
     async def update_user(self, user: User) -> User:
-        return await self.users_repository.update(user)
+        async with self.uow:
+            await self.uow.users.add(user)
+            await self.uow.commit()
+        return user

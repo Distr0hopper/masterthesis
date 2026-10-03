@@ -56,6 +56,9 @@ class Component(SQLModel, table=True):
     """
 
     __tablename__ = "components"
+    # fetch the server-generated timestamps via RETURNING on flush - otherwise they stay
+    # expired and reading one would lazy-load, which an AsyncSession cannot do
+    __mapper_args__ = {"eager_defaults": True}
     __table_args__ = (
         UniqueConstraint("name", "version", name="uq_components_name_version"),
         Index(

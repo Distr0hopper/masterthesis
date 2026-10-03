@@ -9,7 +9,9 @@ from app.application.exception.auth_exceptions import InvalidTokenError
 from app.infrastructure.security.security import create_access_token, decode_access_token
 from app.config import get_settings
 from app.domain.models.user import User
+from app.application.unit_of_work import UnitOfWork
 from app.domain.repository.users_repository import UsersRepository
+from app.infrastructure.db.unit_of_work import SqlUnitOfWork
 
 settings = get_settings()
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -21,28 +23,28 @@ class AuthService:
 
     @staticmethod
     def get_service(
-        users_repository: Annotated[UsersRepository, Depends(UsersRepository.get_repository)],
+        uow: Annotated[UnitOfWork, Depends(SqlUnitOfWork.get_unit_of_work)],
     ) -> "AuthService":
-        return AuthService(users_repository)
+        return AuthService(uow.users)
 
     @staticmethod
     async def get_current_user(
         credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
-        users_repository: Annotated[UsersRepository, Depends(UsersRepository.get_repository)],
+        uow: Annotated[UnitOfWork, Depends(SqlUnitOfWork.get_unit_of_work)],
     ) -> User:
         if credentials is None:
             raise InvalidTokenError()
-        return await AuthService(users_repository).get_user_from_token(credentials.credentials)
+        return await AuthService(uow.users).get_user_from_token(credentials.credentials)
 
     @staticmethod
     async def get_current_user_optional(
         credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
-        users_repository: Annotated[UsersRepository, Depends(UsersRepository.get_repository)],
+        uow: Annotated[UnitOfWork, Depends(SqlUnitOfWork.get_unit_of_work)],
     ) -> User | None:
         if credentials is None:
             return None
         try:
-            return await AuthService(users_repository).get_user_from_token(credentials.credentials)
+            return await AuthService(uow.users).get_user_from_token(credentials.credentials)
         except InvalidTokenError:
             # anonymous browsing must never break because of a stale/garbage token
             return None

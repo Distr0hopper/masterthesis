@@ -16,12 +16,12 @@ from app.application.exception.component_exceptions import (
     PackagedCommitChangedError,
 )
 from app.application.service.components_service import ComponentsService
+from app.application.unit_of_work import UnitOfWork
 from app.domain.compatibility.format_label import accepts_manual_format_label
 from app.domain.models.component import Component, ComponentKind, ComponentSource
 from app.domain.models.component_domain import ComponentDomain
 from app.domain.models.parameter import Parameter
 from app.domain.models.tool import Tool
-from app.domain.repository.components_repository import ComponentsRepository
 from app.infrastructure.cwl.cwl_parser import (
     extract_cwl_type,
     extract_description,
@@ -30,6 +30,7 @@ from app.infrastructure.cwl.cwl_parser import (
     generate_inputs_yaml,
     inject_description,
 )
+from app.infrastructure.db.unit_of_work import SqlUnitOfWork
 from app.infrastructure.packaging.packaging_service_client import PackagingServiceClient
 
 #: the CWL classes a tool may be - the leaves of the composite
@@ -67,25 +68,30 @@ class PackagePreview:
 class ToolsService:
     """What only a tool - the leaf of the composite - does: being uploaded as a single
     CWL document or packaged from a repository, carrying a container, and hand-labelled
-    format ports. Everything shared with workflows is ComponentsService's."""
+    format ports. Everything shared with workflows is ComponentsService's.
+
+    The writing methods a router calls are use cases, each opening the unit of work and
+    committing once. create_tool is not: it runs inside the caller's unit of work, so
+    WorkflowsService.create_from_upload can create its new tools in the same transaction
+    as the workflow."""
 
     def __init__(
         self,
-        components_repository: ComponentsRepository,
+        uow: UnitOfWork,
         components_service: ComponentsService,
         packaging_client: PackagingServiceClient,
     ):
-        self.components_repository = components_repository
+        self.uow = uow
         self.components_service = components_service
         self.packaging_client = packaging_client
 
     @staticmethod
     def get_service(
-        components_repository: Annotated[ComponentsRepository, Depends(ComponentsRepository.get_repository)],
+        uow: Annotated[UnitOfWork, Depends(SqlUnitOfWork.get_unit_of_work)],
         components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
         packaging_client: Annotated[PackagingServiceClient, Depends(PackagingServiceClient.get_client)],
     ) -> "ToolsService":
-        return ToolsService(components_repository, components_service, packaging_client)
+        return ToolsService(uow, components_service, packaging_client)
 
     async def get_bundle(self, tool: Component) -> tuple[str, bytes]:
         base_name = f"{tool.name}-v{tool.version}"
@@ -196,15 +202,33 @@ class ToolsService:
         context: str = "Uploaded",
         format_labels: list[ManualFormatLabel] | None = None,
     ) -> Component:
+        async with self.uow:
+            await self.create_tool(tool, context, format_labels)
+            await self.uow.commit()
+        return await self.components_service.reload(tool)
+
+    async def create_tool(
+        self,
+        tool: Component,
+        context: str = "Uploaded",
+        format_labels: list[ManualFormatLabel] | None = None,
+    ) -> Component:
+        """create_manual without the transaction - runs inside the caller's unit of work."""
         await self.components_service.require_name_available(tool.name, "add a new version instead of creating a new component")
         await self._prepare(tool, context)
         self._apply_manual_format_labels(tool, format_labels or [])
-        return await self.components_service.save_and_reload(tool)
+        return await self.uow.components.add(tool)
 
     async def add_manual_version(
         self, tool: Component, format_labels: list[ManualFormatLabel] | None = None
     ) -> Component:
-        versions = await self.components_repository.find_versions_by_name(tool.name)
+        async with self.uow:
+            await self._add_version(tool, format_labels)
+            await self.uow.commit()
+        return await self.components_service.reload(tool)
+
+    async def _add_version(self, tool: Component, format_labels: list[ManualFormatLabel] | None = None) -> Component:
+        versions = await self.uow.components.find_versions_by_name(tool.name)
         if versions and not versions[-1].is_tool:
             raise ComponentKindMismatchError(tool.name, ComponentKind(versions[-1].kind).value)
         next_version = versions[-1].version + 1 if versions else 1
@@ -217,10 +241,10 @@ class ToolsService:
             self._apply_manual_format_labels(tool, self._manual_format_labels_of(versions[-1]))
         # applied after the carried-over ones, so a reviewed label overrides (or clears) them
         self._apply_manual_format_labels(tool, format_labels or [])
-        return await self.components_service.save_and_reload(tool)
+        return await self.uow.components.add(tool)
 
     async def find_tool_by_repo_url(self, repo_url: str) -> Component | None:
-        return await self.components_repository.find_tool_by_repo_url(repo_url)
+        return await self.uow.components.find_tool_by_repo_url(repo_url)
 
     async def create_from_url(
         self,
@@ -288,7 +312,7 @@ class ToolsService:
         if parent.repo_url is None:
             raise ManualUploadCannotBeRepackagedError()
 
-        versions = await self.components_repository.find_versions_by_name(parent.name)
+        versions = await self.uow.components.find_versions_by_name(parent.name)
         latest = versions[-1] if versions else None
 
         repo_name, cwl_content, commit_sha, metadata_description, _ = await self._run_packaging(parent.repo_url)
@@ -324,8 +348,11 @@ class ToolsService:
     async def update_format_labels(self, tool: Component, format_labels: list[ManualFormatLabel] | None) -> Component:
         if format_labels is None:
             raise MissingCommandPayloadError(ToolCommandType.UPDATE_FORMAT_LABELS, "formatLabels")
-        self._apply_manual_format_labels(tool, format_labels)
-        return await self.components_service.save_and_reload(tool)
+        async with self.uow:
+            self._apply_manual_format_labels(tool, format_labels)
+            await self.uow.components.add(tool)
+            await self.uow.commit()
+        return await self.components_service.reload(tool)
 
     def _apply_manual_format_labels(self, tool: Component, format_labels: list[ManualFormatLabel]) -> None:
         self._apply_manual_format_labels_to(tool.parameters, tool.ontology_url, format_labels)

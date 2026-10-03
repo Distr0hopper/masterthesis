@@ -6,13 +6,14 @@ from typing import Annotated
 from fastapi import Depends
 
 from app.application.service.components_service import ComponentsService
+from app.application.unit_of_work import UnitOfWork
 from app.domain.compatibility.port import FormatPair, Port, data_inputs, data_outputs
 from app.domain.compatibility.port_check import PortCheck, check_ports, format_pair_for, format_pairs_between
 from app.domain.compatibility.ranking import Match, OutputFrame, match_component, rank_key
 from app.domain.models.component import Component
 from app.domain.models.user import User
 from app.domain.pagination.pagination import PaginatedList
-from app.domain.repository.components_repository import ComponentsRepository
+from app.infrastructure.db.unit_of_work import SqlUnitOfWork
 from app.infrastructure.format_service.format_service_client import FormatServiceClient
 
 #: (actual_format, expected_format, ontology_url) -> answer. Process-wide on purpose: a
@@ -43,16 +44,16 @@ class CompatibilityService:
     app.domain.compatibility; this service loads the ports and answers the format
     questions (via the SOS File Format Service) those rules ask."""
 
-    def __init__(self, components_repository: ComponentsRepository, format_service_client: FormatServiceClient):
-        self.components_repository = components_repository
+    def __init__(self, uow: UnitOfWork, format_service_client: FormatServiceClient):
+        self.uow = uow
         self.format_service_client = format_service_client
 
     @staticmethod
     def get_service(
-        components_repository: Annotated[ComponentsRepository, Depends(ComponentsRepository.get_repository)],
+        uow: Annotated[UnitOfWork, Depends(SqlUnitOfWork.get_unit_of_work)],
         format_service_client: Annotated[FormatServiceClient, Depends(FormatServiceClient.get_client)],
     ) -> "CompatibilityService":
-        return CompatibilityService(components_repository, format_service_client)
+        return CompatibilityService(uow, format_service_client)
 
     async def check_connections(self, connections: list[Connection], current_user: User | None) -> list[PortCheck]:
         components = await self._visible_components_by_id(
@@ -91,7 +92,7 @@ class CompatibilityService:
     async def _visible_components_by_id(
         self, ids: list[uuid.UUID], current_user: User | None
     ) -> dict[uuid.UUID, Component]:
-        components = await self.components_repository.find_by_ids(list(dict.fromkeys(ids)))
+        components = await self.uow.components.find_by_ids(list(dict.fromkeys(ids)))
         return {c.id: c for c in components if ComponentsService.is_visible(c, current_user)}
 
     @staticmethod

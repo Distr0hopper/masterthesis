@@ -19,6 +19,7 @@ from app.application.exception.workflow_exceptions import (
     WorkflowHasUnpublishedComponentsError,
     WorkflowNotReadyToPublishError,
 )
+from app.application.unit_of_work import UnitOfWork
 from app.domain.composite.tree import ConflictingTreeFileError, auxiliary_files, descendants, step_files
 from app.domain.models.component import MAX_DESCRIPTION_LENGTH, Component, ComponentKind, ComponentSource, ComponentStatus
 from app.domain.models.component_domain import ComponentDomain
@@ -26,13 +27,11 @@ from app.domain.models.parameter import Parameter
 from app.domain.models.user import User
 from app.domain.models.workflow_step import SETTLED_STEP_STATUSES, StepMatchStatus
 from app.domain.pagination.pagination import PaginatedList
-from app.domain.repository.components_repository import ComponentListFilter, ComponentsRepository
-from app.domain.repository.favorites_repository import FavoritesRepository
-from app.domain.repository.workflow_draft_repository import WorkflowDraftRepository
-from app.domain.repository.workflows_repository import WorkflowsRepository
+from app.domain.repository.components_repository import ComponentListFilter
 from app.infrastructure.cwl.canvas_graph import canvas_component_ids
 from app.infrastructure.cwl.cwl_parser import extract_parameters, extract_schema_url, inject_description
 from app.infrastructure.cwl.workflow_generator import assemble_cwl_zip
+from app.infrastructure.db.unit_of_work import SqlUnitOfWork
 from app.infrastructure.format_service.format_service_client import FormatServiceClient
 from app.infrastructure.format_service.ontology import resolve_ontology_url
 
@@ -84,39 +83,22 @@ class Download:
 
 class ComponentsService:
     """Everything that treats a Component uniformly, whatever its kind - the composite's
-    shared operations. Kind-specific behaviour lives in ToolsService and WorkflowsService."""
+    shared operations. Kind-specific behaviour lives in ToolsService and WorkflowsService.
 
-    def __init__(
-        self,
-        components_repository: ComponentsRepository,
-        workflows_repository: WorkflowsRepository,
-        workflow_draft_repository: WorkflowDraftRepository,
-        favorites_repository: FavoritesRepository,
-        format_service_client: FormatServiceClient,
-    ):
-        self.components_repository = components_repository
-        self.workflows_repository = workflows_repository
-        self.workflow_draft_repository = workflow_draft_repository
-        self.favorites_repository = favorites_repository
+    Transactions: the methods a router calls for a write (execute_command, remove) are
+    use cases - each opens the unit of work and commits once. Every other writing method
+    runs inside its caller's unit and never commits."""
+
+    def __init__(self, uow: UnitOfWork, format_service_client: FormatServiceClient):
+        self.uow = uow
         self.format_service_client = format_service_client
 
     @staticmethod
     def get_service(
-        components_repository: Annotated[ComponentsRepository, Depends(ComponentsRepository.get_repository)],
-        workflows_repository: Annotated[WorkflowsRepository, Depends(WorkflowsRepository.get_repository)],
-        workflow_draft_repository: Annotated[
-            WorkflowDraftRepository, Depends(WorkflowDraftRepository.get_repository)
-        ],
-        favorites_repository: Annotated[FavoritesRepository, Depends(FavoritesRepository.get_repository)],
+        uow: Annotated[UnitOfWork, Depends(SqlUnitOfWork.get_unit_of_work)],
         format_service_client: Annotated[FormatServiceClient, Depends(FormatServiceClient.get_client)],
     ) -> "ComponentsService":
-        return ComponentsService(
-            components_repository,
-            workflows_repository,
-            workflow_draft_repository,
-            favorites_repository,
-            format_service_client,
-        )
+        return ComponentsService(uow, format_service_client)
 
     # --- listing -------------------------------------------------------------------------
 
@@ -127,7 +109,7 @@ class ComponentsService:
         # than trusted from an arbitrary caller-supplied filter, so a public browse request
         # can never leak drafts regardless of what the router builds
         filter = replace(filter, status=ComponentStatus.PUBLISHED, created_by=None)
-        return await self.components_repository.find_paginated(filter, pagination)
+        return await self.uow.components.find_paginated(filter, pagination)
 
     async def list_my_components_by_status(
         self,
@@ -137,27 +119,27 @@ class ComponentsService:
         pagination: PaginatedList,
     ) -> tuple[list[Component], int]:
         filter = ComponentListFilter(created_by=created_by_id, status=status, kind=kind)
-        return await self.components_repository.find_paginated(filter, pagination)
+        return await self.uow.components.find_paginated(filter, pagination)
 
     async def list_all_components(self, filter: ComponentListFilter) -> list[Component]:
         """Every component list_components would page through, unpaged - for callers that
         must order the whole set themselves before paging (the builder palette's ranking)."""
         filter = replace(filter, status=ComponentStatus.PUBLISHED, created_by=None)
-        return await self.components_repository.find_all_filtered(filter)
+        return await self.uow.components.find_all_filtered(filter)
 
     async def get_latest_components(self, limit: int, kind: ComponentKind | None = None) -> list[Component]:
-        components = await self.components_repository.find_all(ComponentStatus.PUBLISHED, kind)
+        components = await self.uow.components.find_all(ComponentStatus.PUBLISHED, kind)
         return sorted(components, key=lambda c: c.created_at, reverse=True)[:limit]
 
     async def get_stats(self) -> ComponentStats:
         return ComponentStats(
-            tools_published=await self.components_repository.count_distinct_names(
+            tools_published=await self.uow.components.count_distinct_names(
                 ComponentStatus.PUBLISHED, ComponentKind.TOOL
             ),
-            workflows_published=await self.components_repository.count_distinct_names(
+            workflows_published=await self.uow.components.count_distinct_names(
                 ComponentStatus.PUBLISHED, ComponentKind.WORKFLOW
             ),
-            contributors=await self.components_repository.count_distinct_contributors(ComponentStatus.PUBLISHED),
+            contributors=await self.uow.components.count_distinct_contributors(ComponentStatus.PUBLISHED),
         )
 
     # --- reading -------------------------------------------------------------------------
@@ -165,7 +147,7 @@ class ComponentsService:
     async def get_component(self, component_id: uuid.UUID, kind: ComponentKind | None = None) -> Component:
         """The component with this id - and, when `kind` is given, only if it is that kind:
         a kind-specific endpoint treats the other kind's id as unknown."""
-        component = await self.components_repository.find_by_id(component_id)
+        component = await self.uow.components.find_by_id(component_id)
         if component is None or (kind is not None and component.kind != kind):
             raise ComponentNotFoundError(component_id, kind.value.capitalize() if kind is not None else "Component")
         return component
@@ -185,7 +167,7 @@ class ComponentsService:
         return current_user is not None and component.created_by_id == current_user.id
 
     async def get_versions(self, component: Component) -> list[Component]:
-        return await self.components_repository.find_versions_by_name(component.name)
+        return await self.uow.components.find_versions_by_name(component.name)
 
     async def get_visible_versions(self, component: Component, current_user: User | None) -> list[Component]:
         versions = await self.get_versions(component)
@@ -193,7 +175,7 @@ class ComponentsService:
 
     async def load_tree(self, component: Component) -> Component:
         """`component` with its whole composite below it loaded - see ComponentsRepository.load_tree."""
-        return await self.components_repository.load_tree(component)
+        return await self.uow.components.load_tree(component)
 
     # --- names ---------------------------------------------------------------------------
 
@@ -203,10 +185,10 @@ class ComponentsService:
         `exclude_id` leaves out the lineage that version belongs to - a component trivially
         holds its own name, so a rename check has to skip it or it would always collide.
         """
-        latest = await self.components_repository.find_latest_by_name(name)
+        latest = await self.uow.components.find_latest_by_name(name)
         if latest is None or exclude_id is None:
             return latest
-        excluded = await self.components_repository.find_by_id(exclude_id)
+        excluded = await self.uow.components.find_by_id(exclude_id)
         return None if excluded is not None and excluded.name == latest.name else latest
 
     async def find_visible_latest_version_by_name(
@@ -284,7 +266,7 @@ class ComponentsService:
 
     # --- lifecycle -----------------------------------------------------------------------
 
-    async def publish(
+    async def _publish(
         self, component: Component, current_user_id: uuid.UUID, publish_components: bool = False
     ) -> Component:
         """Make a component public.
@@ -299,7 +281,7 @@ class ComponentsService:
             return component
         if component.is_tool:
             component.status = ComponentStatus.PUBLISHED
-            return await self.components_repository.save(component)
+            return await self.uow.components.add(component)
 
         await self.load_tree(component)
         if not self._is_settled(component):
@@ -318,67 +300,63 @@ class ComponentsService:
 
         for c in [*drafts, component]:
             c.status = ComponentStatus.PUBLISHED
-        await self.components_repository.save_all([*drafts, component])
-        return await self.save_and_reload(component)
+        await self.uow.components.add_all([*drafts, component])
+        return component
 
     @staticmethod
     def _is_settled(workflow: Component) -> bool:
         return all(step.match_status in SETTLED_STEP_STATUSES for step in workflow.steps)
 
-    async def unpublish(self, component: Component) -> Component:
+    async def _unpublish(self, component: Component) -> Component:
         """Inverse of publish - only the creator can see the component again. Idempotent."""
         if component.status == ComponentStatus.DRAFT:
             return component
         component.status = ComponentStatus.DRAFT
-        return await self.components_repository.save(component)
+        return await self.uow.components.add(component)
 
-    async def update_description(self, component: Component, description: str | None) -> Component:
+    async def _update_description(self, component: Component, description: str | None) -> Component:
         component.description = description
-        return await self.save_and_reload(component)
+        return await self.uow.components.add(component)
 
-    async def update_domains(self, component: Component, domains: list[str] | None) -> Component:
+    async def _update_domains(self, component: Component, domains: list[str] | None) -> Component:
         if not domains:
             raise MissingCommandPayloadError(ComponentCommandType.UPDATE_DOMAIN, "domains")
         component.domains = [ComponentDomain(domain=d) for d in domains]
-        return await self.save_and_reload(component)
+        return await self.uow.components.add(component)
 
     async def execute_command(
         self, component: Component, command: ComponentCommand, current_user_id: uuid.UUID
     ) -> Component:
-        match command.type:
-            case ComponentCommandType.ADD_FAVORITE:
-                await self.add_favorite(current_user_id, component)
-                return component
-            case ComponentCommandType.REMOVE_FAVORITE:
-                await self.remove_favorite(current_user_id, component)
-                return component
-            case ComponentCommandType.PUBLISH:
-                return await self.publish(component, current_user_id, command.publish_components)
-            case ComponentCommandType.UNPUBLISH:
-                return await self.unpublish(component)
-            case ComponentCommandType.UPDATE_DESCRIPTION:
-                return await self.update_description(component, command.description)
-            case ComponentCommandType.UPDATE_DOMAIN:
-                return await self.update_domains(component, command.domains)
+        async with self.uow:
+            match command.type:
+                case ComponentCommandType.ADD_FAVORITE:
+                    # favoriting is scoped to the whole lineage (name), not the specific
+                    # version row the star was clicked on - so every version favorites together
+                    await self.uow.favorites.add(current_user_id, component.name)
+                case ComponentCommandType.REMOVE_FAVORITE:
+                    await self.uow.favorites.remove(current_user_id, component.name)
+                case ComponentCommandType.PUBLISH:
+                    component = await self._publish(component, current_user_id, command.publish_components)
+                case ComponentCommandType.UNPUBLISH:
+                    component = await self._unpublish(component)
+                case ComponentCommandType.UPDATE_DESCRIPTION:
+                    component = await self._update_description(component, command.description)
+                case ComponentCommandType.UPDATE_DOMAIN:
+                    component = await self._update_domains(component, command.domains)
+            await self.uow.commit()
+        return await self.reload(component)
 
-    async def save_and_reload(self, component: Component) -> Component:
-        saved = await self.components_repository.save(component)
-        reloaded = await self.components_repository.find_by_id_fresh(saved.id)
+    async def reload(self, component: Component) -> Component:
+        """`component` freshly read with one composite level loaded - for the response after
+        a write, see ComponentsRepository.find_by_id_fresh."""
+        reloaded = await self.uow.components.find_by_id_fresh(component.id)
         assert reloaded is not None
         return reloaded
 
     # --- favorites -----------------------------------------------------------------------
 
-    async def add_favorite(self, user_id: uuid.UUID, component: Component) -> None:
-        # favoriting is scoped to the whole lineage (name), not the specific version row the
-        # star was clicked on - so every version of the same component favorites together
-        await self.favorites_repository.add(user_id, component.name)
-
-    async def remove_favorite(self, user_id: uuid.UUID, component: Component) -> None:
-        await self.favorites_repository.remove(user_id, component.name)
-
     async def favorited_names(self, user: User | None) -> set[str]:
-        return await self.favorites_repository.find_favorited_names(user.id) if user is not None else set()
+        return await self.uow.favorites.find_favorited_names(user.id) if user is not None else set()
 
     # --- usages and deletion -------------------------------------------------------------
 
@@ -386,7 +364,7 @@ class ComponentsService:
         """The workflows whose steps run any version of `component`'s lineage - its parents in
         the composite, for the detail page's "Used in these workflows". Same visibility as
         get_visible_component: published workflows, plus the user's own drafts."""
-        rows = await self.workflows_repository.find_usages_of_lineage(
+        rows = await self.uow.workflows.find_usages_of_lineage(
             component.name, current_user.id if current_user is not None else None
         )
         usages: dict[uuid.UUID, ComponentUsage] = {}
@@ -409,7 +387,7 @@ class ComponentsService:
         impact = ComponentDeletionImpact()
 
         parents: dict[uuid.UUID, Component] = {}
-        for step in await self.workflows_repository.find_steps_by_component_id(component.id):
+        for step in await self.uow.workflows.find_steps_by_component_id(component.id):
             if step.parent is not None:
                 parents[step.parent.id] = step.parent
         for parent in sorted(parents.values(), key=lambda w: (w.name, w.version)):
@@ -427,7 +405,7 @@ class ComponentsService:
                 impact.hidden_workflow_count += 1
 
         component_id = str(component.id)
-        for draft in await self.workflow_draft_repository.find_all_mentioning(component_id):
+        for draft in await self.uow.drafts.find_all_mentioning(component_id):
             if component_id not in canvas_component_ids(draft.canvas_state):
                 continue
             if draft.created_by_id == current_user.id:
@@ -437,7 +415,7 @@ class ComponentsService:
         impact.own_drafts.sort(key=lambda d: d.name)
         return impact
 
-    async def detach(self, component_id: uuid.UUID) -> None:
+    async def _detach(self, component_id: uuid.UUID) -> None:
         """Unmatch every step pinned to a component version that is about to be deleted -
         a tool or a nested workflow alike.
 
@@ -446,7 +424,7 @@ class ComponentsService:
         version of the lineage - the user picks the replacement. Builder drafts need no
         cascade: their canvas is checked for missing components whenever it is opened.
         """
-        steps = await self.workflows_repository.find_steps_by_component_id(component_id)
+        steps = await self.uow.workflows.find_steps_by_component_id(component_id)
         if not steps:
             return
         reverted: dict[uuid.UUID, Component] = {}
@@ -460,49 +438,55 @@ class ComponentsService:
             if parent is not None and parent.status == ComponentStatus.PUBLISHED:
                 parent.status = ComponentStatus.DRAFT
                 reverted[parent.id] = parent
-        await self.workflows_repository.save_steps(steps, list(reverted.values()))
+        await self.uow.workflows.add_steps(steps, list(reverted.values()))
 
     async def remove(
         self, component: Component, deleted_by_id: uuid.UUID, delete_linked_draft: bool = False
     ) -> bool:
         """Delete one component version, cascading into everything that references it.
 
-        The steps pinned to it are unmatched first (see detach), and the lineage's favorites
+        The steps pinned to it are unmatched first (see _detach), and the lineage's favorites
         go with its last version. For a workflow, `delete_linked_draft` also deletes the
         builder canvas it was synced from - the mirror of WorkflowDraftService.delete_draft's
         delete_linked_workflow: both directions of the draft <-> workflow link are opt-in,
         so neither side's delete silently destroys the other. Returns whether a draft was
         deleted.
 
-        The component is deleted first: it is what the user actually asked to remove, so
-        failing to reach the draft afterwards must not leave that undone.
+        All of it is one transaction: either the component and everything cascading from it
+        is gone, or nothing is.
         """
+        async with self.uow:
+            deleted_draft = await self._remove(component, deleted_by_id, delete_linked_draft)
+            await self.uow.commit()
+        return deleted_draft
+
+    async def _remove(self, component: Component, deleted_by_id: uuid.UUID, delete_linked_draft: bool = False) -> bool:
         versions = await self.get_versions(component)
         # read before the row goes away - the FK is ON DELETE SET NULL on the workflow side,
         # so nothing else recovers which draft this came from
         draft_id = component.workflow.draft_id if component.workflow is not None else None
         name = component.name
 
-        await self.detach(component.id)
-        await self.components_repository.delete(component)
+        await self._detach(component.id)
+        await self.uow.components.delete(component)
         if len(versions) == 1:
-            await self.favorites_repository.delete_by_name(name)
+            await self.uow.favorites.delete_by_name(name)
 
         if not delete_linked_draft or draft_id is None:
             return False
-        draft = await self.workflow_draft_repository.find_by_id(draft_id)
+        draft = await self.uow.drafts.find_by_id(draft_id)
         if draft is None or draft.created_by_id != deleted_by_id:
             return False
-        await self.workflow_draft_repository.delete(draft)
+        await self.uow.drafts.delete(draft)
         return True
 
     async def remove_synced_from_draft(self, draft_id: uuid.UUID, owner_id: uuid.UUID) -> int:
         """Delete every workflow version synced from this builder draft that the user owns.
-        Returns how many were removed."""
+        Returns how many were removed. Runs inside the caller's unit of work."""
         removed = 0
-        for workflow in await self.workflows_repository.find_all_synced_from_draft(draft_id):
+        for workflow in await self.uow.workflows.find_all_synced_from_draft(draft_id):
             if workflow.created_by_id == owner_id:
-                await self.remove(workflow, owner_id)
+                await self._remove(workflow, owner_id)
                 removed += 1
         return removed
 

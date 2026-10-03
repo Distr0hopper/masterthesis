@@ -1,8 +1,6 @@
 import uuid
 from dataclasses import dataclass
-from typing import Annotated
 
-from fastapi import Depends
 from sqlalchemy import or_
 from sqlalchemy.orm import aliased, selectinload
 from sqlmodel import select
@@ -11,7 +9,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.domain.models.component import Component, ComponentStatus
 from app.domain.models.workflow import Workflow
 from app.domain.models.workflow_step import WorkflowStep
-from app.infrastructure.db.session import get_db
+from app.infrastructure.db.session import require_unit_of_work
 
 
 @dataclass(frozen=True)
@@ -32,10 +30,6 @@ class WorkflowsRepository:
 
     def __init__(self, db: AsyncSession):
         self.db = db
-
-    @staticmethod
-    def get_repository(db: Annotated[AsyncSession, Depends(get_db)]) -> "WorkflowsRepository":
-        return WorkflowsRepository(db)
 
     async def find_usages_of_lineage(self, name: str, visible_to: uuid.UUID | None) -> list[ComponentUsageRow]:
         """Every workflow version with a step bound to any version of the lineage `name` -
@@ -107,22 +101,6 @@ class WorkflowsRepository:
     async def find_step_by_id(self, step_id: uuid.UUID) -> WorkflowStep | None:
         return await self.db.get(WorkflowStep, step_id)
 
-    async def find_step_by_id_with_relations(self, step_id: uuid.UUID) -> WorkflowStep | None:
-        """Fresh SELECT of a step with its child component and its parent workflow eagerly
-        loaded. populate_existing because the step is usually already resident with
-        attributes a later commit/refresh unloaded."""
-        query = (
-            select(WorkflowStep)
-            .where(WorkflowStep.id == step_id)
-            .options(
-                selectinload(WorkflowStep.component),
-                selectinload(WorkflowStep.workflow).selectinload(Workflow.component),
-            )
-            .execution_options(populate_existing=True)
-        )
-        result = await self.db.exec(query)
-        return result.first()
-
     async def find_steps_by_component_id(self, component_id: uuid.UUID) -> list[WorkflowStep]:
         """Every step pinned to exactly this component version (not its whole lineage -
         that is find_usages_of_lineage), with its parent workflow loaded."""
@@ -134,14 +112,14 @@ class WorkflowsRepository:
         result = await self.db.exec(query)
         return list(result.all())
 
-    async def save_steps(self, steps: list[WorkflowStep], workflows: list[Component]) -> None:
-        """Persist several step and workflow edits in one commit, so a cascade never
-        leaves half of them applied."""
+    async def add_steps(self, steps: list[WorkflowStep], workflows: list[Component]) -> None:
+        """Step edits together with the workflows they touch."""
+        require_unit_of_work(self.db)
         self.db.add_all([*steps, *workflows])
-        await self.db.commit()
+        await self.db.flush()
 
-    async def save_step(self, step: WorkflowStep) -> WorkflowStep:
+    async def add_step(self, step: WorkflowStep) -> WorkflowStep:
+        require_unit_of_work(self.db)
         self.db.add(step)
-        await self.db.commit()
-        await self.db.refresh(step)
+        await self.db.flush()
         return step

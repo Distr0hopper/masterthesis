@@ -7,6 +7,9 @@ from sqlmodel import Field, SQLModel
 
 class Favorite(SQLModel, table=True):
     __tablename__ = "favorites"
+    # fetch the server-generated timestamps via RETURNING on flush - otherwise they stay
+    # expired and reading one would lazy-load, which an AsyncSession cannot do
+    __mapper_args__ = {"eager_defaults": True}
 
     user_id: uuid.UUID = Field(sa_column=Column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True))
     # the component *lineage* name, so every version favorites together - tools and

@@ -1,21 +1,15 @@
 import uuid
-from typing import Annotated
 
-from fastapi import Depends
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.domain.models.workflow_draft import WorkflowDraft
-from app.infrastructure.db.session import get_db
+from app.infrastructure.db.session import require_unit_of_work
 
 
 class WorkflowDraftRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
-
-    @staticmethod
-    def get_repository(db: Annotated[AsyncSession, Depends(get_db)]) -> "WorkflowDraftRepository":
-        return WorkflowDraftRepository(db)
 
     async def find_all_by_user(self, user_id: uuid.UUID) -> list[WorkflowDraft]:
         # most-recently-saved first: the overview's ordering, so re-saving a draft moves
@@ -38,12 +32,13 @@ class WorkflowDraftRepository:
     async def find_by_id(self, draft_id: uuid.UUID) -> WorkflowDraft | None:
         return await self.db.get(WorkflowDraft, draft_id)
 
-    async def save(self, draft: WorkflowDraft) -> WorkflowDraft:
+    async def add(self, draft: WorkflowDraft) -> WorkflowDraft:
+        require_unit_of_work(self.db)
         self.db.add(draft)
-        await self.db.commit()
-        await self.db.refresh(draft)
+        await self.db.flush()
         return draft
 
     async def delete(self, draft: WorkflowDraft) -> None:
+        require_unit_of_work(self.db)
         await self.db.delete(draft)
-        await self.db.commit()
+        await self.db.flush()

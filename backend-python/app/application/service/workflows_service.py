@@ -24,6 +24,7 @@ from app.application.exception.workflow_exceptions import (
 )
 from app.application.service.components_service import ComponentsService
 from app.application.service.tools_service import ToolsService
+from app.application.unit_of_work import UnitOfWork
 from app.domain.composite.tree import would_create_cycle
 from app.domain.models.component import Component, ComponentKind, ComponentSource, ComponentStatus
 from app.domain.models.component_domain import ComponentDomain
@@ -31,8 +32,6 @@ from app.domain.models.component_file import ComponentFile
 from app.domain.models.parameter import Parameter
 from app.domain.models.workflow import Workflow
 from app.domain.models.workflow_step import StepMatchStatus, WorkflowStep
-from app.domain.repository.components_repository import ComponentsRepository
-from app.domain.repository.workflows_repository import WorkflowsRepository
 from app.infrastructure.cwl.cwl_matcher import best_match
 from app.infrastructure.cwl.cwl_parser import (
     collect_import_targets,
@@ -53,6 +52,7 @@ from app.infrastructure.cwl.workflow_parser import (
     read_workflow_overview,
     strip_cwl_extension,
 )
+from app.infrastructure.db.unit_of_work import SqlUnitOfWork
 
 #: an inline `run: {class: CommandLineTool}` lifted out of a self-contained workflow
 COMPONENT_ORIGIN_INLINE = "inline"
@@ -175,28 +175,24 @@ class StepBinding:
 class WorkflowsService:
     """What only a workflow - the composite - does: being uploaded together with the tools
     its steps run, being synced from a builder canvas, and having its steps bound to child
-    components. Everything shared with tools is ComponentsService's."""
+    components. Everything shared with tools is ComponentsService's.
 
-    def __init__(
-        self,
-        components_repository: ComponentsRepository,
-        workflows_repository: WorkflowsRepository,
-        components_service: ComponentsService,
-        tools_service: ToolsService,
-    ):
-        self.components_repository = components_repository
-        self.workflows_repository = workflows_repository
+    create_from_upload, update_step_component and execute_step_command are use cases, each
+    one transaction. upsert_from_draft is not: it runs inside the unit of work of
+    WorkflowDraftService.sync_to_my_workflows."""
+
+    def __init__(self, uow: UnitOfWork, components_service: ComponentsService, tools_service: ToolsService):
+        self.uow = uow
         self.components_service = components_service
         self.tools_service = tools_service
 
     @staticmethod
     def get_service(
-        components_repository: Annotated[ComponentsRepository, Depends(ComponentsRepository.get_repository)],
-        workflows_repository: Annotated[WorkflowsRepository, Depends(WorkflowsRepository.get_repository)],
+        uow: Annotated[UnitOfWork, Depends(SqlUnitOfWork.get_unit_of_work)],
         components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
         tools_service: Annotated[ToolsService, Depends(ToolsService.get_service)],
     ) -> "WorkflowsService":
-        return WorkflowsService(components_repository, workflows_repository, components_service, tools_service)
+        return WorkflowsService(uow, components_service, tools_service)
 
     async def parse_workflow_upload(self, content: bytes, filename: str | None = None) -> WorkflowUploadPreview:
         """Analyse an uploaded workflow file without persisting anything - auto-detects
@@ -260,7 +256,7 @@ class WorkflowsService:
 
         # one query, reused for every archive step's fuzzy match - the latest version of
         # every tool lineage, since an archive's step files are tools
-        all_components = await self.components_repository.find_all(kind=ComponentKind.TOOL)
+        all_components = await self.uow.components.find_all(kind=ComponentKind.TOOL)
         candidates = [(c.id, c.name) for c in all_components]
         by_id = {c.id: c for c in all_components}
 
@@ -291,7 +287,7 @@ class WorkflowsService:
                 origin, run_reference = COMPONENT_ORIGIN_INLINE, None
                 suggested_name = inline.suggested_name
 
-            existing = await self.components_repository.find_latest_by_name(suggested_name)
+            existing = await self.uow.components.find_latest_by_name(suggested_name)
             parameters = self._safe_extract_parameters(cwl_content)
             ontology_url = self.components_service.ontology_url_for(cwl_content)
             await self.components_service.resolve_format_labels(ontology_url, parameters)
@@ -329,7 +325,7 @@ class WorkflowsService:
     def _safe_extract_parameters(cwl_content: str) -> list[Parameter]:
         """Preview-only: a step file whose ports don't parse still deserves to be shown
         (with its CWL and Docker tabs intact) rather than failing the whole upload. The
-        real parse happens again in ToolsService.create_manual, which does raise."""
+        real parse happens again in ToolsService.create_tool, which does raise."""
         try:
             return extract_parameters(cwl_content)
         except ValueError:
@@ -370,11 +366,9 @@ class WorkflowsService:
         treatment: a domain, a non-blank name, no duplicate name within this upload, and
         no collision with the catalogue (the user is offered the reuse branch instead).
 
-        Necessary because ToolsService.create_manual commits immediately per call
-        (no shared transaction across N creates), so the common failure mode (a name
-        collision) must fail atomically up front rather than being discovered mid-loop
-        after earlier components are already permanently persisted. This matters more now
-        than it did before: archive steps create components too, so N is larger.
+        Not needed for atomicity - the whole upload is one transaction - but it reports
+        every configuration problem as the specific error the upload form understands,
+        before any CWL is processed.
         """
         seen: set[str] = set()
         for step_id, _definition in step_definitions:
@@ -382,7 +376,7 @@ class WorkflowsService:
 
             if config.is_reuse:
                 if config.reuse_component_id is not None:
-                    component = await self.components_repository.find_by_id(config.reuse_component_id)
+                    component = await self.uow.components.find_by_id(config.reuse_component_id)
                     if component is None:
                         raise ComponentNotFoundError(config.reuse_component_id)
                 continue
@@ -400,7 +394,7 @@ class WorkflowsService:
             if config.is_reuse or config.name is None:
                 continue
             # names are one key across both kinds, so a workflow's name collides too
-            if await self.components_repository.find_latest_by_name(config.name) is not None:
+            if await self.uow.components.find_latest_by_name(config.name) is not None:
                 raise ExtractedComponentNameCollisionError(config.name)
 
     async def create_from_upload(
@@ -421,6 +415,8 @@ class WorkflowsService:
         catalogue Component, or a name/domain/description to create a new one from that
         step's CWL. Nothing is auto-created behind the user's back and nothing is left to
         post-save fuzzy triage - an unconfigured step is an error, not a guess.
+
+        One transaction: the new tools and the workflow are created together or not at all.
         """
         await self.components_service.require_name_available(name)
         upload = self._load_upload_content(content, filename)
@@ -471,7 +467,7 @@ class WorkflowsService:
 
         # existence already guaranteed by _validate_component_configs above
         reused_components = {
-            step_id: await self.components_repository.find_by_id(config.reuse_component_id)
+            step_id: await self.uow.components.find_by_id(config.reuse_component_id)
             for step_id, config in component_configs.items()
             if config.reuse_component_id is not None
         }
@@ -563,28 +559,24 @@ class WorkflowsService:
             pending_components.append((step, component, config.format_labels))
             steps.append(step)
 
-        # only create Components once every validation above has passed - create_manual
-        # commits immediately per call, so this loop is the point of no return
-        for step, component, format_labels in pending_components:
-            created = await self.tools_service.create_manual(component, format_labels=format_labels)
-            step.component_id = created.id
-            # also link the ORM relationship object itself (not just the FK id) - the
-            # later commit()+refresh() in save_and_reload expires every object in the
-            # session, and without this, serialising step.component afterwards would
-            # attempt a genuine lazy load outside of any async-safe context and crash
-            # with MissingGreenlet
-            step.component = created
+        async with self.uow:
+            for step, component, format_labels in pending_components:
+                created = await self.tools_service.create_tool(component, format_labels=format_labels)
+                step.component_id = created.id
+                step.component = created
 
-        return await self._create_workflow(
-            name=name,
-            description=description,
-            domains=domains,
-            created_by_id=created_by_id,
-            pipeline_content=pipeline_content,
-            steps=steps,
-            source=ComponentSource.MANUAL_UPLOAD,
-            files=self._files_for(pipeline_content, auxiliary),
-        )
+            workflow = await self._create_workflow(
+                name=name,
+                description=description,
+                domains=domains,
+                created_by_id=created_by_id,
+                pipeline_content=pipeline_content,
+                steps=steps,
+                source=ComponentSource.MANUAL_UPLOAD,
+                files=self._files_for(pipeline_content, auxiliary),
+            )
+            await self.uow.commit()
+        return await self.components_service.reload(workflow)
 
     async def upsert_from_draft(
         self,
@@ -601,6 +593,9 @@ class WorkflowsService:
         next version once it is PUBLISHED, since a published version is what other users
         see (and nest) and must not change under them. The lineage is only reused when the
         caller owns it; anything else falls through to a fresh one.
+
+        Runs inside the caller's unit of work and returns the workflow unreloaded - reload
+        it after the commit.
         """
         steps = [
             WorkflowStep(
@@ -614,7 +609,7 @@ class WorkflowsService:
             for order, binding in enumerate(bindings)
         ]
 
-        latest = await self.workflows_repository.find_latest_by_draft_id(draft_id)
+        latest = await self.uow.workflows.find_latest_by_draft_id(draft_id)
         if latest is None or latest.created_by_id != created_by_id:
             await self.components_service.require_name_available(name)
             return await self._create_workflow(
@@ -631,8 +626,9 @@ class WorkflowsService:
         if latest.name != name:
             # the name is the lineage key, so a renamed canvas renames every version
             await self.components_service.require_name_available(name, exclude_id=latest.id)
-            await self.components_repository.rename_lineage(latest.name, name)
-            latest = await self.components_repository.find_by_id_fresh(latest.id)
+            await self.uow.components.rename_lineage(latest.name, name)
+            # the bulk UPDATE bypassed the identity map - repopulate what it changed
+            latest = await self.uow.components.find_by_id_fresh(latest.id)
             assert latest is not None
         await self._require_acyclic(latest, [b.component_id for b in bindings])
 
@@ -642,9 +638,9 @@ class WorkflowsService:
             # the replaced rows
             latest.workflow.steps = steps
             await self.components_service.assign_ports(latest, "Workflow")
-            return await self.components_service.save_and_reload(latest)
+            return await self.uow.components.add(latest)
 
-        versions = await self.components_repository.find_versions_by_name(latest.name)
+        versions = await self.uow.components.find_versions_by_name(latest.name)
         return await self._create_workflow(
             name=latest.name,
             description=latest.description,
@@ -684,11 +680,11 @@ class WorkflowsService:
         )
         # a workflow's ports are its own inputs/outputs - what a parent sees when nesting it
         await self.components_service.assign_ports(workflow, "Workflow")
-        return await self.components_service.save_and_reload(workflow)
+        return await self.uow.components.add(workflow)
 
     async def _require_acyclic(self, parent: Component, child_ids: list[uuid.UUID]) -> None:
         """Raises WorkflowCycleError when one of the children (eventually) runs `parent`."""
-        for child in await self.components_repository.find_by_ids(list(dict.fromkeys(child_ids))):
+        for child in await self.uow.components.find_by_ids(list(dict.fromkeys(child_ids))):
             if not child.is_workflow:
                 continue
             await self.components_service.load_tree(child)
@@ -697,16 +693,22 @@ class WorkflowsService:
 
     async def linked_workflow_ids(self, draft_ids: set[uuid.UUID]) -> dict[uuid.UUID, uuid.UUID]:
         """{draft_id: newest workflow version id} for the drafts synced to My Workflows."""
-        workflows = await self.workflows_repository.find_all_by_draft_ids(draft_ids)
+        workflows = await self.uow.workflows.find_all_by_draft_ids(draft_ids)
         return {w.workflow.draft_id: w.id for w in workflows if w.workflow is not None and w.workflow.draft_id}
 
     async def get_step_with_workflow(self, step_id: uuid.UUID) -> tuple[WorkflowStep, Component]:
-        step = await self.workflows_repository.find_step_by_id(step_id)
+        step = await self.uow.workflows.find_step_by_id(step_id)
         if step is None or step.parent is None:
             raise WorkflowStepNotFoundError(step_id)
         return step, step.parent
 
     async def update_step_component(self, step_id: uuid.UUID, component_id: uuid.UUID | None) -> WorkflowStep:
+        async with self.uow:
+            step = await self._update_step_component(step_id, component_id)
+            await self.uow.commit()
+        return step
+
+    async def _update_step_component(self, step_id: uuid.UUID, component_id: uuid.UUID | None) -> WorkflowStep:
         step, workflow = await self.get_step_with_workflow(step_id)
         self._require_steps_editable(workflow)
 
@@ -716,36 +718,31 @@ class WorkflowsService:
         if component_id is not None:
             # a tool, or - nested - another workflow, as long as that one does not
             # (eventually) run this workflow itself
-            child = await self.components_repository.find_by_id(component_id)
+            child = await self.uow.components.find_by_id(component_id)
             if child is None:
                 raise ComponentNotFoundError(component_id)
             await self._require_acyclic(workflow, [child.id])
             step.component_id = component_id
+            # the relationship too, not just the FK - it is what the response serialises
+            step.component = child
             step.match_status = StepMatchStatus.SUGGESTED
             step.match_score = None
         else:
             step.component_id = None
+            step.component = None
             step.match_status = StepMatchStatus.UNMATCHED
             step.match_score = None
 
-        saved_step = await self.workflows_repository.save_step(step)
-        # the commit unloaded step.component - reload so the caller can serialise it
-        # without a lazy load
-        reloaded = await self.workflows_repository.find_step_by_id_with_relations(saved_step.id)
-        assert reloaded is not None
-        return reloaded
+        return await self.uow.workflows.add_step(step)
 
-    async def confirm_step(self, step_id: uuid.UUID) -> WorkflowStep:
+    async def _confirm_step(self, step_id: uuid.UUID) -> WorkflowStep:
         step, workflow = await self.get_step_with_workflow(step_id)
         self._require_steps_editable(workflow)
         if step.component_id is None:
             raise WorkflowStepNotMatchedError(step_id)
 
         step.match_status = StepMatchStatus.CONFIRMED
-        saved_step = await self.workflows_repository.save_step(step)
-        reloaded = await self.workflows_repository.find_step_by_id_with_relations(saved_step.id)
-        assert reloaded is not None
-        return reloaded
+        return await self.uow.workflows.add_step(step)
 
     @staticmethod
     def _require_steps_editable(workflow: Component) -> None:
@@ -755,9 +752,12 @@ class WorkflowsService:
             raise PublishedWorkflowStepsLockedError(workflow.id)
 
     async def execute_step_command(self, step: WorkflowStep, command: WorkflowStepCommand) -> WorkflowStep:
-        match command.type:
-            case WorkflowStepCommandType.CONFIRM:
-                return await self.confirm_step(step.id)
+        async with self.uow:
+            match command.type:
+                case WorkflowStepCommandType.CONFIRM:
+                    step = await self._confirm_step(step.id)
+            await self.uow.commit()
+        return step
 
     #: plausible $import/$include targets - all text, so an unrelated binary in the archive
     #: never has to be decoded just to be ignored

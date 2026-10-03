@@ -7,6 +7,9 @@ from sqlmodel import Field, SQLModel
 
 class LoginCode(SQLModel, table=True):
     __tablename__ = "login_codes"
+    # fetch the server-generated timestamps via RETURNING on flush - otherwise they stay
+    # expired and reading one would lazy-load, which an AsyncSession cannot do
+    __mapper_args__ = {"eager_defaults": True}
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     email: str = Field(index=True)

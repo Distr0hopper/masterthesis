@@ -1,8 +1,6 @@
 import uuid
 from dataclasses import dataclass, field
-from typing import Annotated
 
-from fastapi import Depends
 from sqlalchemy import case, exists, update
 from sqlalchemy.orm import aliased, selectinload
 from sqlmodel import and_, func, or_, select
@@ -15,7 +13,7 @@ from app.domain.models.tool import Tool
 from app.domain.models.workflow import Workflow
 from app.domain.models.workflow_step import WorkflowStep
 from app.domain.pagination.pagination import PaginatedList
-from app.infrastructure.db.session import get_db
+from app.infrastructure.db.session import require_unit_of_work
 
 
 @dataclass
@@ -48,10 +46,6 @@ class ComponentsRepository:
 
     def __init__(self, db: AsyncSession):
         self.db = db
-
-    @staticmethod
-    def get_repository(db: Annotated[AsyncSession, Depends(get_db)]) -> "ComponentsRepository":
-        return ComponentsRepository(db)
 
     def _apply_filters(self, query, filter: ComponentListFilter):
         if filter.kind is not None:
@@ -157,12 +151,11 @@ class ComponentsRepository:
         return result.first()
 
     async def find_by_id_fresh(self, component_id: uuid.UUID) -> Component | None:
-        """Same as find_by_id, but repopulates a component already resident in the session.
-        Right after a request that ran several intermediate commits (e.g. creating new tools
-        mid-request), those commits leave every attribute expired, and a plain identity-map
-        hit would leave the steps and their components unpopulated - accessing them later
-        would then attempt a genuine lazy load and crash with MissingGreenlet.
-        """
+        """Same as find_by_id, but repopulates a component already resident in the session -
+        the reload after a write. Steps built from a foreign key alone (component_id set,
+        the step.component relationship never loaded) stay unloaded on a plain identity-map
+        hit, and accessing them later would attempt a genuine lazy load and crash with
+        MissingGreenlet."""
         query = (
             select(Component)
             .where(Component.id == component_id)
@@ -217,22 +210,22 @@ class ComponentsRepository:
     async def rename_lineage(self, old_name: str, new_name: str) -> None:
         """Rename every version of a lineage at once, and the favorites keyed by it - the
         name is the lineage key, so renaming only one version would split the lineage."""
+        require_unit_of_work(self.db)
         await self.db.exec(update(Component).where(Component.name == old_name).values(name=new_name))
         await self.db.exec(update(Favorite).where(Favorite.component_name == old_name).values(component_name=new_name))
-        await self.db.commit()
 
-    async def save(self, component: Component) -> Component:
+    async def add(self, component: Component) -> Component:
+        require_unit_of_work(self.db)
         self.db.add(component)
-        await self.db.commit()
-        await self.db.refresh(component)
+        await self.db.flush()
         return component
 
-    async def save_all(self, components: list[Component]) -> None:
-        """Persist several components in one commit, so a cascade (e.g. publishing a
-        workflow together with its draft children) never leaves half of them applied."""
+    async def add_all(self, components: list[Component]) -> None:
+        require_unit_of_work(self.db)
         self.db.add_all(components)
-        await self.db.commit()
+        await self.db.flush()
 
     async def delete(self, component: Component) -> None:
+        require_unit_of_work(self.db)
         await self.db.delete(component)
-        await self.db.commit()
+        await self.db.flush()

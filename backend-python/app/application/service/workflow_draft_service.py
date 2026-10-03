@@ -11,12 +11,11 @@ from app.application.exception.workflow_draft_exceptions import (
 )
 from app.application.service.components_service import ComponentsService
 from app.application.service.workflows_service import StepBinding, WorkflowsService
+from app.application.unit_of_work import UnitOfWork
 from app.domain.composite.tree import ConflictingTreeFileError, auxiliary_files, step_files
 from app.domain.models.component import Component
 from app.domain.models.parameter import ParameterDirection
 from app.domain.models.workflow_draft import WorkflowDraft
-from app.domain.repository.components_repository import ComponentsRepository
-from app.domain.repository.workflow_draft_repository import WorkflowDraftRepository
 from app.infrastructure.cwl.canvas_graph import (
     CanvasCycleError,
     CanvasFormatError,
@@ -35,6 +34,7 @@ from app.infrastructure.cwl.workflow_generator import (
     render_workflow_cwl,
     safe_workflow_slug,
 )
+from app.infrastructure.db.unit_of_work import SqlUnitOfWork
 
 logger = logging.getLogger("app.application.service.workflow_draft_service")
 
@@ -46,27 +46,24 @@ def _is_file_type(cwl_type: str) -> bool:
 class WorkflowDraftService:
     def __init__(
         self,
-        repository: WorkflowDraftRepository,
-        components_repository: ComponentsRepository,
+        uow: UnitOfWork,
         components_service: ComponentsService,
         workflows_service: WorkflowsService,
     ):
-        self.repository = repository
-        self.components_repository = components_repository
+        self.uow = uow
         self.components_service = components_service
         self.workflows_service = workflows_service
 
     @staticmethod
     def get_service(
-        repository: Annotated[WorkflowDraftRepository, Depends(WorkflowDraftRepository.get_repository)],
-        components_repository: Annotated[ComponentsRepository, Depends(ComponentsRepository.get_repository)],
+        uow: Annotated[UnitOfWork, Depends(SqlUnitOfWork.get_unit_of_work)],
         components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
         workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
     ) -> "WorkflowDraftService":
-        return WorkflowDraftService(repository, components_repository, components_service, workflows_service)
+        return WorkflowDraftService(uow, components_service, workflows_service)
 
     async def list_my_drafts(self, user_id: uuid.UUID) -> list[WorkflowDraft]:
-        return await self.repository.find_all_by_user(user_id)
+        return await self.uow.drafts.find_all_by_user(user_id)
 
     async def linked_workflow_ids(self, draft_ids: set[uuid.UUID]) -> dict[uuid.UUID, uuid.UUID]:
         """{draft_id: newest workflow version id} for the drafts synced to a My Workflows entry."""
@@ -74,7 +71,7 @@ class WorkflowDraftService:
 
     async def get_draft(self, draft_id: uuid.UUID, user_id: uuid.UUID) -> WorkflowDraft:
         """Fetch one draft, enforcing ownership. Every mutating path goes through this."""
-        draft = await self.repository.find_by_id(draft_id)
+        draft = await self.uow.drafts.find_by_id(draft_id)
         if draft is None:
             raise WorkflowDraftNotFoundError(draft_id)
         if draft.created_by_id != user_id:
@@ -94,7 +91,10 @@ class WorkflowDraftService:
             node_count=node_count,
             created_by_id=user_id,
         )
-        return await self.repository.save(draft)
+        async with self.uow:
+            await self.uow.drafts.add(draft)
+            await self.uow.commit()
+        return draft
 
     async def update_draft(
         self,
@@ -107,17 +107,22 @@ class WorkflowDraftService:
         draft.name = name
         draft.canvas_state = canvas_state
         draft.node_count = node_count
-        return await self.repository.save(draft)
+        async with self.uow:
+            await self.uow.drafts.add(draft)
+            await self.uow.commit()
+        return draft
 
     async def delete_draft(
         self, draft: WorkflowDraft, user_id: uuid.UUID, delete_linked_workflow: bool = False
     ) -> None:
         # by default the FK is ON DELETE SET NULL, so the synced My Workflows copy just
         # loses its "edit in builder" link and stays. The user can opt to drop it too -
-        # every version synced from this canvas.
-        if delete_linked_workflow:
-            await self.components_service.remove_synced_from_draft(draft.id, user_id)
-        await self.repository.delete(draft)
+        # every version synced from this canvas. One transaction either way.
+        async with self.uow:
+            if delete_linked_workflow:
+                await self.components_service.remove_synced_from_draft(draft.id, user_id)
+            await self.uow.drafts.delete(draft)
+            await self.uow.commit()
 
     async def missing_component_ids(self, draft: WorkflowDraft) -> list[str]:
         """The componentIds on the draft's canvas that no longer resolve - lets the builder
@@ -136,7 +141,7 @@ class WorkflowDraftService:
             except (ValueError, AttributeError, TypeError):
                 missing.append(str(raw_id))
                 continue
-            component = await self.components_repository.find_by_id(component_id)
+            component = await self.uow.components.find_by_id(component_id)
             if component is None:
                 missing.append(str(raw_id))
             else:
@@ -275,13 +280,16 @@ class WorkflowDraftService:
             for node in ordered_nodes
         ]
 
-        workflow = await self.workflows_service.upsert_from_draft(
-            pipeline_content=render_workflow_cwl(workflow_doc),
-            bindings=bindings,
-            name=draft.name,
-            # the link the UI follows back into the builder, and the key this upsert is on
-            draft_id=draft.id,
-            created_by_id=user_id,
-        )
+        async with self.uow:
+            workflow = await self.workflows_service.upsert_from_draft(
+                pipeline_content=render_workflow_cwl(workflow_doc),
+                bindings=bindings,
+                name=draft.name,
+                # the link the UI follows back into the builder, and the key this upsert is on
+                draft_id=draft.id,
+                created_by_id=user_id,
+            )
+            await self.uow.commit()
+        workflow = await self.components_service.reload(workflow)
         logger.info(f"Synced draft {draft.id} into My Workflows as workflow {workflow.id}")
         return workflow

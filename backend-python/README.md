@@ -44,6 +44,8 @@ whose steps each run another Component - a tool, or (nested) another workflow.
 - API: `/components` serves every shared operation polymorphically (responses discriminated by
   `kind`); `/tools` and `/workflows` hold only what one kind has.
 
+Diagrams of the tables and the composite: [docs/domain-model.md](docs/domain-model.md).
+
 Packaging (`POST /tools/package`, `POST /tools/{id}/commands` with `REPACKAGE`) calls the [`automated-packaging`](../automated-packaging) service over HTTP (`PACKAGING_SERVICE_URL`). It runs as a container from the repo-root `docker-compose.yml`; put an optional `GITHUB_TOKEN` in the repo-root `.env` (see `../.env.example`) to avoid GitHub rate limits. If the service is down, packaging requests return 503.
 
 ## Authentication (OTP email login)

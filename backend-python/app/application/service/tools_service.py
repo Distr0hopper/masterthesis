@@ -31,15 +31,16 @@ from app.infrastructure.cwl.cwl_parser import (
     inject_description,
 )
 from app.infrastructure.db.unit_of_work import SqlUnitOfWork
-from app.infrastructure.packaging.packaging_service_client import PackagingServiceClient
+from app.infrastructure.packaging.packaging_service_client import PackagingResult, PackagingServiceClient
 
 #: the CWL classes a tool may be - the leaves of the composite
 TOOL_CWL_CLASSES = {"CommandLineTool", "ExpressionTool"}
 
 
 @dataclass
-class ParsedTool:
-    """A .cwl read but not persisted - see ToolsService.parse_cwl."""
+class ToolDetails:
+    """Everything a tool derives from its CWL document - read once by
+    ToolsService.read_tool_details, for the preview and for the save alike."""
 
     cwl_content: str
     cwl_type: str | None
@@ -54,7 +55,7 @@ class ParsedTool:
 class PackagePreview:
     """A GitHub repo packaged but not persisted - see ToolsService.preview_package."""
 
-    parsed: ParsedTool
+    parsed: ToolDetails
     repo_name: str
     repo_url: str
     commit_sha: str
@@ -107,19 +108,20 @@ class ToolsService:
 
         return f"{base_name}.zip", buffer.getvalue()
 
-    async def parse_cwl(self, content: bytes) -> ParsedTool:
+    async def parse_cwl(self, content: bytes) -> ToolDetails:
         """Read an uploaded .cwl into everything the UI needs to preview it, without
         persisting anything - the tool-side counterpart of
         WorkflowsService.parse_workflow_upload, so a tool can be reviewed before it is
         created rather than only after.
 
-        Uses exactly the extractors create_manual uses, so the preview is what gets saved.
+        The preview is what gets saved: create_manual reads the document through the same
+        read_tool_details.
         """
         try:
             cwl_content = content.decode("utf-8")
         except UnicodeDecodeError as err:
             raise InvalidCwlError("Uploaded", "File is not valid UTF-8 text") from err
-        return await self._build_preview(cwl_content, "Uploaded", ComponentSource.MANUAL_UPLOAD)
+        return await self.read_tool_details(cwl_content, "Uploaded", ComponentSource.MANUAL_UPLOAD)
 
     async def preview_package(self, repo_url: str) -> PackagePreview:
         """Package a GitHub repo without persisting it, so the generated tool can be
@@ -129,10 +131,11 @@ class ToolsService:
         For a repo that's already packaged, the preview carries the latest version's hand
         labels forward, exactly like add_manual_version does on save.
         """
-        repo_name, cwl_content, commit_sha, description, author = await self._run_packaging(repo_url)
-        parsed = await self._build_preview(cwl_content, "CLI-generated", ComponentSource.AUTOMATED_PACKAGING)
-        if parsed.description is None:
-            parsed.description = self.components_service.truncate_description(description)
+        result = await self.packaging_client.package(repo_url)
+        # the README description, like create_from_url saves it when no override is given
+        parsed = await self.read_tool_details(
+            result.cwl, "CLI-generated", ComponentSource.AUTOMATED_PACKAGING, description=result.description
+        )
 
         existing = await self.find_tool_by_repo_url(repo_url)
         latest = (
@@ -144,25 +147,34 @@ class ToolsService:
             )
         return PackagePreview(
             parsed=parsed,
-            repo_name=repo_name,
+            repo_name=result.repo_name,
             repo_url=repo_url,
-            commit_sha=commit_sha,
-            author=author,
+            commit_sha=result.commit_sha,
+            author=result.author,
             existing=latest,
-            already_packaged=latest is not None and bool(commit_sha) and latest.repo_commit_sha == commit_sha,
+            already_packaged=latest is not None and bool(result.commit_sha) and latest.repo_commit_sha == result.commit_sha,
         )
 
-    async def _build_preview(self, cwl_content: str, context: str, source: ComponentSource) -> ParsedTool:
-        # source matters: parse_ports drops formats for packaged tools, so the preview
-        # must use the same source the tool will be saved with
+    async def read_tool_details(
+        self, cwl_content: str, context: str, source: ComponentSource, description: str | None = None
+    ) -> ToolDetails:
+        """Everything a tool derives from its CWL - the only reading of it, shared by the
+        previews and the save (see _prepare), so what the user reviews is what gets stored.
+
+        `source` matters: parse_ports drops the formats of packaged tools. `description` is
+        one given explicitly - by the user, or the README packaging found - and wins over
+        the document's own `doc:`; either way it is cut to what the column holds.
+        """
         cwl_type = self._require_tool_class(cwl_content, context)
         parameters = self.components_service.parse_ports(cwl_content, context, source)
         ontology_url = self.components_service.ontology_url_for(cwl_content)
         await self.components_service.resolve_format_labels(ontology_url, parameters)
-        return ParsedTool(
+        return ToolDetails(
             cwl_content=cwl_content,
             cwl_type=cwl_type,
-            description=extract_description(cwl_content),
+            description=self.components_service.truncate_description(
+                description if description is not None else extract_description(cwl_content)
+            ),
             dockerfile_content=extract_dockerfile_content(cwl_content),
             docker_pull_reference=extract_docker_pull(cwl_content),
             ontology_url=ontology_url,
@@ -184,17 +196,16 @@ class ToolsService:
 
     async def _prepare(self, tool: Component, context: str) -> None:
         """Everything derived from a tool's CWL, filled in on `tool` before it is saved."""
+        details = await self.read_tool_details(tool.cwl_content, context, tool.source, description=tool.description)
         tool.kind = ComponentKind.TOOL
-        cwl_type = self._require_tool_class(tool.cwl_content, context)
-        await self.components_service.assign_ports(tool, context)
+        tool.parameters = details.parameters
+        tool.ontology_url = details.ontology_url
+        tool.description = details.description
         tool.tool = Tool(
-            cwl_type=cwl_type,
-            dockerfile_content=extract_dockerfile_content(tool.cwl_content),
-            docker_pull_reference=extract_docker_pull(tool.cwl_content),
+            cwl_type=details.cwl_type,
+            dockerfile_content=details.dockerfile_content,
+            docker_pull_reference=details.docker_pull_reference,
         )
-        if tool.description is None:
-            tool.description = extract_description(tool.cwl_content)
-        tool.description = self.components_service.truncate_description(tool.description)
 
     async def create_manual(
         self,
@@ -256,19 +267,19 @@ class ToolsService:
         format_labels: list[ManualFormatLabel] | None = None,
         expected_commit_sha: str | None = None,
     ) -> Component:
-        repo_name, cwl_content, commit_sha, metadata_description, metadata_author = await self._run_packaging(repo_url)
-        self._check_expected_commit(repo_name, commit_sha, expected_commit_sha)
+        result = await self.packaging_client.package(repo_url)
+        self._check_expected_commit(result.repo_name, result.commit_sha, expected_commit_sha)
 
         tool = Component(
             kind=ComponentKind.TOOL,
-            name=(name or "").strip() or repo_name,
-            author_name=metadata_author,
+            name=(name or "").strip() or result.repo_name,
+            author_name=result.author,
             created_by_id=created_by_id,
             repo_url=repo_url,
-            repo_commit_sha=commit_sha,
+            repo_commit_sha=result.commit_sha,
             version=1,
-            cwl_content=cwl_content,
-            description=description_override if description_override is not None else metadata_description,
+            cwl_content=result.cwl,
+            description=description_override if description_override is not None else result.description,
             source=ComponentSource.AUTOMATED_PACKAGING,
             domains=[ComponentDomain(domain=d) for d in domains],
         )
@@ -281,25 +292,44 @@ class ToolsService:
         format_labels: list[ManualFormatLabel] | None = None,
         expected_commit_sha: str | None = None,
     ) -> Component:
-        repo_name, cwl_content, commit_sha, metadata_description, _ = await self._run_packaging(existing.repo_url)
-        self._check_expected_commit(repo_name, commit_sha, expected_commit_sha)
+        """Package the repo `existing` came from again, as the next version of its lineage -
+        refused when the lineage's newest version already is at the repo's current commit.
 
-        if commit_sha and existing.repo_commit_sha == commit_sha:
-            raise AlreadyPackagedError(repo_name, commit_sha)
+        `existing` may be any version of the lineage: the new one always builds on the
+        newest (see _next_packaged_version).
+        """
+        if existing.repo_url is None:
+            raise ManualUploadCannotBeRepackagedError()
+        result = await self.packaging_client.package(existing.repo_url)
+        self._check_expected_commit(result.repo_name, result.commit_sha, expected_commit_sha)
 
-        tool = Component(
-            kind=ComponentKind.TOOL,
-            name=existing.name,
-            author_name=existing.author_name,
-            created_by_id=existing.created_by_id,
-            repo_url=existing.repo_url,
-            repo_commit_sha=commit_sha,
-            cwl_content=cwl_content,
-            description=description_override if description_override is not None else metadata_description,
-            source=existing.source,
-            domains=[ComponentDomain(domain=d.domain) for d in existing.domains],
-        )
+        head = (await self.uow.components.find_versions_by_name(existing.name))[-1]
+        if result.commit_sha and head.repo_commit_sha == result.commit_sha:
+            raise AlreadyPackagedError(result.repo_name, result.commit_sha)
+
+        tool = self._next_packaged_version(head, result, description_override)
         return await self.add_manual_version(tool, format_labels)
+
+    @staticmethod
+    def _next_packaged_version(
+        head: Component, result: PackagingResult, description_override: str | None
+    ) -> Component:
+        """The next version of a packaged lineage, from its newest version `head` - the
+        lineage's current truth for who made it, where it lives and which domains it serves -
+        and what packaging the repo returned. add_manual_version numbers it and carries the
+        hand labels forward."""
+        return Component(
+            kind=ComponentKind.TOOL,
+            name=head.name,
+            author_name=head.author_name,
+            created_by_id=head.created_by_id,
+            repo_url=head.repo_url,
+            repo_commit_sha=result.commit_sha,
+            cwl_content=result.cwl,
+            description=description_override if description_override is not None else result.description,
+            source=head.source,
+            domains=[ComponentDomain(domain=d.domain) for d in head.domains],
+        )
 
     @staticmethod
     def _check_expected_commit(repo_name: str, commit_sha: str | None, expected_commit_sha: str | None) -> None:
@@ -309,30 +339,9 @@ class ToolsService:
             raise PackagedCommitChangedError(repo_name, expected_commit_sha, commit_sha)
 
     async def repackage(self, parent: Component) -> Component:
-        if parent.repo_url is None:
-            raise ManualUploadCannotBeRepackagedError()
-
-        versions = await self.uow.components.find_versions_by_name(parent.name)
-        latest = versions[-1] if versions else None
-
-        repo_name, cwl_content, commit_sha, metadata_description, _ = await self._run_packaging(parent.repo_url)
-
-        if commit_sha and latest is not None and latest.repo_commit_sha == commit_sha:
-            raise AlreadyPackagedError(repo_name, commit_sha)
-
-        tool = Component(
-            kind=ComponentKind.TOOL,
-            name=parent.name,
-            author_name=parent.author_name,
-            created_by_id=parent.created_by_id,
-            repo_url=parent.repo_url,
-            repo_commit_sha=commit_sha,
-            cwl_content=cwl_content,
-            description=metadata_description,
-            source=parent.source,
-            domains=[ComponentDomain(domain=d.domain) for d in parent.domains],
-        )
-        return await self.add_manual_version(tool)
+        """The repackage command: package_next_version without an override - the README's
+        description - and without a reviewed commit to hold the repo to."""
+        return await self.package_next_version(parent, None)
 
     async def execute_command(self, tool: Component, command: ToolCommand) -> Component:
         match command.type:
@@ -340,10 +349,6 @@ class ToolsService:
                 return await self.repackage(tool)
             case ToolCommandType.UPDATE_FORMAT_LABELS:
                 return await self.update_format_labels(tool, command.format_labels)
-
-    async def _run_packaging(self, repo_url: str) -> tuple[str, str, str | None, str | None, str | None]:
-        result = await self.packaging_client.package(repo_url)
-        return result.repo_name, result.cwl, result.commit_sha, result.description, result.author
 
     async def update_format_labels(self, tool: Component, format_labels: list[ManualFormatLabel] | None) -> Component:
         if format_labels is None:

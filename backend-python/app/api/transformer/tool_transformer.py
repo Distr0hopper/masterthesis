@@ -9,7 +9,7 @@ from app.api.dto.tool import (
 )
 from app.api.transformer.parameter_transformer import ParameterTransformer
 from app.application.commands.commands import ToolCommand, ToolCommandType
-from app.application.service.tools_service import ParsedTool
+from app.application.service.tools_service import ToolDetails
 from app.domain.models.component import Component, ComponentKind, ComponentSource
 from app.domain.models.component_domain import ComponentDomain
 
@@ -63,7 +63,7 @@ class ToolTransformer:
         )
 
     @staticmethod
-    def to_preview_fields(parsed: ParsedTool) -> dict:
+    def to_preview_fields(parsed: ToolDetails) -> dict:
         """The ToolPreviewDto fields of a parse result - shared with PackagePreviewDto, which extends it."""
         return dict(
             cwl_content=parsed.cwl_content,
@@ -78,5 +78,5 @@ class ToolTransformer:
         )
 
     @staticmethod
-    def to_preview(parsed: ParsedTool) -> ToolPreviewDto:
+    def to_preview(parsed: ToolDetails) -> ToolPreviewDto:
         return ToolPreviewDto(**ToolTransformer.to_preview_fields(parsed))

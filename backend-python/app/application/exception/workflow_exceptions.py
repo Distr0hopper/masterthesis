@@ -141,3 +141,10 @@ class ExtractedComponentNameCollisionError(Exception):
     def __init__(self, name: str) -> None:
         super().__init__(f"A component named '{name}' already exists - rename it before creating this workflow")
 
+
+
+class InlineStepNotBindableError(Exception):
+    """An inline step carries its definition inside the pipeline - there is no component to bind."""
+
+    def __init__(self, step_id: uuid.UUID) -> None:
+        super().__init__(f"Workflow step {step_id} runs an inline definition and cannot be bound to a component")

@@ -7,9 +7,11 @@ from app.api.exception.exceptions import ForbiddenException
 from app.application.exception.auth_exceptions import InvalidTokenError
 from app.application.exception.component_exceptions import (
     AlreadyPackagedError,
+    ComponentHasPublicParentsError,
     ComponentKindMismatchError,
     ComponentNameAlreadyExistsError,
     ComponentNotFoundError,
+    ComponentUsedByOthersError,
     InvalidCwlError,
     ManualUploadCannotBeRepackagedError,
     MissingCommandPayloadError,
@@ -29,6 +31,7 @@ from app.application.exception.workflow_exceptions import (
     ConflictingStepFileError,
     DuplicateExtractedComponentNameError,
     ExtractedComponentNameCollisionError,
+    InlineStepNotBindableError,
     InvalidComponentConfigError,
     InvalidExtractedComponentNameError,
     InvalidWorkflowArchiveError,
@@ -44,6 +47,7 @@ from app.application.exception.workflow_exceptions import (
     WorkflowStepNotFoundError,
     WorkflowStepNotMatchedError,
 )
+from app.domain.composite.lifecycle import IllegalStatusTransitionError, IllegalStepTransitionError
 from app.domain.exception.login_code_exceptions import (
     InvalidOtpCodeError,
     OtpAttemptsExceededError,
@@ -215,6 +219,10 @@ async def _extracted_component_name_collision_handler(request: Request, exc: Ext
     return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
+async def _conflict_handler(request: Request, exc: Exception) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=ErrorResponse(detail=str(exc)).model_dump())
+
+
 async def _integrity_error_handler(request: Request, exc: IntegrityError) -> JSONResponse:
     # a concurrent change (e.g. a component deleted between lookup and save) - a conflict
     # the client can retry after reloading, not a server error. The DB message is not
@@ -267,3 +275,12 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(InvalidExtractedComponentNameError, _invalid_extracted_component_name_handler)
     app.add_exception_handler(DuplicateExtractedComponentNameError, _duplicate_extracted_component_name_handler)
     app.add_exception_handler(ExtractedComponentNameCollisionError, _extracted_component_name_collision_handler)
+    # the lifecycle's rules - a refused transition is a conflict with the current state
+    for lifecycle_error in (
+        ComponentUsedByOthersError,
+        ComponentHasPublicParentsError,
+        InlineStepNotBindableError,
+        IllegalStatusTransitionError,
+        IllegalStepTransitionError,
+    ):
+        app.add_exception_handler(lifecycle_error, _conflict_handler)

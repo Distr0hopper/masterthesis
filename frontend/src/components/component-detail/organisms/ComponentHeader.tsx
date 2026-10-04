@@ -19,7 +19,6 @@ import {
   ComponentStatus,
   useDownloadComponent,
   usePublishComponent,
-  useUnpublishComponent,
   type ComponentDetailDisplayModel,
 } from '@/api/components';
 import { toolsService } from '@/api/tools';
@@ -41,6 +40,7 @@ import { DeleteComponentDialog } from '@/components/component-mine/organisms/Del
 import { ConfirmPublishDialog } from '@/components/workflow-detail/organisms/ConfirmPublishDialog';
 import { DomainBadges } from '@/components/common/DomainBadges';
 import { EditComponentDialog } from './EditComponentDialog';
+import { UnpublishComponentDialog } from './UnpublishComponentDialog';
 
 interface ComponentHeaderProps {
   model: ComponentDetailDisplayModel;
@@ -68,11 +68,11 @@ function draftChildren(model: ComponentDetailDisplayModel): ComponentSummaryDto[
 
 export function ComponentHeader({ model, backTo, backLabel, onDeleted }: ComponentHeaderProps) {
   const { mutate: publishComponent, isPending: isPublishing } = usePublishComponent();
-  const { mutate: unpublishComponent, isPending: isUnpublishing } = useUnpublishComponent();
   const { mutate: downloadComponent, isPending: isDownloading } = useDownloadComponent();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
+  const [unpublishDialogOpen, setUnpublishDialogOpen] = useState(false);
 
   const isWorkflow = model.kind === 'workflow';
   const canDelete = hasDeleteLink(model._links);
@@ -117,13 +117,6 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
       return;
     }
     doPublish();
-  };
-
-  const handleUnpublish = () => {
-    unpublishComponent(getLink(model._links, 'unpublish')!, {
-      onSuccess: () => toast.success(`${model.kindDisplay} unpublished`),
-      onError: (error) => toast.error(getErrorMessage(error)),
-    });
   };
 
   const handleDownload = () => {
@@ -203,8 +196,7 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handleUnpublish}
-                  disabled={isUnpublishing}
+                  onClick={() => setUnpublishDialogOpen(true)}
                   title={`Hide this ${model.kindDisplay.toLowerCase()} from the public list and the Workflow Builder again`}
                 >
                   <GlobeLock className="mr-1 h-4 w-4" /> Unpublish
@@ -253,6 +245,9 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
         onDeleted={onDeleted}
       />
       <EditComponentDialog component={model} open={editDialogOpen} onOpenChange={setEditDialogOpen} />
+      {canUnpublish && (
+        <UnpublishComponentDialog model={model} open={unpublishDialogOpen} onOpenChange={setUnpublishDialogOpen} />
+      )}
       {isWorkflow && (
         <ConfirmPublishDialog
           open={publishDialogOpen}

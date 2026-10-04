@@ -16,7 +16,7 @@ export const componentKeys = {
   detail: (id: string) => [...componentKeys.all, 'detail', id] as const,
   versions: (id: string) => [...componentKeys.all, 'versions', id] as const,
   usages: (id: string) => [...componentKeys.all, 'usages', id] as const,
-  deletionImpact: (href: string) => [...componentKeys.all, 'deletion-impact', href] as const,
+  impact: (href: string) => [...componentKeys.all, 'impact', href] as const,
   domains: () => ['domains'] as const,
   nameAvailability: (name: string, excludeId?: string) =>
     [...componentKeys.all, 'name-availability', name, excludeId ?? null] as const,
@@ -104,11 +104,11 @@ export const useComponentUsages = (id: string) => {
   });
 };
 
-/** What deleting a version would unmatch - fetched only while the delete dialog is open. */
-export const useComponentDeletionImpact = (link: HateoasLink | undefined, enabled: boolean) => {
+/** What unpublishing or deleting this version touches - fetched when either dialog opens. */
+export const useComponentImpact = (link: HateoasLink | undefined, enabled: boolean) => {
   return useQuery({
-    queryKey: componentKeys.deletionImpact(link?.href ?? ''),
-    queryFn: () => componentsService.getDeletionImpact(link!),
+    queryKey: componentKeys.impact(link?.href ?? ''),
+    queryFn: () => componentsService.getImpact(link!),
     enabled: enabled && !!link,
     // usages change whenever someone edits a workflow - never trust a stale answer here
     staleTime: 0,
@@ -136,14 +136,16 @@ export interface DeleteComponentVariables {
   link: HateoasLink;
   /** workflows only - also delete the builder canvas it was synced from */
   deleteLinkedDraft?: boolean;
+  /** also unpublish your own public workflows that run this version */
+  unpublishParents?: boolean;
 }
 
 export const useDeleteComponent = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ link, deleteLinkedDraft = false }: DeleteComponentVariables) =>
-      componentsService.delete(link, deleteLinkedDraft),
+    mutationFn: ({ link, deleteLinkedDraft = false, unpublishParents = false }: DeleteComponentVariables) =>
+      componentsService.delete(link, deleteLinkedDraft, unpublishParents),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: componentKeys.all });
     },
@@ -162,8 +164,8 @@ export const usePublishComponent = () =>
   );
 
 export const useUnpublishComponent = () =>
-  useCommandMutation(componentKeys.all, (link: HateoasLink) =>
-    componentsService.executeCommand(link, { command: ComponentCommand.UNPUBLISH }),
+  useCommandMutation(componentKeys.all, ({ link, unpublishParents }: { link: HateoasLink; unpublishParents: boolean }) =>
+    componentsService.executeCommand(link, { command: ComponentCommand.UNPUBLISH, unpublishParents }),
   );
 
 export const useUpdateComponentDescription = () =>

@@ -139,9 +139,22 @@ export interface ComponentUsageDto {
   componentVersions: number[];
 }
 
-/** What deleting one exact component version touches - the delete dialog's warning. */
-export interface ComponentDeletionImpactDto {
-  /** workflows the deleter may see; componentVersions is always just this version */
+/** A public workflow running a component at some depth. `status` says which public status it has. */
+export interface ComponentAncestorDto {
+  id: string;
+  name: string;
+  version: number;
+  status: ComponentStatus;
+  createdBy: ComponentCreatorDto | null;
+}
+
+/** What unpublishing or deleting one exact component version touches - read by both dialogs beforehand. */
+export interface ComponentImpactDto {
+  /** the caller's public workflows running it at any depth - they become drafts along with it */
+  ownPublicAncestors: ComponentAncestorDto[];
+  /** other users' public workflows running it at any depth - non-empty means unpublish and delete are blocked */
+  foreignPublicAncestors: ComponentAncestorDto[];
+  /** workflows the caller may see whose steps use exactly this version; componentVersions is always just this one */
   workflows: ComponentUsageDto[];
   /** other users' draft workflows - private, so only counted */
   hiddenWorkflowCount: number;
@@ -209,11 +222,14 @@ export type ComponentCommand = (typeof ComponentCommand)[keyof typeof ComponentC
 
 export type ComponentCommandExecuteRequest =
   | {
-      command:
-        | typeof ComponentCommand.ADD_FAVORITE
-        | typeof ComponentCommand.REMOVE_FAVORITE
-        | typeof ComponentCommand.UNPUBLISH;
+      command: typeof ComponentCommand.ADD_FAVORITE | typeof ComponentCommand.REMOVE_FAVORITE;
       note?: string;
+    }
+  | {
+      command: typeof ComponentCommand.UNPUBLISH;
+      note?: string;
+      /** also unpublish your own public workflows that run it, at any depth */
+      unpublishParents?: boolean;
     }
   | {
       command: typeof ComponentCommand.PUBLISH;

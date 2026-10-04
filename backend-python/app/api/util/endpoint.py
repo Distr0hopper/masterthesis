@@ -15,8 +15,8 @@ class Endpoints:
         return f"{Endpoints.component_by_id(component_id)}/commands"
 
     @staticmethod
-    def component_deletion_impact_by_id(component_id: uuid.UUID) -> str:
-        return f"{Endpoints.component_by_id(component_id)}/deletion-impact"
+    def component_impact_by_id(component_id: uuid.UUID) -> str:
+        return f"{Endpoints.component_by_id(component_id)}/impact"
 
     @staticmethod
     def component_download_by_id(component_id: uuid.UUID) -> str:

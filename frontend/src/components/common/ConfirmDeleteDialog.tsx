@@ -25,6 +25,10 @@ interface ConfirmDeleteDialogProps {
   isPending: boolean;
   /** Extra block content under the description, e.g. a usage warning. */
   children?: ReactNode;
+  /** The delete isn't possible at all - only a Close button is offered; children say why. */
+  blocked?: boolean;
+  /** Confirm button label, when the plain "Delete" undersells what goes (e.g. "Delete and unpublish 2"). */
+  confirmLabel?: string;
 }
 
 export function ConfirmDeleteDialog({
@@ -36,6 +40,8 @@ export function ConfirmDeleteDialog({
   onConfirm,
   isPending,
   children,
+  blocked = false,
+  confirmLabel = 'Delete',
 }: ConfirmDeleteDialogProps) {
   const [deleteLinked, setDeleteLinked] = useState(false);
 
@@ -58,7 +64,7 @@ export function ConfirmDeleteDialog({
         {/* outside DialogDescription for the same reason as the checkbox below */}
         {children}
 
-        {linkedOption && (
+        {linkedOption && !blocked && (
           // outside DialogDescription on purpose: that renders a <p>, which cannot
           // legally contain a label or an input
           <label className="flex items-start gap-2 rounded-md border border-slate-200 p-3 text-sm text-slate-700">
@@ -74,11 +80,13 @@ export function ConfirmDeleteDialog({
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Cancel
+            {blocked ? 'Close' : 'Cancel'}
           </Button>
-          <Button type="button" variant="destructive" onClick={() => onConfirm(cascade)} disabled={isPending}>
-            {isPending ? 'Deleting...' : cascade ? (linkedOption?.confirmLabel ?? 'Delete both') : 'Delete'}
-          </Button>
+          {!blocked && (
+            <Button type="button" variant="destructive" onClick={() => onConfirm(cascade)} disabled={isPending}>
+              {isPending ? 'Deleting...' : cascade ? (linkedOption?.confirmLabel ?? 'Delete both') : confirmLabel}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

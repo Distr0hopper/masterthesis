@@ -20,7 +20,7 @@ class ComponentLinkBuilder(BaseLinkBuilder[Component, ComponentPermissionValidat
             "self": Link(href=Endpoints.component_by_id(entity.id), method=HttpMethod.GET),
             "download": Link(href=Endpoints.component_download_by_id(entity.id), method=HttpMethod.GET),
             "delete": Link(href=Endpoints.component_by_id(entity.id), method=HttpMethod.DELETE),
-            "deletionImpact": Link(href=Endpoints.component_deletion_impact_by_id(entity.id), method=HttpMethod.GET),
+            "impact": Link(href=Endpoints.component_impact_by_id(entity.id), method=HttpMethod.GET),
             "updateDescription": Link(href=commands, method=HttpMethod.POST),
             "updateDomain": Link(href=commands, method=HttpMethod.POST),
             "favorite": Link(href=commands, method=HttpMethod.POST),
@@ -39,8 +39,11 @@ class ComponentLinkBuilder(BaseLinkBuilder[Component, ComponentPermissionValidat
         match rel:
             case "self" | "download":
                 return self._validator.can_read(entity)
-            case "delete" | "deletionImpact":
+            case "delete":
                 return self._validator.can_delete(entity)
+            case "impact":
+                # read before an unpublish or a delete - both are the owner's
+                return self._validator.can_update(entity)
             case "updateDescription":
                 return self._validator.can_execute(entity, ComponentCommandType.UPDATE_DESCRIPTION)
             case "updateDomain":

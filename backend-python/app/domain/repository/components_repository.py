@@ -187,6 +187,25 @@ class ComponentsRepository:
             frontier = [child for component in loaded for child in component.children]
         return root
 
+    async def find_ancestors(self, component_id: uuid.UUID) -> list[Component]:
+        """Every workflow version nesting this exact version, at any depth, each once - the
+        inverse of load_tree ("who runs me?" rather than "what do I run?"), one level per
+        round trip. Steps pin a version row, so other versions of the lineage don't count."""
+        found: dict[uuid.UUID, Component] = {}
+        frontier = {component_id}
+        while frontier:
+            query = (
+                select(Component)
+                .join(Workflow, Workflow.component_id == Component.id)
+                .join(WorkflowStep, WorkflowStep.workflow_id == Workflow.component_id)
+                .where(WorkflowStep.component_id.in_(frontier))
+                .distinct()
+            )
+            parents = [c for c in (await self.db.exec(query)).all() if c.id not in found]
+            found.update((c.id, c) for c in parents)
+            frontier = {c.id for c in parents}
+        return list(found.values())
+
     async def find_versions_by_name(self, name: str) -> list[Component]:
         query = select(Component).where(Component.name == name).order_by(Component.version.asc())
         result = await self.db.exec(query)

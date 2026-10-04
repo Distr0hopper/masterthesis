@@ -49,8 +49,22 @@ class FakeDraftRepository:
 
 
 class FakeComponentsRepository:
-    def __init__(self, components: list[Component]):
+    def __init__(self, components: list[Component], steps: list[WorkflowStep] | None = None):
         self.by_id = {c.id: c for c in components}
+        self.steps = steps or []
+        self.saved: list[Component] = []
+
+    async def find_ancestors(self, component_id: uuid.UUID) -> list[Component]:
+        found: dict[uuid.UUID, Component] = {}
+        frontier = {component_id}
+        while frontier:
+            parents = [s.parent for s in self.steps if s.component_id in frontier and s.parent.id not in found]
+            found.update((p.id, p) for p in parents)
+            frontier = {p.id for p in parents}
+        return list(found.values())
+
+    async def add_all(self, components: list[Component]) -> None:
+        self.saved.extend(components)
 
     async def find_by_id(self, component_id: uuid.UUID) -> Component | None:
         return self.by_id.get(component_id)
@@ -114,7 +128,7 @@ def service(
     favorites: FakeFavoritesRepository | None = None,
 ) -> ComponentsService:
     uow = FakeUnitOfWork(
-        components=FakeComponentsRepository(components or []),
+        components=FakeComponentsRepository(components or [], steps),
         workflows=FakeWorkflowsRepository(steps),
         drafts=FakeDraftRepository(drafts or []),
         favorites=favorites or FakeFavoritesRepository(),
@@ -122,7 +136,7 @@ def service(
     return ComponentsService(uow, None)  # type: ignore[arg-type]
 
 
-def test_detach_unmatches_steps_and_unpublishes_their_workflows() -> None:
+def test_detach_unmatches_steps_and_leaves_their_workflows_status_to_remove() -> None:
     target = component()
     published = workflow("public", ComponentStatus.PUBLISHED)
     pending = workflow("pending", ComponentStatus.DRAFT)
@@ -136,11 +150,11 @@ def test_detach_unmatches_steps_and_unpublishes_their_workflows() -> None:
     for s in (confirmed, suggested):
         assert (s.component_id, s.match_status, s.match_score) == (None, StepMatchStatus.UNMATCHED, None)
     assert unrelated.match_status == StepMatchStatus.CONFIRMED
-    assert published.status == ComponentStatus.DRAFT
-    assert pending.status == ComponentStatus.DRAFT
+    # reverting public workflows is _remove's job - it reaches every one above, not just these
+    assert published.status == ComponentStatus.PUBLISHED
     saved_steps, saved_workflows = svc.uow.workflows.saved  # type: ignore[attr-defined]
     assert saved_steps == [confirmed, suggested]
-    assert saved_workflows == [published]
+    assert saved_workflows == []
 
 
 def test_detach_without_usages_writes_nothing() -> None:
@@ -156,8 +170,9 @@ def test_removing_the_last_version_is_one_transaction() -> None:
     target.workflow = Workflow(component_id=target.id, draft_id=linked.id)
     svc = service([step(published, target.id, StepMatchStatus.CONFIRMED)], [linked], [target])
 
-    assert asyncio.run(svc.remove(target, OWNER, delete_linked_draft=True)) is True
+    assert asyncio.run(svc.remove(target, OWNER, delete_linked_draft=True, unpublish_parents=True)) is True
 
+    assert published.status == ComponentStatus.DRAFT
     uow = svc.uow
     assert (uow.commits, uow.rollbacks) == (1, 0)  # type: ignore[attr-defined]
     assert uow.workflows.saved is not None and uow.favorites.deleted == ["thin-data"]  # type: ignore[attr-defined]
@@ -207,7 +222,11 @@ def test_deletion_impact_names_only_what_the_deleter_may_see() -> None:
     )
     user = User(id=OWNER, email="o@x")
 
-    impact = asyncio.run(service(steps, drafts).get_deletion_impact(target, user))
+    impact = asyncio.run(service(steps, drafts).get_impact(target, user))
+
+    # public workflows are named with their owner; the deleter's own draft workflow isn't one
+    assert [w.name for w in impact.foreign_public_ancestors] == ["b-public"]
+    assert impact.own_public_ancestors == []
 
     assert [u.workflow_name for u in impact.workflows] == ["a-mine", "b-public"]
     assert impact.workflows[0].component_versions == [2]

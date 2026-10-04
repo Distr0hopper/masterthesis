@@ -11,7 +11,7 @@ from fastapi.responses import Response
 from app.api.dto.common import ErrorResponse, MyItemsResponseDtoV1, build_my_items_response
 from app.api.dto.component import (
     ComponentCommandExecuteRequestDto,
-    ComponentDeletionImpactDto,
+    ComponentImpactDto,
     ComponentUsageDto,
     NameAvailabilityDto,
 )
@@ -215,26 +215,28 @@ async def get_usages(
 
 
 @router.get(
-    "/{component_id}/deletion-impact",
-    response_model=ComponentDeletionImpactDto,
+    "/{component_id}/impact",
+    response_model=ComponentImpactDto,
     responses={
         status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
         status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Not the creator of this component"},
         status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Component not found"},
     },
 )
-async def get_deletion_impact(
+async def get_impact(
     component_id: uuid.UUID,
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
-) -> ComponentDeletionImpactDto:
-    """The workflows and builder drafts using exactly this version - what a delete unmatches."""
+) -> ComponentImpactDto:
+    """What unpublishing or deleting exactly this version touches - read by both dialogs
+    beforehand: the public workflows above it (other users' ones block either action), and
+    the workflows and builder drafts a delete unmatches."""
     component = await components_service.get_component(component_id)
-    if not ComponentPermissionValidator(current_user).can_delete(component):
-        raise ForbiddenException("Insufficient permission to delete this component")
+    if not ComponentPermissionValidator(current_user).can_update(component):
+        raise ForbiddenException("Insufficient permission to unpublish or delete this component")
 
-    impact = await components_service.get_deletion_impact(component, current_user)
-    return ComponentTransformer.to_deletion_impact(impact)
+    impact = await components_service.get_impact(component, current_user)
+    return ComponentTransformer.to_impact(impact)
 
 
 @router.get(
@@ -276,7 +278,8 @@ async def download(
         status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Component not found"},
         status.HTTP_409_CONFLICT: {
             "model": ErrorResponse,
-            "description": "PUBLISH of a workflow that still runs draft components",
+            "description": "PUBLISH of a workflow that still runs draft components, or UNPUBLISH of a version "
+            "that public workflows run (other users' ones, or your own without unpublishParents)",
         },
         status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErrorResponse, "description": "Unknown command"},
     },
@@ -308,6 +311,11 @@ async def execute_command(
         status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
         status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Not the creator of this component"},
         status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Component not found"},
+        status.HTTP_409_CONFLICT: {
+            "model": ErrorResponse,
+            "description": "Public workflows run this version - other users' ones, or your own without "
+            "unpublishParents",
+        },
     },
 )
 async def remove(
@@ -316,6 +324,8 @@ async def remove(
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
     # workflows only: also delete the builder draft this workflow was synced from
     delete_linked_draft: Annotated[bool, Query(alias="deleteLinkedDraft")] = False,
+    # also unpublish your own public workflows that run this version, at any depth
+    unpublish_parents: Annotated[bool, Query(alias="unpublishParents")] = False,
 ) -> None:
     component = await components_service.get_component(component_id)
 
@@ -325,5 +335,7 @@ async def remove(
         raise ForbiddenException("Insufficient permission to delete this component")
 
     kind = ComponentKind(component.kind).value
-    deleted_draft = await components_service.remove(component, current_user.id, delete_linked_draft)
+    deleted_draft = await components_service.remove(
+        component, current_user.id, delete_linked_draft, unpublish_parents
+    )
     logger.info(f"Deleted {kind} {component_id}{' and its builder draft' if deleted_draft else ''}")

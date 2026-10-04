@@ -20,8 +20,13 @@ from app.application.commands.commands import (
     WorkflowStepCommand,
     WorkflowStepCommandType,
 )
-from app.application.exception.component_exceptions import InvalidCwlError
+from app.application.exception.component_exceptions import (
+    ComponentHasPublicParentsError,
+    ComponentUsedByOthersError,
+    InvalidCwlError,
+)
 from app.application.exception.workflow_exceptions import (
+    InlineStepNotBindableError,
     NestedWorkflowsNotReadyError,
     PublishedWorkflowStepsLockedError,
     UnpublishableWorkflowComponentsError,
@@ -105,6 +110,28 @@ class FakeComponentsRepository:
         for component in components:
             self._store(component)
 
+    async def delete(self, component: Component) -> None:
+        del self.by_id[component.id]
+
+    async def find_ancestors(self, component_id: uuid.UUID) -> list[Component]:
+        """Every workflow nesting this version, at any depth - scanned from the in-memory steps."""
+        found: dict[uuid.UUID, Component] = {}
+        frontier = {component_id}
+        while frontier:
+            parents = [
+                c
+                for c in self.by_id.values()
+                if c.id not in found and any(s.component_id in frontier for s in c.steps)
+            ]
+            found.update((p.id, p) for p in parents)
+            frontier = {p.id for p in parents}
+        return list(found.values())
+
+
+class FakeFavoritesRepository:
+    async def delete_by_name(self, component_name: str) -> None:
+        pass
+
 
 class FakeWorkflowsRepository:
     def __init__(self, components: FakeComponentsRepository):
@@ -117,6 +144,12 @@ class FakeWorkflowsRepository:
             if c.workflow is not None and c.workflow.draft_id == draft_id
         ]
         return max(synced, key=lambda c: c.version, default=None)
+
+    async def find_steps_by_component_id(self, component_id: uuid.UUID) -> list[WorkflowStep]:
+        return [s for c in self.components.by_id.values() for s in c.steps if s.component_id == component_id]
+
+    async def add_steps(self, steps: list[WorkflowStep], workflows: list[Component]) -> None:
+        pass
 
     async def find_step_by_id(self, step_id: uuid.UUID) -> WorkflowStep | None:
         for component in self.components.by_id.values():
@@ -177,7 +210,9 @@ def workflow(
 
 def services(*components: Component) -> tuple[ComponentsService, WorkflowsService, FakeComponentsRepository]:
     repository = FakeComponentsRepository(*components)
-    uow = FakeUnitOfWork(components=repository, workflows=FakeWorkflowsRepository(repository))
+    uow = FakeUnitOfWork(
+        components=repository, workflows=FakeWorkflowsRepository(repository), favorites=FakeFavoritesRepository()
+    )
     components_service = ComponentsService(uow, None)  # type: ignore[arg-type]
     tools_service = ToolsService(uow, components_service, None)  # type: ignore[arg-type]
     workflows_service = WorkflowsService(uow, components_service, tools_service)  # type: ignore[arg-type]
@@ -186,6 +221,11 @@ def services(*components: Component) -> tuple[ComponentsService, WorkflowsServic
 
 def publish(components_service: ComponentsService, component: Component, publish_components: bool = False) -> Component:
     command = ComponentCommand(type=ComponentCommandType.PUBLISH, publish_components=publish_components)
+    return asyncio.run(components_service.execute_command(component, command, OWNER))
+
+
+def unpublish(components_service: ComponentsService, component: Component, unpublish_parents: bool = False) -> Component:
+    command = ComponentCommand(type=ComponentCommandType.UNPUBLISH, unpublish_parents=unpublish_parents)
     return asyncio.run(components_service.execute_command(component, command, OWNER))
 
 
@@ -237,6 +277,71 @@ def test_someone_elses_draft_anywhere_in_the_tree_blocks_publishing() -> None:
     with pytest.raises(UnpublishableWorkflowComponentsError) as err:
         publish(components_service, root, publish_components=True)
     assert err.value.names == ["theirs"]
+
+
+# --- taking a version out of public view -------------------------------------------------
+
+
+def test_bug1_unpublishing_a_tool_another_users_public_workflow_runs_is_refused() -> None:
+    shared = tool("t")
+    theirs = workflow("theirs", shared, status=ComponentStatus.PUBLISHED, owner=STRANGER)
+    components_service, _, _ = services(shared, theirs)
+
+    with pytest.raises(ComponentUsedByOthersError):
+        unpublish(components_service, shared)
+
+    assert shared.status == theirs.status == ComponentStatus.PUBLISHED
+    assert components_service.uow.commits == 0  # type: ignore[attr-defined]
+
+
+def test_bug2_deleting_a_tool_reverts_every_public_ancestor_not_just_the_parent() -> None:
+    leaf = tool("t")
+    parent = workflow("parent", leaf, status=ComponentStatus.PUBLISHED)
+    grandparent = workflow("grandparent", parent, status=ComponentStatus.PUBLISHED)
+    components_service, _, repository = services(leaf, parent, grandparent)
+
+    asyncio.run(components_service.remove(leaf, OWNER, unpublish_parents=True))
+
+    assert leaf.id not in repository.by_id
+    assert parent.status == grandparent.status == ComponentStatus.DRAFT
+    assert parent.steps[0].match_status == StepMatchStatus.UNMATCHED
+
+
+def test_unpublishing_takes_own_public_ancestors_along_only_when_opted_into() -> None:
+    leaf = tool("t")
+    parent = workflow("parent", leaf, status=ComponentStatus.PUBLISHED)
+    grandparent = workflow("grandparent", parent, status=ComponentStatus.PUBLISHED)
+    components_service, _, _ = services(leaf, parent, grandparent)
+
+    with pytest.raises(ComponentHasPublicParentsError) as err:
+        unpublish(components_service, leaf)
+    assert err.value.workflows == ["grandparent v1", "parent v1"]
+    assert leaf.status == parent.status == grandparent.status == ComponentStatus.PUBLISHED
+
+    unpublish(components_service, leaf, unpublish_parents=True)
+    assert leaf.status == parent.status == grandparent.status == ComponentStatus.DRAFT
+    assert components_service.uow.commits == 1  # type: ignore[attr-defined]
+
+
+def test_unpublishing_a_draft_is_a_no_op() -> None:
+    leaf = tool("t", ComponentStatus.DRAFT)
+    components_service, _, _ = services(leaf)
+    assert unpublish(components_service, leaf).status == ComponentStatus.DRAFT
+
+
+def test_another_users_public_grandparent_blocks_a_delete() -> None:
+    leaf = tool("t")
+    parent = workflow("parent", leaf, status=ComponentStatus.PUBLISHED)
+    theirs = workflow("theirs", parent, status=ComponentStatus.PUBLISHED, owner=STRANGER)
+    components_service, _, repository = services(leaf, parent, theirs)
+
+    with pytest.raises(ComponentUsedByOthersError):
+        asyncio.run(components_service.remove(leaf, OWNER, unpublish_parents=True))
+
+    assert leaf.id in repository.by_id
+    assert parent.status == theirs.status == ComponentStatus.PUBLISHED
+    assert parent.steps[0].match_status == StepMatchStatus.CONFIRMED
+    assert components_service.uow.commits == 0  # type: ignore[attr-defined]
 
 
 # --- builder sync -----------------------------------------------------------------------
@@ -346,6 +451,26 @@ def test_steps_of_a_published_workflow_are_locked() -> None:
         asyncio.run(
             workflows_service.execute_step_command(parent.steps[0], WorkflowStepCommand(type=WorkflowStepCommandType.CONFIRM))
         )
+
+
+def test_an_inline_step_cannot_be_bound() -> None:
+    parent = workflow("outer", tool("a"), step_status=StepMatchStatus.INLINE)
+    other = tool("b")
+    _, workflows_service, _ = services(parent, other)
+
+    with pytest.raises(InlineStepNotBindableError):
+        asyncio.run(workflows_service.update_step_component(parent.steps[0].id, other.id))
+    assert parent.steps[0].match_status == StepMatchStatus.INLINE
+
+
+def test_clearing_an_empty_step_again_is_fine() -> None:
+    parent = workflow("outer", tool("a"), step_status=StepMatchStatus.UNMATCHED)
+    _, workflows_service, _ = services(parent)
+
+    step = asyncio.run(workflows_service.update_step_component(parent.steps[0].id, None))
+    step = asyncio.run(workflows_service.update_step_component(parent.steps[0].id, None))
+
+    assert (step.component_id, step.match_status) == (None, StepMatchStatus.UNMATCHED)
 
 
 def test_a_use_case_cannot_open_a_second_unit_of_work() -> None:

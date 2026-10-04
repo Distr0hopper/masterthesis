@@ -65,3 +65,26 @@ class MissingCommandPayloadError(Exception):
 
     def __init__(self, command: str, field: str) -> None:
         super().__init__(f"Command {command} requires a '{field}'")
+
+
+class ComponentUsedByOthersError(Exception):
+    """Unpublishing or deleting this version would break public workflows of other users -
+    they run it, and only their owners may take them out of public view."""
+
+    def __init__(self, workflows: list[str]) -> None:
+        self.workflows = workflows
+        super().__init__(
+            f"Used by public workflow(s) of other users: {', '.join(workflows)} - contact their owners "
+            "or publish a fixed version instead"
+        )
+
+
+class ComponentHasPublicParentsError(Exception):
+    """Unpublishing or deleting this version takes the caller's own public workflows that run
+    it out of public view too - which they have to opt into."""
+
+    def __init__(self, workflows: list[str]) -> None:
+        self.workflows = workflows
+        super().__init__(
+            f"Used by your public workflow(s) {', '.join(workflows)} - confirm that they become drafts as well"
+        )

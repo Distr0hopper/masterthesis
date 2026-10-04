@@ -3,9 +3,10 @@ from typing import Any
 from app.api.dto.component import (
     ComponentCommandExecuteRequestDto,
     ComponentCommandTypesApiV1,
+    ComponentAncestorDto,
     ComponentCreatorDto,
-    ComponentDeletionDraftDto,
-    ComponentDeletionImpactDto,
+    ComponentImpactDraftDto,
+    ComponentImpactDto,
     ComponentMatchDto,
     ComponentUsageDto,
     ExistingComponentDto,
@@ -18,7 +19,7 @@ from app.api.transformer.parameter_transformer import ParameterTransformer
 from app.api.transformer.workflow_transformer import WorkflowTransformer
 from app.application.commands.commands import ComponentCommand, ComponentCommandType
 from app.application.service.compatibility_service import RankedComponent
-from app.application.service.components_service import ComponentDeletionImpact, ComponentUsage
+from app.application.service.components_service import ComponentImpact, ComponentUsage
 from app.domain.models.component import Component
 from app.domain.models.user import User
 from app.infrastructure.cwl.cwl_parser import inject_description
@@ -44,6 +45,7 @@ class ComponentTransformer:
             description=dto.description,
             domains=dto.domains,
             publish_components=dto.publish_components,
+            unpublish_parents=dto.unpublish_parents,
         )
 
     @staticmethod
@@ -175,10 +177,22 @@ class ComponentTransformer:
         )
 
     @staticmethod
-    def to_deletion_impact(impact: ComponentDeletionImpact) -> ComponentDeletionImpactDto:
-        return ComponentDeletionImpactDto(
+    def to_ancestor(component: Component) -> ComponentAncestorDto:
+        return ComponentAncestorDto(
+            id=component.id,
+            name=component.name,
+            version=component.version,
+            status=component.status,
+            created_by=ComponentTransformer.to_creator(component),
+        )
+
+    @staticmethod
+    def to_impact(impact: ComponentImpact) -> ComponentImpactDto:
+        return ComponentImpactDto(
+            own_public_ancestors=[ComponentTransformer.to_ancestor(a) for a in impact.own_public_ancestors],
+            foreign_public_ancestors=[ComponentTransformer.to_ancestor(a) for a in impact.foreign_public_ancestors],
             workflows=[ComponentTransformer.to_usage(u) for u in impact.workflows],
             hidden_workflow_count=impact.hidden_workflow_count,
-            drafts=[ComponentDeletionDraftDto(id=d.draft_id, name=d.name) for d in impact.own_drafts],
+            drafts=[ComponentImpactDraftDto(id=d.draft_id, name=d.name) for d in impact.own_drafts],
             other_draft_count=impact.other_draft_count,
         )

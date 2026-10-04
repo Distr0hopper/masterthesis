@@ -180,18 +180,35 @@ class ComponentUsageDto(CamelModel):
     component_versions: list[int]
 
 
-class ComponentDeletionDraftDto(CamelModel):
+class ComponentImpactDraftDto(CamelModel):
     id: uuid.UUID
     name: str
 
 
-class ComponentDeletionImpactDto(CamelModel):
-    """What deleting this exact version touches - the delete dialog's usage warning.
-    Other users' private workflows and drafts are only counted, never named."""
+class ComponentAncestorDto(CamelModel):
+    """A public workflow running the component at some depth. Named after no status on
+    purpose - any public status may show up here, so `status` says which."""
 
+    id: uuid.UUID
+    name: str
+    version: int
+    status: ComponentStatus
+    created_by: ComponentCreatorDto | None
+
+
+class ComponentImpactDto(CamelModel):
+    """What unpublishing or deleting this exact version touches - read by both dialogs
+    before the action. Other users' private workflows and drafts are only counted, never
+    named; public workflows are visible to everyone, so they are named with their owner."""
+
+    #: the caller's public workflows running it at any depth - they become drafts with it
+    own_public_ancestors: list[ComponentAncestorDto]
+    #: other users' public workflows running it at any depth - non-empty means it is blocked
+    foreign_public_ancestors: list[ComponentAncestorDto]
+    #: the workflows whose steps use exactly this version - what a delete unmatches
     workflows: list[ComponentUsageDto]
     hidden_workflow_count: int
-    drafts: list[ComponentDeletionDraftDto]
+    drafts: list[ComponentImpactDraftDto]
     other_draft_count: int
 
 
@@ -245,6 +262,10 @@ class ComponentCommandExecuteRequestDto(EmptyDescriptionToNoneMixin, CamelModel)
     publish_components: bool = Field(
         default=False,
         description="PUBLISH of a workflow only: also publish the draft components it runs, at any depth",
+    )
+    unpublish_parents: bool = Field(
+        default=False,
+        description="UNPUBLISH only: also unpublish your own public workflows that run this version, at any depth",
     )
 
     @field_validator("domains")

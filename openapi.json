@@ -808,6 +808,16 @@
               "default": false,
               "title": "Deletelinkeddraft"
             }
+          },
+          {
+            "name": "unpublishParents",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Unpublishparents"
+            }
           }
         ],
         "responses": {
@@ -836,6 +846,16 @@
           },
           "404": {
             "description": "Component not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Public workflows run this version - other users' ones, or your own without unpublishParents",
             "content": {
               "application/json": {
                 "schema": {
@@ -996,14 +1016,14 @@
         }
       }
     },
-    "/components/{component_id}/deletion-impact": {
+    "/components/{component_id}/impact": {
       "get": {
         "tags": [
           "components"
         ],
-        "summary": "Get Deletion Impact",
-        "description": "The workflows and builder drafts using exactly this version - what a delete unmatches.",
-        "operationId": "get_deletion_impact_components__component_id__deletion_impact_get",
+        "summary": "Get Impact",
+        "description": "What unpublishing or deleting exactly this version touches - read by both dialogs\nbeforehand: the public workflows above it (other users' ones block either action), and\nthe workflows and builder drafts a delete unmatches.",
+        "operationId": "get_impact_components__component_id__impact_get",
         "security": [
           {
             "HTTPBearer": []
@@ -1027,7 +1047,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ComponentDeletionImpactDto"
+                  "$ref": "#/components/schemas/ComponentImpactDto"
                 }
               }
             }
@@ -1243,7 +1263,7 @@
             }
           },
           "409": {
-            "description": "PUBLISH of a workflow that still runs draft components",
+            "description": "PUBLISH of a workflow that still runs draft components, or UNPUBLISH of a version that public workflows run (other users' ones, or your own without unpublishParents)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2131,7 +2151,7 @@
             }
           },
           "409": {
-            "description": "The workflow is published, or the component would make it contain itself",
+            "description": "The workflow is published, the step runs an inline definition, or the component would make the workflow contain itself",
             "content": {
               "application/json": {
                 "schema": {
@@ -2937,6 +2957,46 @@
         ],
         "title": "CompatibilityResponseDto"
       },
+      "ComponentAncestorDto": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ComponentStatus"
+          },
+          "createdBy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ComponentCreatorDto"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "version",
+          "status",
+          "createdBy"
+        ],
+        "title": "ComponentAncestorDto",
+        "description": "A public workflow running the component at some depth. Named after no status on\npurpose - any public status may show up here, so `status` says which."
+      },
       "ComponentCommandExecuteRequestDto": {
         "properties": {
           "command": {
@@ -2995,6 +3055,12 @@
             "type": "boolean",
             "title": "Publishcomponents",
             "description": "PUBLISH of a workflow only: also publish the draft components it runs, at any depth",
+            "default": false
+          },
+          "unpublishParents": {
+            "type": "boolean",
+            "title": "Unpublishparents",
+            "description": "UNPUBLISH only: also unpublish your own public workflows that run this version, at any depth",
             "default": false
           }
         },
@@ -3137,7 +3203,7 @@
         ],
         "title": "ComponentCreatorDto"
       },
-      "ComponentDeletionDraftDto": {
+      "ComponentImpactDraftDto": {
         "properties": {
           "id": {
             "type": "string",
@@ -3154,10 +3220,24 @@
           "id",
           "name"
         ],
-        "title": "ComponentDeletionDraftDto"
+        "title": "ComponentImpactDraftDto"
       },
-      "ComponentDeletionImpactDto": {
+      "ComponentImpactDto": {
         "properties": {
+          "ownPublicAncestors": {
+            "items": {
+              "$ref": "#/components/schemas/ComponentAncestorDto"
+            },
+            "type": "array",
+            "title": "Ownpublicancestors"
+          },
+          "foreignPublicAncestors": {
+            "items": {
+              "$ref": "#/components/schemas/ComponentAncestorDto"
+            },
+            "type": "array",
+            "title": "Foreignpublicancestors"
+          },
           "workflows": {
             "items": {
               "$ref": "#/components/schemas/ComponentUsageDto"
@@ -3171,7 +3251,7 @@
           },
           "drafts": {
             "items": {
-              "$ref": "#/components/schemas/ComponentDeletionDraftDto"
+              "$ref": "#/components/schemas/ComponentImpactDraftDto"
             },
             "type": "array",
             "title": "Drafts"
@@ -3183,13 +3263,15 @@
         },
         "type": "object",
         "required": [
+          "ownPublicAncestors",
+          "foreignPublicAncestors",
           "workflows",
           "hiddenWorkflowCount",
           "drafts",
           "otherDraftCount"
         ],
-        "title": "ComponentDeletionImpactDto",
-        "description": "What deleting this exact version touches - the delete dialog's usage warning.\nOther users' private workflows and drafts are only counted, never named."
+        "title": "ComponentImpactDto",
+        "description": "What unpublishing or deleting this exact version touches - read by both dialogs\nbefore the action. Other users' private workflows and drafts are only counted, never\nnamed; public workflows are visible to everyone, so they are named with their owner."
       },
       "ComponentKind": {
         "type": "string",

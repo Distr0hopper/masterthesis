@@ -2,7 +2,7 @@ import { apiClient } from '../client';
 import type { HateoasLink, PageResponse } from '@/api/types';
 import type {
   ComponentCommandExecuteRequest,
-  ComponentDeletionImpactDto,
+  ComponentImpactDto,
   ComponentDetailDto,
   ComponentKind,
   ComponentListItemDto,
@@ -72,15 +72,20 @@ export const componentsService = {
     return apiClient.getBlob(`${ENDPOINT}/${id}/download`, 'component');
   },
 
-  getDeletionImpact(link: HateoasLink): Promise<ComponentDeletionImpactDto> {
+  getImpact(link: HateoasLink): Promise<ComponentImpactDto> {
     return apiClient.request(link);
   },
 
-  /** deleteLinkedDraft: workflows only - also delete the builder canvas it was synced from */
-  delete(link: HateoasLink, deleteLinkedDraft = false): Promise<void> {
-    return apiClient.request(link, undefined, {
-      params: deleteLinkedDraft ? { deleteLinkedDraft: true } : undefined,
-    });
+  /**
+   * deleteLinkedDraft: workflows only - also delete the builder canvas it was synced from.
+   * unpublishParents: also unpublish your own public workflows that run this version.
+   */
+  delete(link: HateoasLink, deleteLinkedDraft = false, unpublishParents = false): Promise<void> {
+    const params = {
+      ...(deleteLinkedDraft ? { deleteLinkedDraft: true } : {}),
+      ...(unpublishParents ? { unpublishParents: true } : {}),
+    };
+    return apiClient.request(link, undefined, { params: Object.keys(params).length ? params : undefined });
   },
 
   /** excludeId: a component trivially holds its own name - leave its lineage out of the check */

@@ -6,8 +6,10 @@ from fastapi import Depends
 
 from app.application.commands.commands import ComponentCommand, ComponentCommandType
 from app.application.exception.component_exceptions import (
+    ComponentHasPublicParentsError,
     ComponentNameAlreadyExistsError,
     ComponentNotFoundError,
+    ComponentUsedByOthersError,
     InvalidCwlError,
     MissingCommandPayloadError,
 )
@@ -20,12 +22,12 @@ from app.application.exception.workflow_exceptions import (
     WorkflowNotReadyToPublishError,
 )
 from app.application.unit_of_work import UnitOfWork
-from app.domain.composite.tree import ConflictingTreeFileError, auxiliary_files, descendants, step_files
+from app.domain.composite import lifecycle
+from app.domain.composite.tree import ConflictingTreeFileError, auxiliary_files, step_files
 from app.domain.models.component import MAX_DESCRIPTION_LENGTH, Component, ComponentKind, ComponentSource, ComponentStatus
 from app.domain.models.component_domain import ComponentDomain
 from app.domain.models.parameter import Parameter
 from app.domain.models.user import User
-from app.domain.models.workflow_step import SETTLED_STEP_STATUSES, StepMatchStatus
 from app.domain.pagination.pagination import PaginatedList
 from app.domain.repository.components_repository import ComponentListFilter
 from app.infrastructure.cwl.canvas_graph import canvas_component_ids
@@ -62,16 +64,34 @@ class DraftRef:
 
 
 @dataclass
-class ComponentDeletionImpact:
-    """What deleting one component version would touch - shown before the delete.
+class ComponentImpact:
+    """What unpublishing or deleting one component version would touch - shown before either.
 
-    Only what the deleter may see is named: other users' draft workflows and their
-    builder drafts are private, so those are just counted."""
+    Only what the actor may see is named: other users' draft workflows and their builder
+    drafts are private, so those are just counted. Public workflows are visible to everyone,
+    so the ones above it are named with their owner."""
 
+    #: the actor's public workflows running it at any depth - they become drafts with it
+    own_public_ancestors: list[Component] = field(default_factory=list)
+    #: other users' public workflows running it at any depth - they block it
+    foreign_public_ancestors: list[Component] = field(default_factory=list)
+    #: the workflows whose steps use exactly this version - what a delete unmatches
     workflows: list[ComponentUsage] = field(default_factory=list)
     hidden_workflow_count: int = 0
     own_drafts: list[DraftRef] = field(default_factory=list)
     other_draft_count: int = 0
+
+
+def _label(component: Component) -> str:
+    return f"{component.name} v{component.version}"
+
+
+def _owner_name(component: Component) -> str:
+    owner = component.created_by
+    if owner is None:
+        return "a former user"
+    # same rule as the frontend's getCreatorDisplay, so the 409 names people like the dialog
+    return f"{owner.first_name} {owner.last_name}" if owner.first_name and owner.last_name else owner.email
 
 
 @dataclass(frozen=True)
@@ -162,7 +182,7 @@ class ComponentsService:
 
     @staticmethod
     def is_visible(component: Component, current_user: User | None) -> bool:
-        if component.status == ComponentStatus.PUBLISHED:
+        if lifecycle.is_public(component):
             return True
         return current_user is not None and component.created_by_id == current_user.id
 
@@ -277,42 +297,54 @@ class ComponentsService:
         depth. `publish_components` opts into publishing them as part of this action;
         without it the draft components are reported and nothing is changed.
         """
-        if component.status == ComponentStatus.PUBLISHED:
+        if lifecycle.is_public(component):
             return component
-        if component.is_tool:
-            component.status = ComponentStatus.PUBLISHED
-            return await self.uow.components.add(component)
 
+        # a tool has no tree - load_tree leaves it as it is, and the check passes trivially
         await self.load_tree(component)
-        if not self._is_settled(component):
+        check = lifecycle.can_publish(component, current_user_id)
+        if check.root_unsettled:
             raise WorkflowNotReadyToPublishError(component.id)
-        unsettled = sorted({c.name for c in descendants(component) if c.is_workflow and not self._is_settled(c)})
-        if unsettled:
-            raise NestedWorkflowsNotReadyError(unsettled)
+        if check.unsettled_nested:
+            raise NestedWorkflowsNotReadyError(check.unsettled_nested)
+        if check.foreign_drafts:
+            raise UnpublishableWorkflowComponentsError(check.foreign_drafts)
+        if check.own_drafts and not publish_components:
+            raise WorkflowHasUnpublishedComponentsError(sorted({c.name for c in check.own_drafts}))
 
-        drafts = [c for c in descendants(component) if c.status == ComponentStatus.DRAFT]
-        if drafts:
-            foreign = sorted({c.name for c in drafts if c.created_by_id != current_user_id})
-            if foreign:
-                raise UnpublishableWorkflowComponentsError(foreign)
-            if not publish_components:
-                raise WorkflowHasUnpublishedComponentsError(sorted({c.name for c in drafts}))
-
-        for c in [*drafts, component]:
-            c.status = ComponentStatus.PUBLISHED
-        await self.uow.components.add_all([*drafts, component])
+        lifecycle.mark_published([*check.own_drafts, component])
+        await self.uow.components.add_all([*check.own_drafts, component])
         return component
 
-    @staticmethod
-    def _is_settled(workflow: Component) -> bool:
-        return all(step.match_status in SETTLED_STEP_STATUSES for step in workflow.steps)
+    async def _unpublish(
+        self, component: Component, current_user_id: uuid.UUID, unpublish_parents: bool = False
+    ) -> Component:
+        """Inverse of publish - only the creator can see the component again. Idempotent.
 
-    async def _unpublish(self, component: Component) -> Component:
-        """Inverse of publish - only the creator can see the component again. Idempotent."""
-        if component.status == ComponentStatus.DRAFT:
+        Never breaks a public workflow running it: see _require_retractable."""
+        if lifecycle.is_draft(component):
             return component
-        component.status = ComponentStatus.DRAFT
-        return await self.uow.components.add(component)
+        own_parents = await self._require_retractable(component, current_user_id, unpublish_parents)
+        lifecycle.mark_draft([component, *own_parents])
+        await self.uow.components.add_all([component, *own_parents])
+        return component
+
+    async def _require_retractable(
+        self, component: Component, actor_id: uuid.UUID, unpublish_parents: bool
+    ) -> list[Component]:
+        """The rule shared by unpublish and delete - both take a version out of public view.
+
+        Every public workflow running it, at any depth, would break. Other users' block it:
+        only their owners may take them down. The actor's own go down with it, but only
+        when opted into - the impact endpoint shows them beforehand, so the refusal here is
+        for races. Returns those own workflows.
+        """
+        impact = lifecycle.retract_impact(await self.uow.components.find_ancestors(component.id), actor_id)
+        if impact.foreign:
+            raise ComponentUsedByOthersError([f"{_label(w)} by {_owner_name(w)}" for w in impact.foreign])
+        if impact.own and not unpublish_parents:
+            raise ComponentHasPublicParentsError([_label(w) for w in impact.own])
+        return impact.own
 
     async def _update_description(self, component: Component, description: str | None) -> Component:
         component.description = description
@@ -338,7 +370,7 @@ class ComponentsService:
                 case ComponentCommandType.PUBLISH:
                     component = await self._publish(component, current_user_id, command.publish_components)
                 case ComponentCommandType.UNPUBLISH:
-                    component = await self._unpublish(component)
+                    component = await self._unpublish(component, current_user_id, command.unpublish_parents)
                 case ComponentCommandType.UPDATE_DESCRIPTION:
                     component = await self._update_description(component, command.description)
                 case ComponentCommandType.UPDATE_DOMAIN:
@@ -382,9 +414,14 @@ class ComponentsService:
                 usage.component_versions.append(row.component_version)
         return list(usages.values())
 
-    async def get_deletion_impact(self, component: Component, current_user: User) -> ComponentDeletionImpact:
-        """The workflows and builder drafts that reference exactly this component version."""
-        impact = ComponentDeletionImpact()
+    async def get_impact(self, component: Component, current_user: User) -> ComponentImpact:
+        """What unpublishing or deleting exactly this version touches - shown before either.
+
+        The same answer serves both: the public workflows above it decide whether it may be
+        taken out of public view at all (see _require_retractable), and the direct usages
+        are what a delete additionally unmatches."""
+        retract = lifecycle.retract_impact(await self.uow.components.find_ancestors(component.id), current_user.id)
+        impact = ComponentImpact(own_public_ancestors=retract.own, foreign_public_ancestors=retract.foreign)
 
         parents: dict[uuid.UUID, Component] = {}
         for step in await self.uow.workflows.find_steps_by_component_id(component.id):
@@ -420,32 +457,29 @@ class ComponentsService:
         a tool or a nested workflow alike.
 
         The FK's ON DELETE SET NULL alone would leave such steps CONFIRMED/SUGGESTED with
-        no component, and their workflow public. Deliberately never rebinds to another
+        no component. Their workflows' status is _remove's concern. Deliberately never rebinds to another
         version of the lineage - the user picks the replacement. Builder drafts need no
         cascade: their canvas is checked for missing components whenever it is opened.
         """
         steps = await self.uow.workflows.find_steps_by_component_id(component_id)
         if not steps:
             return
-        reverted: dict[uuid.UUID, Component] = {}
         for step in steps:
-            step.component_id = None
-            step.component = None
-            step.match_status = StepMatchStatus.UNMATCHED
-            step.match_score = None
-            # a public workflow with an unmatched step would be broken for everyone
-            parent = step.parent
-            if parent is not None and parent.status == ComponentStatus.PUBLISHED:
-                parent.status = ComponentStatus.DRAFT
-                reverted[parent.id] = parent
-        await self.uow.workflows.add_steps(steps, list(reverted.values()))
+            lifecycle.unbind_step(step)
+        await self.uow.workflows.add_steps(steps, [])
 
     async def remove(
-        self, component: Component, deleted_by_id: uuid.UUID, delete_linked_draft: bool = False
+        self,
+        component: Component,
+        deleted_by_id: uuid.UUID,
+        delete_linked_draft: bool = False,
+        unpublish_parents: bool = False,
     ) -> bool:
         """Delete one component version, cascading into everything that references it.
 
-        The steps pinned to it are unmatched first (see _detach), and the lineage's favorites
+        Refused when public workflows of other users run it, at any depth; the deleter's
+        own ones become drafts with `unpublish_parents` (see _require_retractable). The
+        steps pinned to it are unmatched (see _detach), and the lineage's favorites
         go with its last version. For a workflow, `delete_linked_draft` also deletes the
         builder canvas it was synced from - the mirror of WorkflowDraftService.delete_draft's
         delete_linked_workflow: both directions of the draft <-> workflow link are opt-in,
@@ -456,18 +490,30 @@ class ComponentsService:
         is gone, or nothing is.
         """
         async with self.uow:
-            deleted_draft = await self._remove(component, deleted_by_id, delete_linked_draft)
+            deleted_draft = await self._remove(component, deleted_by_id, delete_linked_draft, unpublish_parents)
             await self.uow.commit()
         return deleted_draft
 
-    async def _remove(self, component: Component, deleted_by_id: uuid.UUID, delete_linked_draft: bool = False) -> bool:
+    async def _remove(
+        self,
+        component: Component,
+        deleted_by_id: uuid.UUID,
+        delete_linked_draft: bool = False,
+        unpublish_parents: bool = False,
+    ) -> bool:
         versions = await self.get_versions(component)
         # read before the row goes away - the FK is ON DELETE SET NULL on the workflow side,
         # so nothing else recovers which draft this came from
         draft_id = component.workflow.draft_id if component.workflow is not None else None
         name = component.name
 
+        # before _detach - unbinding the steps is what makes them stop pointing upwards
+        own_parents = await self._require_retractable(component, deleted_by_id, unpublish_parents)
         await self._detach(component.id)
+        # every public workflow above it, not just the direct parents: a parent becoming a
+        # draft leaves the public workflow nesting that parent running a draft as well
+        lifecycle.mark_draft(own_parents)
+        await self.uow.components.add_all(own_parents)
         await self.uow.components.delete(component)
         if len(versions) == 1:
             await self.uow.favorites.delete_by_name(name)
@@ -482,7 +528,10 @@ class ComponentsService:
 
     async def remove_synced_from_draft(self, draft_id: uuid.UUID, owner_id: uuid.UUID) -> int:
         """Delete every workflow version synced from this builder draft that the user owns.
-        Returns how many were removed. Runs inside the caller's unit of work."""
+        Returns how many were removed. Runs inside the caller's unit of work.
+
+        Never takes public workflows above them down - a version still nested in one makes
+        the whole call fail (see _require_retractable), and is deleted from its own page."""
         removed = 0
         for workflow in await self.uow.workflows.find_all_synced_from_draft(draft_id):
             if workflow.created_by_id == owner_id:

@@ -14,6 +14,7 @@ from app.application.exception.workflow_exceptions import (
     InvalidComponentConfigError,
     InvalidExtractedComponentNameError,
     InvalidWorkflowArchiveError,
+    InlineStepNotBindableError,
     InvalidWorkflowCwlError,
     MissingImportedFileError,
     PublishedWorkflowStepsLockedError,
@@ -25,6 +26,7 @@ from app.application.exception.workflow_exceptions import (
 from app.application.service.components_service import ComponentsService
 from app.application.service.tools_service import ToolsService
 from app.application.unit_of_work import UnitOfWork
+from app.domain.composite import lifecycle
 from app.domain.composite.tree import would_create_cycle
 from app.domain.models.component import Component, ComponentKind, ComponentSource, ComponentStatus
 from app.domain.models.component_domain import ComponentDomain
@@ -632,7 +634,7 @@ class WorkflowsService:
             assert latest is not None
         await self._require_acyclic(latest, [b.component_id for b in bindings])
 
-        if latest.status == ComponentStatus.DRAFT:
+        if lifecycle.is_draft(latest):
             latest.cwl_content = pipeline_content
             # cascade="all, delete-orphan" on Workflow.steps / Component.parameters deletes
             # the replaced rows
@@ -711,10 +713,9 @@ class WorkflowsService:
     async def _update_step_component(self, step_id: uuid.UUID, component_id: uuid.UUID | None) -> WorkflowStep:
         step, workflow = await self.get_step_with_workflow(step_id)
         self._require_steps_editable(workflow)
+        if step.match_status == StepMatchStatus.INLINE:
+            raise InlineStepNotBindableError(step_id)
 
-        # selecting a candidate here never confirms it - only confirm_step() does. A
-        # manually-touched selection also has no algorithmic confidence value, so
-        # match_score is always cleared, whether a component was picked or cleared.
         if component_id is not None:
             # a tool, or - nested - another workflow, as long as that one does not
             # (eventually) run this workflow itself
@@ -722,16 +723,9 @@ class WorkflowsService:
             if child is None:
                 raise ComponentNotFoundError(component_id)
             await self._require_acyclic(workflow, [child.id])
-            step.component_id = component_id
-            # the relationship too, not just the FK - it is what the response serialises
-            step.component = child
-            step.match_status = StepMatchStatus.SUGGESTED
-            step.match_score = None
+            lifecycle.bind_step(step, child)
         else:
-            step.component_id = None
-            step.component = None
-            step.match_status = StepMatchStatus.UNMATCHED
-            step.match_score = None
+            lifecycle.unbind_step(step)
 
         return await self.uow.workflows.add_step(step)
 
@@ -741,14 +735,14 @@ class WorkflowsService:
         if step.component_id is None:
             raise WorkflowStepNotMatchedError(step_id)
 
-        step.match_status = StepMatchStatus.CONFIRMED
+        lifecycle.confirm_step(step)
         return await self.uow.workflows.add_step(step)
 
     @staticmethod
     def _require_steps_editable(workflow: Component) -> None:
-        # a published workflow is what other users see and nest - rebinding a step under
+        # a public workflow is what other users see and nest - rebinding a step under
         # them would silently change it; the creator unpublishes first instead
-        if workflow.status == ComponentStatus.PUBLISHED:
+        if not lifecycle.steps_editable(workflow):
             raise PublishedWorkflowStepsLockedError(workflow.id)
 
     async def execute_step_command(self, step: WorkflowStep, command: WorkflowStepCommand) -> WorkflowStep:

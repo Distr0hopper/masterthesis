@@ -3,12 +3,13 @@ import { useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { ConfirmDeleteDialog } from '@/components/common/ConfirmDeleteDialog';
+import { PublicAncestors } from '@/components/common/PublicAncestors';
 import {
   ComponentSource,
   ComponentStatus,
-  useComponentDeletionImpact,
+  useComponentImpact,
   useDeleteComponent,
-  type ComponentDeletionImpactDto,
+  type ComponentImpactDto,
   type ComponentDisplayModel,
 } from '@/api/components';
 import { getLink } from '@/api/permissions';
@@ -27,8 +28,8 @@ function plural(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? '' : 's'}`;
 }
 
-/** Where this version is still used - the delete goes ahead regardless, this just says what it unmatches. */
-function UsageWarning({ impact }: { impact: ComponentDeletionImpactDto }) {
+/** Where this version is still used - what the delete unmatches. Public workflows above it are PublicAncestors' part. */
+function UsageWarning({ impact }: { impact: ComponentImpactDto }) {
   const workflowCount = impact.workflows.length + impact.hiddenWorkflowCount;
   const draftCount = impact.drafts.length + impact.otherDraftCount;
   if (workflowCount === 0 && draftCount === 0) return null;
@@ -43,8 +44,8 @@ function UsageWarning({ impact }: { impact: ComponentDeletionImpactDto }) {
       {workflowCount > 0 && (
         <div>
           <p>
-            Used by {plural(workflowCount, 'workflow')}. Their steps will be unmatched, and published workflows are
-            reverted to drafts until a new component is picked.
+            Used by {plural(workflowCount, 'workflow')}. Their steps will be unmatched until a new component is
+            picked.
           </p>
           <ul className="mt-1 list-disc space-y-0.5 pl-5">
             {impact.workflows.map((workflow) => (
@@ -92,10 +93,11 @@ function UsageWarning({ impact }: { impact: ComponentDeletionImpactDto }) {
 export function DeleteComponentDialog({ component, open, onOpenChange, onDeleted }: DeleteComponentDialogProps) {
   const queryClient = useQueryClient();
   const { mutate, isPending } = useDeleteComponent();
-  const { data: impact, isLoading: isLoadingImpact } = useComponentDeletionImpact(
-    getLink(component._links, 'deletionImpact'),
-    open,
-  );
+  const { data: impact, isLoading: isLoadingImpact } = useComponentImpact(getLink(component._links, 'impact'), open);
+  // another user's public workflow runs it - taking it out of public view would break theirs
+  const blocked = (impact?.foreignPublicAncestors.length ?? 0) > 0;
+  // the user's own public workflows above it become drafts with it - confirmed by deleting
+  const ownParents = impact?.ownPublicAncestors.length ?? 0;
 
   // only offer the cascade when there is something on the other side to delete: the
   // workflow came from the builder and its draft still exists (draftId is ON DELETE SET
@@ -107,7 +109,7 @@ export function DeleteComponentDialog({ component, open, onOpenChange, onDeleted
 
   const handleDelete = (deleteLinkedDraft: boolean) => {
     mutate(
-      { link: getLink(component._links, 'delete')!, deleteLinkedDraft },
+      { link: getLink(component._links, 'delete')!, deleteLinkedDraft, unpublishParents: ownParents > 0 },
       {
         onSuccess: () => {
           toast.success(
@@ -151,10 +153,13 @@ export function DeleteComponentDialog({ component, open, onOpenChange, onDeleted
           : undefined
       }
       onConfirm={handleDelete}
-      isPending={isPending}
+      isPending={isPending || isLoadingImpact}
+      blocked={blocked}
+      confirmLabel={ownParents > 0 ? `Delete and unpublish ${ownParents}` : 'Delete'}
     >
       {isLoadingImpact && <p className="text-sm text-slate-500">Checking where this version is used...</p>}
-      {impact && <UsageWarning impact={impact} />}
+      {impact && <PublicAncestors impact={impact} verb="Deleting" />}
+      {impact && !blocked && <UsageWarning impact={impact} />}
     </ConfirmDeleteDialog>
   );
 }

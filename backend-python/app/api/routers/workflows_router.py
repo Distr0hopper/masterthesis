@@ -140,7 +140,8 @@ async def parse_workflow(
         status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Step or component not found"},
         status.HTTP_409_CONFLICT: {
             "model": ErrorResponse,
-            "description": "The workflow is published, or the component would make it contain itself",
+            "description": "The workflow is published, the step runs an inline definition, or the component "
+            "would make the workflow contain itself",
         },
     },
 )

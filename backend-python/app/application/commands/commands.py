@@ -66,6 +66,9 @@ class ComponentCommand:
     domains: list[str] | None = None
     #: PUBLISH of a workflow only - also publish its still-draft children
     publish_components: bool = False
+    #: UNPUBLISH only - also unpublish the caller's own public workflows that run this
+    #: version, at any depth (other users' ones always block)
+    unpublish_parents: bool = False
 
 
 @dataclass

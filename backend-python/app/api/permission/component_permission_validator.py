@@ -1,6 +1,7 @@
 from app.api.permission.base import PermissionValidator
 from app.application.commands.commands import ComponentCommandType, ToolCommandType, WorkflowStepCommandType
-from app.domain.models.component import Component, ComponentStatus
+from app.domain.composite import lifecycle
+from app.domain.models.component import Component
 from app.domain.models.user import User
 
 
@@ -15,7 +16,7 @@ class ComponentPermissionValidator(PermissionValidator[Component]):
 
     def can_read(self, component: Component) -> bool:
         """Mirrors ComponentsService.is_visible: published components are public, drafts are owner-only."""
-        if component.status == ComponentStatus.PUBLISHED:
+        if lifecycle.is_public(component):
             return True
         return self.user is not None and component.created_by_id == self.user.id
 
@@ -64,7 +65,7 @@ class ComponentPermissionValidator(PermissionValidator[Component]):
     def can_edit_steps(self, workflow: Component) -> bool:
         """A workflow's steps are its creator's to rebind - while it is a draft. A published
         workflow is what others see and nest, so it is unpublished first."""
-        return workflow.is_workflow and self.can_update(workflow) and workflow.status == ComponentStatus.DRAFT
+        return workflow.is_workflow and self.can_update(workflow) and lifecycle.steps_editable(workflow)
 
     def can_execute_step(self, workflow: Component, action: str | WorkflowStepCommandType) -> bool:
         try:

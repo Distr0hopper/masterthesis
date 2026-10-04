@@ -1,6 +1,5 @@
 """DTOs only a tool - the leaf of the composite - has."""
 
-from enum import StrEnum
 from typing import Literal
 from urllib.parse import urlparse
 
@@ -17,6 +16,7 @@ from app.api.dto.component import (
     FormatLabelDto,
     PreviewParameterDto,
 )
+from app.application.commands.commands import ToolCommandType
 from app.domain.models.component import MAX_DESCRIPTION_LENGTH, ComponentKind
 from app.domain.models.component_domain import VALID_DOMAINS
 
@@ -135,13 +135,8 @@ class PackagePreviewDto(ToolPreviewDto):
     already_packaged: bool
 
 
-class ToolCommandTypesApiV1(StrEnum):
-    REPACKAGE = "REPACKAGE"
-    UPDATE_FORMAT_LABELS = "UPDATE_FORMAT_LABELS"
-
-
 class ToolCommandExecuteRequestDto(CamelModel):
-    command: ToolCommandTypesApiV1 = Field(..., description="The specific action to perform on the tool")
+    command: ToolCommandType = Field(..., description="The specific action to perform on the tool")
     note: str | None = Field(default=None, description="Optional note for the command execution")
     format_labels: list[FormatLabelDto] | None = Field(
         default=None,

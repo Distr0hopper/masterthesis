@@ -7,6 +7,7 @@ from typing import Annotated
 from fastapi import Depends
 
 from app.application.commands.commands import ManualFormatLabel, ToolCommand, ToolCommandType
+from app.application.commands.registry import CommandSpec, is_tool_owner
 from app.application.exception.component_exceptions import (
     AlreadyPackagedError,
     ComponentKindMismatchError,
@@ -343,12 +344,10 @@ class ToolsService:
         description - and without a reviewed commit to hold the repo to."""
         return await self.package_next_version(parent, None)
 
-    async def execute_command(self, tool: Component, command: ToolCommand) -> Component:
-        match command.type:
-            case ToolCommandType.REPACKAGE:
-                return await self.repackage(tool)
-            case ToolCommandType.UPDATE_FORMAT_LABELS:
-                return await self.update_format_labels(tool, command.format_labels)
+    async def execute_command(self, tool: Component, command: ToolCommand, current_user_id: uuid.UUID) -> Component:
+        """Run one command of TOOL_COMMANDS. Each handler is a use case of its own, with its
+        own transaction - there is nothing to wrap here."""
+        return await TOOL_COMMANDS[command.type].run(self, tool, command, current_user_id)
 
     async def update_format_labels(self, tool: Component, format_labels: list[ManualFormatLabel] | None) -> Component:
         if format_labels is None:
@@ -379,3 +378,16 @@ class ToolsService:
             for p in tool.parameters
             if p.format_label and accepts_manual_format_label(p, tool.ontology_url)
         ]
+
+
+#: Every command only a tool understands - see app.application.commands.registry
+TOOL_COMMANDS: dict[ToolCommandType, CommandSpec[ToolsService, ToolCommand]] = {
+    ToolCommandType.REPACKAGE: CommandSpec(
+        rel="repackage", allowed=is_tool_owner, run=lambda s, tool, cmd, user: s.repackage(tool)
+    ),
+    ToolCommandType.UPDATE_FORMAT_LABELS: CommandSpec(
+        rel="updateFormatLabels",
+        allowed=is_tool_owner,
+        run=lambda s, tool, cmd, user: s.update_format_labels(tool, cmd.format_labels),
+    ),
+}

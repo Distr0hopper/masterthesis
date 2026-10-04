@@ -6,12 +6,12 @@ an endpoint returns when it serves both kinds live in component_variants.py.
 
 import uuid
 from datetime import datetime
-from enum import StrEnum
 
 from pydantic import Field, field_validator
 
 from app.api.dto.base import CamelModel
 from app.api.link.model import LinkModel
+from app.application.commands.commands import ComponentCommandType
 from app.domain.compatibility.format_label import FormatLabelSource
 from app.domain.compatibility.port_check import ConnectionStatus
 from app.domain.models.component import (
@@ -247,19 +247,8 @@ class NameAvailabilityDto(CamelModel):
     existing: ExistingComponentDto | None
 
 
-class ComponentCommandTypesApiV1(StrEnum):
-    ADD_FAVORITE = "ADD_FAVORITE"
-    REMOVE_FAVORITE = "REMOVE_FAVORITE"
-    PUBLISH = "PUBLISH"
-    UNPUBLISH = "UNPUBLISH"
-    UPDATE_DESCRIPTION = "UPDATE_DESCRIPTION"
-    UPDATE_DOMAIN = "UPDATE_DOMAIN"
-    DEPRECATE = "DEPRECATE"
-    UNDEPRECATE = "UNDEPRECATE"
-
-
 class ComponentCommandExecuteRequestDto(EmptyDescriptionToNoneMixin, CamelModel):
-    command: ComponentCommandTypesApiV1 = Field(..., description="The specific action to perform on the component")
+    command: ComponentCommandType = Field(..., description="The specific action to perform on the component")
     note: str | None = Field(default=None, description="Optional note for the command execution")
     description: str | None = Field(
         default=None,

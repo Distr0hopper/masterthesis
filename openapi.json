@@ -3000,7 +3000,7 @@
       "ComponentCommandExecuteRequestDto": {
         "properties": {
           "command": {
-            "$ref": "#/components/schemas/ComponentCommandTypesApiV1",
+            "$ref": "#/components/schemas/ComponentCommandType",
             "description": "The specific action to perform on the component"
           },
           "note": {
@@ -3083,7 +3083,7 @@
         ],
         "title": "ComponentCommandExecuteRequestDto"
       },
-      "ComponentCommandTypesApiV1": {
+      "ComponentCommandType": {
         "type": "string",
         "enum": [
           "ADD_FAVORITE",
@@ -3095,7 +3095,8 @@
           "DEPRECATE",
           "UNDEPRECATE"
         ],
-        "title": "ComponentCommandTypesApiV1"
+        "title": "ComponentCommandType",
+        "description": "Commands every component understands, whatever its kind."
       },
       "ComponentConfigDto": {
         "properties": {
@@ -4635,7 +4636,7 @@
       "ToolCommandExecuteRequestDto": {
         "properties": {
           "command": {
-            "$ref": "#/components/schemas/ToolCommandTypesApiV1",
+            "$ref": "#/components/schemas/ToolCommandType",
             "description": "The specific action to perform on the tool"
           },
           "note": {
@@ -4672,13 +4673,14 @@
         ],
         "title": "ToolCommandExecuteRequestDto"
       },
-      "ToolCommandTypesApiV1": {
+      "ToolCommandType": {
         "type": "string",
         "enum": [
           "REPACKAGE",
           "UPDATE_FORMAT_LABELS"
         ],
-        "title": "ToolCommandTypesApiV1"
+        "title": "ToolCommandType",
+        "description": "Commands only a tool - the leaf of the composite - understands."
       },
       "ToolDetailDto": {
         "properties": {
@@ -5796,7 +5798,7 @@
       "WorkflowStepCommandExecuteRequestDto": {
         "properties": {
           "command": {
-            "$ref": "#/components/schemas/WorkflowStepCommandTypesApiV1",
+            "$ref": "#/components/schemas/WorkflowStepCommandType",
             "description": "The specific action to perform on the step"
           },
           "note": {
@@ -5818,12 +5820,12 @@
         ],
         "title": "WorkflowStepCommandExecuteRequestDto"
       },
-      "WorkflowStepCommandTypesApiV1": {
+      "WorkflowStepCommandType": {
         "type": "string",
         "enum": [
           "CONFIRM"
         ],
-        "title": "WorkflowStepCommandTypesApiV1"
+        "title": "WorkflowStepCommandType"
       },
       "WorkflowStepDto": {
         "properties": {

@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import Depends
 
 from app.application.commands.commands import ComponentCommand, ComponentCommandType
+from app.application.commands.registry import CommandSpec, is_logged_in, is_owner
 from app.application.exception.component_exceptions import (
     ComponentHasDeprecatedParentsError,
     ComponentHasPublicParentsError,
@@ -113,8 +114,9 @@ class ComponentsService:
     shared operations. Kind-specific behaviour lives in ToolsService and WorkflowsService.
 
     Transactions: the methods a router calls for a write (execute_command, remove) are
-    use cases - each opens the unit of work and commits once. Every other writing method
-    runs inside its caller's unit and never commits."""
+    use cases - each opens the unit of work and commits once. Every other writing method -
+    the command handlers of COMPONENT_COMMANDS included - runs inside its caller's unit and
+    never commits."""
 
     def __init__(self, uow: UnitOfWork, format_service_client: FormatServiceClient):
         self.uow = uow
@@ -293,7 +295,7 @@ class ComponentsService:
 
     # --- lifecycle -----------------------------------------------------------------------
 
-    async def _publish(
+    async def publish(
         self, component: Component, current_user_id: uuid.UUID, publish_components: bool = False
     ) -> Component:
         """Make a component public.
@@ -325,7 +327,7 @@ class ComponentsService:
         await self.uow.components.add_all([*check.own_drafts, component])
         return component
 
-    async def _unpublish(
+    async def unpublish(
         self, component: Component, current_user_id: uuid.UUID, unpublish_parents: bool = False
     ) -> Component:
         """Inverse of publish - only the creator can see the component again. Idempotent.
@@ -360,7 +362,7 @@ class ComponentsService:
             raise ComponentHasPublicParentsError([_label(w) for w in impact.own])
         return impact.own
 
-    async def _deprecate(self, component: Component, note: str | None) -> Component:
+    async def deprecate(self, component: Component, note: str | None) -> Component:
         """Retract a public version without breaking anything: it stays readable and keeps
         working wherever it already runs, but is no longer listed or offered for new use -
         so, unlike unpublishing, no workflow above it needs a check. Deprecating again only
@@ -368,43 +370,38 @@ class ComponentsService:
         lifecycle.mark_deprecated(component, (note or "").strip() or None)
         return await self.uow.components.add(component)
 
-    async def _undeprecate(self, component: Component) -> Component:
+    async def undeprecate(self, component: Component) -> Component:
         lifecycle.mark_undeprecated(component)
         return await self.uow.components.add(component)
 
-    async def _update_description(self, component: Component, description: str | None) -> Component:
+    async def update_description(self, component: Component, description: str | None) -> Component:
         component.description = description
         return await self.uow.components.add(component)
 
-    async def _update_domains(self, component: Component, domains: list[str] | None) -> Component:
+    async def update_domains(self, component: Component, domains: list[str] | None) -> Component:
         if not domains:
             raise MissingCommandPayloadError(ComponentCommandType.UPDATE_DOMAIN, "domains")
         component.domains = [ComponentDomain(domain=d) for d in domains]
         return await self.uow.components.add(component)
 
+    async def add_favorite(self, component: Component, user_id: uuid.UUID) -> Component:
+        # favoriting is scoped to the whole lineage (name), not the specific version row the
+        # star was clicked on - so every version favorites together
+        await self.uow.favorites.add(user_id, component.name)
+        return component
+
+    async def remove_favorite(self, component: Component, user_id: uuid.UUID) -> Component:
+        await self.uow.favorites.remove(user_id, component.name)
+        return component
+
     async def execute_command(
         self, component: Component, command: ComponentCommand, current_user_id: uuid.UUID
     ) -> Component:
+        """Run one command of COMPONENT_COMMANDS as one transaction. The handlers it
+        dispatches to (publish, deprecate, add_favorite, ...) never commit themselves."""
+        spec = COMPONENT_COMMANDS[command.type]
         async with self.uow:
-            match command.type:
-                case ComponentCommandType.ADD_FAVORITE:
-                    # favoriting is scoped to the whole lineage (name), not the specific
-                    # version row the star was clicked on - so every version favorites together
-                    await self.uow.favorites.add(current_user_id, component.name)
-                case ComponentCommandType.REMOVE_FAVORITE:
-                    await self.uow.favorites.remove(current_user_id, component.name)
-                case ComponentCommandType.PUBLISH:
-                    component = await self._publish(component, current_user_id, command.publish_components)
-                case ComponentCommandType.UNPUBLISH:
-                    component = await self._unpublish(component, current_user_id, command.unpublish_parents)
-                case ComponentCommandType.UPDATE_DESCRIPTION:
-                    component = await self._update_description(component, command.description)
-                case ComponentCommandType.UPDATE_DOMAIN:
-                    component = await self._update_domains(component, command.domains)
-                case ComponentCommandType.DEPRECATE:
-                    component = await self._deprecate(component, command.deprecation_note)
-                case ComponentCommandType.UNDEPRECATE:
-                    component = await self._undeprecate(component)
+            component = await spec.run(self, component, command, current_user_id)
             await self.uow.commit()
         return await self.reload(component)
 
@@ -596,3 +593,32 @@ class ComponentsService:
             raise ConflictingAuxiliaryFileError(err.path) from err
         filename, content = assemble_cwl_zip(component.name, component.cwl_content, files, extras)
         return Download(filename=filename, content=content, media_type="application/zip")
+
+
+#: Every command a component understands, whatever its kind - see app.application.commands.registry
+COMPONENT_COMMANDS: dict[ComponentCommandType, CommandSpec[ComponentsService, ComponentCommand]] = {
+    ComponentCommandType.ADD_FAVORITE: CommandSpec(
+        rel="favorite", allowed=is_logged_in, run=lambda s, c, cmd, user: s.add_favorite(c, user)
+    ),
+    ComponentCommandType.REMOVE_FAVORITE: CommandSpec(
+        rel="unfavorite", allowed=is_logged_in, run=lambda s, c, cmd, user: s.remove_favorite(c, user)
+    ),
+    ComponentCommandType.PUBLISH: CommandSpec(
+        rel="publish", allowed=is_owner, run=lambda s, c, cmd, user: s.publish(c, user, cmd.publish_components)
+    ),
+    ComponentCommandType.UNPUBLISH: CommandSpec(
+        rel="unpublish", allowed=is_owner, run=lambda s, c, cmd, user: s.unpublish(c, user, cmd.unpublish_parents)
+    ),
+    ComponentCommandType.UPDATE_DESCRIPTION: CommandSpec(
+        rel="updateDescription", allowed=is_owner, run=lambda s, c, cmd, user: s.update_description(c, cmd.description)
+    ),
+    ComponentCommandType.UPDATE_DOMAIN: CommandSpec(
+        rel="updateDomain", allowed=is_owner, run=lambda s, c, cmd, user: s.update_domains(c, cmd.domains)
+    ),
+    ComponentCommandType.DEPRECATE: CommandSpec(
+        rel="deprecate", allowed=is_owner, run=lambda s, c, cmd, user: s.deprecate(c, cmd.deprecation_note)
+    ),
+    ComponentCommandType.UNDEPRECATE: CommandSpec(
+        rel="undeprecate", allowed=is_owner, run=lambda s, c, cmd, user: s.undeprecate(c)
+    ),
+}

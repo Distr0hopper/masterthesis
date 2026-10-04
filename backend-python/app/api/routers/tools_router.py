@@ -254,7 +254,7 @@ async def execute_command(
         logger.warning(f"User {current_user.id} not permitted to execute {command.type} on tool {tool_id}")
         raise ForbiddenException(f"Insufficient permission to execute {command.type} on this tool")
 
-    updated = await tools_service.execute_command(tool, command)
+    updated = await tools_service.execute_command(tool, command, current_user.id)
     logger.info(f"Executed command {command.type} on tool {tool_id}")
     favorited_names = await components_service.favorited_names(current_user)
     return ComponentTransformer.to_detail(updated, updated.name in favorited_names, current_user)

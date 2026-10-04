@@ -56,7 +56,7 @@ export interface WorkflowDetailDto extends ComponentDetailBaseDto {
   draftId: string | null;
 }
 
-/** Mirrors the backend's WorkflowStepCommandTypesApiV1 - POST /workflows/steps/{id}/commands. */
+/** Mirrors the backend's WorkflowStepCommandType - POST /workflows/steps/{id}/commands. */
 export const WorkflowStepCommand = {
   CONFIRM: 'CONFIRM',
 } as const;

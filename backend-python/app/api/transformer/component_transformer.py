@@ -2,7 +2,6 @@ from typing import Any
 
 from app.api.dto.component import (
     ComponentCommandExecuteRequestDto,
-    ComponentCommandTypesApiV1,
     ComponentAncestorDto,
     ComponentCreatorDto,
     ComponentImpactDraftDto,
@@ -17,7 +16,7 @@ from app.api.link.component import ComponentLinkBuilder
 from app.api.permission.component_permission_validator import ComponentPermissionValidator
 from app.api.transformer.parameter_transformer import ParameterTransformer
 from app.api.transformer.workflow_transformer import WorkflowTransformer
-from app.application.commands.commands import ComponentCommand, ComponentCommandType
+from app.application.commands.commands import ComponentCommand
 from app.application.service.compatibility_service import RankedComponent
 from app.application.service.components_service import ComponentImpact, ComponentUsage
 from app.domain.models.component import Component
@@ -31,18 +30,8 @@ class ComponentTransformer:
 
     @staticmethod
     def to_domain_command(dto: ComponentCommandExecuteRequestDto) -> ComponentCommand:
-        mapping = {
-            ComponentCommandTypesApiV1.ADD_FAVORITE: ComponentCommandType.ADD_FAVORITE,
-            ComponentCommandTypesApiV1.REMOVE_FAVORITE: ComponentCommandType.REMOVE_FAVORITE,
-            ComponentCommandTypesApiV1.PUBLISH: ComponentCommandType.PUBLISH,
-            ComponentCommandTypesApiV1.UNPUBLISH: ComponentCommandType.UNPUBLISH,
-            ComponentCommandTypesApiV1.UPDATE_DESCRIPTION: ComponentCommandType.UPDATE_DESCRIPTION,
-            ComponentCommandTypesApiV1.UPDATE_DOMAIN: ComponentCommandType.UPDATE_DOMAIN,
-            ComponentCommandTypesApiV1.DEPRECATE: ComponentCommandType.DEPRECATE,
-            ComponentCommandTypesApiV1.UNDEPRECATE: ComponentCommandType.UNDEPRECATE,
-        }
         return ComponentCommand(
-            type=mapping[dto.command],
+            type=dto.command,
             note=dto.note,
             description=dto.description,
             domains=dto.domains,

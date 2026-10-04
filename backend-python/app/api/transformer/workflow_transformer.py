@@ -2,14 +2,13 @@ from app.api.dto.workflow import (
     ComponentSummaryDto,
     StepComponentMatchDto,
     WorkflowStepCommandExecuteRequestDto,
-    WorkflowStepCommandTypesApiV1,
     WorkflowStepDto,
     WorkflowStepPreviewDto,
 )
 from app.api.link.workflow_step import WorkflowStepLinkBuilder
 from app.api.permission.component_permission_validator import ComponentPermissionValidator
 from app.api.transformer.parameter_transformer import ParameterTransformer
-from app.application.commands.commands import WorkflowStepCommand, WorkflowStepCommandType
+from app.application.commands.commands import WorkflowStepCommand
 from app.application.service.workflows_service import ComponentMatch, ComponentPreview
 from app.domain.models.component import Component
 from app.domain.models.user import User
@@ -21,10 +20,7 @@ class WorkflowTransformer:
 
     @staticmethod
     def to_domain_step_command(dto: WorkflowStepCommandExecuteRequestDto) -> WorkflowStepCommand:
-        mapping = {
-            WorkflowStepCommandTypesApiV1.CONFIRM: WorkflowStepCommandType.CONFIRM,
-        }
-        return WorkflowStepCommand(type=mapping[dto.command], note=dto.note)
+        return WorkflowStepCommand(type=dto.command, note=dto.note)
 
     @staticmethod
     def to_summary(component: Component, current_user: User | None) -> ComponentSummaryDto:

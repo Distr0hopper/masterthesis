@@ -4,11 +4,10 @@ from app.api.dto.tool import (
     AddVersionRequestDto,
     CreateToolRequestDto,
     ToolCommandExecuteRequestDto,
-    ToolCommandTypesApiV1,
     ToolPreviewDto,
 )
 from app.api.transformer.parameter_transformer import ParameterTransformer
-from app.application.commands.commands import ToolCommand, ToolCommandType
+from app.application.commands.commands import ToolCommand
 from app.application.service.tools_service import ToolDetails
 from app.domain.models.component import Component, ComponentKind, ComponentSource
 from app.domain.models.component_domain import ComponentDomain
@@ -19,12 +18,8 @@ class ToolTransformer:
 
     @staticmethod
     def to_domain_command(dto: ToolCommandExecuteRequestDto) -> ToolCommand:
-        mapping = {
-            ToolCommandTypesApiV1.REPACKAGE: ToolCommandType.REPACKAGE,
-            ToolCommandTypesApiV1.UPDATE_FORMAT_LABELS: ToolCommandType.UPDATE_FORMAT_LABELS,
-        }
         return ToolCommand(
-            type=mapping[dto.command],
+            type=dto.command,
             note=dto.note,
             format_labels=(
                 ParameterTransformer.to_format_labels(dto.format_labels) if dto.format_labels is not None else None

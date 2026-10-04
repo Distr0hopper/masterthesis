@@ -1,5 +1,8 @@
 from app.api.permission.base import PermissionValidator
 from app.application.commands.commands import ComponentCommandType, ToolCommandType, WorkflowStepCommandType
+from app.application.commands.registry import is_owner
+from app.application.service.components_service import COMPONENT_COMMANDS
+from app.application.service.tools_service import TOOL_COMMANDS
 from app.domain.composite import lifecycle
 from app.domain.models.component import Component
 from app.domain.models.user import User
@@ -22,48 +25,26 @@ class ComponentPermissionValidator(PermissionValidator[Component]):
         return self.user is not None and component.created_by_id == self.user.id
 
     def can_update(self, component: Component) -> bool:
-        return self.user is not None and component.created_by_id == self.user.id
+        return is_owner(self.user, component)
 
     def can_delete(self, component: Component) -> bool:
-        return self.user is not None and component.created_by_id == self.user.id
-
-    def can_favorite(self) -> bool:
-        return self.user is not None
+        return is_owner(self.user, component)
 
     def can_execute(self, component: Component, action: str | ComponentCommandType) -> bool:
+        """Whether COMPONENT_COMMANDS lets this user run `action` - each command declares it."""
         try:
             command = ComponentCommandType.from_string(str(action))
         except (ValueError, TypeError):
             return False
-
-        match command:
-            case ComponentCommandType.ADD_FAVORITE | ComponentCommandType.REMOVE_FAVORITE:
-                return self.can_favorite()
-            case (
-                ComponentCommandType.PUBLISH
-                | ComponentCommandType.UNPUBLISH
-                | ComponentCommandType.UPDATE_DESCRIPTION
-                | ComponentCommandType.UPDATE_DOMAIN
-                | ComponentCommandType.DEPRECATE
-                | ComponentCommandType.UNDEPRECATE
-            ):
-                return self.can_update(component)
-            case _:
-                return False
+        return COMPONENT_COMMANDS[command].allowed(self.user, component)
 
     def can_execute_tool(self, component: Component, action: str | ToolCommandType) -> bool:
-        if not component.is_tool:
-            return False
+        """Whether TOOL_COMMANDS lets this user run `action` - each command declares it."""
         try:
             command = ToolCommandType.from_string(str(action))
         except (ValueError, TypeError):
             return False
-
-        match command:
-            case ToolCommandType.REPACKAGE | ToolCommandType.UPDATE_FORMAT_LABELS:
-                return self.can_update(component)
-            case _:
-                return False
+        return TOOL_COMMANDS[command].allowed(self.user, component)
 
     def can_edit_steps(self, workflow: Component) -> bool:
         """A workflow's steps are its creator's to rebind - while it is a draft. A published

@@ -1,7 +1,6 @@
 """DTOs only a workflow - the composite - has: its steps and its upload flow."""
 
 import uuid
-from enum import StrEnum
 from typing import Literal
 
 from fastapi import UploadFile
@@ -17,6 +16,7 @@ from app.api.dto.component import (
 )
 from app.api.dto.tool import ToolPreviewDto
 from app.api.link.model import LinkModel
+from app.application.commands.commands import WorkflowStepCommandType
 from app.domain.models.component import MAX_DESCRIPTION_LENGTH, ComponentKind, ComponentSource, ComponentStatus
 from app.domain.models.component_domain import VALID_DOMAINS
 from app.domain.models.workflow_step import StepMatchStatus
@@ -173,10 +173,6 @@ class UpdateWorkflowStepRequestDto(CamelModel):
     component_id: uuid.UUID | None
 
 
-class WorkflowStepCommandTypesApiV1(StrEnum):
-    CONFIRM = "CONFIRM"
-
-
 class WorkflowStepCommandExecuteRequestDto(CamelModel):
-    command: WorkflowStepCommandTypesApiV1 = Field(..., description="The specific action to perform on the step")
+    command: WorkflowStepCommandType = Field(..., description="The specific action to perform on the step")
     note: str | None = Field(default=None, description="Optional note for the command execution")

@@ -7,6 +7,8 @@ from app.api.exception.exceptions import ForbiddenException
 from app.application.exception.auth_exceptions import InvalidTokenError
 from app.application.exception.component_exceptions import (
     AlreadyPackagedError,
+    ComponentDeprecatedError,
+    ComponentHasDeprecatedParentsError,
     ComponentHasPublicParentsError,
     ComponentKindMismatchError,
     ComponentNameAlreadyExistsError,
@@ -44,6 +46,7 @@ from app.application.exception.workflow_exceptions import (
     WorkflowCycleError,
     WorkflowHasUnpublishedComponentsError,
     WorkflowNotReadyToPublishError,
+    WorkflowRunsDeprecatedComponentsError,
     WorkflowStepNotFoundError,
     WorkflowStepNotMatchedError,
 )
@@ -279,6 +282,9 @@ def register_exception_handlers(app: FastAPI) -> None:
     for lifecycle_error in (
         ComponentUsedByOthersError,
         ComponentHasPublicParentsError,
+        ComponentHasDeprecatedParentsError,
+        ComponentDeprecatedError,
+        WorkflowRunsDeprecatedComponentsError,
         InlineStepNotBindableError,
         IllegalStatusTransitionError,
         IllegalStepTransitionError,

@@ -24,6 +24,7 @@ from app.application.exception.favorites_exceptions import FavoritesRequireAuthE
 from app.application.service.auth_service import AuthService
 from app.application.service.compatibility_service import CompatibilityService
 from app.application.service.components_service import ComponentsService
+from app.domain.composite.lifecycle import PUBLIC_STATUSES
 from app.domain.models.component import ComponentKind, ComponentStatus
 from app.domain.models.component_domain import VALID_DOMAINS
 from app.domain.models.user import User
@@ -109,10 +110,11 @@ async def list_my_components(
     unpublished_pagination = PaginatedList(limit=limit, offset=unpublished_offset)
 
     published, published_total = await components_service.list_my_components_by_status(
-        current_user.id, ComponentStatus.PUBLISHED, kind, published_pagination
+        # deprecated versions are still public - the owner finds them here, badged
+        current_user.id, PUBLIC_STATUSES, kind, published_pagination
     )
     unpublished, unpublished_total = await components_service.list_my_components_by_status(
-        current_user.id, ComponentStatus.DRAFT, kind, unpublished_pagination
+        current_user.id, frozenset({ComponentStatus.DRAFT}), kind, unpublished_pagination
     )
     favorited_names = await components_service.favorited_names(current_user)
 
@@ -278,8 +280,10 @@ async def download(
         status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Component not found"},
         status.HTTP_409_CONFLICT: {
             "model": ErrorResponse,
-            "description": "PUBLISH of a workflow that still runs draft components, or UNPUBLISH of a version "
-            "that public workflows run (other users' ones, or your own without unpublishParents)",
+            "description": "PUBLISH of a workflow that still runs draft components or gives a deprecated "
+            "version a new dependent; UNPUBLISH of a version that public workflows run (other users' ones, "
+            "your own deprecated ones, or your own without unpublishParents) or that is deprecated; "
+            "DEPRECATE of a draft; UNDEPRECATE of a version that isn't deprecated",
         },
         status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErrorResponse, "description": "Unknown command"},
     },
@@ -313,8 +317,8 @@ async def execute_command(
         status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Component not found"},
         status.HTTP_409_CONFLICT: {
             "model": ErrorResponse,
-            "description": "Public workflows run this version - other users' ones, or your own without "
-            "unpublishParents",
+            "description": "Public workflows run this version - other users' ones, your own deprecated "
+            "ones, or your own without unpublishParents",
         },
     },
 )

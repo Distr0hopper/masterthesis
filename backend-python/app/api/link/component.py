@@ -27,6 +27,8 @@ class ComponentLinkBuilder(BaseLinkBuilder[Component, ComponentPermissionValidat
             "unfavorite": Link(href=commands, method=HttpMethod.POST),
             "publish": Link(href=commands, method=HttpMethod.POST),
             "unpublish": Link(href=commands, method=HttpMethod.POST),
+            "deprecate": Link(href=commands, method=HttpMethod.POST),
+            "undeprecate": Link(href=commands, method=HttpMethod.POST),
         }
         if entity.is_tool:
             tool_commands = Endpoints.tool_commands_by_id(entity.id)
@@ -56,6 +58,10 @@ class ComponentLinkBuilder(BaseLinkBuilder[Component, ComponentPermissionValidat
                 return self._validator.can_execute(entity, ComponentCommandType.PUBLISH)
             case "unpublish":
                 return self._validator.can_execute(entity, ComponentCommandType.UNPUBLISH)
+            case "deprecate":
+                return self._validator.can_execute(entity, ComponentCommandType.DEPRECATE)
+            case "undeprecate":
+                return self._validator.can_execute(entity, ComponentCommandType.UNDEPRECATE)
             case "updateFormatLabels":
                 return self._validator.can_execute_tool(entity, ToolCommandType.UPDATE_FORMAT_LABELS)
             case "repackage":

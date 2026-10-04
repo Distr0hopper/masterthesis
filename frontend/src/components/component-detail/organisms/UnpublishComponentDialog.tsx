@@ -9,14 +9,22 @@ import {
 } from '@/components/ui/dialog.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { PublicAncestors } from '@/components/common/PublicAncestors';
-import { useComponentImpact, useUnpublishComponent, type ComponentDetailDisplayModel } from '@/api/components';
-import { getLink } from '@/api/permissions';
+import {
+  isRetractBlocked,
+  ownPublishedAncestors,
+  useComponentImpact,
+  useUnpublishComponent,
+  type ComponentDetailDisplayModel,
+} from '@/api/components';
+import { canDeprecate, getLink } from '@/api/permissions';
 import { getErrorMessage } from '@/lib/errors';
 
 interface UnpublishComponentDialogProps {
   model: ComponentDetailDisplayModel;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** opens the deprecate dialog - offered when unpublishing is blocked */
+  onDeprecateInstead: () => void;
 }
 
 /**
@@ -25,13 +33,12 @@ interface UnpublishComponentDialogProps {
  * the user's own become drafts along with it. The server enforces the same rule; its 409
  * only shows up if a parent was published between opening this dialog and confirming.
  */
-export function UnpublishComponentDialog({ model, open, onOpenChange }: UnpublishComponentDialogProps) {
+export function UnpublishComponentDialog({ model, open, onOpenChange, onDeprecateInstead }: UnpublishComponentDialogProps) {
   const { mutate: unpublish, isPending } = useUnpublishComponent();
   const { data: impact, isLoading } = useComponentImpact(getLink(model._links, 'impact'), open);
 
-  // another user's public workflow runs it - taking it out of public view would break theirs
-  const blocked = (impact?.foreignPublicAncestors.length ?? 0) > 0;
-  const ownCount = impact?.ownPublicAncestors.length ?? 0;
+  const blocked = isRetractBlocked(impact);
+  const ownCount = impact ? ownPublishedAncestors(impact).length : 0;
   // private drafts of other users break nothing public - publishing them stops later anyway
   const otherDrafts = impact?.hiddenWorkflowCount ?? 0;
 
@@ -58,9 +65,7 @@ export function UnpublishComponentDialog({ model, open, onOpenChange }: Unpublis
         <DialogHeader>
           <DialogTitle>{blocked ? `${model.name} cannot be unpublished` : `Unpublish ${model.name}?`}</DialogTitle>
           <DialogDescription>
-            {blocked
-              ? 'Other users have built on this version.'
-              : 'Only you will be able to see it.'}
+            {blocked ? 'Public workflows that run this version would break.' : 'Only you will be able to see it.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -76,6 +81,17 @@ export function UnpublishComponentDialog({ model, open, onOpenChange }: Unpublis
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
             {blocked ? 'Close' : 'Cancel'}
           </Button>
+          {blocked && canDeprecate(model._links) && (
+            <Button
+              type="button"
+              onClick={() => {
+                onOpenChange(false);
+                onDeprecateInstead();
+              }}
+            >
+              Deprecate instead
+            </Button>
+          )}
           {!blocked && (
             <Button type="button" onClick={handleConfirm} disabled={isPending || isLoading}>
               {isPending ? 'Unpublishing...' : ownCount > 0 ? `Unpublish all ${ownCount + 1}` : 'Unpublish'}

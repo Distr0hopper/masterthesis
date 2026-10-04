@@ -25,7 +25,8 @@ class ComponentListFilter:
     exclude_created_by: uuid.UUID | None = None
     favorited_by: uuid.UUID | None = None
     search: str | None = None
-    status: ComponentStatus | None = None
+    #: None for any status - e.g. lifecycle.LISTED_STATUSES for the public lists
+    statuses: frozenset[ComponentStatus] | None = None
     favorites_first_for: uuid.UUID | None = None
 
 
@@ -57,8 +58,8 @@ class ComponentsRepository:
                     select(ComponentDomain.component_id).where(ComponentDomain.domain.in_(matching))
                 )
             )
-        if filter.status is not None:
-            query = query.where(Component.status == filter.status)
+        if filter.statuses is not None:
+            query = query.where(Component.status.in_(filter.statuses))
         if filter.created_by is not None:
             query = query.where(Component.created_by_id == filter.created_by)
         if filter.exclude_created_by is not None:
@@ -75,10 +76,10 @@ class ComponentsRepository:
         return query
 
     async def find_all(
-        self, status: ComponentStatus | None = None, kind: ComponentKind | None = None
+        self, statuses: frozenset[ComponentStatus] | None = None, kind: ComponentKind | None = None
     ) -> list[Component]:
         """The latest version of every lineage."""
-        query = self._apply_filters(select(Component).distinct(Component.name), ComponentListFilter(status=status, kind=kind))
+        query = self._apply_filters(select(Component).distinct(Component.name), ComponentListFilter(statuses=statuses, kind=kind))
         query = query.order_by(Component.name, Component.version.desc())
         result = await self.db.exec(query)
         return list(result.all())
@@ -124,20 +125,20 @@ class ComponentsRepository:
         return list(result.all())
 
     async def count_distinct_names(
-        self, status: ComponentStatus | None = None, kind: ComponentKind | None = None
+        self, statuses: frozenset[ComponentStatus] | None = None, kind: ComponentKind | None = None
     ) -> int:
         query = select(func.count(func.distinct(Component.name)))
-        if status is not None:
-            query = query.where(Component.status == status)
+        if statuses is not None:
+            query = query.where(Component.status.in_(statuses))
         if kind is not None:
             query = query.where(Component.kind == kind)
         result = await self.db.exec(query)
         return result.one()
 
-    async def count_distinct_contributors(self, status: ComponentStatus | None = None) -> int:
+    async def count_distinct_contributors(self, statuses: frozenset[ComponentStatus] | None = None) -> int:
         query = select(func.count(func.distinct(Component.created_by_id))).where(Component.created_by_id.is_not(None))
-        if status is not None:
-            query = query.where(Component.status == status)
+        if statuses is not None:
+            query = query.where(Component.status.in_(statuses))
         result = await self.db.exec(query)
         return result.one()
 

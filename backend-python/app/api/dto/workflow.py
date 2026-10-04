@@ -31,6 +31,8 @@ class ComponentSummaryDto(CamelModel):
     version: int
     domains: list[str]
     status: ComponentStatus
+    #: why the child is deprecated - set only while it is
+    deprecation_note: str | None = None
     can_publish: bool
 
 
@@ -116,6 +118,8 @@ class StepComponentMatchDto(CamelModel):
     domains: list[str]
     #: fuzzy-match confidence; null for an exact name collision, which isn't a guess
     score: float | None
+    #: a deprecated holder of the name can't be reused - a new step can't run it
+    status: ComponentStatus
 
 
 class WorkflowStepPreviewDto(ToolPreviewDto):

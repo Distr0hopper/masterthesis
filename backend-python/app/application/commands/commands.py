@@ -31,6 +31,8 @@ class ComponentCommandType(CommandType):
     UNPUBLISH = "UNPUBLISH"
     UPDATE_DESCRIPTION = "UPDATE_DESCRIPTION"
     UPDATE_DOMAIN = "UPDATE_DOMAIN"
+    DEPRECATE = "DEPRECATE"
+    UNDEPRECATE = "UNDEPRECATE"
 
 
 class ToolCommandType(CommandType):
@@ -69,6 +71,8 @@ class ComponentCommand:
     #: UNPUBLISH only - also unpublish the caller's own public workflows that run this
     #: version, at any depth (other users' ones always block)
     unpublish_parents: bool = False
+    #: DEPRECATE only - why, npm-style (None for no note)
+    deprecation_note: str | None = None
 
 
 @dataclass

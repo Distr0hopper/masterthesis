@@ -27,6 +27,8 @@ interface ConfirmDeleteDialogProps {
   children?: ReactNode;
   /** The delete isn't possible at all - only a Close button is offered; children say why. */
   blocked?: boolean;
+  /** The alternative offered while blocked, e.g. deprecating instead of deleting. Closes this dialog. */
+  blockedAlternative?: { label: string; onSelect: () => void };
   /** Confirm button label, when the plain "Delete" undersells what goes (e.g. "Delete and unpublish 2"). */
   confirmLabel?: string;
 }
@@ -41,6 +43,7 @@ export function ConfirmDeleteDialog({
   isPending,
   children,
   blocked = false,
+  blockedAlternative,
   confirmLabel = 'Delete',
 }: ConfirmDeleteDialogProps) {
   const [deleteLinked, setDeleteLinked] = useState(false);
@@ -82,6 +85,17 @@ export function ConfirmDeleteDialog({
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
             {blocked ? 'Close' : 'Cancel'}
           </Button>
+          {blocked && blockedAlternative && (
+            <Button
+              type="button"
+              onClick={() => {
+                onOpenChange(false);
+                blockedAlternative.onSelect();
+              }}
+            >
+              {blockedAlternative.label}
+            </Button>
+          )}
           {!blocked && (
             <Button type="button" variant="destructive" onClick={() => onConfirm(cascade)} disabled={isPending}>
               {isPending ? 'Deleting...' : cascade ? (linkedOption?.confirmLabel ?? 'Delete both') : confirmLabel}

@@ -32,6 +32,8 @@ export type ComponentSource = (typeof ComponentSource)[keyof typeof ComponentSou
 export const ComponentStatus = {
   DRAFT: 'draft',
   PUBLISHED: 'published',
+  /** still readable, and keeps working where it already runs - but not listed or offered for new use */
+  DEPRECATED: 'deprecated',
 } as const;
 export type ComponentStatus = (typeof ComponentStatus)[keyof typeof ComponentStatus];
 
@@ -175,6 +177,8 @@ export interface ComponentListItemBaseDto extends WithHateoasLinks {
   version: number;
   domains: ComponentDomain[];
   status: ComponentStatus;
+  /** why the version is deprecated - set only while it is */
+  deprecationNote?: string | null;
   createdAt: string;
   isFavorite: boolean;
   parameters: ParameterDto[] | null;
@@ -198,6 +202,8 @@ export interface ComponentDetailBaseDto extends WithHateoasLinks {
   domains: ComponentDomain[];
   source: ComponentSource;
   status: ComponentStatus;
+  /** why the version is deprecated - set only while it is */
+  deprecationNote?: string | null;
   parameters: ParameterDto[];
   createdAt: string;
   updatedAt: string;
@@ -217,6 +223,8 @@ export const ComponentCommand = {
   UNPUBLISH: 'UNPUBLISH',
   UPDATE_DESCRIPTION: 'UPDATE_DESCRIPTION',
   UPDATE_DOMAIN: 'UPDATE_DOMAIN',
+  DEPRECATE: 'DEPRECATE',
+  UNDEPRECATE: 'UNDEPRECATE',
 } as const;
 export type ComponentCommand = (typeof ComponentCommand)[keyof typeof ComponentCommand];
 
@@ -225,6 +233,13 @@ export type ComponentCommandExecuteRequest =
       command: typeof ComponentCommand.ADD_FAVORITE | typeof ComponentCommand.REMOVE_FAVORITE;
       note?: string;
     }
+  | {
+      command: typeof ComponentCommand.DEPRECATE;
+      note?: string;
+      /** why, shown to everyone who sees or runs it; null for no note */
+      deprecationNote: string | null;
+    }
+  | { command: typeof ComponentCommand.UNDEPRECATE; note?: string }
   | {
       command: typeof ComponentCommand.UNPUBLISH;
       note?: string;

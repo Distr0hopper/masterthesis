@@ -25,6 +25,7 @@ export const SOURCE_LABELS: Record<ComponentSource, string> = {
 export const STATUS_LABELS: Record<ComponentStatus, string> = {
   [ComponentStatus.DRAFT]: 'Draft',
   [ComponentStatus.PUBLISHED]: 'Published',
+  [ComponentStatus.DEPRECATED]: 'Deprecated',
 };
 
 export const KIND_LABELS: Record<ComponentKind, string> = {
@@ -50,6 +51,8 @@ export interface ComponentDisplayModelBase extends WithHateoasLinks {
   domainsDisplay: string[];
   status: ComponentStatus;
   statusDisplay: string;
+  /** why the version is deprecated - null unless it is */
+  deprecationNote: string | null;
   createdAt: Date;
   createdAtDisplay: string;
   isFavorite: boolean;
@@ -141,6 +144,7 @@ export function toDisplayModelBase(dto: ComponentListItemBaseDto): ComponentDisp
     domainsDisplay: dto.domains.map(getDomainLabel),
     status: dto.status,
     statusDisplay: STATUS_LABELS[dto.status],
+    deprecationNote: dto.deprecationNote ?? null,
     createdAt,
     createdAtDisplay: formatDate(createdAt),
     isFavorite: dto.isFavorite,

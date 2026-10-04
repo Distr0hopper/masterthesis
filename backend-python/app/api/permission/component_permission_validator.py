@@ -15,7 +15,8 @@ class ComponentPermissionValidator(PermissionValidator[Component]):
         return self.user is not None
 
     def can_read(self, component: Component) -> bool:
-        """Mirrors ComponentsService.is_visible: published components are public, drafts are owner-only."""
+        """Mirrors ComponentsService.is_visible: public components (published or deprecated)
+        are readable by everyone, drafts by their owner only."""
         if lifecycle.is_public(component):
             return True
         return self.user is not None and component.created_by_id == self.user.id
@@ -43,6 +44,8 @@ class ComponentPermissionValidator(PermissionValidator[Component]):
                 | ComponentCommandType.UNPUBLISH
                 | ComponentCommandType.UPDATE_DESCRIPTION
                 | ComponentCommandType.UPDATE_DOMAIN
+                | ComponentCommandType.DEPRECATE
+                | ComponentCommandType.UNDEPRECATE
             ):
                 return self.can_update(component)
             case _:

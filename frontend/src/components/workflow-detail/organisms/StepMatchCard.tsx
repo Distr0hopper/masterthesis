@@ -17,7 +17,7 @@ import { ComponentPickerDialog } from '@/components/common/ComponentPickerDialog
 import { ComponentLink } from '@/components/common/ComponentLink';
 import { DefinitionDisclosure } from '@/components/common/DefinitionDisclosure';
 import { ComponentDefinition } from '@/components/component-detail/organisms/ComponentDefinition';
-import { useComponent } from '@/api/components';
+import { ComponentStatus, useComponent } from '@/api/components';
 
 const STATUS_BADGE_VARIANT: Record<StepMatchStatus, 'secondary' | 'default' | 'destructive'> = {
   [StepMatchStatus.SUGGESTED]: 'secondary',
@@ -94,6 +94,17 @@ export function StepMatchCard({ step }: StepMatchCardProps) {
               {step.component?.kind === 'workflow' && (
                 <Badge variant="outline" title="This step runs a whole workflow">
                   Nested workflow
+                </Badge>
+              )}
+              {step.component?.status === ComponentStatus.DEPRECATED && (
+                <Badge
+                  variant="outline"
+                  className="border-slate-400 text-slate-700"
+                  title={`Keeps working here, but can't be used in new workflows${
+                    step.component.deprecationNote ? ` - ${step.component.deprecationNote}` : ''
+                  }`}
+                >
+                  Deprecated
                 </Badge>
               )}
               {canUpdate && (

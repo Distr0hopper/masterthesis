@@ -15,6 +15,8 @@ interface ConfirmPublishDialogProps {
   onOpenChange: (open: boolean) => void;
   draftComponents: ComponentSummaryDto[];
   blockedByOthers: ComponentSummaryDto[];
+  /** deprecated components its steps run - publishing would give them a new dependent */
+  deprecatedComponents: ComponentSummaryDto[];
   onConfirm: (publishComponents: boolean) => void;
   isPending: boolean;
 }
@@ -32,12 +34,15 @@ export function ConfirmPublishDialog({
   onOpenChange,
   draftComponents,
   blockedByOthers,
+  deprecatedComponents,
   onConfirm,
   isPending,
 }: ConfirmPublishDialogProps) {
   const hasDrafts = draftComponents.length > 0;
-  // a draft owned by someone else cannot be published here at all - no button will fix it
-  const isBlocked = blockedByOthers.length > 0;
+  const runsDeprecated = deprecatedComponents.length > 0;
+  // a draft owned by someone else, or a deprecated component, cannot be resolved here at
+  // all - only replacing the step does
+  const isBlocked = blockedByOthers.length > 0 || runsDeprecated;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -45,13 +50,33 @@ export function ConfirmPublishDialog({
         <DialogHeader>
           <DialogTitle>{isBlocked ? 'This workflow cannot be published yet' : 'Publish this workflow?'}</DialogTitle>
           <DialogDescription>
-            {isBlocked
+            {runsDeprecated
+              ? 'It runs deprecated components. They keep working where they already run, but a newly published workflow must not depend on them - replace these steps with newer versions first.'
+              : isBlocked
               ? 'It uses draft components owned by someone else. Only their creator can publish them, so ask them to before publishing this workflow.'
               : hasDrafts
                 ? 'A published workflow must not point at draft components - nobody else can see those. Publishing these along with it makes the whole workflow usable.'
                 : 'This workflow will become visible to everyone.'}
           </DialogDescription>
         </DialogHeader>
+
+        {runsDeprecated && (
+          <ul className="divide-y rounded-md border border-input">
+            {deprecatedComponents.map((component) => (
+              <li key={component.id} className="flex flex-col gap-0.5 px-3 py-2">
+                <ComponentLink
+                  componentId={component.id}
+                  kind={component.kind}
+                  name={component.name}
+                  version={component.version}
+                />
+                <span className="text-xs text-slate-600">
+                  deprecated{component.deprecationNote ? `: ${component.deprecationNote}` : ''}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
 
         {hasDrafts && (
           <div className="flex flex-col gap-2">

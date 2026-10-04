@@ -21,7 +21,10 @@ from app.application.commands.commands import (
     WorkflowStepCommandType,
 )
 from app.application.exception.component_exceptions import (
+    ComponentDeprecatedError,
+    ComponentHasDeprecatedParentsError,
     ComponentHasPublicParentsError,
+    ComponentNotFoundError,
     ComponentUsedByOthersError,
     InvalidCwlError,
 )
@@ -33,6 +36,7 @@ from app.application.exception.workflow_exceptions import (
     WorkflowCycleError,
     WorkflowHasUnpublishedComponentsError,
     WorkflowNotReadyToPublishError,
+    WorkflowRunsDeprecatedComponentsError,
 )
 from app.application.service.components_service import ComponentsService
 from app.application.service.tools_service import ToolsService
@@ -41,6 +45,7 @@ from app.domain.models.component import Component, ComponentKind, ComponentStatu
 from app.domain.models.tool import Tool
 from app.domain.models.workflow import Workflow
 from app.domain.models.workflow_step import StepMatchStatus, WorkflowStep
+from app.domain.composite.lifecycle import IllegalStatusTransitionError
 from tests.application.fake_unit_of_work import FakeUnitOfWork
 
 OWNER = uuid.uuid4()
@@ -99,8 +104,14 @@ class FakeComponentsRepository:
             if component.name == old_name:
                 component.name = new_name
 
-    async def find_all(self, status: ComponentStatus | None = None, kind: ComponentKind | None = None) -> list[Component]:
-        return [c for c in self.by_id.values() if kind is None or c.kind == kind]
+    async def find_all(
+        self, statuses: frozenset[ComponentStatus] | None = None, kind: ComponentKind | None = None
+    ) -> list[Component]:
+        return [
+            c
+            for c in self.by_id.values()
+            if (kind is None or c.kind == kind) and (statuses is None or c.status in statuses)
+        ]
 
     async def add(self, component: Component) -> Component:
         self._store(component)
@@ -344,6 +355,99 @@ def test_another_users_public_grandparent_blocks_a_delete() -> None:
     assert components_service.uow.commits == 0  # type: ignore[attr-defined]
 
 
+# --- deprecation ------------------------------------------------------------------------
+
+
+def deprecate(components_service: ComponentsService, component: Component, note: str | None = None) -> Component:
+    command = ComponentCommand(type=ComponentCommandType.DEPRECATE, deprecation_note=note)
+    return asyncio.run(components_service.execute_command(component, command, OWNER))
+
+
+def undeprecate(components_service: ComponentsService, component: Component) -> Component:
+    return asyncio.run(
+        components_service.execute_command(component, ComponentCommand(type=ComponentCommandType.UNDEPRECATE), OWNER)
+    )
+
+
+def test_deprecating_retracts_a_version_others_run_without_breaking_them() -> None:
+    shared = tool("t")
+    theirs = workflow("theirs", shared, status=ComponentStatus.PUBLISHED, owner=STRANGER)
+    components_service, _, _ = services(shared, theirs)
+
+    deprecate(components_service, shared, "  wrong CRS handling, use v3  ")
+
+    assert (shared.status, shared.deprecation_note) == (ComponentStatus.DEPRECATED, "wrong CRS handling, use v3")
+    assert theirs.status == ComponentStatus.PUBLISHED
+    undeprecate(components_service, shared)
+    assert (shared.status, shared.deprecation_note) == (ComponentStatus.PUBLISHED, None)
+    assert components_service.uow.commits == 2  # type: ignore[attr-defined]
+
+
+def test_a_draft_cannot_be_deprecated() -> None:
+    draft_tool = tool("t", ComponentStatus.DRAFT)
+    components_service, _, _ = services(draft_tool)
+    with pytest.raises(IllegalStatusTransitionError):
+        deprecate(components_service, draft_tool)
+    assert draft_tool.status == ComponentStatus.DRAFT
+
+
+def test_a_deprecated_version_is_undeprecated_before_it_can_be_unpublished() -> None:
+    old = tool("t", ComponentStatus.DEPRECATED)
+    components_service, _, _ = services(old)
+    with pytest.raises(IllegalStatusTransitionError):
+        unpublish(components_service, old, unpublish_parents=True)
+    assert old.status == ComponentStatus.DEPRECATED
+
+
+def test_an_own_deprecated_ancestor_blocks_unpublish_and_delete_and_changes_nothing() -> None:
+    leaf = tool("t")
+    parent = workflow("parent", leaf, status=ComponentStatus.PUBLISHED)
+    grandparent = workflow("grandparent", parent, status=ComponentStatus.DEPRECATED)
+    components_service, _, repository = services(leaf, parent, grandparent)
+
+    with pytest.raises(ComponentHasDeprecatedParentsError) as err:
+        unpublish(components_service, leaf, unpublish_parents=True)
+    assert err.value.workflows == ["grandparent v1"]
+    with pytest.raises(ComponentHasDeprecatedParentsError):
+        asyncio.run(components_service.remove(leaf, OWNER, unpublish_parents=True))
+
+    assert leaf.id in repository.by_id
+    assert (leaf.status, parent.status, grandparent.status) == (
+        ComponentStatus.PUBLISHED,
+        ComponentStatus.PUBLISHED,
+        ComponentStatus.DEPRECATED,
+    )
+    assert parent.steps[0].match_status == StepMatchStatus.CONFIRMED
+    assert components_service.uow.commits == 0  # type: ignore[attr-defined]
+
+
+def test_publishing_a_workflow_that_runs_a_deprecated_version_is_refused() -> None:
+    old = tool("old", ComponentStatus.DEPRECATED, owner=STRANGER)
+    old.deprecation_note = "use v2"
+    root = workflow("w", old)
+    components_service, _, _ = services(root, old)
+
+    with pytest.raises(WorkflowRunsDeprecatedComponentsError) as err:
+        publish(components_service, root, publish_components=True)
+
+    assert err.value.components == ["old v1 (use v2)"]
+    assert root.status == ComponentStatus.DRAFT and old.status == ComponentStatus.DEPRECATED
+
+
+def test_an_unpublished_workflow_cannot_be_republished_over_a_since_deprecated_child() -> None:
+    # documented consequence: republishing would give the deprecated version a new dependent
+    leaf = tool("t")
+    root = workflow("w", leaf, status=ComponentStatus.PUBLISHED)
+    components_service, _, _ = services(leaf, root)
+
+    deprecate(components_service, leaf)
+    unpublish(components_service, root)
+
+    with pytest.raises(WorkflowRunsDeprecatedComponentsError):
+        publish(components_service, root)
+    assert root.status == ComponentStatus.DRAFT
+
+
 # --- builder sync -----------------------------------------------------------------------
 
 
@@ -427,7 +531,7 @@ def test_a_step_can_nest_another_workflow() -> None:
     child = workflow("inner", tool("b"))
     _, workflows_service, _ = services(parent, child)
 
-    step = asyncio.run(workflows_service.update_step_component(parent.steps[0].id, child.id))
+    step = asyncio.run(workflows_service.update_step_component(parent.steps[0].id, child.id, OWNER))
 
     assert (step.component_id, step.match_status) == (child.id, StepMatchStatus.SUGGESTED)
 
@@ -438,7 +542,7 @@ def test_a_step_cannot_nest_a_workflow_that_runs_its_own_workflow() -> None:
     _, workflows_service, _ = services(parent, child)
 
     with pytest.raises(WorkflowCycleError):
-        asyncio.run(workflows_service.update_step_component(parent.steps[0].id, child.id))
+        asyncio.run(workflows_service.update_step_component(parent.steps[0].id, child.id, OWNER))
 
 
 def test_steps_of_a_published_workflow_are_locked() -> None:
@@ -446,11 +550,30 @@ def test_steps_of_a_published_workflow_are_locked() -> None:
     _, workflows_service, _ = services(parent)
 
     with pytest.raises(PublishedWorkflowStepsLockedError):
-        asyncio.run(workflows_service.update_step_component(parent.steps[0].id, None))
+        asyncio.run(workflows_service.update_step_component(parent.steps[0].id, None, OWNER))
     with pytest.raises(PublishedWorkflowStepsLockedError):
         asyncio.run(
             workflows_service.execute_step_command(parent.steps[0], WorkflowStepCommand(type=WorkflowStepCommandType.CONFIRM))
         )
+
+
+def test_a_new_step_cannot_run_a_deprecated_version() -> None:
+    parent = workflow("outer", tool("a"), step_status=StepMatchStatus.UNMATCHED)
+    old = tool("old", ComponentStatus.DEPRECATED)
+    _, workflows_service, _ = services(parent, old)
+
+    with pytest.raises(ComponentDeprecatedError):
+        asyncio.run(workflows_service.update_step_component(parent.steps[0].id, old.id, OWNER))
+    assert parent.steps[0].match_status == StepMatchStatus.UNMATCHED
+
+
+def test_someone_elses_draft_is_unknown_to_a_step() -> None:
+    parent = workflow("outer", tool("a"), step_status=StepMatchStatus.UNMATCHED)
+    theirs = tool("theirs", ComponentStatus.DRAFT, owner=STRANGER)
+    _, workflows_service, _ = services(parent, theirs)
+
+    with pytest.raises(ComponentNotFoundError):
+        asyncio.run(workflows_service.update_step_component(parent.steps[0].id, theirs.id, OWNER))
 
 
 def test_an_inline_step_cannot_be_bound() -> None:
@@ -459,7 +582,7 @@ def test_an_inline_step_cannot_be_bound() -> None:
     _, workflows_service, _ = services(parent, other)
 
     with pytest.raises(InlineStepNotBindableError):
-        asyncio.run(workflows_service.update_step_component(parent.steps[0].id, other.id))
+        asyncio.run(workflows_service.update_step_component(parent.steps[0].id, other.id, OWNER))
     assert parent.steps[0].match_status == StepMatchStatus.INLINE
 
 
@@ -467,8 +590,8 @@ def test_clearing_an_empty_step_again_is_fine() -> None:
     parent = workflow("outer", tool("a"), step_status=StepMatchStatus.UNMATCHED)
     _, workflows_service, _ = services(parent)
 
-    step = asyncio.run(workflows_service.update_step_component(parent.steps[0].id, None))
-    step = asyncio.run(workflows_service.update_step_component(parent.steps[0].id, None))
+    step = asyncio.run(workflows_service.update_step_component(parent.steps[0].id, None, OWNER))
+    step = asyncio.run(workflows_service.update_step_component(parent.steps[0].id, None, OWNER))
 
     assert (step.component_id, step.match_status) == (None, StepMatchStatus.UNMATCHED)
 
@@ -479,7 +602,7 @@ def test_a_use_case_cannot_open_a_second_unit_of_work() -> None:
 
     async def nested() -> None:
         async with workflows_service.uow:
-            await workflows_service.update_step_component(parent.steps[0].id, None)
+            await workflows_service.update_step_component(parent.steps[0].id, None, OWNER)
 
     with pytest.raises(RuntimeError, match="already open"):
         asyncio.run(nested())
@@ -516,6 +639,28 @@ inputs:
 outputs:
   out: File
 """
+
+
+def test_an_upload_cannot_reuse_a_deprecated_version() -> None:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as zf:
+        zf.writestr("pipeline.cwl", UPLOAD_PIPELINE)
+        zf.writestr("a.cwl", UPLOAD_TOOL)
+        zf.writestr("b.cwl", UPLOAD_TOOL)
+    old = tool("old", ComponentStatus.DEPRECATED)
+    configs = {
+        "a": ComponentConfig(step_id="a", reuse_component_id=old.id),
+        "b": ComponentConfig(step_id="b", name="tool-b", domains=["general"]),
+    }
+    _, workflows_service, repository = services(old)
+
+    with pytest.raises(ComponentDeprecatedError):
+        asyncio.run(
+            workflows_service.create_from_upload(buffer.getvalue(), "x.zip", "wf", None, ["general"], configs, OWNER)
+        )
+
+    assert list(repository.by_id) == [old.id]
+    assert workflows_service.uow.commits == 0  # type: ignore[attr-defined]
 
 
 def test_a_failing_step_rolls_back_the_tools_created_before_it() -> None:

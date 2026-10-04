@@ -6,6 +6,7 @@ from sqlalchemy.orm import aliased, selectinload
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.domain.composite.lifecycle import PUBLIC_STATUSES
 from app.domain.models.component import Component, ComponentStatus
 from app.domain.models.workflow import Workflow
 from app.domain.models.workflow_step import WorkflowStep
@@ -33,12 +34,12 @@ class WorkflowsRepository:
 
     async def find_usages_of_lineage(self, name: str, visible_to: uuid.UUID | None) -> list[ComponentUsageRow]:
         """Every workflow version with a step bound to any version of the lineage `name` -
-        a tool, or a nested workflow - restricted to what `visible_to` may see (published
-        workflows, plus their own drafts). Selects columns only - loading whole workflows
+        a tool, or a nested workflow - restricted to what `visible_to` may see (public
+        workflows, deprecated ones included, plus their own drafts). Selects columns only - loading whole workflows
         would pull in all their steps and domains just to print a name."""
         parent = aliased(Component)
         child = aliased(Component)
-        visible = parent.status == ComponentStatus.PUBLISHED
+        visible = parent.status.in_(PUBLIC_STATUSES)
         if visible_to is not None:
             visible = or_(visible, parent.created_by_id == visible_to)
         query = (

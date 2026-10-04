@@ -35,6 +35,7 @@ class WorkflowTransformer:
             version=component.version,
             domains=sorted(d.domain for d in component.domains),
             status=component.status,
+            deprecation_note=component.deprecation_note,
             can_publish=ComponentPermissionValidator(current_user).can_update(component),
         )
 
@@ -64,6 +65,7 @@ class WorkflowTransformer:
             version=match.version,
             domains=match.domains,
             score=match.score,
+            status=match.status,
         )
 
     @staticmethod

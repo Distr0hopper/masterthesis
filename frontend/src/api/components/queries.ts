@@ -168,6 +168,16 @@ export const useUnpublishComponent = () =>
     componentsService.executeCommand(link, { command: ComponentCommand.UNPUBLISH, unpublishParents }),
   );
 
+export const useDeprecateComponent = () =>
+  useCommandMutation(componentKeys.all, ({ link, deprecationNote }: { link: HateoasLink; deprecationNote: string | null }) =>
+    componentsService.executeCommand(link, { command: ComponentCommand.DEPRECATE, deprecationNote }),
+  );
+
+export const useUndeprecateComponent = () =>
+  useCommandMutation(componentKeys.all, (link: HateoasLink) =>
+    componentsService.executeCommand(link, { command: ComponentCommand.UNDEPRECATE }),
+  );
+
 export const useUpdateComponentDescription = () =>
   useCommandMutation(componentKeys.all, ({ link, description }: { link: HateoasLink; description: string | null }) =>
     componentsService.executeCommand(link, { command: ComponentCommand.UPDATE_DESCRIPTION, description }),

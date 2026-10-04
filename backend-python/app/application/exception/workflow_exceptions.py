@@ -148,3 +148,15 @@ class InlineStepNotBindableError(Exception):
 
     def __init__(self, step_id: uuid.UUID) -> None:
         super().__init__(f"Workflow step {step_id} runs an inline definition and cannot be bound to a component")
+
+
+class WorkflowRunsDeprecatedComponentsError(Exception):
+    """Publishing would give deprecated versions a new public dependent - only replacing the
+    steps that run them resolves it."""
+
+    def __init__(self, components: list[str]) -> None:
+        self.components = components
+        super().__init__(
+            f"Runs deprecated component(s) {', '.join(components)} - replace them with newer versions "
+            "before publishing"
+        )

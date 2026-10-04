@@ -1,4 +1,4 @@
-"""add status column to components
+"""add status and deprecation_note columns to components
 
 Revision ID: a3f71c2b9d54
 Revises: 5b88e4260cae
@@ -37,8 +37,11 @@ def upgrade() -> None:
     # supplies the value itself (Component.status defaults to DRAFT); this only covers
     # inserts that bypass the model.
     op.alter_column('components', 'status', server_default='draft')
+    # why a version is deprecated (status 'deprecated'), npm-style - NULL in every other status
+    op.add_column('components', sa.Column('deprecation_note', sa.String(length=500), nullable=True))
 
 
 def downgrade() -> None:
     """Downgrade schema."""
+    op.drop_column('components', 'deprecation_note')
     op.drop_column('components', 'status')

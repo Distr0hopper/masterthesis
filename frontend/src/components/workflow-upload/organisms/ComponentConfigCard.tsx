@@ -15,6 +15,7 @@ import { FormatLabelFields } from '@/components/common/FormatLabelFields';
 import { ComponentOrigin, type WorkflowStepPreviewDto } from '@/api/workflows';
 import { toolTransformer } from '@/api/tools';
 import {
+  ComponentStatus,
   withFormatLabels,
   useComponent,
   useComponentNameAvailability,
@@ -116,7 +117,11 @@ export function ComponentConfigCard({
                 <span className="flex flex-wrap items-center gap-1">
                   This name is already taken by
                   <ComponentLink componentId={taken.id} kind={taken.kind} name={taken.name} version={taken.version} />
+                  {taken.status === ComponentStatus.DEPRECATED && (
+                    <span>- deprecated, so a new workflow can't reuse it. Choose another name.</span>
+                  )}
                 </span>
+                {taken.status !== ComponentStatus.DEPRECATED && (
                 <Button
                   type="button"
                   size="sm"
@@ -132,6 +137,7 @@ export function ComponentConfigCard({
                 >
                   Reuse it
                 </Button>
+                )}
               </div>
             )}
 

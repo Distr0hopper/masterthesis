@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  Archive,
+  ArchiveRestore,
   ChevronLeft,
   Download,
   ExternalLink,
@@ -19,6 +21,7 @@ import {
   ComponentStatus,
   useDownloadComponent,
   usePublishComponent,
+  useUndeprecateComponent,
   type ComponentDetailDisplayModel,
 } from '@/api/components';
 import { toolsService } from '@/api/tools';
@@ -26,6 +29,8 @@ import { StepMatchStatus, type ComponentSummaryDto } from '@/api/workflows';
 import {
   canFavorite,
   canDelete as hasDeleteLink,
+  canDeprecate as hasDeprecateLink,
+  canUndeprecate as hasUndeprecateLink,
   canPublish as hasPublishLink,
   canUnpublish as hasUnpublishLink,
   canUpdateDescription as hasUpdateDescriptionLink,
@@ -40,6 +45,7 @@ import { DeleteComponentDialog } from '@/components/component-mine/organisms/Del
 import { ConfirmPublishDialog } from '@/components/workflow-detail/organisms/ConfirmPublishDialog';
 import { DomainBadges } from '@/components/common/DomainBadges';
 import { EditComponentDialog } from './EditComponentDialog';
+import { DeprecateComponentDialog } from './DeprecateComponentDialog';
 import { UnpublishComponentDialog } from './UnpublishComponentDialog';
 
 interface ComponentHeaderProps {
@@ -54,6 +60,17 @@ const DRAFT_NOTICE: Record<ComponentDetailDisplayModel['kind'], string> = {
   workflow:
     'This workflow is a draft and is only visible to you. Confirm every step below, then click Publish to make it public.',
 };
+
+/** The deprecated children a workflow's publish would give a new dependent - its direct steps' components. */
+function deprecatedChildren(model: ComponentDetailDisplayModel): ComponentSummaryDto[] {
+  if (model.kind !== 'workflow') return [];
+  return model.steps
+    .map((step) => step.component)
+    .filter(
+      (component): component is ComponentSummaryDto =>
+        component !== null && component.status === ComponentStatus.DEPRECATED,
+    );
+}
 
 /** The draft children a workflow's publish would have to take along - its direct steps' components. */
 function draftChildren(model: ComponentDetailDisplayModel): ComponentSummaryDto[] {
@@ -73,6 +90,8 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const [unpublishDialogOpen, setUnpublishDialogOpen] = useState(false);
+  const [deprecateDialogOpen, setDeprecateDialogOpen] = useState(false);
+  const { mutate: undeprecateComponent, isPending: isUndeprecating } = useUndeprecateComponent();
 
   const isWorkflow = model.kind === 'workflow';
   const canDelete = hasDeleteLink(model._links);
@@ -88,6 +107,10 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
     );
   const canPublish = hasPublishLink(model._links) && model.status === ComponentStatus.DRAFT;
   const canUnpublish = hasUnpublishLink(model._links) && model.status === ComponentStatus.PUBLISHED;
+  const canDeprecate = hasDeprecateLink(model._links) && model.status === ComponentStatus.PUBLISHED;
+  const canUndeprecate = hasUndeprecateLink(model._links) && model.status === ComponentStatus.DEPRECATED;
+  // only the direct children are known here; the backend also checks the drafts published along
+  const deprecated = deprecatedChildren(model);
 
   // only the direct children are listed here; the backend checks the whole tree and names
   // any deeper drafts in its answer
@@ -111,8 +134,15 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
     );
   };
 
+  const handleUndeprecate = () => {
+    undeprecateComponent(getLink(model._links, 'undeprecate')!, {
+      onSuccess: () => toast.success(`${model.kindDisplay} is listed and usable in new workflows again`),
+      onError: (error) => toast.error(getErrorMessage(error)),
+    });
+  };
+
   const handlePublish = () => {
-    if (drafts.length > 0) {
+    if (drafts.length > 0 || deprecated.length > 0) {
       setPublishDialogOpen(true);
       return;
     }
@@ -135,6 +165,17 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
       {model.status === ComponentStatus.DRAFT && (
         <div className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           {DRAFT_NOTICE[model.kind]}
+        </div>
+      )}
+
+      {model.status === ComponentStatus.DEPRECATED && (
+        <div role="status" className="mt-4 rounded-md border border-slate-300 bg-slate-100 px-4 py-3 text-sm text-slate-800">
+          <p className="font-medium">
+            This version is deprecated{model.deprecationNote ? `: ${model.deprecationNote}` : '.'}
+          </p>
+          <p className="mt-1">
+            Workflows that already run it keep working, but it is no longer listed and can't be used in new workflows.
+          </p>
         </div>
       )}
 
@@ -203,6 +244,28 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
                 </Button>
               )}
 
+              {canDeprecate && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDeprecateDialogOpen(true)}
+                  title="Stop offering this version for new workflows - existing ones keep working"
+                >
+                  <Archive className="mr-1 h-4 w-4" /> Deprecate
+                </Button>
+              )}
+
+              {canUndeprecate && (
+                <>
+                  <Button variant="outline" size="sm" onClick={() => setDeprecateDialogOpen(true)}>
+                    <Pencil className="mr-1 h-4 w-4" /> Edit note
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleUndeprecate} disabled={isUndeprecating}>
+                    <ArchiveRestore className="mr-1 h-4 w-4" /> Undeprecate
+                  </Button>
+                </>
+              )}
+
               {canDelete && (
                 <Button variant="destructive" size="sm" onClick={() => setDeleteDialogOpen(true)}>
                   <Trash2 className="mr-1 h-4 w-4" /> Delete
@@ -243,17 +306,25 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         onDeleted={onDeleted}
+        onDeprecateInstead={() => setDeprecateDialogOpen(true)}
       />
       <EditComponentDialog component={model} open={editDialogOpen} onOpenChange={setEditDialogOpen} />
       {canUnpublish && (
-        <UnpublishComponentDialog model={model} open={unpublishDialogOpen} onOpenChange={setUnpublishDialogOpen} />
+        <UnpublishComponentDialog
+          model={model}
+          open={unpublishDialogOpen}
+          onOpenChange={setUnpublishDialogOpen}
+          onDeprecateInstead={() => setDeprecateDialogOpen(true)}
+        />
       )}
+      <DeprecateComponentDialog component={model} open={deprecateDialogOpen} onOpenChange={setDeprecateDialogOpen} />
       {isWorkflow && (
         <ConfirmPublishDialog
           open={publishDialogOpen}
           onOpenChange={setPublishDialogOpen}
           draftComponents={drafts}
           blockedByOthers={blockedByOthers}
+          deprecatedComponents={deprecated}
           onConfirm={doPublish}
           isPending={isPublishing}
         />

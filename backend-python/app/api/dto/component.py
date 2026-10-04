@@ -14,7 +14,13 @@ from app.api.dto.base import CamelModel
 from app.api.link.model import LinkModel
 from app.domain.compatibility.format_label import FormatLabelSource
 from app.domain.compatibility.port_check import ConnectionStatus
-from app.domain.models.component import MAX_DESCRIPTION_LENGTH, ComponentKind, ComponentSource, ComponentStatus
+from app.domain.models.component import (
+    MAX_DEPRECATION_NOTE_LENGTH,
+    MAX_DESCRIPTION_LENGTH,
+    ComponentKind,
+    ComponentSource,
+    ComponentStatus,
+)
 from app.domain.models.component_domain import VALID_DOMAINS
 from app.domain.models.parameter import ParameterDirection
 
@@ -131,6 +137,8 @@ class ComponentListItemBaseDto(CamelModel, LinkModel):
     version: int
     domains: list[str]
     status: ComponentStatus
+    #: why the version is deprecated - set only while it is
+    deprecation_note: str | None = None
     created_at: datetime
     is_favorite: bool
     # opt-in only (`?includeParameters=true`), hence None rather than []: browse/home/mine
@@ -161,6 +169,8 @@ class ComponentDetailBaseDto(CamelModel, LinkModel):
     domains: list[str]
     source: ComponentSource
     status: ComponentStatus
+    #: why the version is deprecated - set only while it is
+    deprecation_note: str | None = None
     #: the component's ports - a workflow's are its own inputs/outputs
     parameters: list[ParameterDto]
     created_at: datetime
@@ -244,6 +254,8 @@ class ComponentCommandTypesApiV1(StrEnum):
     UNPUBLISH = "UNPUBLISH"
     UPDATE_DESCRIPTION = "UPDATE_DESCRIPTION"
     UPDATE_DOMAIN = "UPDATE_DOMAIN"
+    DEPRECATE = "DEPRECATE"
+    UNDEPRECATE = "UNDEPRECATE"
 
 
 class ComponentCommandExecuteRequestDto(EmptyDescriptionToNoneMixin, CamelModel):
@@ -266,6 +278,11 @@ class ComponentCommandExecuteRequestDto(EmptyDescriptionToNoneMixin, CamelModel)
     unpublish_parents: bool = Field(
         default=False,
         description="UNPUBLISH only: also unpublish your own public workflows that run this version, at any depth",
+    )
+    deprecation_note: str | None = Field(
+        default=None,
+        max_length=MAX_DEPRECATION_NOTE_LENGTH,
+        description="DEPRECATE only: why the version is deprecated, shown to everyone who sees or runs it",
     )
 
     @field_validator("domains")

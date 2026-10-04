@@ -140,8 +140,8 @@ async def parse_workflow(
         status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Step or component not found"},
         status.HTTP_409_CONFLICT: {
             "model": ErrorResponse,
-            "description": "The workflow is published, the step runs an inline definition, or the component "
-            "would make the workflow contain itself",
+            "description": "The workflow is published, the step runs an inline definition, the component "
+            "is deprecated, or it would make the workflow contain itself",
         },
     },
 )
@@ -158,7 +158,7 @@ async def update_step(
         logger.warning(f"User {current_user.id} not permitted to update step {step_id}")
         raise ForbiddenException("Insufficient permission to update this workflow's step")
 
-    updated = await workflows_service.update_step_component(step_id, dto.component_id)
+    updated = await workflows_service.update_step_component(step_id, dto.component_id, current_user.id)
     logger.info(f"Updated step {step_id} -> component {dto.component_id}")
     return WorkflowTransformer.to_step(updated, current_user)
 

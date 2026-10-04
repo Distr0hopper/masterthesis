@@ -84,6 +84,7 @@ export const toolTransformer = {
       domainsDisplay: domains.map(getDomainLabel),
       status: ComponentStatus.DRAFT,
       statusDisplay: STATUS_LABELS[ComponentStatus.DRAFT],
+      deprecationNote: null,
       createdAt: now,
       createdAtDisplay: formatDate(now),
       isFavorite: false,

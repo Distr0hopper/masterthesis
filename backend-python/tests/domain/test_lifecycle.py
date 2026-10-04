@@ -11,11 +11,14 @@ from app.domain.composite.lifecycle import (
     IllegalStatusTransitionError,
     IllegalStepTransitionError,
     bind_step,
+    can_bind,
     can_publish,
     confirm_step,
     is_public,
+    mark_deprecated,
     mark_draft,
     mark_published,
+    mark_undeprecated,
     retract_impact,
     unbind_step,
 )
@@ -26,7 +29,7 @@ from app.domain.models.workflow_step import StepMatchStatus, WorkflowStep
 
 ME = uuid.uuid4()
 THEM = uuid.uuid4()
-DRAFT, PUBLISHED = ComponentStatus.DRAFT, ComponentStatus.PUBLISHED
+DRAFT, PUBLISHED, DEPRECATED = ComponentStatus.DRAFT, ComponentStatus.PUBLISHED, ComponentStatus.DEPRECATED
 UNMATCHED, SUGGESTED, CONFIRMED, INLINE = (
     StepMatchStatus.UNMATCHED,
     StepMatchStatus.SUGGESTED,
@@ -87,23 +90,56 @@ def step(status: StepMatchStatus, bound: bool = True) -> WorkflowStep:
 # --- the component status table --------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    ("current", "target"),
-    [(DRAFT, DRAFT), (DRAFT, PUBLISHED), (PUBLISHED, PUBLISHED), (PUBLISHED, DRAFT)],
-)
-def test_component_status_edges_in_the_table_are_legal(current: ComponentStatus, target: ComponentStatus) -> None:
+def move(component: Component, target: ComponentStatus) -> None:
+    match target:
+        case ComponentStatus.PUBLISHED:
+            mark_published([component])
+        case ComponentStatus.DRAFT:
+            mark_draft([component])
+        case ComponentStatus.DEPRECATED:
+            mark_deprecated(component, "superseded")
+
+
+LEGAL = {
+    (DRAFT, DRAFT), (DRAFT, PUBLISHED),
+    (PUBLISHED, PUBLISHED), (PUBLISHED, DRAFT), (PUBLISHED, DEPRECATED),
+    (DEPRECATED, DEPRECATED), (DEPRECATED, PUBLISHED),
+}  # fmt: skip
+ALL_EDGES = [(a, b) for a in ComponentStatus for b in ComponentStatus]
+
+
+@pytest.mark.parametrize(("current", "target"), ALL_EDGES)
+def test_the_status_table_decides_every_edge(current: ComponentStatus, target: ComponentStatus) -> None:
     component = tool("t", current)
-    (mark_published if target == PUBLISHED else mark_draft)([component])
-    assert component.status == target
+    if (current, target) in LEGAL:
+        move(component, target)
+        assert component.status == target
+    else:
+        with pytest.raises(IllegalStatusTransitionError):
+            move(component, target)
+        assert component.status == current
 
 
-def test_a_status_edge_missing_from_the_table_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
-    # stands in for the DEPRECATED ticket's missing DEPRECATED -> DRAFT edge
-    monkeypatch.setitem(COMPONENT_TRANSITIONS, PUBLISHED, frozenset({PUBLISHED}))
-    component = tool("t", PUBLISHED)
-    with pytest.raises(IllegalStatusTransitionError):
+def test_a_deprecated_version_never_goes_straight_back_to_draft() -> None:
+    component = tool("t", DEPRECATED)
+    with pytest.raises(IllegalStatusTransitionError, match="published"):
         mark_draft([component])
-    assert component.status == PUBLISHED
+    assert component.status == DEPRECATED
+
+
+def test_the_note_lives_and_dies_with_the_deprecated_status() -> None:
+    component = tool("t", PUBLISHED)
+    mark_deprecated(component, "wrong CRS handling, use v3")
+    assert (component.status, component.deprecation_note) == (DEPRECATED, "wrong CRS handling, use v3")
+    mark_deprecated(component, "use v4")
+    assert component.deprecation_note == "use v4"
+    mark_undeprecated(component)
+    assert (component.status, component.deprecation_note) == (PUBLISHED, None)
+
+
+def test_only_a_deprecated_version_can_be_undeprecated() -> None:
+    with pytest.raises(IllegalStatusTransitionError):
+        mark_undeprecated(tool("t", PUBLISHED))
 
 
 def test_every_status_has_a_row_in_the_table() -> None:
@@ -179,11 +215,69 @@ def test_publishing_checks_the_whole_tree() -> None:
 
 
 def test_only_drafts_are_published_along() -> None:
-    # drafts are `== DRAFT`, never "not published" - a child in any other non-draft status
-    # (e.g. a later DEPRECATED) must not be swept up and silently changed by its parent
     public = tool("public", PUBLISHED)
     check = can_publish(workflow("root", public, tool("draft", DRAFT)), ME)
     assert [c.name for c in check.own_drafts] == ["draft"]
+
+
+def test_publishing_a_parent_never_touches_a_deprecated_child() -> None:
+    # drafts are `== DRAFT`, never "not published" - otherwise the deprecated child would
+    # land in own_drafts and mark_published would silently un-deprecate it
+    old = tool("old", DEPRECATED)
+    old.deprecation_note = "use v2"
+    nested = workflow("nested", old, status=PUBLISHED, owner=THEM)
+    root = workflow("root", nested, tool("draft", DRAFT))
+
+    check = can_publish(root, ME)
+    mark_published([*check.own_drafts, root])
+
+    assert old not in check.own_drafts
+    assert (old.status, old.deprecation_note) == (DEPRECATED, "use v2")
+
+
+# --- deprecated versions under a publish -----------------------------------------------
+
+
+@pytest.mark.parametrize("owner", [ME, THEM])
+def test_a_deprecated_direct_child_blocks_whoever_owns_it(owner: uuid.UUID) -> None:
+    old = tool("old", DEPRECATED, owner=owner)
+    check = can_publish(workflow("root", old, tool("fine")), ME)
+    assert check.deprecated_children == [old]
+
+
+def test_a_deprecated_child_of_an_own_draft_going_public_along_blocks() -> None:
+    old = tool("old", DEPRECATED, owner=THEM)
+    inner = workflow("inner", old)  # my draft - it would go public with root
+    check = can_publish(workflow("root", inner), ME)
+    assert check.deprecated_children == [old]
+
+
+def test_a_deprecated_version_below_an_already_public_workflow_does_not_block() -> None:
+    # C publishes W0, which runs B's published W1, which runs A's since-deprecated T: W1's
+    # dependency on T is old and not C's to fix - C only adds a dependent to W1
+    t = tool("t", DEPRECATED, owner=uuid.uuid4())
+    w1 = workflow("w1", t, status=PUBLISHED, owner=THEM)
+    check = can_publish(workflow("w0", w1), ME)
+    assert check.deprecated_children == []
+    assert check.foreign_drafts == [] and check.own_drafts == []
+
+
+# --- binding a new step -----------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("status", "owner", "bindable"),
+    [
+        (PUBLISHED, ME, True),
+        (PUBLISHED, THEM, True),
+        (DRAFT, ME, True),
+        (DRAFT, THEM, False),
+        (DEPRECATED, ME, False),
+        (DEPRECATED, THEM, False),
+    ],
+)
+def test_who_may_bind_what(status: ComponentStatus, owner: uuid.UUID, bindable: bool) -> None:
+    assert can_bind(tool("t", status, owner=owner), ME) is bindable
 
 
 def test_unsettled_root_is_reported() -> None:
@@ -215,10 +309,21 @@ def test_retract_without_public_ancestors_is_free() -> None:
     assert impact.own == impact.foreign == [] and not impact.blocked
 
 
-def test_public_means_the_public_statuses_not_just_published() -> None:
-    assert is_public(tool("t", PUBLISHED)) and not is_public(tool("t", DRAFT))
+def test_own_deprecated_ancestors_get_their_own_blocking_bucket() -> None:
+    published = workflow("published", status=PUBLISHED)
+    deprecated = workflow("deprecated", status=DEPRECATED)
+
+    impact = retract_impact([published, deprecated], ME)
+
+    assert [a.name for a in impact.own] == ["published"]
+    assert [a.name for a in impact.own_deprecated] == ["deprecated"]
+    assert impact.foreign == [] and impact.blocked
 
 
-# DEPRECATED ticket: add
-# - publishing a parent never touches a DEPRECATED child (it isn't in own_drafts);
-# - a DEPRECATED ancestor blocks a retract (it is in PUBLIC_STATUSES).
+def test_a_foreign_deprecated_ancestor_blocks_like_any_foreign_one() -> None:
+    impact = retract_impact([workflow("theirs", status=DEPRECATED, owner=THEM)], ME)
+    assert [a.name for a in impact.foreign] == ["theirs"] and impact.blocked
+
+
+def test_public_means_published_or_deprecated() -> None:
+    assert is_public(tool("t", PUBLISHED)) and is_public(tool("t", DEPRECATED)) and not is_public(tool("t", DRAFT))

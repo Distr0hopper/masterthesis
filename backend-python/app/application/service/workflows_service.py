@@ -7,7 +7,7 @@ from typing import Annotated
 from fastapi import Depends
 
 from app.application.commands.commands import ManualFormatLabel, WorkflowStepCommand, WorkflowStepCommandType
-from app.application.exception.component_exceptions import ComponentNotFoundError
+from app.application.exception.component_exceptions import ComponentDeprecatedError, ComponentNotFoundError
 from app.application.exception.workflow_exceptions import (
     DuplicateExtractedComponentNameError,
     ExtractedComponentNameCollisionError,
@@ -76,6 +76,8 @@ class ComponentMatch:
     domains: list[str]
     #: fuzzy-match confidence; None for an exact name collision, which isn't a guess
     score: float | None
+    #: a name conflict may be held by a deprecated version - it can't be reused then
+    status: ComponentStatus = ComponentStatus.PUBLISHED
 
 
 @dataclass
@@ -256,9 +258,10 @@ class WorkflowsService:
         """
         inline_by_step_id = {c.step_id: c for c in extract_inline_components(upload.cwl_content)}
 
-        # one query, reused for every archive step's fuzzy match - the latest version of
-        # every tool lineage, since an archive's step files are tools
-        all_components = await self.uow.components.find_all(kind=ComponentKind.TOOL)
+        # one query, reused for every archive step's fuzzy match - the latest listed version
+        # of every tool lineage, since an archive's step files are tools. Listed only: a
+        # deprecated version takes no new dependents, so it is never suggested
+        all_components = await self.uow.components.find_all(lifecycle.LISTED_STATUSES, ComponentKind.TOOL)
         candidates = [(c.id, c.name) for c in all_components]
         by_id = {c.id: c for c in all_components}
 
@@ -321,6 +324,7 @@ class WorkflowsService:
             version=component.version,
             domains=sorted(d.domain for d in component.domains),
             score=score,
+            status=ComponentStatus(component.status),
         )
 
     @staticmethod
@@ -360,11 +364,11 @@ class WorkflowsService:
         )
 
     async def _validate_component_configs(
-        self, step_definitions: list[tuple[str, dict]], configs: dict[str, ComponentConfig]
+        self, step_definitions: list[tuple[str, dict]], configs: dict[str, ComponentConfig], actor_id: uuid.UUID
     ) -> None:
         """Validates every step's configuration before any Component is created.
 
-        Reuse configs only need their target to exist. Create configs get the full
+        Reuse configs need a target the actor may bind (see _require_bindable). Create configs get the full
         treatment: a domain, a non-blank name, no duplicate name within this upload, and
         no collision with the catalogue (the user is offered the reuse branch instead).
 
@@ -381,6 +385,7 @@ class WorkflowsService:
                     component = await self.uow.components.find_by_id(config.reuse_component_id)
                     if component is None:
                         raise ComponentNotFoundError(config.reuse_component_id)
+                    self._require_bindable(component, actor_id)
                 continue
 
             if config.name is None or not config.name.strip():
@@ -463,7 +468,7 @@ class WorkflowsService:
             raise UnconfiguredWorkflowStepError(unconfigured)
 
         configurable_steps = [(sid, d) for sid, d in step_definitions if sid not in inline_only]
-        await self._validate_component_configs(configurable_steps, component_configs)
+        await self._validate_component_configs(configurable_steps, component_configs, created_by_id)
 
         extracted_by_step_id = {c.step_id: c for c in extract_inline_components(upload.cwl_content)}
 
@@ -704,13 +709,17 @@ class WorkflowsService:
             raise WorkflowStepNotFoundError(step_id)
         return step, step.parent
 
-    async def update_step_component(self, step_id: uuid.UUID, component_id: uuid.UUID | None) -> WorkflowStep:
+    async def update_step_component(
+        self, step_id: uuid.UUID, component_id: uuid.UUID | None, actor_id: uuid.UUID
+    ) -> WorkflowStep:
         async with self.uow:
-            step = await self._update_step_component(step_id, component_id)
+            step = await self._update_step_component(step_id, component_id, actor_id)
             await self.uow.commit()
         return step
 
-    async def _update_step_component(self, step_id: uuid.UUID, component_id: uuid.UUID | None) -> WorkflowStep:
+    async def _update_step_component(
+        self, step_id: uuid.UUID, component_id: uuid.UUID | None, actor_id: uuid.UUID
+    ) -> WorkflowStep:
         step, workflow = await self.get_step_with_workflow(step_id)
         self._require_steps_editable(workflow)
         if step.match_status == StepMatchStatus.INLINE:
@@ -722,6 +731,7 @@ class WorkflowsService:
             child = await self.uow.components.find_by_id(component_id)
             if child is None:
                 raise ComponentNotFoundError(component_id)
+            self._require_bindable(child, actor_id)
             await self._require_acyclic(workflow, [child.id])
             lifecycle.bind_step(step, child)
         else:
@@ -737,6 +747,16 @@ class WorkflowsService:
 
         lifecycle.confirm_step(step)
         return await self.uow.workflows.add_step(step)
+
+    @staticmethod
+    def _require_bindable(child: Component, actor_id: uuid.UUID) -> None:
+        """A new step may only run what lifecycle.can_bind allows. Someone else's draft is
+        reported as not found, exactly like an unknown id - its existence is private."""
+        if lifecycle.can_bind(child, actor_id):
+            return
+        if lifecycle.is_deprecated(child):
+            raise ComponentDeprecatedError(f"{child.name} v{child.version}", child.deprecation_note)
+        raise ComponentNotFoundError(child.id)
 
     @staticmethod
     def _require_steps_editable(workflow: Component) -> None:

@@ -88,3 +88,24 @@ class ComponentHasPublicParentsError(Exception):
         super().__init__(
             f"Used by your public workflow(s) {', '.join(workflows)} - confirm that they become drafts as well"
         )
+
+
+class ComponentHasDeprecatedParentsError(Exception):
+    """The caller's own public workflows running this version include deprecated ones - a
+    deprecated version never goes straight back to draft, so they block the cascade."""
+
+    def __init__(self, workflows: list[str]) -> None:
+        self.workflows = workflows
+        super().__init__(
+            f"Used by your deprecated workflow(s) {', '.join(workflows)} - undeprecate them first, "
+            "or deprecate this version instead"
+        )
+
+
+class ComponentDeprecatedError(Exception):
+    """A deprecated version keeps working where it already runs, but takes no new dependents."""
+
+    def __init__(self, label: str, note: str | None) -> None:
+        super().__init__(
+            f"{label} is deprecated{f' ({note})' if note else ''} - pick a newer version instead"
+        )

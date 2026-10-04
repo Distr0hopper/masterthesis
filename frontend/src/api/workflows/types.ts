@@ -25,6 +25,8 @@ export interface ComponentSummaryDto {
   version: number;
   domains: string[];
   status: ComponentStatus;
+  /** why the child is deprecated - set only while it is */
+  deprecationNote?: string | null;
   canPublish: boolean;
 }
 
@@ -105,6 +107,8 @@ export interface StepComponentMatchDto {
   version: number;
   domains: string[];
   score: number | null;
+  /** a deprecated holder of the name can't be reused - a new step can't run it */
+  status: ComponentStatus;
 }
 
 export interface WorkflowStepPreviewDto extends ToolPreviewDto {

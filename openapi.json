@@ -855,7 +855,7 @@
             }
           },
           "409": {
-            "description": "Public workflows run this version - other users' ones, or your own without unpublishParents",
+            "description": "Public workflows run this version - other users' ones, your own deprecated ones, or your own without unpublishParents",
             "content": {
               "application/json": {
                 "schema": {
@@ -1263,7 +1263,7 @@
             }
           },
           "409": {
-            "description": "PUBLISH of a workflow that still runs draft components, or UNPUBLISH of a version that public workflows run (other users' ones, or your own without unpublishParents)",
+            "description": "PUBLISH of a workflow that still runs draft components or gives a deprecated version a new dependent; UNPUBLISH of a version that public workflows run (other users' ones, your own deprecated ones, or your own without unpublishParents) or that is deprecated; DEPRECATE of a draft; UNDEPRECATE of a version that isn't deprecated",
             "content": {
               "application/json": {
                 "schema": {
@@ -2151,7 +2151,7 @@
             }
           },
           "409": {
-            "description": "The workflow is published, the step runs an inline definition, or the component would make the workflow contain itself",
+            "description": "The workflow is published, the step runs an inline definition, the component is deprecated, or it would make the workflow contain itself",
             "content": {
               "application/json": {
                 "schema": {
@@ -3062,6 +3062,19 @@
             "title": "Unpublishparents",
             "description": "UNPUBLISH only: also unpublish your own public workflows that run this version, at any depth",
             "default": false
+          },
+          "deprecationNote": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deprecationnote",
+            "description": "DEPRECATE only: why the version is deprecated, shown to everyone who sees or runs it"
           }
         },
         "type": "object",
@@ -3078,7 +3091,9 @@
           "PUBLISH",
           "UNPUBLISH",
           "UPDATE_DESCRIPTION",
-          "UPDATE_DOMAIN"
+          "UPDATE_DOMAIN",
+          "DEPRECATE",
+          "UNDEPRECATE"
         ],
         "title": "ComponentCommandTypesApiV1"
       },
@@ -3345,10 +3360,11 @@
         "type": "string",
         "enum": [
           "draft",
-          "published"
+          "published",
+          "deprecated"
         ],
         "title": "ComponentStatus",
-        "description": "A component is staged privately until its creator publishes it."
+        "description": "A component is staged privately until its creator publishes it. A published version\ncan later be deprecated: still readable, and everything already running it keeps\nworking, but it is no longer listed or offered for new use (see composite.lifecycle)."
       },
       "ComponentSummaryDto": {
         "properties": {
@@ -3377,6 +3393,17 @@
           },
           "status": {
             "$ref": "#/components/schemas/ComponentStatus"
+          },
+          "deprecationNote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deprecationnote"
           },
           "canPublish": {
             "type": "boolean",
@@ -4553,6 +4580,9 @@
               }
             ],
             "title": "Score"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ComponentStatus"
           }
         },
         "type": "object",
@@ -4562,7 +4592,8 @@
           "name",
           "version",
           "domains",
-          "score"
+          "score",
+          "status"
         ],
         "title": "StepComponentMatchDto",
         "description": "An existing component a step could bind to instead of creating a new one."
@@ -4770,6 +4801,17 @@
           "status": {
             "$ref": "#/components/schemas/ComponentStatus"
           },
+          "deprecationNote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deprecationnote"
+          },
           "parameters": {
             "items": {
               "$ref": "#/components/schemas/ParameterDto"
@@ -4920,6 +4962,17 @@
           },
           "status": {
             "$ref": "#/components/schemas/ComponentStatus"
+          },
+          "deprecationNote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deprecationnote"
           },
           "createdAt": {
             "type": "string",
@@ -5380,6 +5433,17 @@
           "status": {
             "$ref": "#/components/schemas/ComponentStatus"
           },
+          "deprecationNote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deprecationnote"
+          },
           "parameters": {
             "items": {
               "$ref": "#/components/schemas/ParameterDto"
@@ -5646,6 +5710,17 @@
           },
           "status": {
             "$ref": "#/components/schemas/ComponentStatus"
+          },
+          "deprecationNote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deprecationnote"
           },
           "createdAt": {
             "type": "string",

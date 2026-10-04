@@ -38,6 +38,8 @@ class ComponentTransformer:
             ComponentCommandTypesApiV1.UNPUBLISH: ComponentCommandType.UNPUBLISH,
             ComponentCommandTypesApiV1.UPDATE_DESCRIPTION: ComponentCommandType.UPDATE_DESCRIPTION,
             ComponentCommandTypesApiV1.UPDATE_DOMAIN: ComponentCommandType.UPDATE_DOMAIN,
+            ComponentCommandTypesApiV1.DEPRECATE: ComponentCommandType.DEPRECATE,
+            ComponentCommandTypesApiV1.UNDEPRECATE: ComponentCommandType.UNDEPRECATE,
         }
         return ComponentCommand(
             type=mapping[dto.command],
@@ -46,6 +48,7 @@ class ComponentTransformer:
             domains=dto.domains,
             publish_components=dto.publish_components,
             unpublish_parents=dto.unpublish_parents,
+            deprecation_note=dto.deprecation_note,
         )
 
     @staticmethod
@@ -77,6 +80,7 @@ class ComponentTransformer:
             version=component.version,
             domains=ComponentTransformer.to_domains(component),
             status=component.status,
+            deprecation_note=component.deprecation_note,
             created_at=component.created_at,
             is_favorite=is_favorite,
             parameters=(
@@ -128,6 +132,7 @@ class ComponentTransformer:
             domains=ComponentTransformer.to_domains(component),
             source=component.source,
             status=component.status,
+            deprecation_note=component.deprecation_note,
             parameters=[ParameterTransformer.to_parameter(p, component.ontology_url) for p in component.parameters],
             created_at=component.created_at,
             updated_at=component.updated_at,

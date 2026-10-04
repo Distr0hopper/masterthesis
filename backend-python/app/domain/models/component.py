@@ -33,13 +33,17 @@ class ComponentSource(str, Enum):
 
 
 class ComponentStatus(str, Enum):
-    """A component is staged privately until its creator publishes it."""
+    """A component is staged privately until its creator publishes it. A published version
+    can later be deprecated: still readable, and everything already running it keeps
+    working, but it is no longer listed or offered for new use (see composite.lifecycle)."""
 
     DRAFT = "draft"
     PUBLISHED = "published"
+    DEPRECATED = "deprecated"
 
 
 MAX_DESCRIPTION_LENGTH = 2000
+MAX_DEPRECATION_NOTE_LENGTH = 500
 
 
 class Component(SQLModel, table=True):
@@ -94,10 +98,14 @@ class Component(SQLModel, table=True):
     # explicit String column: SQLModel would otherwise infer a native Postgres
     # enum type from the Python Enum
     source: ComponentSource = Field(default=ComponentSource.MANUAL_UPLOAD, sa_column=Column(String, nullable=False))
-    # Per *version row*, not per lineage: only PUBLISHED rows are publicly visible/listed (see
-    # ComponentsService.is_visible), so a still-draft v2 never hides an already-published v1
-    # from the browse list.
+    # Per *version row*, not per lineage: only PUBLISHED rows are listed and only PUBLISHED or
+    # DEPRECATED ones are publicly visible (see composite.lifecycle), so a still-draft or
+    # deprecated v2 never hides an already-published v1 from the browse list.
     status: ComponentStatus = Field(default=ComponentStatus.DRAFT, sa_column=Column(String, nullable=False))
+    #: why the version is deprecated, npm-style - set only while it is DEPRECATED
+    deprecation_note: str | None = Field(
+        default=None, sa_column=Column(String(MAX_DEPRECATION_NOTE_LENGTH), nullable=True)
+    )
     created_at: datetime = Field(sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False))
     updated_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

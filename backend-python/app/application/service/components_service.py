@@ -6,6 +6,7 @@ from fastapi import Depends
 
 from app.application.commands.commands import ComponentCommand, ComponentCommandType
 from app.application.exception.component_exceptions import (
+    ComponentHasDeprecatedParentsError,
     ComponentHasPublicParentsError,
     ComponentNameAlreadyExistsError,
     ComponentNotFoundError,
@@ -20,6 +21,7 @@ from app.application.exception.workflow_exceptions import (
     UnpublishableWorkflowComponentsError,
     WorkflowHasUnpublishedComponentsError,
     WorkflowNotReadyToPublishError,
+    WorkflowRunsDeprecatedComponentsError,
 )
 from app.application.unit_of_work import UnitOfWork
 from app.domain.composite import lifecycle
@@ -86,6 +88,11 @@ def _label(component: Component) -> str:
     return f"{component.name} v{component.version}"
 
 
+def _label_with_note(component: Component) -> str:
+    note = component.deprecation_note
+    return f"{_label(component)}{f' ({note})' if note else ''}"
+
+
 def _owner_name(component: Component) -> str:
     owner = component.created_by
     if owner is None:
@@ -128,38 +135,38 @@ class ComponentsService:
         # browse-list callers always see only PUBLISHED components - enforced here rather
         # than trusted from an arbitrary caller-supplied filter, so a public browse request
         # can never leak drafts regardless of what the router builds
-        filter = replace(filter, status=ComponentStatus.PUBLISHED, created_by=None)
+        filter = replace(filter, statuses=lifecycle.LISTED_STATUSES, created_by=None)
         return await self.uow.components.find_paginated(filter, pagination)
 
     async def list_my_components_by_status(
         self,
         created_by_id: uuid.UUID,
-        status: ComponentStatus,
+        statuses: frozenset[ComponentStatus],
         kind: ComponentKind | None,
         pagination: PaginatedList,
     ) -> tuple[list[Component], int]:
-        filter = ComponentListFilter(created_by=created_by_id, status=status, kind=kind)
+        filter = ComponentListFilter(created_by=created_by_id, statuses=statuses, kind=kind)
         return await self.uow.components.find_paginated(filter, pagination)
 
     async def list_all_components(self, filter: ComponentListFilter) -> list[Component]:
         """Every component list_components would page through, unpaged - for callers that
         must order the whole set themselves before paging (the builder palette's ranking)."""
-        filter = replace(filter, status=ComponentStatus.PUBLISHED, created_by=None)
+        filter = replace(filter, statuses=lifecycle.LISTED_STATUSES, created_by=None)
         return await self.uow.components.find_all_filtered(filter)
 
     async def get_latest_components(self, limit: int, kind: ComponentKind | None = None) -> list[Component]:
-        components = await self.uow.components.find_all(ComponentStatus.PUBLISHED, kind)
+        components = await self.uow.components.find_all(lifecycle.LISTED_STATUSES, kind)
         return sorted(components, key=lambda c: c.created_at, reverse=True)[:limit]
 
     async def get_stats(self) -> ComponentStats:
         return ComponentStats(
             tools_published=await self.uow.components.count_distinct_names(
-                ComponentStatus.PUBLISHED, ComponentKind.TOOL
+                lifecycle.LISTED_STATUSES, ComponentKind.TOOL
             ),
             workflows_published=await self.uow.components.count_distinct_names(
-                ComponentStatus.PUBLISHED, ComponentKind.WORKFLOW
+                lifecycle.LISTED_STATUSES, ComponentKind.WORKFLOW
             ),
-            contributors=await self.uow.components.count_distinct_contributors(ComponentStatus.PUBLISHED),
+            contributors=await self.uow.components.count_distinct_contributors(lifecycle.LISTED_STATUSES),
         )
 
     # --- reading -------------------------------------------------------------------------
@@ -307,6 +314,8 @@ class ComponentsService:
             raise WorkflowNotReadyToPublishError(component.id)
         if check.unsettled_nested:
             raise NestedWorkflowsNotReadyError(check.unsettled_nested)
+        if check.deprecated_children:
+            raise WorkflowRunsDeprecatedComponentsError([_label_with_note(c) for c in check.deprecated_children])
         if check.foreign_drafts:
             raise UnpublishableWorkflowComponentsError(check.foreign_drafts)
         if check.own_drafts and not publish_components:
@@ -321,9 +330,12 @@ class ComponentsService:
     ) -> Component:
         """Inverse of publish - only the creator can see the component again. Idempotent.
 
-        Never breaks a public workflow running it: see _require_retractable."""
+        Never breaks a public workflow running it: see _require_retractable. A deprecated
+        version is undeprecated first - the table has no way from it back to draft."""
         if lifecycle.is_draft(component):
             return component
+        if not lifecycle.can_transition(component, ComponentStatus.DRAFT):
+            raise lifecycle.IllegalStatusTransitionError(component, ComponentStatus.DRAFT)
         own_parents = await self._require_retractable(component, current_user_id, unpublish_parents)
         lifecycle.mark_draft([component, *own_parents])
         await self.uow.components.add_all([component, *own_parents])
@@ -342,9 +354,23 @@ class ComponentsService:
         impact = lifecycle.retract_impact(await self.uow.components.find_ancestors(component.id), actor_id)
         if impact.foreign:
             raise ComponentUsedByOthersError([f"{_label(w)} by {_owner_name(w)}" for w in impact.foreign])
+        if impact.own_deprecated:
+            raise ComponentHasDeprecatedParentsError([_label(w) for w in impact.own_deprecated])
         if impact.own and not unpublish_parents:
             raise ComponentHasPublicParentsError([_label(w) for w in impact.own])
         return impact.own
+
+    async def _deprecate(self, component: Component, note: str | None) -> Component:
+        """Retract a public version without breaking anything: it stays readable and keeps
+        working wherever it already runs, but is no longer listed or offered for new use -
+        so, unlike unpublishing, no workflow above it needs a check. Deprecating again only
+        replaces the note."""
+        lifecycle.mark_deprecated(component, (note or "").strip() or None)
+        return await self.uow.components.add(component)
+
+    async def _undeprecate(self, component: Component) -> Component:
+        lifecycle.mark_undeprecated(component)
+        return await self.uow.components.add(component)
 
     async def _update_description(self, component: Component, description: str | None) -> Component:
         component.description = description
@@ -375,6 +401,10 @@ class ComponentsService:
                     component = await self._update_description(component, command.description)
                 case ComponentCommandType.UPDATE_DOMAIN:
                     component = await self._update_domains(component, command.domains)
+                case ComponentCommandType.DEPRECATE:
+                    component = await self._deprecate(component, command.deprecation_note)
+                case ComponentCommandType.UNDEPRECATE:
+                    component = await self._undeprecate(component)
             await self.uow.commit()
         return await self.reload(component)
 

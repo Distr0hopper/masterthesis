@@ -7,12 +7,14 @@ import { PublicAncestors } from '@/components/common/PublicAncestors';
 import {
   ComponentSource,
   ComponentStatus,
+  isRetractBlocked,
+  ownPublishedAncestors,
   useComponentImpact,
   useDeleteComponent,
   type ComponentImpactDto,
   type ComponentDisplayModel,
 } from '@/api/components';
-import { getLink } from '@/api/permissions';
+import { canDeprecate, getLink } from '@/api/permissions';
 import { draftKeys } from '@/api/workflow-drafts';
 import { getErrorMessage } from '@/lib/errors';
 import { ROUTES } from '@/lib/routes';
@@ -22,6 +24,8 @@ interface DeleteComponentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onDeleted?: () => void;
+  /** opens the deprecate dialog - offered when deleting is blocked */
+  onDeprecateInstead: () => void;
 }
 
 function plural(count: number, noun: string): string {
@@ -53,7 +57,7 @@ function UsageWarning({ impact }: { impact: ComponentImpactDto }) {
                 <Link to={ROUTES.workflowDetail(workflow.id)} className="underline" target="_blank" rel="noreferrer">
                   {workflow.name} v{workflow.version}
                 </Link>
-                {workflow.status === ComponentStatus.PUBLISHED && ' (published)'}
+                {workflow.status !== ComponentStatus.DRAFT && ` (${workflow.status})`}
               </li>
             ))}
             {impact.hiddenWorkflowCount > 0 && (
@@ -90,14 +94,20 @@ function UsageWarning({ impact }: { impact: ComponentImpactDto }) {
  * workflow by the workflows nesting it - so both get the usage warning. A builder
  * workflow additionally offers to take the canvas it was synced from along.
  */
-export function DeleteComponentDialog({ component, open, onOpenChange, onDeleted }: DeleteComponentDialogProps) {
+export function DeleteComponentDialog({
+  component,
+  open,
+  onOpenChange,
+  onDeleted,
+  onDeprecateInstead,
+}: DeleteComponentDialogProps) {
   const queryClient = useQueryClient();
   const { mutate, isPending } = useDeleteComponent();
   const { data: impact, isLoading: isLoadingImpact } = useComponentImpact(getLink(component._links, 'impact'), open);
   // another user's public workflow runs it - taking it out of public view would break theirs
-  const blocked = (impact?.foreignPublicAncestors.length ?? 0) > 0;
-  // the user's own public workflows above it become drafts with it - confirmed by deleting
-  const ownParents = impact?.ownPublicAncestors.length ?? 0;
+  const blocked = isRetractBlocked(impact);
+  // the user's own published workflows above it become drafts with it - confirmed by deleting
+  const ownParents = impact ? ownPublishedAncestors(impact).length : 0;
 
   // only offer the cascade when there is something on the other side to delete: the
   // workflow came from the builder and its draft still exists (draftId is ON DELETE SET
@@ -155,6 +165,11 @@ export function DeleteComponentDialog({ component, open, onOpenChange, onDeleted
       onConfirm={handleDelete}
       isPending={isPending || isLoadingImpact}
       blocked={blocked}
+      blockedAlternative={
+        canDeprecate(component._links) && component.status === ComponentStatus.PUBLISHED
+          ? { label: 'Deprecate instead', onSelect: onDeprecateInstead }
+          : undefined
+      }
       confirmLabel={ownParents > 0 ? `Delete and unpublish ${ownParents}` : 'Delete'}
     >
       {isLoadingImpact && <p className="text-sm text-slate-500">Checking where this version is used...</p>}

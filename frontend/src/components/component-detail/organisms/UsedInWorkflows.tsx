@@ -47,6 +47,11 @@ export function UsedInWorkflows({ componentId, version }: UsedInWorkflowsProps) 
                       Draft
                     </Badge>
                   )}
+                  {usage.status === ComponentStatus.DEPRECATED && (
+                    <Badge variant="outline" className="border-slate-400 text-slate-700">
+                      Deprecated
+                    </Badge>
+                  )}
                 </li>
               );
             })}

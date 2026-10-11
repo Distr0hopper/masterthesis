@@ -19,7 +19,7 @@ interface ComponentCardProps {
   actions?: ReactNode;
 }
 
-/** One card for either kind - only the kind snippet, the footer line and the builder link differ. */
+/** One card for either kind - only the kind snippet, a workflow's step count and the builder link differ. */
 export function ComponentCard({ component, backTo, showBuilderLink = false, actions }: ComponentCardProps) {
   const KindIcon = KIND_ICONS[component.kind];
 
@@ -40,8 +40,8 @@ export function ComponentCard({ component, backTo, showBuilderLink = false, acti
       : null;
 
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-3 pt-6">
+    <Card className="flex flex-col">
+      <CardContent className="flex flex-1 flex-col gap-3 pt-6">
         <div className="flex items-center justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline" className="w-fit gap-1 text-slate-700">
@@ -65,13 +65,15 @@ export function ComponentCard({ component, backTo, showBuilderLink = false, acti
 
         {component.description && <p className="line-clamp-2 text-sm text-slate-500">{component.description}</p>}
 
-        <div className="flex items-center justify-between border-t pt-3 text-sm text-slate-500">
-          <span>{component.kind === 'workflow' ? `${component.stepCount} steps` : component.authorDisplay}</span>
+        <div className="mt-auto flex items-center justify-between border-t pt-3 text-sm text-slate-500">
+          <span>
+            {component.authorDisplay}
+            {component.kind === 'workflow' &&
+              ` · ${component.stepCount} step${component.stepCount === 1 ? '' : 's'}`}
+          </span>
           <span>{component.createdAtDisplay}</span>
         </div>
 
-        {/* stacked, not side by side: "Edit in Workflow Builder" is too long to sit
-            next to View in a three-column card grid without truncating */}
         <div className="flex flex-col gap-2">
           <Button asChild className="w-full bg-jmu-blue-800 hover:bg-jmu-blue-800/90">
             <Link

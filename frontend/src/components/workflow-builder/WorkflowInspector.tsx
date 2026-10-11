@@ -9,7 +9,7 @@ import {
   isNumericParameter,
 } from './lib/portKinds';
 import { formatNoteFor, formatPortType } from './lib/ports';
-import { ROUTES } from '@/lib/routes';
+import { componentDetailRoute } from '@/lib/routes';
 import type { ComponentFlowNode } from './types';
 import { DomainBadges } from '@/components/common/DomainBadges';
 
@@ -82,7 +82,7 @@ export function WorkflowInspector({ node, onParameterChange }: WorkflowInspector
             {node.data.label}
           </span>
           <a
-            href={ROUTES.componentDetail(node.data.componentId)}
+            href={componentDetailRoute(node.data.kind, node.data.componentId)}
             target="_blank"
             rel="noreferrer"
             className="shrink-0 rounded p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-jmu-blue-800"

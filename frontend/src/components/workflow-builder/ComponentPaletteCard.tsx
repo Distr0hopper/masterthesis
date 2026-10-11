@@ -3,7 +3,7 @@ import {
   type ComponentDisplayModel,
 } from '@/api/components';
 import { cn } from '@/lib/utils';
-import { ROUTES } from '@/lib/routes';
+import { componentDetailRoute } from '@/lib/routes';
 import { NO_DATA_INPUTS_SCORE } from './lib/portKinds';
 import { DRAG_MIME, type ComponentDragPayload } from './types';
 import { DomainBadges } from '@/components/common/DomainBadges';
@@ -54,7 +54,7 @@ export function ComponentPaletteCard({ component }: ComponentPaletteCardProps) {
             />
           )}
           <a
-            href={ROUTES.componentDetail(component.id)}
+            href={componentDetailRoute(component.kind, component.id)}
             target="_blank"
             rel="noreferrer"
             // the card is the drag source; without this the browser would start

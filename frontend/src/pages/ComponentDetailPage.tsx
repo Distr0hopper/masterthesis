@@ -1,4 +1,4 @@
-import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { isAxiosError } from 'axios';
 import { ChevronLeft } from 'lucide-react';
 import { useComponent, type ComponentKind } from '@/api/components';
@@ -8,12 +8,12 @@ import { UsedInWorkflows } from '@/components/component-detail/organisms/UsedInW
 import { ToolTabs } from '@/components/tool-detail/organisms/ToolTabs';
 import { WorkflowDefinition } from '@/components/workflow-detail/organisms/WorkflowDefinition';
 import { WorkflowSteps } from '@/components/workflow-detail/organisms/WorkflowSteps';
-import { KIND_ROUTES, componentDetailRoute } from '@/lib/routes';
+import { KIND_ROUTES } from '@/lib/routes';
 import { KIND_COPY } from '@/lib/componentKinds';
 
 interface ComponentDetailPageProps {
-  /** the kind the route is for - omitted on /components/:id, which only resolves and redirects */
-  kind?: ComponentKind;
+  /** the kind the route is for - /tools/:id or /workflows/:id */
+  kind: ComponentKind;
 }
 
 /**
@@ -27,20 +27,21 @@ export default function ComponentDetailPage({ kind }: ComponentDetailPageProps) 
   const location = useLocation();
   const { data: model, isLoading, error } = useComponent(id ?? '');
 
-  // until it has loaded, the route's kind is the best guess for where "back" leads
-  const routes = KIND_ROUTES[model?.kind ?? kind ?? 'tool'];
-  const copy = KIND_COPY[model?.kind ?? kind ?? 'tool'];
+  const routes = KIND_ROUTES[kind];
+  const copy = KIND_COPY[kind];
   const backTo = (location.state as { from?: string } | null)?.from ?? routes.browse;
-  const backLabel = backTo === routes.mine ? `Back to My ${copy.plural}` : `Back to ${copy.plural}`;
+  const backLabel = backTo === routes.mine ? `Back to My ${copy.plural}` : 'Back to Browse';
 
   if (isLoading) {
     return <p className="text-slate-500">Loading...</p>;
   }
 
-  if (isAxiosError(error) && error.response?.status === 404) {
+  // an id of the other kind under this route (/workflows/<a tool's id>) is no page either
+  const notFound = (isAxiosError(error) && error.response?.status === 404) || (model && model.kind !== kind);
+  if (notFound) {
     return (
       <div>
-        <p className="text-slate-500">{kind ? `${KIND_COPY[kind].singular} not found.` : 'Not found.'}</p>
+        <p className="text-slate-500">{copy.singular} not found.</p>
         <Link to={backTo} className="mt-4 inline-flex items-center gap-1 text-sm text-jmu-blue-800 hover:underline">
           <ChevronLeft className="h-4 w-4" /> {backLabel}
         </Link>
@@ -50,11 +51,6 @@ export default function ComponentDetailPage({ kind }: ComponentDetailPageProps) 
 
   if (error || !model) {
     return <p className="text-slate-500">Something went wrong loading this page.</p>;
-  }
-
-  // a /components/:id link, or a tool's id under /workflows - land on the right page
-  if (model.kind !== kind) {
-    return <Navigate to={componentDetailRoute(model.kind, model.id)} state={location.state} replace />;
   }
 
   return (

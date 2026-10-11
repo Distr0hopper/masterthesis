@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter as Router, Navigate, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Header from '@/components/layout/Header';
 import { ContainerLayout } from '@/components/layout/ContainerLayout';
 import { FullBleedLayout } from '@/components/layout/FullBleedLayout';
@@ -17,7 +17,7 @@ import ProfilePage from "@/pages/ProfilePage.tsx";
 import ProtectedRoute from "@/pages/ProtectedRoutes.tsx";
 import { Toaster } from "@/components/ui/sonner.tsx";
 import { SessionKeeper } from "@/api/auth/SessionKeeper";
-import { ROUTES, browseRoute } from "@/lib/routes";
+import { ROUTES } from "@/lib/routes";
 
 const queryClient = new QueryClient();
 
@@ -45,14 +45,6 @@ export default function App() {
             <Route path={ROUTES.workflowDetail(':id')} element={<ComponentDetailPage key="workflow" kind="workflow" />} />
             <Route path={ROUTES.myWorkflows} element={<ProtectedRoute> <MyComponentsPage key="workflow" kind="workflow" /> </ProtectedRoute>} />
 
-            {/* old paths - the per-kind lists and the pre-split component pages - existing links keep working */}
-            <Route path={ROUTES.legacyTools} element={<Navigate to={browseRoute({ kind: 'tool' })} replace />} />
-            <Route path={ROUTES.legacyWorkflows} element={<Navigate to={browseRoute({ kind: 'workflow' })} replace />} />
-            <Route path={ROUTES.legacyComponents} element={<Navigate to={ROUTES.browse} replace />} />
-            <Route path={ROUTES.legacyMyComponents} element={<Navigate to={ROUTES.myTools} replace />} />
-            <Route path={ROUTES.legacyComponentUpload} element={<Navigate to={ROUTES.toolUpload} replace />} />
-            {/* resolves the kind, then redirects to /tools/:id or /workflows/:id */}
-            <Route path={ROUTES.componentDetail(':id')} element={<ComponentDetailPage />} />
             <Route path={ROUTES.login} element={<LoginPage />} />
             <Route path={ROUTES.builder} element={<WorkflowBuilderOverviewPage />} />
           </Route>

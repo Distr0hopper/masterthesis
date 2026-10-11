@@ -1,12 +1,11 @@
 import { ExternalLink } from 'lucide-react';
 import type { ComponentKind } from '@/api/components';
-import { ROUTES, componentDetailRoute } from '@/lib/routes';
+import { componentDetailRoute } from '@/lib/routes';
 import { cn } from '@/lib/utils';
 
 interface ComponentLinkProps {
   componentId: string;
-  /** when unknown, the link goes through /components/:id, which resolves the kind */
-  kind?: ComponentKind;
+  kind: ComponentKind;
   name: string;
   version?: number | null;
   className?: string;
@@ -19,7 +18,7 @@ interface ComponentLinkProps {
 export function ComponentLink({ componentId, kind, name, version, className }: ComponentLinkProps) {
   return (
     <a
-      href={kind ? componentDetailRoute(kind, componentId) : ROUTES.componentDetail(componentId)}
+      href={componentDetailRoute(kind, componentId)}
       target="_blank"
       rel="noreferrer"
       title="Open details in a new tab"

@@ -12,7 +12,7 @@ describe('ComponentLink text content', () => {
   it('separates name and version with a real character, not a CSS gap', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
-        <ComponentLink componentId="abc" name="Remove Outliers" version={1} />
+        <ComponentLink componentId="abc" kind="tool" name="Remove Outliers" version={1} />
       </MemoryRouter>,
     );
     expect(textOf(html)).toBe('Remove Outliers v1');

@@ -83,20 +83,20 @@ export function StepMatchCard({ step }: StepMatchCardProps) {
         ) : (
         <div className="flex flex-col gap-2">
           <Label>Matched Component</Label>
-          {step.componentId ? (
+          {step.component ? (
             <div className="flex items-center justify-between gap-2 rounded-md border border-input px-3 py-2">
               <ComponentLink
-                componentId={step.componentId}
-                kind={step.component?.kind}
-                name={step.componentName ?? 'Component'}
-                version={step.componentVersion}
+                componentId={step.component.id}
+                kind={step.component.kind}
+                name={step.component.name}
+                version={step.component.version}
               />
-              {step.component?.kind === 'workflow' && (
+              {step.component.kind === 'workflow' && (
                 <Badge variant="outline" title="This step runs a whole workflow">
                   Nested workflow
                 </Badge>
               )}
-              {step.component?.status === ComponentStatus.DEPRECATED && (
+              {step.component.status === ComponentStatus.DEPRECATED && (
                 <Badge
                   variant="outline"
                   className="border-slate-400 text-slate-700"

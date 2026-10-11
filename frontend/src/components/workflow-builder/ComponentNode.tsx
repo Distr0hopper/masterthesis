@@ -8,7 +8,7 @@ import {
 } from '@/api/components';
 import { configParameters, dataInputs, dataOutputs } from './lib/portKinds';
 import { formatPortType } from './lib/ports';
-import { ROUTES } from '@/lib/routes';
+import { componentDetailRoute } from '@/lib/routes';
 import type { ComponentFlowNode } from './types';
 import { DomainBadges } from '@/components/common/DomainBadges';
 
@@ -100,7 +100,7 @@ export function ComponentNode({ id, data, selected }: NodeProps<ComponentFlowNod
           {/* a deleted component has no detail page left to open */}
           {!data.missing && (
             <a
-              href={ROUTES.componentDetail(data.componentId)}
+              href={componentDetailRoute(data.kind, data.componentId)}
               target="_blank"
               rel="noreferrer"
               // `nodrag` keeps React Flow from starting a node drag on mousedown, which

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { ComponentConfigDto, WorkflowStepPreviewDto } from '@/api/workflows';
-import { toFormatLabelDtos, type ExistingComponentDto, type FormatLabelDraft } from '@/api/components';
+import { toFormatLabelDtos, type ComponentKind, type ExistingComponentDto, type FormatLabelDraft } from '@/api/components';
 
 export type ConfigMode = 'create' | 'reuse';
 
@@ -13,6 +13,7 @@ export interface ComponentConfigState {
   formatLabels: FormatLabelDraft;
   /** set in 'reuse' mode - the catalogue component this step binds to */
   reuseComponentId: string | null;
+  reuseKind: ComponentKind | null;
   reuseName: string | null;
   reuseVersion: number | null;
 }
@@ -25,7 +26,7 @@ function initialState(preview: WorkflowStepPreviewDto): ComponentConfigState {
   // an archive step whose run: filename matches a catalogue component defaults to reusing
   // it - re-importing a component the repository already holds is almost never intended
   if (preview.suggestedMatch) {
-    const { componentId, name, version } = preview.suggestedMatch;
+    const { componentId, kind, name, version } = preview.suggestedMatch;
     return {
       mode: 'reuse',
       name: preview.suggestedName,
@@ -33,6 +34,7 @@ function initialState(preview: WorkflowStepPreviewDto): ComponentConfigState {
       description: preview.description ?? '',
       formatLabels: {},
       reuseComponentId: componentId,
+      reuseKind: kind,
       reuseName: name,
       reuseVersion: version,
     };
@@ -44,6 +46,7 @@ function initialState(preview: WorkflowStepPreviewDto): ComponentConfigState {
     description: preview.description ?? '',
     formatLabels: {},
     reuseComponentId: null,
+    reuseKind: null,
     reuseName: null,
     reuseVersion: null,
   };

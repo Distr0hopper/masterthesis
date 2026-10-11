@@ -43,7 +43,7 @@ export default function Header() {
   const browseActive =
     pathname === ROUTES.browse ||
     (!isUpload &&
-      (pathname.startsWith(`${ROUTES.legacyTools}/`) || pathname.startsWith(`${ROUTES.legacyWorkflows}/`)));
+      (pathname.startsWith(ROUTES.toolDetail('')) || pathname.startsWith(ROUTES.workflowDetail(''))));
   const ToolIcon = KIND_ICONS.tool;
   const WorkflowIcon = KIND_ICONS.workflow;
 

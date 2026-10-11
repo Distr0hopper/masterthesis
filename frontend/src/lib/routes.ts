@@ -13,18 +13,6 @@ export const ROUTES = {
   myWorkflows: '/my-workflows',
   workflowUpload: '/workflows/upload',
   workflowDetail: (id: string) => `/workflows/${id}`,
-  /**
-   * A component's detail page when its kind is not known here - it resolves the kind and
-   * redirects. Also what old /components/:id links and bookmarks land on.
-   */
-  componentDetail: (id: string) => `/components/${id}`,
-  /** old paths - the per-kind lists from before /browse, and from before tools were
-   *  split from components - they redirect */
-  legacyTools: '/tools',
-  legacyWorkflows: '/workflows',
-  legacyComponents: '/components',
-  legacyMyComponents: '/my-components',
-  legacyComponentUpload: '/components/upload',
   about: '/about',
   builder: '/builder',
   builderNew: '/builder/new',

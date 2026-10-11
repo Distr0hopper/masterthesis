@@ -54,9 +54,9 @@ export function ComponentConfigCard({
   }, [taken, onNameConflictChange]);
 
   useEffect(() => {
-    if (reused) onChange({ reuseName: reused.name, reuseVersion: reused.version });
+    if (reused) onChange({ reuseKind: reused.kind, reuseName: reused.name, reuseVersion: reused.version });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reused?.id, reused?.name, reused?.version]);
+  }, [reused?.id, reused?.kind, reused?.name, reused?.version]);
 
   // a step's own CWL always previews as the tool it would become
   const model = toolTransformer.toPreviewDisplayModel(
@@ -130,6 +130,7 @@ export function ComponentConfigCard({
                     onChange({
                       mode: 'reuse',
                       reuseComponentId: taken.id,
+                      reuseKind: taken.kind,
                       reuseName: taken.name,
                       reuseVersion: taken.version,
                     })
@@ -169,9 +170,10 @@ export function ComponentConfigCard({
           <div className="flex flex-col gap-2">
             <Label>Reused component</Label>
             <div className="flex items-center justify-between gap-2 rounded-md border border-input px-3 py-2">
-              {config.reuseComponentId && config.reuseName ? (
+              {config.reuseComponentId && config.reuseKind && config.reuseName ? (
                 <ComponentLink
                   componentId={config.reuseComponentId}
+                  kind={config.reuseKind}
                   name={config.reuseName}
                   version={config.reuseVersion}
                 />

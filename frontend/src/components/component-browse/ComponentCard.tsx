@@ -40,32 +40,36 @@ export function ComponentCard({ component, backTo, showBuilderLink = false, acti
       : null;
 
   return (
-    <Card className="flex flex-col">
-      <CardContent className="flex flex-1 flex-col gap-3 pt-6">
-        <div className="flex items-center justify-between">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline" className="w-fit gap-1 text-slate-700">
-              <KindIcon className="h-3.5 w-3.5" />
-              {component.kindDisplay}
-            </Badge>
-            {component.status !== ComponentStatus.PUBLISHED && (
-              <Badge variant="secondary" className="w-fit">
-                {component.statusDisplay}
+    // four rows shared with the other cards of a grid row (subgrid): content, footer, View,
+    // extra actions - so View lines up even when one card has more actions than another
+    <Card className="row-span-4 grid grid-rows-subgrid gap-0">
+      <CardContent className="row-span-4 grid grid-rows-subgrid gap-0 pt-6">
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="w-fit gap-1 text-slate-700">
+                <KindIcon className="h-3.5 w-3.5" />
+                {component.kindDisplay}
               </Badge>
+              {component.status !== ComponentStatus.PUBLISHED && (
+                <Badge variant="secondary" className="w-fit">
+                  {component.statusDisplay}
+                </Badge>
+              )}
+              <DomainBadges domains={component.domains} />
+            </div>
+
+            {canFavorite(component._links) && (
+              <ComponentFavoriteButton links={component._links!} isFavorite={component.isFavorite} />
             )}
-            <DomainBadges domains={component.domains} />
           </div>
 
-          {canFavorite(component._links) && (
-            <ComponentFavoriteButton links={component._links!} isFavorite={component.isFavorite} />
-          )}
+          <h3 className="font-mono text-lg font-bold text-slate-900">{component.name}</h3>
+
+          {component.description && <p className="line-clamp-2 text-sm text-slate-500">{component.description}</p>}
         </div>
 
-        <h3 className="font-mono text-lg font-bold text-slate-900">{component.name}</h3>
-
-        {component.description && <p className="line-clamp-2 text-sm text-slate-500">{component.description}</p>}
-
-        <div className="mt-auto flex items-center justify-between border-t pt-3 text-sm text-slate-500">
+        <div className="mt-3 flex items-center justify-between border-t pt-3 text-sm text-slate-500">
           <span>
             {component.authorDisplay}
             {component.kind === 'workflow' &&
@@ -74,16 +78,16 @@ export function ComponentCard({ component, backTo, showBuilderLink = false, acti
           <span>{component.createdAtDisplay}</span>
         </div>
 
-        <div className="flex flex-col gap-2">
-          <Button asChild className="w-full bg-jmu-blue-800 hover:bg-jmu-blue-800/90">
-            <Link
-              to={KIND_ROUTES[component.kind].detail(component.id)}
-              state={{ from: backTo ?? KIND_ROUTES[component.kind].browse }}
-            >
-              View
-            </Link>
-          </Button>
+        <Button asChild className="mt-3 w-full bg-jmu-blue-800 hover:bg-jmu-blue-800/90">
+          <Link
+            to={KIND_ROUTES[component.kind].detail(component.id)}
+            state={{ from: backTo ?? KIND_ROUTES[component.kind].browse }}
+          >
+            View
+          </Link>
+        </Button>
 
+        <div className="mt-2 flex flex-col gap-2 empty:mt-0">
           {builderDraftId && (
             <Button asChild variant="outline" className="w-full" title="Open the draft this was published from">
               <Link to={ROUTES.builderWorkflow(builderDraftId)}>

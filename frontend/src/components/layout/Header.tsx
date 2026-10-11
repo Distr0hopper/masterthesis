@@ -37,13 +37,11 @@ export default function Header() {
     navigate(ROUTES.login);
   };
 
-  // the detail pages (/tools/:id, /workflows/:id) are reached from the browse list - the
-  // upload pages share their prefix but belong to the Upload menu
-  const isUpload = pathname === ROUTES.toolUpload || pathname === ROUTES.workflowUpload;
+  // the detail pages (/tools/:id, /workflows/:id) are reached from the browse list
   const browseActive =
     pathname === ROUTES.browse ||
-    (!isUpload &&
-      (pathname.startsWith(ROUTES.toolDetail('')) || pathname.startsWith(ROUTES.workflowDetail(''))));
+    pathname.startsWith(ROUTES.toolDetail('')) ||
+    pathname.startsWith(ROUTES.workflowDetail(''));
   const ToolIcon = KIND_ICONS.tool;
   const WorkflowIcon = KIND_ICONS.workflow;
 

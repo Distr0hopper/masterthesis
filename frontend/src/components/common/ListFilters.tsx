@@ -18,7 +18,7 @@ interface ListFiltersProps {
 }
 
 /**
- * The filter row of the Components and Workflows pages - one component so both lists
+ * The filter row of the browse list - one component so every list
  * filter the same way: search, domains, and (signed in) favourites only / hide my own.
  */
 export function ListFilters({

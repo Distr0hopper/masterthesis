@@ -1,9 +1,10 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Loader2, Package, Search, Workflow } from 'lucide-react';
+import { Loader2, Search } from 'lucide-react';
 import { useGlobalSearch } from '@/api/search';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
-import { ROUTES } from '@/lib/routes';
+import { ROUTES, browseRoute } from '@/lib/routes';
+import { KIND_ICONS } from '@/lib/componentKinds';
 import { cn } from '@/lib/utils';
 
 interface GlobalSearchProps {
@@ -95,15 +96,18 @@ export function GlobalSearch({ size = 'compact', autoFocus, enableShortcut, onCl
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [enableShortcut]);
 
-  const toolsListUrl = `${ROUTES.tools}?search=${encodeURIComponent(search)}`;
-  const workflowsListUrl = `${ROUTES.workflows}?search=${encodeURIComponent(search)}`;
+  const toolsListUrl = browseRoute({ kind: 'tool', search });
+  const workflowsListUrl = browseRoute({ kind: 'workflow', search });
+
+  const ToolIcon = KIND_ICONS.tool;
+  const WorkflowIcon = KIND_ICONS.workflow;
 
   // one flat list, in display order, so the arrow keys can walk across both groups
   const toolEntries: Entry[] = tools.items.map((c) => ({
     key: `c-${c.id}`,
     to: ROUTES.toolDetail(c.id),
     content: (
-      <ResultLine icon={<Package className="h-4 w-4" />} title={c.name} meta={`v${c.version}`} detail={c.description} />
+      <ResultLine icon={<ToolIcon className="h-4 w-4" />} title={c.name} meta={`v${c.version}`} detail={c.description} />
     ),
   }));
   const workflowEntries: Entry[] = workflows.items.map((w) => ({
@@ -111,7 +115,7 @@ export function GlobalSearch({ size = 'compact', autoFocus, enableShortcut, onCl
     to: ROUTES.workflowDetail(w.id),
     content: (
       <ResultLine
-        icon={<Workflow className="h-4 w-4" />}
+        icon={<WorkflowIcon className="h-4 w-4" />}
         title={w.name}
         meta={`${w.stepCount} step${w.stepCount === 1 ? '' : 's'}`}
         detail={w.description}

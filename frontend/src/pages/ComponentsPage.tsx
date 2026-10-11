@@ -1,26 +1,32 @@
 import { useSearchParams, Link } from 'react-router-dom';
-import { Upload } from 'lucide-react';
+import { ChevronDown, Upload } from 'lucide-react';
 import { useComponents, useDomains, type ComponentKind } from '@/api/components';
 import { ComponentCard } from '@/components/component-browse/ComponentCard';
 import { ListFilters } from '@/components/common/ListFilters';
 import { Pagination } from '@/components/common/Pagination';
 import { Button } from '@/components/ui/button.tsx';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuthStore } from '@/store/auth.store';
 import { usePageParams } from '@/lib/usePageParams';
 import { KIND_ROUTES } from '@/lib/routes';
-import { KIND_COPY } from '@/lib/componentKinds';
+import { KIND_COPY, KIND_ICONS } from '@/lib/componentKinds';
 
-interface ComponentsPageProps {
-  kind: ComponentKind;
+const KINDS = Object.keys(KIND_COPY) as ComponentKind[];
+const ALL = 'all';
+
+function parseKind(value: string): ComponentKind | undefined {
+  return KINDS.find((kind) => kind === value);
 }
 
-/** The public browse list of one kind - Tools or Workflows. */
-export default function ComponentsPage({ kind }: ComponentsPageProps) {
-  const copy = KIND_COPY[kind];
+/** The public browse list of both kinds - `?kind=` narrows it to Tools or Workflows. */
+export default function ComponentsPage() {
   const { limit, offset, setOffset, getFilter, setFilter, getFilterAll, setFilterAll } = usePageParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated());
 
+  const kind = parseKind(getFilter('kind'));
+  const itemLabel = kind ? KIND_COPY[kind].pluralLower : 'tools and workflows';
   const searchTerm = getFilter('search');
   const selectedDomains = getFilterAll('domain');
   const hideMine = searchParams.get('hideMine') === 'true';
@@ -54,19 +60,51 @@ export default function ComponentsPage({ kind }: ComponentsPageProps) {
     <div>
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">{copy.plural}</h1>
-          <p className="mt-1 text-slate-500">{copy.browseSubtitle}</p>
+          <h1 className="text-2xl font-semibold text-slate-900">Browse</h1>
+          <p className="mt-1 text-slate-500">Reusable CWL tools and the workflows composed of them.</p>
         </div>
 
         {isAuthenticated && (
-          <Button asChild className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90">
-            <Link to={KIND_ROUTES[kind].upload}>
-              <Upload size={14} />
-              {copy.uploadLabel}
-            </Link>
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90">
+                <Upload size={14} />
+                Upload
+                <ChevronDown size={13} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              {KINDS.map((k) => {
+                const Icon = KIND_ICONS[k];
+                return (
+                  <DropdownMenuItem key={k} asChild>
+                    <Link to={KIND_ROUTES[k].upload} className="cursor-pointer text-slate-900">
+                      <Icon size={14} className="text-slate-500" />
+                      {KIND_COPY[k].uploadLabel}
+                    </Link>
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
+
+      {/* a filter, not tabbed content - the one list below follows the URL's ?kind= */}
+      <Tabs value={kind ?? ALL} onValueChange={(value) => setFilter('kind', value === ALL ? '' : value)} className="mt-6">
+        <TabsList>
+          <TabsTrigger value={ALL}>All</TabsTrigger>
+          {KINDS.map((k) => {
+            const Icon = KIND_ICONS[k];
+            return (
+              <TabsTrigger key={k} value={k} className="gap-1.5">
+                <Icon className="h-4 w-4" />
+                {KIND_COPY[k].plural}
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
+      </Tabs>
 
       <ListFilters
         searchTerm={searchTerm}
@@ -79,17 +117,17 @@ export default function ComponentsPage({ kind }: ComponentsPageProps) {
         onFavoritesOnlyChange={(value) => setBooleanFilter('favoritesOnly', value)}
         hideMine={hideMine}
         onHideMineChange={(value) => setBooleanFilter('hideMine', value)}
-        itemLabel={copy.pluralLower}
+        itemLabel={itemLabel}
       />
 
       {isLoading ? (
-        <p className="mt-8 text-slate-500">Loading {copy.pluralLower}...</p>
+        <p className="mt-8 text-slate-500">Loading {itemLabel}...</p>
       ) : (
         <>
           <p className="mt-6 text-sm text-slate-500">{total} results</p>
 
           {displayModels.length === 0 ? (
-            <p className="mt-8 text-slate-500">No {copy.pluralLower} found.</p>
+            <p className="mt-8 text-slate-500">No {itemLabel} found.</p>
           ) : (
             <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
               {displayModels.map((component) => (

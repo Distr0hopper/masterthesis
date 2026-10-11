@@ -1,3 +1,4 @@
+import { Package, Workflow, type LucideIcon } from 'lucide-react';
 import type { ComponentKind } from '@/api/components/types';
 
 /** The wording that differs between the two kinds of component on otherwise shared pages. */
@@ -8,7 +9,6 @@ export interface KindCopy {
   plural: string;
   /** "tools" / "workflows" - mid-sentence */
   pluralLower: string;
-  browseSubtitle: string;
   mineSubtitle: string;
   uploadLabel: string;
 }
@@ -18,7 +18,6 @@ export const KIND_COPY: Record<ComponentKind, KindCopy> = {
     singular: 'Tool',
     plural: 'Tools',
     pluralLower: 'tools',
-    browseSubtitle: 'Reusable CWL building blocks for your workflows.',
     mineSubtitle: "Tools you've uploaded or packaged, including drafts that are still only visible to you.",
     uploadLabel: 'Upload Tool',
   },
@@ -26,9 +25,14 @@ export const KIND_COPY: Record<ComponentKind, KindCopy> = {
     singular: 'Workflow',
     plural: 'Workflows',
     pluralLower: 'workflows',
-    browseSubtitle: 'Pipelines composed of tools - and of other workflows.',
     mineSubtitle:
       "Workflows you've uploaded or built in the Workflow Builder, including drafts that are still only visible to you.",
     uploadLabel: 'Upload Workflow',
   },
+};
+
+/** The icon standing for each kind - on cards, in menus and in search results. */
+export const KIND_ICONS: Record<ComponentKind, LucideIcon> = {
+  tool: Package,
+  workflow: Workflow,
 };

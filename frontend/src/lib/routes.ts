@@ -5,11 +5,11 @@ import type { ComponentKind } from '@/api/components/types';
 // this instead of a hardcoded string literal.
 export const ROUTES = {
   home: '/',
-  tools: '/tools',
+  /** the one public list of both kinds - `?kind=` narrows it, see browseRoute */
+  browse: '/browse',
   myTools: '/my-tools',
   toolUpload: '/tools/upload',
   toolDetail: (id: string) => `/tools/${id}`,
-  workflows: '/workflows',
   myWorkflows: '/my-workflows',
   workflowUpload: '/workflows/upload',
   workflowDetail: (id: string) => `/workflows/${id}`,
@@ -18,8 +18,10 @@ export const ROUTES = {
    * redirects. Also what old /components/:id links and bookmarks land on.
    */
   componentDetail: (id: string) => `/components/${id}`,
-  /** old paths from before tools were split from components - they redirect */
-  legacyBrowse: '/browse',
+  /** old paths - the per-kind lists from before /browse, and from before tools were
+   *  split from components - they redirect */
+  legacyTools: '/tools',
+  legacyWorkflows: '/workflows',
   legacyComponents: '/components',
   legacyMyComponents: '/my-components',
   legacyComponentUpload: '/components/upload',
@@ -31,6 +33,15 @@ export const ROUTES = {
   login: '/login',
 } as const;
 
+/** The browse list, optionally pre-filtered to one kind and/or a search term. */
+export function browseRoute({ kind, search }: { kind?: ComponentKind; search?: string } = {}): string {
+  const params = new URLSearchParams();
+  if (kind) params.set('kind', kind);
+  if (search) params.set('search', search);
+  const query = params.toString();
+  return query ? `${ROUTES.browse}?${query}` : ROUTES.browse;
+}
+
 /** The routes of one kind of component. */
 export interface KindRoutes {
   browse: string;
@@ -40,9 +51,9 @@ export interface KindRoutes {
 }
 
 export const KIND_ROUTES: Record<ComponentKind, KindRoutes> = {
-  tool: { browse: ROUTES.tools, mine: ROUTES.myTools, upload: ROUTES.toolUpload, detail: ROUTES.toolDetail },
+  tool: { browse: browseRoute({ kind: 'tool' }), mine: ROUTES.myTools, upload: ROUTES.toolUpload, detail: ROUTES.toolDetail },
   workflow: {
-    browse: ROUTES.workflows,
+    browse: browseRoute({ kind: 'workflow' }),
     mine: ROUTES.myWorkflows,
     upload: ROUTES.workflowUpload,
     detail: ROUTES.workflowDetail,

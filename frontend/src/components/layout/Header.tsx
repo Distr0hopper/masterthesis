@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronDown, LogOut, Package, Search, Upload, User, Workflow, X } from 'lucide-react';
+import { ChevronDown, LogOut, Search, Upload, User, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useAuthStore } from '@/store/auth.store';
 import { ROUTES } from '@/lib/routes';
+import { KIND_ICONS } from '@/lib/componentKinds';
 import { GlobalSearch } from './GlobalSearch';
 import { loginPath } from '@/api/auth/session';
 
@@ -36,6 +37,16 @@ export default function Header() {
     navigate(ROUTES.login);
   };
 
+  // the detail pages (/tools/:id, /workflows/:id) are reached from the browse list - the
+  // upload pages share their prefix but belong to the Upload menu
+  const isUpload = pathname === ROUTES.toolUpload || pathname === ROUTES.workflowUpload;
+  const browseActive =
+    pathname === ROUTES.browse ||
+    (!isUpload &&
+      (pathname.startsWith(`${ROUTES.legacyTools}/`) || pathname.startsWith(`${ROUTES.legacyWorkflows}/`)));
+  const ToolIcon = KIND_ICONS.tool;
+  const WorkflowIcon = KIND_ICONS.workflow;
+
   const displayName = user?.firstName ?? user?.email.split('@')[0] ?? 'user';
 
   return (
@@ -54,17 +65,8 @@ export default function Header() {
           <Link to={ROUTES.home} className={navLinkClass(pathname === ROUTES.home)}>
             Home
           </Link>
-          <Link
-            to={ROUTES.tools}
-            className={navLinkClass(pathname === ROUTES.tools || pathname.startsWith(`${ROUTES.tools}/`))}
-          >
-            Tools
-          </Link>
-          <Link
-            to={ROUTES.workflows}
-            className={navLinkClass(pathname === ROUTES.workflows || pathname.startsWith(`${ROUTES.workflows}/`))}
-          >
-            Workflows
+          <Link to={ROUTES.browse} className={navLinkClass(browseActive)}>
+            Browse
           </Link>
           <Link
             to={ROUTES.builder}
@@ -99,13 +101,13 @@ export default function Header() {
                 <DropdownMenuContent align="start" className="w-48">
                   <DropdownMenuItem asChild>
                     <Link to={ROUTES.toolUpload} className="cursor-pointer text-slate-900">
-                      <Package size={14} className="text-slate-500" />
+                      <ToolIcon size={14} className="text-slate-500" />
                       Upload Tool
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link to={ROUTES.workflowUpload} className="cursor-pointer text-slate-900">
-                      <Workflow size={14} className="text-slate-500" />
+                      <WorkflowIcon size={14} className="text-slate-500" />
                       Upload Workflow
                     </Link>
                   </DropdownMenuItem>
@@ -129,13 +131,13 @@ export default function Header() {
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link to={ROUTES.myTools} className="cursor-pointer text-slate-900">
-                      <Package size={14} className="text-slate-500" />
+                      <ToolIcon size={14} className="text-slate-500" />
                       My Tools
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link to={ROUTES.myWorkflows} className="cursor-pointer text-slate-900">
-                      <Workflow size={14} className="text-slate-500" />
+                      <WorkflowIcon size={14} className="text-slate-500" />
                       My Workflows
                     </Link>
                   </DropdownMenuItem>

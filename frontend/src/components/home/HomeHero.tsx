@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button.tsx';
-import { ROUTES } from '@/lib/routes';
+import { browseRoute } from '@/lib/routes';
 import { GlobalSearch } from '@/components/layout/GlobalSearch';
 
 export function HomeHero() {
@@ -24,10 +24,10 @@ export function HomeHero() {
 
         <div className="mt-4 flex flex-wrap gap-3">
           <Button asChild className="bg-white text-jmu-blue-600 hover:bg-jmu-blue-50">
-            <Link to={ROUTES.tools}>Browse Tools</Link>
+            <Link to={browseRoute({ kind: 'tool' })}>Browse Tools</Link>
           </Button>
           <Button asChild variant="outline" className="border-white bg-transparent text-white hover:bg-white/10">
-            <Link to={ROUTES.workflows}>Browse Workflows</Link>
+            <Link to={browseRoute({ kind: 'workflow' })}>Browse Workflows</Link>
           </Button>
         </div>
       </div>

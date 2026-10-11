@@ -9,19 +9,20 @@ import { ComponentSource, ComponentStatus, type ComponentDisplayModel } from '@/
 import { canDelete, canFavorite } from '@/api/permissions';
 import { KIND_ROUTES, ROUTES } from '@/lib/routes';
 import { DomainBadges } from '@/components/common/DomainBadges';
+import { KIND_ICONS } from '@/lib/componentKinds';
 
 interface ComponentCardProps {
   component: ComponentDisplayModel;
   backTo?: string;
   /** an editing surface (My Workflows) - offer "Edit in Workflow Builder" where possible */
   showBuilderLink?: boolean;
-  /** show which kind it is - for lists mixing tools and workflows */
-  showKind?: boolean;
   actions?: ReactNode;
 }
 
-/** One card for either kind - only the footer line and the builder link differ. */
-export function ComponentCard({ component, backTo, showBuilderLink = false, showKind = false, actions }: ComponentCardProps) {
+/** One card for either kind - only the kind snippet, the footer line and the builder link differ. */
+export function ComponentCard({ component, backTo, showBuilderLink = false, actions }: ComponentCardProps) {
+  const KindIcon = KIND_ICONS[component.kind];
+
   // Three separate conditions, all required:
   //  - showBuilderLink: this surface is an editing one (My Workflows), not the browse list
   //  - source/draftId:  it came from the builder, and that draft still exists (the FK is
@@ -43,11 +44,10 @@ export function ComponentCard({ component, backTo, showBuilderLink = false, show
       <CardContent className="flex flex-col gap-3 pt-6">
         <div className="flex items-center justify-between">
           <div className="flex flex-wrap items-center gap-2">
-            {showKind && (
-              <Badge variant="outline" className="w-fit">
-                {component.kindDisplay}
-              </Badge>
-            )}
+            <Badge variant="outline" className="w-fit gap-1 text-slate-700">
+              <KindIcon className="h-3.5 w-3.5" />
+              {component.kindDisplay}
+            </Badge>
             {component.status !== ComponentStatus.PUBLISHED && (
               <Badge variant="secondary" className="w-fit">
                 {component.statusDisplay}

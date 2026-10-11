@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import Depends
 
 from app.application.commands.commands import ComponentCommand, ComponentCommandType
-from app.application.commands.registry import CommandSpec, is_logged_in, is_owner
+from app.application.commands.registry import CommandSpec, is_logged_in, is_owner, is_readable_by
 from app.application.exception.component_exceptions import (
     ComponentHasDeprecatedParentsError,
     ComponentHasPublicParentsError,
@@ -191,9 +191,7 @@ class ComponentsService:
 
     @staticmethod
     def is_visible(component: Component, current_user: User | None) -> bool:
-        if lifecycle.is_public(component):
-            return True
-        return current_user is not None and component.created_by_id == current_user.id
+        return is_readable_by(current_user, component)
 
     async def get_versions(self, component: Component) -> list[Component]:
         return await self.uow.components.find_versions_by_name(component.name)

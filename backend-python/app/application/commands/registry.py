@@ -9,6 +9,7 @@ import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
+from app.domain.composite import lifecycle
 from app.domain.models.component import Component
 from app.domain.models.user import User
 
@@ -27,12 +28,18 @@ class CommandSpec[TService, TCommand]:
     run: Callable[[TService, Component, TCommand, uuid.UUID], Awaitable[Component]]
 
 
-def is_logged_in(user: User | None, component: Component) -> bool:
+def is_logged_in(user: User | None, component: Component | None = None) -> bool:
     return user is not None
 
 
 def is_owner(user: User | None, component: Component) -> bool:
     return user is not None and component.created_by_id == user.id
+
+
+def is_readable_by(user: User | None, component: Component) -> bool:
+    """Public components (published or deprecated) are readable by everyone, drafts by their
+    owner only."""
+    return lifecycle.is_public(component) or is_owner(user, component)
 
 
 def is_tool_owner(user: User | None, component: Component) -> bool:

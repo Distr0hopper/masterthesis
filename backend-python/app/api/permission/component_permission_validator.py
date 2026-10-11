@@ -1,6 +1,6 @@
 from app.api.permission.base import PermissionValidator
 from app.application.commands.commands import ComponentCommandType, ToolCommandType, WorkflowStepCommandType
-from app.application.commands.registry import is_owner
+from app.application.commands.registry import is_logged_in, is_owner, is_readable_by
 from app.application.service.components_service import COMPONENT_COMMANDS
 from app.application.service.tools_service import TOOL_COMMANDS
 from app.domain.composite import lifecycle
@@ -15,14 +15,10 @@ class ComponentPermissionValidator(PermissionValidator[Component]):
         super().__init__(user)
 
     def can_create(self) -> bool:
-        return self.user is not None
+        return is_logged_in(self.user)
 
     def can_read(self, component: Component) -> bool:
-        """Mirrors ComponentsService.is_visible: public components (published or deprecated)
-        are readable by everyone, drafts by their owner only."""
-        if lifecycle.is_public(component):
-            return True
-        return self.user is not None and component.created_by_id == self.user.id
+        return is_readable_by(self.user, component)
 
     def can_update(self, component: Component) -> bool:
         return is_owner(self.user, component)

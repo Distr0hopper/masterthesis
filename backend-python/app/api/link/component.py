@@ -3,16 +3,17 @@ from app.api.link.model import Link
 from app.api.permission.component_permission_validator import ComponentPermissionValidator
 from app.api.util.endpoint import Endpoints
 from app.api.util.http_method import HttpMethod
-from app.application.commands.registry import CommandSpec
+from app.application.commands.commands import ComponentCommandType, ToolCommandType
 from app.application.service.components_service import COMPONENT_COMMANDS
 from app.application.service.tools_service import TOOL_COMMANDS
 from app.domain.models.component import Component
 
 
-#: a command's spec by the rel it is offered under - both families share one rel namespace
-_COMMANDS_BY_REL: dict[str, CommandSpec] = {
-    spec.rel: spec for spec in (*COMPONENT_COMMANDS.values(), *TOOL_COMMANDS.values())
+#: a command by the rel it is offered under - both families share one rel namespace
+_COMPONENT_COMMAND_BY_REL: dict[str, ComponentCommandType] = {
+    spec.rel: command for command, spec in COMPONENT_COMMANDS.items()
 }
+_TOOL_COMMAND_BY_REL: dict[str, ToolCommandType] = {spec.rel: command for command, spec in TOOL_COMMANDS.items()}
 
 
 class ComponentLinkBuilder(BaseLinkBuilder[Component, ComponentPermissionValidator]):
@@ -41,9 +42,10 @@ class ComponentLinkBuilder(BaseLinkBuilder[Component, ComponentPermissionValidat
         return links
 
     def _is_link_allowed(self, rel: str, entity: Component) -> bool:
-        command = _COMMANDS_BY_REL.get(rel)
-        if command is not None:
-            return command.allowed(self.current_user, entity)
+        if (command := _COMPONENT_COMMAND_BY_REL.get(rel)) is not None:
+            return self._validator.can_execute(entity, command)
+        if (tool_command := _TOOL_COMMAND_BY_REL.get(rel)) is not None:
+            return self._validator.can_execute_tool(entity, tool_command)
         match rel:
             case "self" | "download":
                 return self._validator.can_read(entity)

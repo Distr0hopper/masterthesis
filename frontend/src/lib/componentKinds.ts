@@ -10,7 +10,6 @@ export interface KindCopy {
   /** "tools" / "workflows" - mid-sentence */
   pluralLower: string;
   mineSubtitle: string;
-  uploadLabel: string;
 }
 
 export const KIND_COPY: Record<ComponentKind, KindCopy> = {
@@ -19,7 +18,6 @@ export const KIND_COPY: Record<ComponentKind, KindCopy> = {
     plural: 'Tools',
     pluralLower: 'tools',
     mineSubtitle: "Tools you've uploaded or packaged, including drafts that are still only visible to you.",
-    uploadLabel: 'Upload Tool',
   },
   workflow: {
     singular: 'Workflow',
@@ -27,7 +25,6 @@ export const KIND_COPY: Record<ComponentKind, KindCopy> = {
     pluralLower: 'workflows',
     mineSubtitle:
       "Workflows you've uploaded or built in the Workflow Builder, including drafts that are still only visible to you.",
-    uploadLabel: 'Upload Workflow',
   },
 };
 

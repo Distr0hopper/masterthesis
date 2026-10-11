@@ -1,15 +1,11 @@
-import { useSearchParams, Link } from 'react-router-dom';
-import { ChevronDown, Upload } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { useComponents, useDomains, type ComponentKind } from '@/api/components';
 import { ComponentCard } from '@/components/component-browse/ComponentCard';
 import { ListFilters } from '@/components/common/ListFilters';
 import { Pagination } from '@/components/common/Pagination';
-import { Button } from '@/components/ui/button.tsx';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuthStore } from '@/store/auth.store';
 import { usePageParams } from '@/lib/usePageParams';
-import { KIND_ROUTES } from '@/lib/routes';
 import { KIND_COPY, KIND_ICONS } from '@/lib/componentKinds';
 
 const KINDS = Object.keys(KIND_COPY) as ComponentKind[];
@@ -58,37 +54,8 @@ export default function ComponentsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Browse</h1>
-          <p className="mt-1 text-slate-500">Reusable CWL tools and the workflows composed of them.</p>
-        </div>
-
-        {isAuthenticated && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90">
-                <Upload size={14} />
-                Upload
-                <ChevronDown size={13} />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              {KINDS.map((k) => {
-                const Icon = KIND_ICONS[k];
-                return (
-                  <DropdownMenuItem key={k} asChild>
-                    <Link to={KIND_ROUTES[k].upload} className="cursor-pointer text-slate-900">
-                      <Icon size={14} className="text-slate-500" />
-                      {KIND_COPY[k].uploadLabel}
-                    </Link>
-                  </DropdownMenuItem>
-                );
-              })}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-      </div>
+      <h1 className="text-2xl font-semibold text-slate-900">Browse</h1>
+      <p className="mt-1 text-slate-500">Reusable CWL tools and the workflows composed of them.</p>
 
       {/* a filter, not tabbed content - the one list below follows the URL's ?kind= */}
       <Tabs value={kind ?? ALL} onValueChange={(value) => setFilter('kind', value === ALL ? '' : value)} className="mt-6">

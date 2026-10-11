@@ -90,65 +90,64 @@ export default function Header() {
           >
             {searchOpen ? <X size={16} /> : <Search size={16} />}
           </button>
+          {/* shown signed out too - the upload routes are protected and send you to the
+              login first, then back to the upload page */}
+          <DropdownMenu>
+            <DropdownMenuTrigger className="flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-sm font-medium text-jmu-blue-600 transition-colors hover:bg-jmu-blue-50 focus:outline-none">
+              <Upload size={14} />
+              Upload
+              <ChevronDown size={13} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-48">
+              <DropdownMenuItem asChild>
+                <Link to={ROUTES.toolUpload} className="cursor-pointer text-slate-900">
+                  <ToolIcon size={14} className="text-slate-500" />
+                  Upload Tool
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link to={ROUTES.workflowUpload} className="cursor-pointer text-slate-900">
+                  <WorkflowIcon size={14} className="text-slate-500" />
+                  Upload Workflow
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           {isAuthenticated ? (
-            <>
-              <DropdownMenu>
-                <DropdownMenuTrigger className="flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-sm font-medium text-jmu-blue-600 transition-colors hover:bg-jmu-blue-50 focus:outline-none">
-                  <Upload size={14} />
-                  Upload
-                  <ChevronDown size={13} />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-48">
-                  <DropdownMenuItem asChild>
-                    <Link to={ROUTES.toolUpload} className="cursor-pointer text-slate-900">
-                      <ToolIcon size={14} className="text-slate-500" />
-                      Upload Tool
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to={ROUTES.workflowUpload} className="cursor-pointer text-slate-900">
-                      <WorkflowIcon size={14} className="text-slate-500" />
-                      Upload Workflow
-                    </Link>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              <DropdownMenu>
-                <DropdownMenuTrigger className="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-sm text-jmu-blue-100 transition-colors hover:text-white focus:outline-none">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20">
-                    <User size={13} className="text-white" />
-                  </span>
-                  <span>{displayName}</span>
-                  <ChevronDown size={13} />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuItem asChild>
-                    <Link to={ROUTES.profile} className="cursor-pointer text-slate-900">
-                      <User size={14} className="text-slate-500" />
-                      Profile
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to={ROUTES.myTools} className="cursor-pointer text-slate-900">
-                      <ToolIcon size={14} className="text-slate-500" />
-                      My Tools
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to={ROUTES.myWorkflows} className="cursor-pointer text-slate-900">
-                      <WorkflowIcon size={14} className="text-slate-500" />
-                      My Workflows
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-slate-900">
-                    <LogOut size={14} className="text-slate-500" />
-                    Logout
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </>
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex items-center gap-1.5 rounded px-2.5 py-1.5 text-sm text-jmu-blue-100 transition-colors hover:text-white focus:outline-none">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20">
+                  <User size={13} className="text-white" />
+                </span>
+                <span>{displayName}</span>
+                <ChevronDown size={13} />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem asChild>
+                  <Link to={ROUTES.profile} className="cursor-pointer text-slate-900">
+                    <User size={14} className="text-slate-500" />
+                    Profile
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to={ROUTES.myTools} className="cursor-pointer text-slate-900">
+                    <ToolIcon size={14} className="text-slate-500" />
+                    My Tools
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to={ROUTES.myWorkflows} className="cursor-pointer text-slate-900">
+                    <WorkflowIcon size={14} className="text-slate-500" />
+                    My Workflows
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-slate-900">
+                  <LogOut size={14} className="text-slate-500" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           ) : (
             <Link
               // come back to this page after logging in

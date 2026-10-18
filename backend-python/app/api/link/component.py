@@ -29,6 +29,7 @@ class ComponentLinkBuilder(BaseLinkBuilder[Component, ComponentPermissionValidat
             "download": Link(href=Endpoints.component_download_by_id(entity.id), method=HttpMethod.GET),
             "delete": Link(href=Endpoints.component_by_id(entity.id), method=HttpMethod.DELETE),
             "impact": Link(href=Endpoints.component_impact_by_id(entity.id), method=HttpMethod.GET),
+            "publishImpact": Link(href=Endpoints.component_publish_impact_by_id(entity.id), method=HttpMethod.GET),
         }
         # one POST link per declared command, offered under its rel
         commands = Endpoints.component_commands_by_id(entity.id)
@@ -54,6 +55,9 @@ class ComponentLinkBuilder(BaseLinkBuilder[Component, ComponentPermissionValidat
             case "impact":
                 # read before an unpublish or a delete - both are the owner's
                 return self._validator.can_update(entity)
+            case "publishImpact":
+                # read before a publish - offered wherever the publish itself is
+                return self._validator.can_execute(entity, ComponentCommandType.PUBLISH)
             case "addVersion":
                 # a packaged tool's versions come from its repo - see the repackage rel
                 return entity.is_tool and not entity.is_packaged and self._validator.can_update(entity)

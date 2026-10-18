@@ -3,6 +3,7 @@ import type { HateoasLink, PageResponse } from '@/api/types';
 import type {
   ComponentCommandExecuteRequest,
   ComponentImpactDto,
+  PublishImpactDto,
   ComponentDetailDto,
   ComponentKind,
   ComponentListItemDto,
@@ -75,6 +76,10 @@ export const componentsService = {
   },
 
   getImpact(link: HateoasLink): Promise<ComponentImpactDto> {
+    return apiClient.request(link);
+  },
+
+  getPublishImpact(link: HateoasLink): Promise<PublishImpactDto> {
     return apiClient.request(link);
   },
 

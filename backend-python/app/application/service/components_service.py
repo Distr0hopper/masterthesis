@@ -73,6 +73,18 @@ class DraftRef:
     name: str
 
 
+@dataclass(frozen=True)
+class SupersededVersion:
+    """An older version that publishing would deprecate - shown before the publish."""
+
+    component: Component
+    #: the newer version that replaces it
+    superseded_by: Component
+    #: workflows whose steps run exactly this version - they keep working; only counted,
+    #: since other users' private ones must not be named
+    workflow_count: int
+
+
 @dataclass
 class ComponentImpact:
     """What unpublishing or deleting one component version would touch - shown before either.
@@ -334,27 +346,46 @@ class ComponentsService:
         for c in published:
             await self._require_not_superseded(c)
         lifecycle.mark_published(published)
-        superseded = await self._supersede_older_versions(published)
-        await self.uow.components.add_all([*published, *superseded])
+        superseded = await self._superseded_by_publishing(published)
+        for older, newest in superseded:
+            lifecycle.mark_superseded([older], newest)
+        await self.uow.components.add_all([*published, *(older for older, _ in superseded)])
         return component
+
+    async def get_publish_impact(self, component: Component, actor_id: uuid.UUID) -> list[SupersededVersion]:
+        """The older versions publishing `component` would deprecate - shown before the publish,
+        like get_impact before an unpublish. Covers the same set publish() makes public: the
+        component and, for a workflow, the actor's own drafts below it (published along with
+        it). Whether the publish is allowed at all is publish()'s answer, not this one's."""
+        if lifecycle.is_public(component):
+            return []
+        await self.load_tree(component)
+        check = lifecycle.can_publish(component, actor_id)
+        impact = []
+        for older, newest in await self._superseded_by_publishing([*check.own_drafts, component]):
+            steps = await self.uow.workflows.find_steps_by_component_id(older.id)
+            parents = {step.parent.id for step in steps if step.parent is not None}
+            impact.append(SupersededVersion(component=older, superseded_by=newest, workflow_count=len(parents)))
+        return impact
 
     async def _require_not_superseded(self, component: Component) -> None:
         newer = lifecycle.newer_published(component, await self.uow.components.find_versions_by_name(component.name))
         if newer is not None:
             raise SupersededVersionError(component.name, component.version, newer.version)
 
-    async def _supersede_older_versions(self, published: list[Component]) -> list[Component]:
-        """Deprecate the still-published older versions of every lineage just published - a
-        new version replaces them in the list, and must keep doing so after an unpublish."""
+    async def _superseded_by_publishing(self, published: list[Component]) -> list[tuple[Component, Component]]:
+        """(older, newest) for the still-published older versions of every lineage in
+        `published` - publishing deprecates them: a new version replaces them in the list, and
+        must keep doing so after an unpublish. Shared by publish and its preview, so the
+        dialog names exactly what the publish then does."""
         newest_by_name: dict[str, Component] = {}
         for c in published:
             if c.name not in newest_by_name or c.version > newest_by_name[c.name].version:
                 newest_by_name[c.name] = c
-        superseded: list[Component] = []
-        for newest in newest_by_name.values():
-            older = lifecycle.superseded_by(newest, await self.uow.components.find_versions_by_name(newest.name))
-            lifecycle.mark_superseded(older, newest)
-            superseded.extend(older)
+        superseded: list[tuple[Component, Component]] = []
+        for newest in sorted(newest_by_name.values(), key=lambda c: c.name):
+            versions = await self.uow.components.find_versions_by_name(newest.name)
+            superseded.extend((older, newest) for older in lifecycle.superseded_by(newest, versions))
         return superseded
 
     async def unpublish(

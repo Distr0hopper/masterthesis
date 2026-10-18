@@ -1116,6 +1116,85 @@
         }
       }
     },
+    "/components/{component_id}/publish-impact": {
+      "get": {
+        "tags": [
+          "components"
+        ],
+        "summary": "Get Publish Impact",
+        "description": "What publishing this version would deprecate - the older published versions of its\nlineage, and of the drafts a workflow publishes along with it. Read by the publish\ndialog beforehand, like /impact before an unpublish or delete.",
+        "operationId": "get_publish_impact_components__component_id__publish_impact_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "component_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Component Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishImpactDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not the creator of this component",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Component not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/components/{component_id}/download": {
       "get": {
         "tags": [
@@ -4543,6 +4622,23 @@
         "title": "PreviewParameterDto",
         "description": "A previewed port. Deliberately NOT ParameterDto: that carries a real uuid primary\nkey, and these are never persisted - the id here is a synthetic, stable-within-one-\nresponse string that only exists to give the UI a list key."
       },
+      "PublishImpactDto": {
+        "properties": {
+          "supersedes": {
+            "items": {
+              "$ref": "#/components/schemas/SupersededVersionDto"
+            },
+            "type": "array",
+            "title": "Supersedes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "supersedes"
+        ],
+        "title": "PublishImpactDto",
+        "description": "What publishing this version would deprecate - read by the publish dialog beforehand.\nIncludes the older versions of draft components a workflow publishes along with it."
+      },
       "RequestOtpDto": {
         "properties": {
           "email": {
@@ -4655,6 +4751,45 @@
           "inline"
         ],
         "title": "StepMatchStatus"
+      },
+      "SupersededVersionDto": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ComponentKind"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "supersededByVersion": {
+            "type": "integer",
+            "title": "Supersededbyversion"
+          },
+          "workflowCount": {
+            "type": "integer",
+            "title": "Workflowcount"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "version",
+          "supersededByVersion",
+          "workflowCount"
+        ],
+        "title": "SupersededVersionDto",
+        "description": "An older published version that publishing would deprecate."
       },
       "SupersedingVersionDto": {
         "properties": {

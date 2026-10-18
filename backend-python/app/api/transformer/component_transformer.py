@@ -9,6 +9,8 @@ from app.api.dto.component import (
     ComponentMatchDto,
     ComponentUsageDto,
     ExistingComponentDto,
+    PublishImpactDto,
+    SupersededVersionDto,
     SupersedingVersionDto,
 )
 from app.api.dto.tool import ToolDetailDto, ToolListItemDto
@@ -19,7 +21,7 @@ from app.api.transformer.parameter_transformer import ParameterTransformer
 from app.api.transformer.workflow_transformer import WorkflowTransformer
 from app.application.commands.commands import ComponentCommand
 from app.application.service.compatibility_service import RankedComponent
-from app.application.service.components_service import ComponentImpact, ComponentUsage
+from app.application.service.components_service import ComponentImpact, ComponentUsage, SupersededVersion
 from app.domain.models.component import Component
 from app.domain.models.user import User
 from app.infrastructure.cwl.cwl_parser import inject_description
@@ -184,6 +186,22 @@ class ComponentTransformer:
             version=component.version,
             status=component.status,
             created_by=ComponentTransformer.to_creator(component),
+        )
+
+    @staticmethod
+    def to_publish_impact(superseded: list[SupersededVersion]) -> PublishImpactDto:
+        return PublishImpactDto(
+            supersedes=[
+                SupersededVersionDto(
+                    id=s.component.id,
+                    kind=s.component.kind,
+                    name=s.component.name,
+                    version=s.component.version,
+                    superseded_by_version=s.superseded_by.version,
+                    workflow_count=s.workflow_count,
+                )
+                for s in superseded
+            ]
         )
 
     @staticmethod

@@ -19,6 +19,10 @@ class Endpoints:
         return f"{Endpoints.component_by_id(component_id)}/impact"
 
     @staticmethod
+    def component_publish_impact_by_id(component_id: uuid.UUID) -> str:
+        return f"{Endpoints.component_by_id(component_id)}/publish-impact"
+
+    @staticmethod
     def component_download_by_id(component_id: uuid.UUID) -> str:
         return f"{Endpoints.component_by_id(component_id)}/download"
 

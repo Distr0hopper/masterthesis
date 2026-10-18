@@ -216,6 +216,26 @@ class ComponentAncestorDto(CamelModel):
     created_by: ComponentCreatorDto | None
 
 
+class SupersededVersionDto(CamelModel):
+    """An older published version that publishing would deprecate."""
+
+    id: uuid.UUID
+    kind: ComponentKind
+    name: str
+    version: int
+    #: the version that replaces it - the note it gets reads "Superseded by v<this>"
+    superseded_by_version: int
+    #: workflows whose steps run exactly this version - they keep working
+    workflow_count: int
+
+
+class PublishImpactDto(CamelModel):
+    """What publishing this version would deprecate - read by the publish dialog beforehand.
+    Includes the older versions of draft components a workflow publishes along with it."""
+
+    supersedes: list[SupersededVersionDto]
+
+
 class ComponentImpactDto(CamelModel):
     """What unpublishing or deleting this exact version touches - read by both dialogs
     before the action. Other users' private workflows and drafts are only counted, never

@@ -269,6 +269,35 @@ def test_publishing_a_new_version_deprecates_the_published_older_ones_for_good()
     assert v1.status == ComponentStatus.DEPRECATED
 
 
+def test_the_publish_impact_names_exactly_what_the_publish_then_deprecates() -> None:
+    old_tool, new_tool = tool("t"), tool("t", ComponentStatus.DRAFT)
+    new_tool.version = 2
+    old_wf = workflow("w", old_tool, status=ComponentStatus.PUBLISHED)
+    new_wf = workflow("w", new_tool, version=2)
+    components_service, _, _ = services(old_wf, new_wf, old_tool, new_tool)
+
+    impact = asyncio.run(components_service.get_publish_impact(new_wf, OWNER))
+
+    # the workflow's own older version, and the one of the draft tool published along
+    assert [(s.component.name, s.component.version, s.superseded_by.version) for s in impact] == [
+        ("t", 1, 2),
+        ("w", 1, 2),
+    ]
+    # old_wf runs the old tool - it keeps working, so it is just counted
+    assert [s.workflow_count for s in impact] == [1, 0]
+    # a preview changes nothing
+    assert old_tool.status == old_wf.status == ComponentStatus.PUBLISHED
+
+    publish(components_service, new_wf, publish_components=True)
+    assert old_tool.status == old_wf.status == ComponentStatus.DEPRECATED
+
+
+def test_publishing_a_first_version_supersedes_nothing() -> None:
+    leaf = tool("t", ComponentStatus.DRAFT)
+    components_service, _, _ = services(leaf)
+    assert asyncio.run(components_service.get_publish_impact(leaf, OWNER)) == []
+
+
 def test_an_older_version_cannot_be_published_next_to_a_newer_published_one() -> None:
     v1, v2 = tool("t", ComponentStatus.DRAFT), tool("t")
     v2.version = 2

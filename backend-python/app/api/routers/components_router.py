@@ -14,6 +14,7 @@ from app.api.dto.component import (
     ComponentImpactDto,
     ComponentUsageDto,
     NameAvailabilityDto,
+    PublishImpactDto,
 )
 from app.api.dto.component_variants import ComponentDetailDto, ComponentListItemDto
 from app.api.dto.pagination import ListQueryPaginationDtoV1, PaginatedResponseDtoV1, build_paginated_response
@@ -240,6 +241,31 @@ async def get_impact(
 
     impact = await components_service.get_impact(component, current_user)
     return ComponentTransformer.to_impact(impact)
+
+
+@router.get(
+    "/{component_id}/publish-impact",
+    response_model=PublishImpactDto,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
+        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Not the creator of this component"},
+        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Component not found"},
+    },
+)
+async def get_publish_impact(
+    component_id: uuid.UUID,
+    current_user: Annotated[User, Depends(AuthService.get_current_user)],
+    components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
+) -> PublishImpactDto:
+    """What publishing this version would deprecate - the older published versions of its
+    lineage, and of the drafts a workflow publishes along with it. Read by the publish
+    dialog beforehand, like /impact before an unpublish or delete."""
+    component = await components_service.get_component(component_id)
+    if not ComponentPermissionValidator(current_user).can_update(component):
+        raise ForbiddenException("Insufficient permission to publish this component")
+
+    superseded = await components_service.get_publish_impact(component, current_user.id)
+    return ComponentTransformer.to_publish_impact(superseded)
 
 
 @router.get(

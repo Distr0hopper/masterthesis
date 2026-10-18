@@ -22,6 +22,7 @@ import {
   ComponentStatus,
   useDownloadComponent,
   usePublishComponent,
+  usePublishImpact,
   useUndeprecateComponent,
   type ComponentDetailDisplayModel,
 } from '@/api/components';
@@ -46,7 +47,7 @@ import { ROUTES, componentDetailRoute } from '@/lib/routes';
 import { downloadBlob } from '@/lib/download';
 import { ComponentFavoriteButton } from '@/components/ComponentFavoriteButton';
 import { DeleteComponentDialog } from '@/components/component-mine/organisms/DeleteComponentDialog';
-import { ConfirmPublishDialog } from '@/components/workflow-detail/organisms/ConfirmPublishDialog';
+import { ConfirmPublishDialog } from './ConfirmPublishDialog';
 import { DomainBadges } from '@/components/common/DomainBadges';
 import { EditComponentDialog } from './EditComponentDialog';
 import { DeprecateComponentDialog } from './DeprecateComponentDialog';
@@ -114,6 +115,12 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
       (step) => step.matchStatus === StepMatchStatus.CONFIRMED || step.matchStatus === StepMatchStatus.INLINE,
     );
   const canPublish = hasPublishLink(model._links) && model.status === ComponentStatus.DRAFT;
+  // what the publish would deprecate - read once its dialog opens, like the delete dialog's impact
+  const { data: publishImpact, isLoading: isLoadingPublishImpact } = usePublishImpact(
+    getLink(model._links, 'publishImpact'),
+    canPublish && publishDialogOpen,
+  );
+  const supersedes = publishImpact?.supersedes ?? [];
   const canUnpublish = hasUnpublishLink(model._links) && model.status === ComponentStatus.PUBLISHED;
   const canDeprecate = hasDeprecateLink(model._links) && model.status === ComponentStatus.PUBLISHED;
   const canUndeprecate = hasUndeprecateLink(model._links) && model.status === ComponentStatus.DEPRECATED;
@@ -135,8 +142,10 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
             publishComponents && drafts.length > 0
               ? `${model.kindDisplay} published, along with the draft components it runs`
               : `${model.kindDisplay} published`;
-          // the backend deprecates the older published versions this one supersedes
-          toast.success(model.version > 1 ? `${published} - older published versions are now deprecated` : published);
+          const deprecatedLabels = supersedes.map((s) => (s.name === model.name ? `v${s.version}` : `${s.name} v${s.version}`));
+          toast.success(
+            deprecatedLabels.length > 0 ? `${published} - ${deprecatedLabels.join(', ')} deprecated` : published,
+          );
         },
         onError: (error) => toast.error(getErrorMessage(error)),
       },
@@ -148,14 +157,6 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
       onSuccess: () => toast.success(`${model.kindDisplay} is listed and usable in new workflows again`),
       onError: (error) => toast.error(getErrorMessage(error)),
     });
-  };
-
-  const handlePublish = () => {
-    if (drafts.length > 0 || deprecated.length > 0) {
-      setPublishDialogOpen(true);
-      return;
-    }
-    doPublish();
   };
 
   const handleDownload = () => {
@@ -270,15 +271,10 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
                 <Button
                   size="sm"
                   className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90"
-                  onClick={handlePublish}
+                  // always confirmed, like unpublish, deprecate and delete - it makes the version visible to everyone
+                  onClick={() => setPublishDialogOpen(true)}
                   disabled={isPublishing || !allStepsSettled}
-                  title={
-                    !allStepsSettled
-                      ? 'Confirm every step before publishing'
-                      : model.version > 1
-                        ? 'Older published versions of this lineage are deprecated - workflows running them keep working'
-                        : undefined
-                  }
+                  title={allStepsSettled ? undefined : 'Confirm every step before publishing'}
                 >
                   <Globe className="mr-1 h-4 w-4" /> Publish
                 </Button>
@@ -369,10 +365,13 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
         />
       )}
       <DeprecateComponentDialog component={model} open={deprecateDialogOpen} onOpenChange={setDeprecateDialogOpen} />
-      {isWorkflow && (
+      {canPublish && (
         <ConfirmPublishDialog
           open={publishDialogOpen}
           onOpenChange={setPublishDialogOpen}
+          component={model}
+          supersedes={supersedes}
+          isLoadingImpact={isLoadingPublishImpact}
           draftComponents={drafts}
           blockedByOthers={blockedByOthers}
           deprecatedComponents={deprecated}

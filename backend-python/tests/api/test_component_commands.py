@@ -19,7 +19,7 @@ STRANGER = User(id=uuid.uuid4(), email="stranger@example.com")
 OWNER_COMMAND_RELS = {"updateDescription", "updateDomain", "publish", "unpublish", "deprecate", "undeprecate"}
 LOGGED_IN_COMMAND_RELS = {"favorite", "unfavorite"}
 TOOL_COMMAND_RELS = {"updateFormatLabels", "repackage"}
-OTHER_RELS = {"self", "download", "delete", "impact", "addVersion"}
+OTHER_RELS = {"self", "download", "delete", "impact", "publishImpact", "addVersion"}
 
 
 def component(kind: ComponentKind, source: ComponentSource = ComponentSource.MANUAL_UPLOAD) -> Component:
@@ -79,6 +79,17 @@ def test_a_superseded_version_is_offered_neither_publish_nor_undeprecate(kind: C
     assert command_rels(OWNER, c) == OWNER_COMMAND_RELS - {"publish", "undeprecate"} | LOGGED_IN_COMMAND_RELS | (
         TOOL_COMMAND_RELS - {"repackage"} if kind == ComponentKind.TOOL else set()
     )
+
+
+def test_the_publish_impact_is_offered_wherever_publish_is() -> None:
+    def rels(user: User | None, c: Component) -> set[str]:
+        return set(ComponentLinkBuilder(user)._filter_links(c))
+
+    c = component(ComponentKind.TOOL)
+    assert "publishImpact" in rels(OWNER, c)
+    assert "publishImpact" not in rels(STRANGER, c)
+    c.__dict__.update(superseded_by_id=uuid.uuid4(), superseded_by_version=2)
+    assert "publishImpact" not in rels(OWNER, c)
 
 
 def test_command_links_point_at_the_commands_endpoint_of_the_kind() -> None:

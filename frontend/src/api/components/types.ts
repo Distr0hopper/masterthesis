@@ -150,6 +150,26 @@ export interface ComponentAncestorDto {
   createdBy: ComponentCreatorDto | null;
 }
 
+/** An older published version that publishing would deprecate. */
+export interface SupersededVersionDto {
+  id: string;
+  kind: ComponentKind;
+  name: string;
+  version: number;
+  /** the version that replaces it - its deprecation note reads "Superseded by v<this>" */
+  supersededByVersion: number;
+  /** workflows whose steps run exactly this version - they keep working */
+  workflowCount: number;
+}
+
+/**
+ * What publishing one version would deprecate - read by the publish dialog beforehand.
+ * Includes the older versions of draft components a workflow publishes along with it.
+ */
+export interface PublishImpactDto {
+  supersedes: SupersededVersionDto[];
+}
+
 /** What unpublishing or deleting one exact component version touches - read by both dialogs beforehand. */
 export interface ComponentImpactDto {
   /** the caller's public workflows running it at any depth - they become drafts along with it */

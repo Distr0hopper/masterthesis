@@ -17,6 +17,7 @@ export const componentKeys = {
   versions: (id: string) => [...componentKeys.all, 'versions', id] as const,
   usages: (id: string) => [...componentKeys.all, 'usages', id] as const,
   impact: (href: string) => [...componentKeys.all, 'impact', href] as const,
+  publishImpact: (href: string) => [...componentKeys.all, 'publish-impact', href] as const,
   domains: () => ['domains'] as const,
   nameAvailability: (name: string, excludeId?: string) =>
     [...componentKeys.all, 'name-availability', name, excludeId ?? null] as const,
@@ -111,6 +112,17 @@ export const useComponentImpact = (link: HateoasLink | undefined, enabled: boole
     queryFn: () => componentsService.getImpact(link!),
     enabled: enabled && !!link,
     // usages change whenever someone edits a workflow - never trust a stale answer here
+    staleTime: 0,
+  });
+};
+
+/** What publishing a version would deprecate - fetched while its Publish button is on screen. */
+export const usePublishImpact = (link: HateoasLink | undefined, enabled: boolean) => {
+  return useQuery({
+    queryKey: componentKeys.publishImpact(link?.href ?? ''),
+    queryFn: () => componentsService.getPublishImpact(link!),
+    enabled: enabled && !!link,
+    // another version may be published or deprecated meanwhile - never trust a stale answer
     staleTime: 0,
   });
 };

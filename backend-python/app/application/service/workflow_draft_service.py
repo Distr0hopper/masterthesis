@@ -24,6 +24,7 @@ from app.infrastructure.cwl.canvas_graph import (
     parse_canvas,
     topological_sort,
 )
+from app.infrastructure.cwl.cwl_parser import extract_input_declarations
 from app.infrastructure.cwl.workflow_generator import (
     PortSpec,
     assemble_cwl_zip,
@@ -165,6 +166,7 @@ class WorkflowDraftService:
     def _to_port_spec(component: Component) -> PortSpec:
         # uniform over the composite: a nested workflow exposes its ports exactly like a tool
         spec = PortSpec(name=component.name)
+        declarations = extract_input_declarations(component.cwl_content)
         for parameter in component.parameters:
             if parameter.direction == ParameterDirection.OUTPUT:
                 if _is_file_type(parameter.cwl_type):
@@ -173,6 +175,11 @@ class WorkflowDraftService:
                 spec.file_inputs[parameter.name] = parameter.cwl_type
             else:
                 spec.config_inputs[parameter.name] = parameter.cwl_type
+                if parameter.name in declarations:
+                    declared_type, default = declarations[parameter.name]
+                    spec.config_types[parameter.name] = declared_type
+                    if default is not None:
+                        spec.config_defaults[parameter.name] = default
         return spec
 
     async def export_to_zip(self, draft: WorkflowDraft) -> tuple[str, bytes]:

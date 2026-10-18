@@ -32,6 +32,40 @@ class PortSpec:
     file_outputs: dict[str, str] = field(default_factory=dict)
     #: parameter name -> cwl type, for non-File inputs (the configurable knobs)
     config_inputs: dict[str, str] = field(default_factory=dict)
+    #: parameter name -> the knob's type exactly as the component's document declares it
+    #: (`int?`, an inline enum, ...). Only knobs listed here can be redeclared as workflow
+    #: inputs - the stored `config_inputs` type is lossy (no `?`, enums stringified)
+    config_types: dict[str, Any] = field(default_factory=dict)
+    #: parameter name -> the component's own default for that knob, if it declares one
+    config_defaults: dict[str, Any] = field(default_factory=dict)
+
+
+#: CWL types a workflow can redeclare without the component's SchemaDefRequirement / $import
+_PORTABLE_TYPES = {"null", "boolean", "int", "long", "float", "double", "string", "file", "directory", "any"}
+
+
+def portable_type(cwl_type: Any) -> Any | None:
+    """The type to declare a workflow input with, or None if it can't stand on its own
+    there - a record, or a named type that only resolves inside the component's document.
+
+    Inline enums lose their `name`: two steps redeclaring the same enum must not collide.
+    """
+    if isinstance(cwl_type, str):
+        base = cwl_type.removesuffix("?")
+        while base.endswith("[]"):
+            base = base.removesuffix("[]")
+        return cwl_type if base.lower() in _PORTABLE_TYPES else None
+    if isinstance(cwl_type, list):
+        members = [portable_type(member) for member in cwl_type]
+        return members if members and all(m is not None for m in members) else None
+    if isinstance(cwl_type, dict):
+        if cwl_type.get("type") == "array":
+            items = portable_type(cwl_type.get("items"))
+            return {"type": "array", "items": items} if items is not None else None
+        symbols = cwl_type.get("symbols")
+        if cwl_type.get("type") == "enum" and isinstance(symbols, list) and all(isinstance(s, str) for s in symbols):
+            return {"type": "enum", "symbols": symbols}
+    return None
 
 
 def _base_type(cwl_type: str) -> str:
@@ -195,14 +229,27 @@ def build_workflow_document(
                 workflow_inputs[input_id] = {"type": cwl_type}
                 step_in[port_name] = input_id
 
-        # configured knobs ride along as step-level defaults, keeping the workflow's own
-        # input interface limited to actual data files
+        # every knob becomes a workflow input too, so it can be changed in the job file
+        # without touching the component. The value configured on the canvas - else the
+        # component's own default - is the input's default, so the workflow still runs as
+        # configured when the job file leaves it out.
         parameter_values: dict[str, str] = node["data"].get("parameterValues") or {}
         for port_name, cwl_type in spec.config_inputs.items():
             raw = parameter_values.get(port_name)
-            if raw is None or raw == "":
+            configured = None if raw is None or raw == "" else coerce_default(raw, cwl_type)
+            declared_type = portable_type(spec.config_types.get(port_name))
+            if declared_type is None:
+                # a type only the component's document can resolve: bake the value in instead
+                if configured is not None:
+                    step_in[port_name] = {"default": configured}
                 continue
-            step_in[port_name] = {"default": coerce_default(raw, cwl_type)}
+            input_id = _workflow_input_id(step_id, port_name)
+            definition: dict[str, Any] = {"type": declared_type}
+            default = configured if configured is not None else spec.config_defaults.get(port_name)
+            if default is not None:
+                definition["default"] = default
+            workflow_inputs[input_id] = definition
+            step_in[port_name] = input_id
 
         steps[step_id] = {
             "run": cwl_filename_for(spec.name),
@@ -235,17 +282,17 @@ def build_workflow_document(
 
 def generate_workflow_inputs_yaml(workflow_name: str, workflow_doc: dict[str, Any]) -> str:
     """A job file (inputs.yaml) for a generated workflow: one entry per workflow input,
-    with a placeholder path to fill in before `cwltool <workflow>.cwl <this file>`.
+    ready for `cwltool <workflow>.cwl <this file>`.
 
     Reads the inputs of the very document build_workflow_document produced, so the two
-    files always agree. Those inputs are exactly the File ports nothing on the canvas feeds
-    (`step_x__port`); configured parameter values are already baked into the steps as
-    defaults, so they don't appear here.
+    files always agree. Those inputs are the File ports nothing on the canvas feeds - a
+    placeholder path to fill in - and every step's configuration, pre-filled with the
+    value it defaults to in the .cwl, to be changed right here.
     """
     slug = safe_workflow_slug(workflow_name)
     lines = [
         f"# CWL inputs for {workflow_name}",
-        "# Replace each placeholder path with your data, then run:",
+        "# Replace each placeholder path with your data, adjust the step configuration, then run:",
         f"#   cwltool {slug}.cwl {slug}-inputs.yaml",
     ]
     inputs: dict[str, dict[str, Any]] = workflow_doc.get("inputs") or {}
@@ -253,19 +300,90 @@ def generate_workflow_inputs_yaml(workflow_name: str, workflow_doc: dict[str, An
         lines += ["# Every input of this workflow is wired on the canvas - it needs no input files.", "{}"]
         return "\n".join(lines) + "\n"
 
-    for input_id, definition in inputs.items():
-        cwl_type = str(definition.get("type", "File"))
-        step_id, _, port_name = input_id.partition("__")
-        lines.append("")
-        lines.append(f"# {port_name} of {step_id} ({cwl_type})")
-        lines.extend(_job_entry(input_id, port_name or input_id, cwl_type))
+    data = {k: v for k, v in inputs.items() if _is_data_placeholder(v)}
+    config = {k: v for k, v in inputs.items() if k not in data}
+
+    if data:
+        lines += ["", "# --- Input data ---"]
+        for input_id, definition in data.items():
+            step_id, _, port_name = input_id.partition("__")
+            lines.append("")
+            lines.append(f"# {port_name} of {step_id} ({describe_type(definition.get('type'))})")
+            lines.extend(_placeholder_entry(input_id, port_name or input_id, definition.get("type")))
+
+    if config:
+        lines += ["", "# --- Step configuration ---"]
+        current_step = None
+        for input_id, definition in config.items():
+            step_id, _, port_name = input_id.partition("__")
+            if step_id != current_step:
+                lines += ["", f"# {step_id}"]
+                current_step = step_id
+            note = describe_type(definition.get("type"))
+            if "default" not in definition:
+                note += ", required" if not _is_optional(definition.get("type")) else ""
+            lines.append(f"# {port_name} ({note})")
+            lines.append(_value_entry(input_id, definition.get("default")))
     return "\n".join(lines) + "\n"
 
 
-def _job_entry(input_id: str, port_name: str, cwl_type: str) -> list[str]:
-    """One File input in job-file form. Arrays get one example element; optional inputs
-    are still written out, since leaving them in is harmless and easier to fill in."""
+def describe_type(cwl_type: Any) -> str:
+    """A CWL type as a short human-readable comment: `int?`, `string[]`, `enum: a, b`."""
+    if isinstance(cwl_type, list):
+        members = [describe_type(m) for m in cwl_type if m != "null"]
+        text = " | ".join(members)
+        return f"{text}?" if "null" in cwl_type else text
+    if isinstance(cwl_type, dict):
+        if cwl_type.get("type") == "array":
+            return f"{describe_type(cwl_type.get('items'))}[]"
+        if cwl_type.get("type") == "enum":
+            return "enum: " + ", ".join(str(s).rsplit("/", 1)[-1] for s in cwl_type.get("symbols") or [])
+    return str(cwl_type if cwl_type is not None else "File")
+
+
+def _is_optional(cwl_type: Any) -> bool:
+    if isinstance(cwl_type, str):
+        return cwl_type.endswith("?")
+    return isinstance(cwl_type, list) and "null" in cwl_type
+
+
+def _file_class(cwl_type: Any) -> str | None:
+    """`File` / `Directory` for a (possibly optional or array) file-like type, else None."""
+    if isinstance(cwl_type, list):
+        members = [m for m in cwl_type if m != "null"]
+        return _file_class(members[0]) if len(members) == 1 else None
+    if isinstance(cwl_type, dict) and cwl_type.get("type") == "array":
+        return _file_class(cwl_type.get("items"))
+    if isinstance(cwl_type, str):
+        base = _base_type(cwl_type)
+        return {"file": "File", "directory": "Directory"}.get(base)
+    return None
+
+
+def _is_array(cwl_type: Any) -> bool:
+    if isinstance(cwl_type, list):
+        return any(_is_array(m) for m in cwl_type if m != "null")
+    if isinstance(cwl_type, dict):
+        return cwl_type.get("type") == "array"
+    return isinstance(cwl_type, str) and cwl_type.removesuffix("?").endswith("[]")
+
+
+def _is_data_placeholder(definition: dict[str, Any]) -> bool:
+    # a File/Directory nobody gave a value - the user has to point it at their data
+    return "default" not in definition and _file_class(definition.get("type")) is not None
+
+
+def _placeholder_entry(input_id: str, port_name: str, cwl_type: Any) -> list[str]:
+    """One File/Directory input in job-file form. Arrays get one example element; optional
+    inputs are still written out, since leaving them in is harmless and easier to fill in."""
+    cls = _file_class(cwl_type) or "File"
+    location = "path" if cls == "File" else "location"
     placeholder = f"/path/to/{port_name}"
-    if cwl_type.replace("?", "").strip().endswith("[]"):
-        return [f"{input_id}:", "  - class: File", f"    path: {placeholder}"]
-    return [f"{input_id}:", "  class: File", f"  path: {placeholder}"]
+    if _is_array(cwl_type):
+        return [f"{input_id}:", f"  - class: {cls}", f"    {location}: {placeholder}"]
+    return [f"{input_id}:", f"  class: {cls}", f"  {location}: {placeholder}"]
+
+
+def _value_entry(input_id: str, value: Any) -> str:
+    # null for a knob without a value: fine for an optional one, a clear error for a required one
+    return yaml.safe_dump({input_id: value}, default_flow_style=False, sort_keys=False, allow_unicode=True).rstrip()

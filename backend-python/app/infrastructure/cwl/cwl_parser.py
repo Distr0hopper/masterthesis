@@ -164,6 +164,26 @@ def _extract_parameter_group(
     return parameters
 
 
+def extract_input_declarations(cwl_content: str) -> dict[str, tuple[Any, Any]]:
+    """{input name: (type, default)} exactly as the document declares them - unlike the
+    stored Parameter, which flattens the type to a string. Never raises; an unparseable
+    document declares nothing."""
+    try:
+        doc: Any = load_cwl(cwl_content)
+    except YAMLError:
+        return {}
+    if not isinstance(doc, dict):
+        return {}
+    declarations: dict[str, tuple[Any, Any]] = {}
+    for name, definition in normalize_idmap(doc.get("inputs"), "id").items():
+        if isinstance(definition, dict):
+            declarations[name] = (definition.get("type", "string"), definition.get("default"))
+        else:
+            # `name: int` shorthand - the value is the type itself
+            declarations[name] = (definition if definition else "string", None)
+    return declarations
+
+
 def extract_cwl_type(cwl_content: str) -> str | None:
     try:
         doc: Any = load_cwl(cwl_content)

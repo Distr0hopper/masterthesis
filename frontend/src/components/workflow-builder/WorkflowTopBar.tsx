@@ -81,7 +81,7 @@ export function WorkflowTopBar({
             variant="outline"
             onClick={onExportInputs}
             disabled={isExportingInputs || isSaving}
-            title="Download an inputs.yaml with a placeholder for every input the workflow needs"
+            title="Download an inputs.yaml with a placeholder for every input file and the configuration of every step"
           >
             <FileText className="h-4 w-4" />
             {isExportingInputs ? 'Exporting...' : 'Export inputs.yaml'}

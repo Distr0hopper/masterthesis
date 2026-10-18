@@ -1,9 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  formatRelativeTime,
-  parseCanvasState,
-  serializeCanvasState,
-} from './canvasState';
+import { describe, expect, it } from 'vitest';
+import { parseCanvasState, serializeCanvasState } from './canvasState';
 import { COMPONENT_EDGE_TYPE } from '../types';
 import type { ComponentFlowNode } from '../types';
 
@@ -31,34 +27,6 @@ const edge = (id: string, source: string, target: string) => ({
 
 const canvas = (overrides: Record<string, unknown> = {}) =>
   JSON.stringify({ nodes: [node('a'), node('b')], edges: [edge('a-b', 'a', 'b')], ...overrides });
-
-describe('formatRelativeTime', () => {
-  afterEach(() => vi.useRealTimers());
-
-  const at = (iso: string, now: string) => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date(now));
-    return formatRelativeTime(iso);
-  };
-
-  it('reports sub-minute ages as "just now"', () => {
-    expect(at('2026-09-06T10:00:00Z', '2026-09-06T10:00:30Z')).toBe('just now');
-  });
-
-  it('reports minutes, hours and days', () => {
-    expect(at('2026-09-06T10:00:00Z', '2026-09-06T10:05:00Z')).toBe('5m ago');
-    expect(at('2026-09-06T10:00:00Z', '2026-09-06T12:00:00Z')).toBe('2h ago');
-    expect(at('2026-09-03T10:00:00Z', '2026-09-06T10:00:00Z')).toBe('3d ago');
-  });
-
-  it('does not produce absurd hour counts for old saves', () => {
-    expect(at('2026-08-06T10:00:00Z', '2026-09-06T10:00:00Z')).toBe('31d ago');
-  });
-
-  it('falls back to "just now" for an unparseable timestamp', () => {
-    expect(formatRelativeTime('not-a-date')).toBe('just now');
-  });
-});
 
 describe('serializeCanvasState', () => {
   it('round-trips through parseCanvasState', () => {

@@ -1,10 +1,9 @@
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, Download, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button.tsx';
 import { Input } from '@/components/ui/input.tsx';
 import { ROUTES } from '@/lib/routes';
-import { formatRelativeTime } from './lib/canvasState';
+import { useRelativeTime } from '@/lib/useRelativeTime';
 
 interface WorkflowTopBarProps {
   workflowName: string;
@@ -18,24 +17,6 @@ interface WorkflowTopBarProps {
   updatedAt: string | null;
 }
 
-function useRelativeTime(isoString: string | null): string | null {
-  const [label, setLabel] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!isoString) {
-      setLabel(null);
-      return;
-    }
-
-    const update = () => setLabel(`Saved ${formatRelativeTime(isoString)}`);
-    update();
-    const interval = setInterval(update, 60_000);
-    return () => clearInterval(interval);
-  }, [isoString]);
-
-  return label;
-}
-
 export function WorkflowTopBar({
   workflowName,
   onWorkflowNameChange,
@@ -47,7 +28,7 @@ export function WorkflowTopBar({
   isExportingInputs,
   updatedAt,
 }: WorkflowTopBarProps) {
-  const savedLabel = useRelativeTime(updatedAt);
+  const savedAgo = useRelativeTime(updatedAt);
 
   return (
     <div className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white px-4">
@@ -69,7 +50,7 @@ export function WorkflowTopBar({
       </div>
 
       <div className="flex items-center gap-3">
-        {savedLabel && <span className="shrink-0 text-xs text-slate-400">{savedLabel}</span>}
+        {savedAgo && <span className="shrink-0 text-xs text-slate-400">Saved {savedAgo}</span>}
 
         <div className="flex items-center gap-2">
           {/* Save also syncs the workflow into "My Workflows"; publishing happens there */}

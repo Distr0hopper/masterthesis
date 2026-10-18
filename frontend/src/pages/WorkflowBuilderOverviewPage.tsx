@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button.tsx';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { useWorkflowDrafts } from '@/api/workflow-drafts';
 import { DraftCardActions } from '@/components/workflow-builder/DraftCardActions';
-import { formatRelativeTime } from '@/components/workflow-builder/lib/canvasState';
+import { formatRelativeTime } from '@/lib/relativeTime';
 import { useAuthStore } from '@/store/auth.store';
 import { ROUTES } from '@/lib/routes';
 

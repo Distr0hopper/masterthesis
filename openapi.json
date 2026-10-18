@@ -531,6 +531,17 @@
               "default": 0,
               "title": "Unpublishedoffset"
             }
+          },
+          {
+            "name": "deprecatedOffset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Deprecatedoffset"
+            }
           }
         ],
         "responses": {
@@ -3893,12 +3904,16 @@
           },
           "unpublished": {
             "$ref": "#/components/schemas/PaginatedResponseDtoV1_Annotated_Union_ToolListItemDto__WorkflowListItemDto___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"
+          },
+          "deprecated": {
+            "$ref": "#/components/schemas/PaginatedResponseDtoV1_Annotated_Union_ToolListItemDto__WorkflowListItemDto___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"
           }
         },
         "type": "object",
         "required": [
           "published",
-          "unpublished"
+          "unpublished",
+          "deprecated"
         ],
         "title": "MyItemsResponseDtoV1[Annotated[Union[ToolListItemDto, WorkflowListItemDto], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]]"
       },

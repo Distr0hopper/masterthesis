@@ -13,7 +13,7 @@ export function toListDisplayModel<TDto, TDisplay>(
   };
 }
 
-/** toListDisplayModel applied to both buckets of a SplitPageResponse. */
+/** toListDisplayModel applied to every bucket of a SplitPageResponse. */
 export function toSplitDisplayModel<TDto, TDisplay>(
   response: SplitPageResponse<TDto>,
   dtoListToDisplayModels: (dtos: TDto[]) => TDisplay[],
@@ -21,5 +21,6 @@ export function toSplitDisplayModel<TDto, TDisplay>(
   return {
     published: toListDisplayModel(response.published, dtoListToDisplayModels),
     unpublished: toListDisplayModel(response.unpublished, dtoListToDisplayModels),
+    deprecated: toListDisplayModel(response.deprecated, dtoListToDisplayModels),
   };
 }

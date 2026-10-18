@@ -13,16 +13,18 @@ interface UseSplitPageParamsResult {
   limit: number;
   published: SplitPageParamsBucket;
   unpublished: SplitPageParamsBucket;
+  deprecated: SplitPageParamsBucket;
 }
 
 /**
- * URL-backed pagination for a page with two independently paged sections (My Workflows,
- * My Components). Both buckets read the same shared `limit` key but own a distinct offset
- * key, matching the `publishedOffset`/`unpublishedOffset` params the `/mine` endpoints take.
+ * URL-backed pagination for a page with independently paged sections (My Tools, My
+ * Workflows). Every bucket reads the same shared `limit` key but owns a distinct offset
+ * key, matching the `publishedOffset`/`unpublishedOffset`/`deprecatedOffset` params `/mine` takes.
  */
 export function useSplitPageParams(): UseSplitPageParamsResult {
   const published = usePageParams({ offsetKey: 'publishedOffset' });
   const unpublished = usePageParams({ offsetKey: 'unpublishedOffset' });
+  const deprecated = usePageParams({ offsetKey: 'deprecatedOffset' });
 
   const toBucket = (params: ReturnType<typeof usePageParams>): SplitPageParamsBucket => ({
     limit: params.limit,
@@ -36,5 +38,6 @@ export function useSplitPageParams(): UseSplitPageParamsResult {
     limit: published.limit,
     published: toBucket(published),
     unpublished: toBucket(unpublished),
+    deprecated: toBucket(deprecated),
   };
 }

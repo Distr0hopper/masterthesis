@@ -43,6 +43,7 @@ export const componentsService = {
         limit: params.limit,
         publishedOffset: params.publishedOffset,
         unpublishedOffset: params.unpublishedOffset,
+        deprecatedOffset: params.deprecatedOffset,
       },
     });
   },

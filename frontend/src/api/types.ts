@@ -31,22 +31,25 @@ export interface PageResponse<T> {
 
 /**
  * The "my <entity>" response shape shared by GET /workflows/mine and GET /components/mine -
- * two independently paginated buckets the server splits by publication status.
+ * independently paginated buckets the server splits by status.
  */
 export interface SplitPageResponse<T> {
   published: PageResponse<T>;
   unpublished: PageResponse<T>;
+  deprecated: PageResponse<T>;
 }
 
 export interface SplitDisplayModel<T> {
   published: ListDisplayModel<T>;
   unpublished: ListDisplayModel<T>;
+  deprecated: ListDisplayModel<T>;
 }
 
 export interface MineQueryParams {
   limit?: number;
   publishedOffset?: number;
   unpublishedOffset?: number;
+  deprecatedOffset?: number;
 }
 
 export interface ListDisplayModel<T> {

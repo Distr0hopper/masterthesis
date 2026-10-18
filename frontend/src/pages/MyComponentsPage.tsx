@@ -14,18 +14,20 @@ interface MyComponentsPageProps {
 export default function MyComponentsPage({ kind }: MyComponentsPageProps) {
   const copy = KIND_COPY[kind];
   const routes = KIND_ROUTES[kind];
-  const { limit, published, unpublished } = useSplitPageParams();
+  const { limit, published, unpublished, deprecated } = useSplitPageParams();
 
   const { data, isLoading } = useMyComponents({
     kind,
     limit,
     publishedOffset: published.offset,
     unpublishedOffset: unpublished.offset,
+    deprecatedOffset: deprecated.offset,
   });
 
   const publishedTotal = data?.published.total ?? 0;
   const unpublishedTotal = data?.unpublished.total ?? 0;
-  const isEmpty = publishedTotal === 0 && unpublishedTotal === 0;
+  const deprecatedTotal = data?.deprecated.total ?? 0;
+  const isEmpty = publishedTotal === 0 && unpublishedTotal === 0 && deprecatedTotal === 0;
 
   return (
     <div>
@@ -83,6 +85,23 @@ export default function MyComponentsPage({ kind }: MyComponentsPageProps) {
                 itemsPerPage={limit}
                 currentPage={published.page}
                 onPageChange={published.goToPage}
+              />
+            </>
+          )}
+
+          {deprecatedTotal > 0 && (
+            <>
+              <ComponentSection
+                title={`Deprecated ${copy.plural}`}
+                components={data?.deprecated.items ?? []}
+                total={deprecatedTotal}
+                backTo={routes.mine}
+              />
+              <Pagination
+                totalItems={deprecatedTotal}
+                itemsPerPage={limit}
+                currentPage={deprecated.page}
+                onPageChange={deprecated.goToPage}
               />
             </>
           )}

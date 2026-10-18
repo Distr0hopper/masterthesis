@@ -24,7 +24,6 @@ from app.application.exception.favorites_exceptions import FavoritesRequireAuthE
 from app.application.service.auth_service import AuthService
 from app.application.service.compatibility_service import CompatibilityService
 from app.application.service.components_service import ComponentsService
-from app.domain.composite.lifecycle import PUBLIC_STATUSES
 from app.domain.models.component import ComponentKind, ComponentStatus
 from app.domain.models.component_domain import VALID_DOMAINS
 from app.domain.models.user import User
@@ -99,16 +98,22 @@ async def list_my_components(
     limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
     published_offset: Annotated[int, Query(alias="publishedOffset", ge=0)] = 0,
     unpublished_offset: Annotated[int, Query(alias="unpublishedOffset", ge=0)] = 0,
+    deprecated_offset: Annotated[int, Query(alias="deprecatedOffset", ge=0)] = 0,
 ) -> MyItemsResponseDtoV1[ComponentListItemDto]:
     published_pagination = PaginatedList(limit=limit, offset=published_offset)
     unpublished_pagination = PaginatedList(limit=limit, offset=unpublished_offset)
+    deprecated_pagination = PaginatedList(limit=limit, offset=deprecated_offset)
 
+    # one bucket per status - each shows a lineage's newest version in that status, so a
+    # deprecated v1 sits in its own section rather than hiding behind a published v2
     published, published_total = await components_service.list_my_components_by_status(
-        # deprecated versions are still public - the owner finds them here, badged
-        current_user.id, PUBLIC_STATUSES, kind, published_pagination
+        current_user.id, frozenset({ComponentStatus.PUBLISHED}), kind, published_pagination
     )
     unpublished, unpublished_total = await components_service.list_my_components_by_status(
         current_user.id, frozenset({ComponentStatus.DRAFT}), kind, unpublished_pagination
+    )
+    deprecated, deprecated_total = await components_service.list_my_components_by_status(
+        current_user.id, frozenset({ComponentStatus.DEPRECATED}), kind, deprecated_pagination
     )
     favorited_names = await components_service.favorited_names(current_user)
 
@@ -120,6 +125,8 @@ async def list_my_components(
         published_pagination,
         (to_items(unpublished), unpublished_total),
         unpublished_pagination,
+        (to_items(deprecated), deprecated_total),
+        deprecated_pagination,
     )
 
 

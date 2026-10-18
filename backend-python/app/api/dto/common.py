@@ -10,13 +10,14 @@ class ErrorResponse(CamelModel):
 class MyItemsResponseDtoV1[T](CamelModel):
     """The "my components" response shape of GET /components/mine.
 
-    Two independently paginated buckets rather than one list the client splits: a single
-    page of mixed-status rows can't be split into two correct sections once pagination is
-    involved.
+    Independently paginated buckets, one per status, rather than one list the client
+    splits: a single page of mixed-status rows can't be split into correct sections once
+    pagination is involved.
     """
 
     published: PaginatedResponseDtoV1[T]
     unpublished: PaginatedResponseDtoV1[T]
+    deprecated: PaginatedResponseDtoV1[T]
 
 
 def build_my_items_response[T](
@@ -24,10 +25,11 @@ def build_my_items_response[T](
     published_pagination: PaginatedList,
     unpublished: tuple[list[T], int],
     unpublished_pagination: PaginatedList,
+    deprecated: tuple[list[T], int],
+    deprecated_pagination: PaginatedList,
 ) -> MyItemsResponseDtoV1[T]:
-    published_items, published_total = published
-    unpublished_items, unpublished_total = unpublished
     return MyItemsResponseDtoV1[T](
-        published=build_paginated_response(published_items, published_total, published_pagination),
-        unpublished=build_paginated_response(unpublished_items, unpublished_total, unpublished_pagination),
+        published=build_paginated_response(*published, published_pagination),
+        unpublished=build_paginated_response(*unpublished, unpublished_pagination),
+        deprecated=build_paginated_response(*deprecated, deprecated_pagination),
     )

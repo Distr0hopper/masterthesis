@@ -1,9 +1,10 @@
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
-from sqlalchemy import Column, DateTime, ForeignKey, Index, String, Text, UniqueConstraint, func, text
+from sqlalchemy import Column, DateTime, ForeignKey, Index, String, Text, UniqueConstraint, func, select, text
+from sqlalchemy.orm import column_property
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
@@ -159,6 +160,23 @@ class Component(SQLModel, table=True):
         return self.kind == ComponentKind.WORKFLOW
 
     @property
+    def superseded_by(self) -> tuple[uuid.UUID, int] | None:
+        """(id, version) of the newest published version of the lineage above this one - while
+        there is one, this version must not be published (again), see lifecycle.newer_published.
+
+        Read from what the row was loaded with: never lazy-loads, and a component not
+        (re)loaded since it was flushed counts as not superseded. Display only - the services
+        check the rule against the versions themselves."""
+        superseding_id = self.__dict__.get("superseded_by_id")
+        if superseding_id is None:
+            return None
+        return superseding_id, self.__dict__["superseded_by_version"]
+
+    @property
+    def is_superseded(self) -> bool:
+        return self.superseded_by is not None
+
+    @property
     def is_packaged(self) -> bool:
         """Packaged from a GitHub repo - its versions come from that repo, never an upload."""
         return self.source == ComponentSource.AUTOMATED_PACKAGING
@@ -172,3 +190,28 @@ class Component(SQLModel, table=True):
     def children(self) -> list["Component"]:
         """The components this one is composed of - one per bound step, in step order."""
         return [step.component for step in self.steps if step.component is not None]
+
+
+# a plain table alias - aliased(Component) would configure the mappers before the related
+# models are imported
+_newer = Component.__table__.alias("newer")  # type: ignore[attr-defined]
+
+
+def _newest_newer_published(column: Column) -> Any:  # type: ignore[type-arg]
+    return (
+        select(column)
+        .where(
+            _newer.c.name == Component.__table__.c.name,  # type: ignore[attr-defined]
+            _newer.c.version > Component.__table__.c.version,  # type: ignore[attr-defined]
+            _newer.c.status == ComponentStatus.PUBLISHED.value,
+        )
+        .order_by(_newer.c.version.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
+
+
+#: loaded with every row - the newest published version of the same lineage above it, if
+#: any (see Component.superseded_by). Read-only, never written.
+Component.superseded_by_id = column_property(_newest_newer_published(_newer.c.id))  # type: ignore[attr-defined]
+Component.superseded_by_version = column_property(_newest_newer_published(_newer.c.version))  # type: ignore[attr-defined]

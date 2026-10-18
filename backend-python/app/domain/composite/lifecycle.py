@@ -126,6 +126,18 @@ def mark_deprecated(component: Component, note: str | None) -> None:
     component.deprecation_note = note
 
 
+def newer_published(component: Component, versions: Iterable[Component]) -> Component | None:
+    """The newest published version of `component`'s lineage above it, if any. While there is
+    one, `component` stays out of PUBLISHED - publishing or undeprecating it would put an old
+    version back on offer, hidden behind the newer one in every list."""
+    newer = [
+        v
+        for v in versions
+        if v.name == component.name and v.version > component.version and v.status in LISTED_STATUSES
+    ]
+    return max(newer, key=lambda v: v.version, default=None)
+
+
 def superseded_by(newest: Component, versions: Iterable[Component]) -> list[Component]:
     """The versions of `newest`'s lineage that publishing it supersedes: the older ones still
     published. They are deprecated rather than left listed, so a later unpublish of `newest`

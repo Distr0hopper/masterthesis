@@ -36,6 +36,12 @@ def is_owner(user: User | None, component: Component) -> bool:
     return user is not None and component.created_by_id == user.id
 
 
+def is_owner_of_unsuperseded(user: User | None, component: Component) -> bool:
+    """For the commands that make a version PUBLISHED - not offered while a newer version of
+    the lineage is published (see lifecycle.newer_published)."""
+    return is_owner(user, component) and not component.is_superseded
+
+
 def is_readable_by(user: User | None, component: Component) -> bool:
     """Public components (published or deprecated) are readable by everyone, drafts by their
     owner only."""

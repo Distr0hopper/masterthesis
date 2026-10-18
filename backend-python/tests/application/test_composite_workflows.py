@@ -27,6 +27,7 @@ from app.application.exception.component_exceptions import (
     ComponentNotFoundError,
     ComponentUsedByOthersError,
     InvalidCwlError,
+    SupersededVersionError,
 )
 from app.application.exception.workflow_exceptions import (
     InlineStepNotBindableError,
@@ -268,14 +269,40 @@ def test_publishing_a_new_version_deprecates_the_published_older_ones_for_good()
     assert v1.status == ComponentStatus.DEPRECATED
 
 
-def test_publishing_an_older_version_leaves_the_newer_published_one_alone() -> None:
+def test_an_older_version_cannot_be_published_next_to_a_newer_published_one() -> None:
     v1, v2 = tool("t", ComponentStatus.DRAFT), tool("t")
     v2.version = 2
     components_service, _, _ = services(v1, v2)
 
-    publish(components_service, v1)
+    with pytest.raises(SupersededVersionError):
+        publish(components_service, v1)
+    assert v1.status == ComponentStatus.DRAFT
 
-    assert v1.status == v2.status == ComponentStatus.PUBLISHED
+
+def test_a_superseded_version_cannot_be_undeprecated_until_the_newer_one_is_down() -> None:
+    v1, v2 = tool("t", ComponentStatus.DEPRECATED), tool("t")
+    v2.version = 2
+    components_service, _, _ = services(v1, v2)
+
+    with pytest.raises(SupersededVersionError):
+        undeprecate(components_service, v1)
+    assert v1.status == ComponentStatus.DEPRECATED
+
+    unpublish(components_service, v2)
+    undeprecate(components_service, v1)
+    assert v1.status == ComponentStatus.PUBLISHED
+
+
+def test_a_superseded_draft_is_not_published_along_with_a_workflow() -> None:
+    old = tool("t", ComponentStatus.DRAFT)
+    new = tool("t")
+    new.version = 2
+    root = workflow("w", old)
+    components_service, _, _ = services(root, old, new)
+
+    with pytest.raises(SupersededVersionError):
+        publish(components_service, root, publish_components=True)
+    assert root.status == old.status == ComponentStatus.DRAFT
 
 
 def test_drafts_published_along_with_a_workflow_supersede_their_older_versions() -> None:

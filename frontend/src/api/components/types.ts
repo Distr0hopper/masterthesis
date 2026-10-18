@@ -204,10 +204,17 @@ export interface ComponentDetailBaseDto extends WithHateoasLinks {
   status: ComponentStatus;
   /** why the version is deprecated - set only while it is */
   deprecationNote?: string | null;
+  /** the newest published version above this one - while set, this one can't be published or undeprecated */
+  supersededBy?: SupersedingVersionDto | null;
   parameters: ParameterDto[];
   createdAt: string;
   updatedAt: string;
   isFavorite: boolean;
+}
+
+export interface SupersedingVersionDto {
+  id: string;
+  version: number;
 }
 
 /** A row of a list serving both kinds - narrow it on `kind`. */

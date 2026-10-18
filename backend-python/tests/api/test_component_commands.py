@@ -71,6 +71,16 @@ def test_an_anonymous_viewer_is_offered_no_command(kind: ComponentKind) -> None:
     assert command_rels(None, component(kind)) == set()
 
 
+@pytest.mark.parametrize("kind", list(ComponentKind))
+def test_a_superseded_version_is_offered_neither_publish_nor_undeprecate(kind: ComponentKind) -> None:
+    c = component(kind)
+    # what the row is loaded with when a newer version of the lineage is published
+    c.__dict__.update(superseded_by_id=uuid.uuid4(), superseded_by_version=2)
+    assert command_rels(OWNER, c) == OWNER_COMMAND_RELS - {"publish", "undeprecate"} | LOGGED_IN_COMMAND_RELS | (
+        TOOL_COMMAND_RELS - {"repackage"} if kind == ComponentKind.TOOL else set()
+    )
+
+
 def test_command_links_point_at_the_commands_endpoint_of_the_kind() -> None:
     tool = component(ComponentKind.TOOL, ComponentSource.AUTOMATED_PACKAGING)
     links = ComponentLinkBuilder(OWNER)._filter_links(tool)

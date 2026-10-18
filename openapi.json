@@ -4656,6 +4656,26 @@
         ],
         "title": "StepMatchStatus"
       },
+      "SupersedingVersionDto": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "version"
+        ],
+        "title": "SupersedingVersionDto",
+        "description": "The newer published version that keeps an older one from being published."
+      },
       "SyncedWorkflowDto": {
         "properties": {
           "workflowId": {
@@ -4860,6 +4880,16 @@
               }
             ],
             "title": "Deprecationnote"
+          },
+          "supersededBy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SupersedingVersionDto"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "parameters": {
             "items": {
@@ -5492,6 +5522,16 @@
               }
             ],
             "title": "Deprecationnote"
+          },
+          "supersededBy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SupersedingVersionDto"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "parameters": {
             "items": {

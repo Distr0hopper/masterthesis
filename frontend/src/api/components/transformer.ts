@@ -8,6 +8,7 @@ import type {
   DomainDto,
   FormatLabelSource,
   ParameterDto,
+  SupersedingVersionDto,
 } from './types';
 import { ComponentSource, ComponentStatus, ParameterDirection } from './types';
 import { formatDate, getCreatorDisplay } from '@/api/transformer';
@@ -63,6 +64,8 @@ export interface ComponentDisplayModelBase extends WithHateoasLinks {
 
 /** What every detail display model carries on top, whatever the kind. */
 export interface ComponentDetailFields {
+  /** the newest published version above this one - see ComponentDetailBaseDto.supersededBy */
+  supersededBy: SupersedingVersionDto | null;
   source: ComponentSource;
   sourceDisplay: string;
   repoUrl: string | null;
@@ -159,6 +162,7 @@ export function toDetailFields(dto: ComponentDetailBaseDto): ComponentDetailFiel
   const updatedAt = new Date(dto.updatedAt);
   const parameters = dto.parameters.map(toParameterDisplayModel);
   return {
+    supersededBy: dto.supersededBy ?? null,
     source: dto.source,
     sourceDisplay: SOURCE_LABELS[dto.source],
     repoUrl: dto.repoUrl,

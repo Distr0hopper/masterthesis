@@ -9,6 +9,7 @@ from app.api.dto.component import (
     ComponentMatchDto,
     ComponentUsageDto,
     ExistingComponentDto,
+    SupersedingVersionDto,
 )
 from app.api.dto.tool import ToolDetailDto, ToolListItemDto
 from app.api.dto.workflow import WorkflowDetailDto, WorkflowListItemDto
@@ -122,6 +123,11 @@ class ComponentTransformer:
             source=component.source,
             status=component.status,
             deprecation_note=component.deprecation_note,
+            superseded_by=(
+                SupersedingVersionDto(id=component.superseded_by[0], version=component.superseded_by[1])
+                if component.superseded_by is not None
+                else None
+            ),
             parameters=[ParameterTransformer.to_parameter(p, component.ontology_url) for p in component.parameters],
             created_at=component.created_at,
             updated_at=component.updated_at,

@@ -151,6 +151,13 @@ class ComponentListItemBaseDto(CamelModel, LinkModel):
     match: ComponentMatchDto | None = None
 
 
+class SupersedingVersionDto(CamelModel):
+    """The newer published version that keeps an older one from being published."""
+
+    id: uuid.UUID
+    version: int
+
+
 class ComponentDetailBaseDto(CamelModel, LinkModel):
     """What every detail view carries, whatever the kind - see ToolDetailDto / WorkflowDetailDto."""
 
@@ -171,6 +178,9 @@ class ComponentDetailBaseDto(CamelModel, LinkModel):
     status: ComponentStatus
     #: why the version is deprecated - set only while it is
     deprecation_note: str | None = None
+    #: the newest published version above this one - while set, this version can't be
+    #: published or undeprecated
+    superseded_by: SupersedingVersionDto | None = None
     #: the component's ports - a workflow's are its own inputs/outputs
     parameters: list[ParameterDto]
     created_at: datetime

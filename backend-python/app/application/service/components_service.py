@@ -5,7 +5,13 @@ from typing import Annotated
 from fastapi import Depends
 
 from app.application.commands.commands import ComponentCommand, ComponentCommandType
-from app.application.commands.registry import CommandSpec, is_logged_in, is_owner, is_readable_by
+from app.application.commands.registry import (
+    CommandSpec,
+    is_logged_in,
+    is_owner,
+    is_owner_of_unsuperseded,
+    is_readable_by,
+)
 from app.application.exception.component_exceptions import (
     ComponentHasDeprecatedParentsError,
     ComponentHasPublicParentsError,
@@ -14,6 +20,7 @@ from app.application.exception.component_exceptions import (
     ComponentUsedByOthersError,
     InvalidCwlError,
     MissingCommandPayloadError,
+    SupersededVersionError,
 )
 from app.application.exception.workflow_exceptions import (
     ConflictingAuxiliaryFileError,
@@ -324,10 +331,17 @@ class ComponentsService:
             raise WorkflowHasUnpublishedComponentsError(sorted({c.name for c in check.own_drafts}))
 
         published = [*check.own_drafts, component]
+        for c in published:
+            await self._require_not_superseded(c)
         lifecycle.mark_published(published)
         superseded = await self._supersede_older_versions(published)
         await self.uow.components.add_all([*published, *superseded])
         return component
+
+    async def _require_not_superseded(self, component: Component) -> None:
+        newer = lifecycle.newer_published(component, await self.uow.components.find_versions_by_name(component.name))
+        if newer is not None:
+            raise SupersededVersionError(component.name, component.version, newer.version)
 
     async def _supersede_older_versions(self, published: list[Component]) -> list[Component]:
         """Deprecate the still-published older versions of every lineage just published - a
@@ -387,6 +401,7 @@ class ComponentsService:
         return await self.uow.components.add(component)
 
     async def undeprecate(self, component: Component) -> Component:
+        await self._require_not_superseded(component)
         lifecycle.mark_undeprecated(component)
         return await self.uow.components.add(component)
 
@@ -620,7 +635,7 @@ COMPONENT_COMMANDS: dict[ComponentCommandType, CommandSpec[ComponentsService, Co
         rel="unfavorite", allowed=is_logged_in, run=lambda s, c, cmd, user: s.remove_favorite(c, user)
     ),
     ComponentCommandType.PUBLISH: CommandSpec(
-        rel="publish", allowed=is_owner, run=lambda s, c, cmd, user: s.publish(c, user, cmd.publish_components)
+        rel="publish", allowed=is_owner_of_unsuperseded, run=lambda s, c, cmd, user: s.publish(c, user, cmd.publish_components)
     ),
     ComponentCommandType.UNPUBLISH: CommandSpec(
         rel="unpublish", allowed=is_owner, run=lambda s, c, cmd, user: s.unpublish(c, user, cmd.unpublish_parents)
@@ -635,6 +650,6 @@ COMPONENT_COMMANDS: dict[ComponentCommandType, CommandSpec[ComponentsService, Co
         rel="deprecate", allowed=is_owner, run=lambda s, c, cmd, user: s.deprecate(c, cmd.deprecation_note)
     ),
     ComponentCommandType.UNDEPRECATE: CommandSpec(
-        rel="undeprecate", allowed=is_owner, run=lambda s, c, cmd, user: s.undeprecate(c)
+        rel="undeprecate", allowed=is_owner_of_unsuperseded, run=lambda s, c, cmd, user: s.undeprecate(c)
     ),
 }

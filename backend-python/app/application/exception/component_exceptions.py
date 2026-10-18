@@ -41,6 +41,16 @@ class ManualUploadCannotBeRepackagedError(Exception):
         super().__init__("Cannot repackage a manually uploaded component")
 
 
+class SupersededVersionError(Exception):
+    """A newer version of the lineage is published - an older one can't be published next to it."""
+
+    def __init__(self, name: str, version: int, newer_version: int) -> None:
+        super().__init__(
+            f"'{name}' v{newer_version} is published, so v{version} is superseded - unpublish or delete "
+            f"v{newer_version} first"
+        )
+
+
 class PackagedToolCannotTakeUploadError(Exception):
     """A packaged lineage's versions come from its repo - an uploaded CWL would break that."""
 

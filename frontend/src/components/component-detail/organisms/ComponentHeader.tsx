@@ -42,7 +42,7 @@ import {
   getLink,
 } from '@/api/permissions';
 import { getErrorMessage } from '@/lib/errors';
-import { ROUTES } from '@/lib/routes';
+import { ROUTES, componentDetailRoute } from '@/lib/routes';
 import { downloadBlob } from '@/lib/download';
 import { ComponentFavoriteButton } from '@/components/ComponentFavoriteButton';
 import { DeleteComponentDialog } from '@/components/component-mine/organisms/DeleteComponentDialog';
@@ -173,7 +173,18 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
 
       {model.status === ComponentStatus.DRAFT && (
         <div className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          {DRAFT_NOTICE[model.kind]}
+          {model.supersededBy ? (
+            // no Publish button here - a newer version is published, so this one is superseded
+            <>
+              This version is a draft and only visible to you.{' '}
+              <Link to={componentDetailRoute(model.kind, model.supersededBy.id)} className="font-medium underline">
+                v{model.supersededBy.version}
+              </Link>{' '}
+              is already published, so this older version can't be published anymore.
+            </>
+          ) : (
+            DRAFT_NOTICE[model.kind]
+          )}
         </div>
       )}
 
@@ -184,6 +195,16 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
           </p>
           <p className="mt-1">
             Workflows that already run it keep working, but it is no longer listed and can't be used in new workflows.
+            {model.supersededBy && (
+              <>
+                {' '}
+                The current version is{' '}
+                <Link to={componentDetailRoute(model.kind, model.supersededBy.id)} className="font-medium underline">
+                  v{model.supersededBy.version}
+                </Link>
+                .
+              </>
+            )}
           </p>
         </div>
       )}

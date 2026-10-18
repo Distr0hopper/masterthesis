@@ -18,15 +18,14 @@ from app.infrastructure.db.session import require_unit_of_work
 
 @dataclass
 class ComponentListFilter:
-    #: None lists both kinds - the composite's uniform view
     kind: ComponentKind | None = None
     domains: list[str] = field(default_factory=list)
     created_by: uuid.UUID | None = None
     exclude_created_by: uuid.UUID | None = None
     favorited_by: uuid.UUID | None = None
     search: str | None = None
-    #: None for any status - e.g. lifecycle.LISTED_STATUSES for the public lists
     statuses: frozenset[ComponentStatus] | None = None
+    drafts_of: uuid.UUID | None = None
     favorites_first_for: uuid.UUID | None = None
 
 
@@ -59,7 +58,13 @@ class ComponentsRepository:
                 )
             )
         if filter.statuses is not None:
-            query = query.where(Component.status.in_(filter.statuses))
+            listed = Component.status.in_(filter.statuses)
+            if filter.drafts_of is not None:
+                own_draft = and_(
+                    Component.status == ComponentStatus.DRAFT, Component.created_by_id == filter.drafts_of
+                )
+                listed = or_(listed, own_draft)
+            query = query.where(listed)
         if filter.created_by is not None:
             query = query.where(Component.created_by_id == filter.created_by)
         if filter.exclude_created_by is not None:

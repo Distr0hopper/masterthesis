@@ -29,6 +29,7 @@ export const componentsService = {
         includeParameters: params.includeParameters || undefined,
         rankAgainst: params.rankAgainst?.length ? params.rankAgainst : undefined,
         favoritesFirst: params.favoritesFirst || undefined,
+        includeMyDrafts: params.includeMyDrafts || undefined,
         limit: params.limit,
         offset: params.offset,
       },

@@ -33,6 +33,7 @@ export function WorkflowSidebar({ rankAgainst }: WorkflowSidebarProps) {
     rankAgainst,
     favoritesFirst: isAuthenticated,
     favoritesOnly: isAuthenticated && favoritesOnly,
+    includeMyDrafts: isAuthenticated,
   });
   const { data: domains } = useDomains();
 

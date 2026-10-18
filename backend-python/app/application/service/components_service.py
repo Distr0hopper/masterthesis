@@ -136,7 +136,8 @@ class ComponentsService:
     ) -> tuple[list[Component], int]:
         # browse-list callers always see only PUBLISHED components - enforced here rather
         # than trusted from an arbitrary caller-supplied filter, so a public browse request
-        # can never leak drafts regardless of what the router builds
+        # can never leak drafts regardless of what the router builds. The one addition is
+        # `drafts_of`, which the router only ever sets to the authenticated caller
         filter = replace(filter, statuses=lifecycle.LISTED_STATUSES, created_by=None)
         return await self.uow.components.find_paginated(filter, pagination)
 

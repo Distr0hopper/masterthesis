@@ -412,6 +412,16 @@
             }
           },
           {
+            "name": "includeMyDrafts",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Includemydrafts"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,

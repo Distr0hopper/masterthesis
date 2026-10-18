@@ -1,12 +1,15 @@
 import { ExternalLink, Star } from 'lucide-react';
 import {
+  ComponentStatus,
   type ComponentDisplayModel,
 } from '@/api/components';
+import { Badge } from '@/components/ui/badge.tsx';
 import { cn } from '@/lib/utils';
 import { componentDetailRoute } from '@/lib/routes';
 import { NO_DATA_INPUTS_SCORE } from './lib/portKinds';
 import { DRAG_MIME, type ComponentDragPayload } from './types';
 import { DomainBadges } from '@/components/common/DomainBadges';
+import { WrappableName } from '@/components/common/WrappableName';
 
 interface ComponentPaletteCardProps {
   /** `component.match` is the backend's ranking of this candidate against the canvas */
@@ -42,8 +45,9 @@ export function ComponentPaletteCard({ component }: ComponentPaletteCardProps) {
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="break-all font-mono text-sm font-semibold text-slate-900">
-          {component.name}
+        {/* wrap at word boundaries first; break-words still splits a single overlong part */}
+        <span className="min-w-0 break-words font-mono text-sm font-semibold text-slate-900">
+          <WrappableName name={component.name} />
         </span>
         <div className="flex shrink-0 items-center gap-1">
           {/* makes the favourites-first ordering legible, rather than looking arbitrary */}
@@ -86,7 +90,18 @@ export function ComponentPaletteCard({ component }: ComponentPaletteCardProps) {
         </span>
       )}
 
-      <DomainBadges domains={component.domains} />
+      <div className="flex flex-wrap gap-1">
+        {component.status === ComponentStatus.DRAFT && (
+          <Badge
+            variant="outline"
+            className="border-amber-300 text-amber-700"
+            title="Not published - only visible to you"
+          >
+            Draft
+          </Badge>
+        )}
+        <DomainBadges domains={component.domains} />
+      </div>
     </div>
   );
 }

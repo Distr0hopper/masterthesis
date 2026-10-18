@@ -265,6 +265,7 @@ export interface ComponentListQueryParams extends PageParams<ComponentListItemDt
   includeParameters?: boolean;
   rankAgainst?: string[];
   favoritesFirst?: boolean;
+  includeMyDrafts?: boolean;
 }
 
 export interface MyComponentsQueryParams extends MineQueryParams {

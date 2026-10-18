@@ -41,22 +41,15 @@ async def list_components(
     compatibility_service: Annotated[CompatibilityService, Depends(CompatibilityService.get_service)],
     current_user: Annotated[User | None, Depends(AuthService.get_current_user_optional)],
     pagination_dto: Annotated[ListQueryPaginationDtoV1, Depends()],
-    # omitted lists both kinds - tools and workflows side by side
     kind: Annotated[ComponentKind | None, Query()] = None,
-    # repeatable: ?domain=a&domain=b selects both. json_schema_extra adds the enum purely
-    # so Swagger UI renders a dropdown for each value
     domain: Annotated[list[str] | None, Query(json_schema_extra={"items": {"enum": VALID_DOMAINS}})] = None,
     favorites_only: Annotated[bool, Query(alias="favoritesOnly")] = False,
     exclude_mine: Annotated[bool, Query(alias="excludeMine")] = False,
     search: Annotated[str | None, Query()] = None,
-    # off by default so the browse grid keeps its slim payload - only the workflow
-    # builder, which type-checks every listed component's ports, asks for these
     include_parameters: Annotated[bool, Query(alias="includeParameters")] = False,
-    # repeatable: the component of every workflow-builder canvas node, most recently added
-    # first. Switches the list to the builder palette's order - ranked by how well each
-    # component fits the canvas, before paging - and implies includeParameters
     rank_against: Annotated[list[uuid.UUID] | None, Query(alias="rankAgainst")] = None,
     favorites_first: Annotated[bool, Query(alias="favoritesFirst")] = False,
+    include_my_drafts: Annotated[bool, Query(alias="includeMyDrafts")] = False,
 ) -> PaginatedResponseDtoV1[ComponentListItemDto]:
     if favorites_only and current_user is None:
         raise FavoritesRequireAuthError()
@@ -71,6 +64,7 @@ async def list_components(
         favorited_by=favorited_by,
         search=search,
         favorites_first_for=current_user.id if favorites_first and current_user is not None else None,
+        drafts_of=current_user.id if include_my_drafts and current_user is not None else None,
     )
     favorited_names = await components_service.favorited_names(current_user)
 

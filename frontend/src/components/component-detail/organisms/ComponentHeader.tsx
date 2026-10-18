@@ -22,6 +22,7 @@ import {
   ComponentStatus,
   useDownloadComponent,
   usePublishComponent,
+  useComponentVersions,
   usePublishImpact,
   useUndeprecateComponent,
   type ComponentDetailDisplayModel,
@@ -52,6 +53,7 @@ import { DomainBadges } from '@/components/common/DomainBadges';
 import { EditComponentDialog } from './EditComponentDialog';
 import { DeprecateComponentDialog } from './DeprecateComponentDialog';
 import { UnpublishComponentDialog } from './UnpublishComponentDialog';
+import { VERSIONS_ANCHOR } from './ComponentVersions';
 
 interface ComponentHeaderProps {
   model: ComponentDetailDisplayModel;
@@ -99,6 +101,9 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
   const { mutate: undeprecateComponent, isPending: isUndeprecating } = useUndeprecateComponent();
 
   const navigate = useNavigate();
+  // shares its cache with the Versions card further down
+  const { data: versions } = useComponentVersions(model.id);
+  const versionCount = versions?.length ?? 0;
   const isWorkflow = model.kind === 'workflow';
   // a tool's next version: an uploaded CWL, or its GitHub repo packaged again - a workflow's
   // come from the Workflow Builder
@@ -226,6 +231,11 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
               <Badge variant="outline" className="w-fit" title="Version of this lineage">
                 v{model.version}
               </Badge>
+              {versionCount > 1 && (
+                <a href={`#${VERSIONS_ANCHOR}`} className="text-xs text-slate-500 hover:text-jmu-blue-800 hover:underline">
+                  {versionCount} versions
+                </a>
+              )}
 
               {canFavorite(model._links) && <ComponentFavoriteButton links={model._links!} isFavorite={model.isFavorite} />}
             </div>

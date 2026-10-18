@@ -5,6 +5,7 @@ import { useComponent, type ComponentKind } from '@/api/components';
 import { ComponentHeader } from '@/components/component-detail/organisms/ComponentHeader';
 import { RelatedComponents } from '@/components/component-detail/organisms/RelatedComponents';
 import { UsedInWorkflows } from '@/components/component-detail/organisms/UsedInWorkflows';
+import { ComponentVersions } from '@/components/component-detail/organisms/ComponentVersions';
 import { ToolTabs } from '@/components/tool-detail/organisms/ToolTabs';
 import { WorkflowDefinition } from '@/components/workflow-detail/organisms/WorkflowDefinition';
 import { WorkflowSteps } from '@/components/workflow-detail/organisms/WorkflowSteps';
@@ -64,6 +65,7 @@ export default function ComponentDetailPage({ kind }: ComponentDetailPageProps) 
           <WorkflowSteps model={model} />
         </>
       )}
+      <ComponentVersions componentId={model.id} kind={model.kind} />
       <UsedInWorkflows componentId={model.id} version={model.version} />
       <RelatedComponents />
     </div>

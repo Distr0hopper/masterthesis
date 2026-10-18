@@ -6,15 +6,18 @@ import uuid
 
 import pytest
 
+from app.application.commands.commands import ManualFormatLabel
 from app.application.exception.component_exceptions import (
     AlreadyPackagedError,
     ManualUploadCannotBeRepackagedError,
     PackagedCommitChangedError,
+    PackagedToolCannotTakeUploadError,
 )
 from app.application.service.components_service import ComponentsService
 from app.application.service.tools_service import ToolsService
 from app.domain.models.component import MAX_DESCRIPTION_LENGTH, Component, ComponentKind, ComponentSource
 from app.domain.models.component_domain import ComponentDomain
+from app.domain.models.parameter import ParameterDirection
 from app.infrastructure.packaging.packaging_service_client import PackagingResult
 from tests.application.fake_unit_of_work import FakeUnitOfWork
 from tests.application.test_composite_workflows import FakeComponentsRepository
@@ -163,6 +166,44 @@ def test_a_manual_upload_cannot_be_repackaged() -> None:
     tools_service, _ = service(manual)
     with pytest.raises(ManualUploadCannotBeRepackagedError):
         asyncio.run(tools_service.repackage(manual))
+
+
+def test_a_packaged_tool_takes_no_uploaded_version() -> None:
+    v1 = packaged(1, "c1")
+    tools_service, _ = service(v1)
+    with pytest.raises(PackagedToolCannotTakeUploadError):
+        asyncio.run(tools_service.add_uploaded_version(packaged(2, "c-hand")))
+
+
+LABELLED_CWL = """
+cwlVersion: v1.2
+class: CommandLineTool
+baseCommand: echo
+inputs:
+  data:
+    type: File
+outputs:
+  out:
+    type: File
+"""
+
+
+def test_an_uploaded_version_applies_its_reviewed_labels_over_the_carried_over_ones() -> None:
+    cwl = LABELLED_CWL
+    v1 = Component(id=uuid.uuid4(), kind=ComponentKind.TOOL, name="m", cwl_content=cwl, created_by_id=OWNER)
+    tools_service, _ = service()
+    asyncio.run(tools_service.create_manual(v1, format_labels=[ManualFormatLabel("data", ParameterDirection.INPUT, "CSV")]))
+
+    v2 = asyncio.run(
+        tools_service.add_uploaded_version(
+            Component(kind=ComponentKind.TOOL, name="m", cwl_content=cwl, created_by_id=OWNER),
+            format_labels=[ManualFormatLabel("out", ParameterDirection.OUTPUT, "GeoTIFF")],
+        )
+    )
+
+    assert v2.version == 2
+    labels = {p.name: p.format_label for p in v2.parameters if p.format_label}
+    assert labels == {"data": "CSV", "out": "GeoTIFF"}
 
 
 def test_repackaging_from_an_old_version_builds_on_the_lineage_head() -> None:

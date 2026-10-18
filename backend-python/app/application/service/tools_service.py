@@ -7,12 +7,13 @@ from typing import Annotated
 from fastapi import Depends
 
 from app.application.commands.commands import ManualFormatLabel, ToolCommand, ToolCommandType
-from app.application.commands.registry import CommandSpec, is_tool_owner
+from app.application.commands.registry import CommandSpec, is_packaged_tool_owner, is_tool_owner
 from app.application.exception.component_exceptions import (
     AlreadyPackagedError,
     ComponentKindMismatchError,
     InvalidCwlError,
     ManualUploadCannotBeRepackagedError,
+    PackagedToolCannotTakeUploadError,
     MissingCommandPayloadError,
     PackagedCommitChangedError,
 )
@@ -231,6 +232,15 @@ class ToolsService:
         self._apply_manual_format_labels(tool, format_labels or [])
         return await self.uow.components.add(tool)
 
+    async def add_uploaded_version(
+        self, tool: Component, format_labels: list[ManualFormatLabel] | None = None
+    ) -> Component:
+        """A hand-uploaded CWL as the next version - only for lineages that weren't packaged
+        from GitHub; those get theirs from the repo (package_next_version)."""
+        if tool.is_packaged:
+            raise PackagedToolCannotTakeUploadError(tool.name)
+        return await self.add_manual_version(tool, format_labels)
+
     async def add_manual_version(
         self, tool: Component, format_labels: list[ManualFormatLabel] | None = None
     ) -> Component:
@@ -383,7 +393,7 @@ class ToolsService:
 #: Every command only a tool understands - see app.application.commands.registry
 TOOL_COMMANDS: dict[ToolCommandType, CommandSpec[ToolsService, ToolCommand]] = {
     ToolCommandType.REPACKAGE: CommandSpec(
-        rel="repackage", allowed=is_tool_owner, run=lambda s, tool, cmd, user: s.repackage(tool)
+        rel="repackage", allowed=is_packaged_tool_owner, run=lambda s, tool, cmd, user: s.repackage(tool)
     ),
     ToolCommandType.UPDATE_FORMAT_LABELS: CommandSpec(
         rel="updateFormatLabels",

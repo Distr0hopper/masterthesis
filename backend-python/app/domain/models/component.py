@@ -159,6 +159,11 @@ class Component(SQLModel, table=True):
         return self.kind == ComponentKind.WORKFLOW
 
     @property
+    def is_packaged(self) -> bool:
+        """Packaged from a GitHub repo - its versions come from that repo, never an upload."""
+        return self.source == ComponentSource.AUTOMATED_PACKAGING
+
+    @property
     def steps(self) -> list["WorkflowStep"]:
         """A workflow's steps in order - always [] for a tool, the leaf of the composite."""
         return self.workflow.steps if self.workflow is not None else []

@@ -8,7 +8,7 @@ import pytest
 from app.api.link.component import ComponentLinkBuilder
 from app.api.permission.component_permission_validator import ComponentPermissionValidator
 from app.application.commands.commands import ComponentCommandType, ToolCommandType
-from app.domain.models.component import Component, ComponentKind
+from app.domain.models.component import Component, ComponentKind, ComponentSource
 from app.domain.models.tool import Tool
 from app.domain.models.user import User
 from app.domain.models.workflow import Workflow
@@ -22,8 +22,8 @@ TOOL_COMMAND_RELS = {"updateFormatLabels", "repackage"}
 OTHER_RELS = {"self", "download", "delete", "impact", "addVersion"}
 
 
-def component(kind: ComponentKind) -> Component:
-    c = Component(id=uuid.uuid4(), kind=kind, name="c", cwl_content="", created_by_id=OWNER.id)
+def component(kind: ComponentKind, source: ComponentSource = ComponentSource.MANUAL_UPLOAD) -> Component:
+    c = Component(id=uuid.uuid4(), kind=kind, name="c", cwl_content="", created_by_id=OWNER.id, source=source)
     if kind == ComponentKind.TOOL:
         c.tool = Tool()
     else:
@@ -36,10 +36,29 @@ def command_rels(user: User | None, c: Component) -> set[str]:
     return set(links) - OTHER_RELS
 
 
-@pytest.mark.parametrize("kind", list(ComponentKind))
-def test_the_owner_is_offered_every_command_of_the_kind(kind: ComponentKind) -> None:
-    expected = OWNER_COMMAND_RELS | LOGGED_IN_COMMAND_RELS | (TOOL_COMMAND_RELS if kind == ComponentKind.TOOL else set())
-    assert command_rels(OWNER, component(kind)) == expected
+def test_the_owner_is_offered_every_command_of_a_workflow() -> None:
+    assert command_rels(OWNER, component(ComponentKind.WORKFLOW)) == OWNER_COMMAND_RELS | LOGGED_IN_COMMAND_RELS
+
+
+def test_the_owner_is_offered_every_command_of_a_packaged_tool() -> None:
+    tool = component(ComponentKind.TOOL, ComponentSource.AUTOMATED_PACKAGING)
+    assert command_rels(OWNER, tool) == OWNER_COMMAND_RELS | LOGGED_IN_COMMAND_RELS | TOOL_COMMAND_RELS
+
+
+def test_a_manual_tool_is_not_offered_repackage() -> None:
+    expected = OWNER_COMMAND_RELS | LOGGED_IN_COMMAND_RELS | (TOOL_COMMAND_RELS - {"repackage"})
+    assert command_rels(OWNER, component(ComponentKind.TOOL)) == expected
+
+
+@pytest.mark.parametrize(
+    ("source", "offered"),
+    [(ComponentSource.MANUAL_UPLOAD, True), (ComponentSource.AUTOMATED_PACKAGING, False)],
+)
+def test_only_a_manual_tool_takes_an_uploaded_version(source: ComponentSource, offered: bool) -> None:
+    tool = component(ComponentKind.TOOL, source)
+    assert ("addVersion" in ComponentLinkBuilder(OWNER)._filter_links(tool)) is offered
+    assert "addVersion" not in ComponentLinkBuilder(STRANGER)._filter_links(tool)
+    assert "addVersion" not in ComponentLinkBuilder(OWNER)._filter_links(component(ComponentKind.WORKFLOW))
 
 
 @pytest.mark.parametrize("kind", list(ComponentKind))
@@ -53,7 +72,7 @@ def test_an_anonymous_viewer_is_offered_no_command(kind: ComponentKind) -> None:
 
 
 def test_command_links_point_at_the_commands_endpoint_of_the_kind() -> None:
-    tool = component(ComponentKind.TOOL)
+    tool = component(ComponentKind.TOOL, ComponentSource.AUTOMATED_PACKAGING)
     links = ComponentLinkBuilder(OWNER)._filter_links(tool)
     assert links["publish"].href == f"/components/{tool.id}/commands"
     assert links["repackage"].href == f"/tools/{tool.id}/commands"
@@ -71,8 +90,9 @@ def test_component_commands_are_the_owners_except_favorites(command: ComponentCo
 
 @pytest.mark.parametrize("command", list(ToolCommandType))
 def test_tool_commands_are_the_owners_and_only_for_tools(command: ToolCommandType) -> None:
-    assert ComponentPermissionValidator(OWNER).can_execute_tool(component(ComponentKind.TOOL), command)
-    assert not ComponentPermissionValidator(STRANGER).can_execute_tool(component(ComponentKind.TOOL), command)
+    tool = component(ComponentKind.TOOL, ComponentSource.AUTOMATED_PACKAGING)
+    assert ComponentPermissionValidator(OWNER).can_execute_tool(tool, command)
+    assert not ComponentPermissionValidator(STRANGER).can_execute_tool(tool, command)
     assert not ComponentPermissionValidator(OWNER).can_execute_tool(component(ComponentKind.WORKFLOW), command)
 
 

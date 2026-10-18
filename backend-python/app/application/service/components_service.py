@@ -297,7 +297,8 @@ class ComponentsService:
     async def publish(
         self, component: Component, current_user_id: uuid.UUID, publish_components: bool = False
     ) -> Component:
-        """Make a component public.
+        """Make a component public - and deprecate the older versions of its lineage that are
+        still published, since this one supersedes them.
 
         A tool simply flips. A workflow takes its whole tree into account: a public
         workflow whose steps run draft components would be broken for every other user -
@@ -322,9 +323,25 @@ class ComponentsService:
         if check.own_drafts and not publish_components:
             raise WorkflowHasUnpublishedComponentsError(sorted({c.name for c in check.own_drafts}))
 
-        lifecycle.mark_published([*check.own_drafts, component])
-        await self.uow.components.add_all([*check.own_drafts, component])
+        published = [*check.own_drafts, component]
+        lifecycle.mark_published(published)
+        superseded = await self._supersede_older_versions(published)
+        await self.uow.components.add_all([*published, *superseded])
         return component
+
+    async def _supersede_older_versions(self, published: list[Component]) -> list[Component]:
+        """Deprecate the still-published older versions of every lineage just published - a
+        new version replaces them in the list, and must keep doing so after an unpublish."""
+        newest_by_name: dict[str, Component] = {}
+        for c in published:
+            if c.name not in newest_by_name or c.version > newest_by_name[c.name].version:
+                newest_by_name[c.name] = c
+        superseded: list[Component] = []
+        for newest in newest_by_name.values():
+            older = lifecycle.superseded_by(newest, await self.uow.components.find_versions_by_name(newest.name))
+            lifecycle.mark_superseded(older, newest)
+            superseded.extend(older)
+        return superseded
 
     async def unpublish(
         self, component: Component, current_user_id: uuid.UUID, unpublish_parents: bool = False

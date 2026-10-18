@@ -6,6 +6,7 @@ import { FullBleedLayout } from '@/components/layout/FullBleedLayout';
 import ComponentsPage from '@/pages/ComponentsPage';
 import ComponentDetailPage from '@/pages/ComponentDetailPage';
 import ToolUploadPage from '@/pages/ToolUploadPage';
+import ToolNewVersionPage from '@/pages/ToolNewVersionPage';
 import MyComponentsPage from '@/pages/MyComponentsPage';
 import WorkflowUploadPage from '@/pages/WorkflowUploadPage';
 import LoginPage from '@/pages/LoginPage';
@@ -40,6 +41,7 @@ export default function App() {
             <Route path={ROUTES.browse} element={<ComponentsPage />} />
             <Route path={ROUTES.toolUpload} element={<ProtectedRoute> <ToolUploadPage /> </ProtectedRoute>} />
             <Route path={ROUTES.toolDetail(':id')} element={<ComponentDetailPage key="tool" kind="tool" />} />
+            <Route path={ROUTES.toolNewVersion(':id')} element={<ProtectedRoute> <ToolNewVersionPage /> </ProtectedRoute>} />
             <Route path={ROUTES.myTools} element={<ProtectedRoute> <MyComponentsPage key="tool" kind="tool" /> </ProtectedRoute>} />
             <Route path={ROUTES.workflowUpload} element={<ProtectedRoute> <WorkflowUploadPage /> </ProtectedRoute>} />
             <Route path={ROUTES.workflowDetail(':id')} element={<ComponentDetailPage key="workflow" kind="workflow" />} />

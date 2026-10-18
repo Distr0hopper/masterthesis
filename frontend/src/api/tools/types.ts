@@ -83,7 +83,9 @@ export interface PackageToolDto {
   expectedCommitSha?: string | null;
 }
 
+/** A hand-uploaded CWL as the next version - only for tools that weren't packaged from GitHub. */
 export interface AddVersionDto {
   repoCommitSha?: string;
-  description?: string;
+  description?: string | null;
+  formatLabels?: FormatLabelDto[];
 }

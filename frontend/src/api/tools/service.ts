@@ -34,6 +34,7 @@ export const toolsService = {
     formData.append('cwlFile', file);
     if (dto.repoCommitSha) formData.append('repoCommitSha', dto.repoCommitSha);
     if (dto.description) formData.append('description', dto.description);
+    if (dto.formatLabels?.length) formData.append('formatLabels', JSON.stringify(dto.formatLabels));
     return apiClient.post(`${ENDPOINT}/${id}/versions`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });

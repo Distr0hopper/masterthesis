@@ -41,6 +41,13 @@ class ManualUploadCannotBeRepackagedError(Exception):
         super().__init__("Cannot repackage a manually uploaded component")
 
 
+class PackagedToolCannotTakeUploadError(Exception):
+    """A packaged lineage's versions come from its repo - an uploaded CWL would break that."""
+
+    def __init__(self, name: str) -> None:
+        super().__init__(f"'{name}' is packaged from GitHub - repackage it instead of uploading a new version")
+
+
 class ComponentNameAlreadyExistsError(Exception):
     """Names are the lineage key, unique across tools and workflows alike."""
 

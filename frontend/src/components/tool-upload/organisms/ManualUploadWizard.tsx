@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { FormProvider, useWatch } from 'react-hook-form';
 import { AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -13,12 +13,20 @@ import { useUploadWizard } from '@/components/common/useUploadWizard';
 import { useUploadMetadataForm } from '@/components/common/useUploadMetadataForm';
 import { ToolReviewStep } from './ToolReviewStep';
 import {
+  initialFormatLabelDraft,
   toFormatLabelDtos,
   withFormatLabels,
   type FormatLabelDraft,
   useComponentNameAvailability,
 } from '@/api/components';
-import { toolTransformer, useParseTool, useUploadTool, type ToolDetailDto } from '@/api/tools';
+import {
+  toolTransformer,
+  useAddManualVersion,
+  useParseTool,
+  useUploadTool,
+  type ToolDetailDisplayModel,
+  type ToolDetailDto,
+} from '@/api/tools';
 import type { UploadMetadataFormData } from '@/api/schema';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { getErrorMessage } from '@/lib/errors';
@@ -31,27 +39,28 @@ const STEPS = [
 ];
 
 interface ManualUploadWizardProps {
-  // when provided, replaces the default post-upload navigation - used to embed this in
-  // contexts like the workflow step picker, where navigating away would abandon
-  // whatever page it was opened from
   onSuccess?: (created: ToolDetailDto) => void;
+  parent?: ToolDetailDisplayModel;
 }
 
-export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
+export function ManualUploadWizard({ onSuccess, parent }: ManualUploadWizardProps) {
   const navigate = useNavigate();
   const parseMutation = useParseTool();
-  const { mutate: upload, isPending: isCreating, error: createError, reset: resetCreate } = useUploadTool();
+  const uploadMutation = useUploadTool();
+  const addVersionMutation = useAddManualVersion();
+  const { isPending: isCreating, error: createError, reset: resetCreate } = parent ? addVersionMutation : uploadMutation;
   const wizard = useUploadWizard();
-  const { form, prefill } = useUploadMetadataForm();
+  const { form, prefill } = useUploadMetadataForm(parent && { name: parent.name, domains: parent.domains });
 
   const [file, setFile] = useState<File | null>(null);
-  const [formatLabels, setFormatLabels] = useState<FormatLabelDraft>({});
+  const carriedLabels = parent ? initialFormatLabelDraft([...parent.inputs, ...parent.outputs]) : {};
+  const [formatLabels, setFormatLabels] = useState<FormatLabelDraft>(carriedLabels);
 
   const { name, domains, description } = useWatch({ control: form.control });
-  const debouncedName = useDebouncedValue(name ?? '');
+  const debouncedName = useDebouncedValue(parent ? '' : (name ?? ''));
   const { data: availability } = useComponentNameAvailability(debouncedName);
 
-  const taken = availability?.available === false;
+  const taken = !parent && availability?.available === false;
   const takenBy = taken ? availability?.existing : null;
 
   const parsed = parseMutation.data;
@@ -70,10 +79,10 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
     parseMutation.reset();
     resetCreate();
     form.clearErrors();
-    setFormatLabels({});
+    setFormatLabels(carriedLabels);
     wizard.backToSource();
     if (selected) {
-      prefill({ name: stripUploadExtension(selected.name) });
+      if (!parent) prefill({ name: stripUploadExtension(selected.name) });
       readFile(selected);
     }
   };
@@ -86,7 +95,27 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
 
   const handleCreate = (values: UploadMetadataFormData) => {
     if (!file || !parsed || taken) return;
-    upload(
+    if (parent) {
+      addVersionMutation.mutate(
+        {
+          id: parent.id,
+          file,
+          dto: {
+            description: values.description || null,
+            formatLabels: toFormatLabelDtos(parsed.parameters, formatLabels),
+          },
+        },
+        {
+          onSuccess: (created) => {
+            toast.success(`${created.name} v${created.version} created`);
+            if (onSuccess) onSuccess(created);
+            else navigate(ROUTES.toolDetail(created.id));
+          },
+        },
+      );
+      return;
+    }
+    uploadMutation.mutate(
       {
         file,
         dto: {
@@ -120,9 +149,17 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
               version={takenBy.version}
               className="inline-flex"
             />{' '}
-            {takenBy.canAddVersion
-              ? '— rename yours, or add a new version to it instead.'
-              : '— choose a different name.'}
+            {takenBy.canAddVersion ? (
+              <>
+                — rename yours, or{' '}
+                <Link to={ROUTES.toolNewVersion(takenBy.id)} className="font-medium underline">
+                  add a new version to it
+                </Link>{' '}
+                instead.
+              </>
+            ) : (
+              '— choose a different name.'
+            )}
           </>
         ) : (
           'This name is already taken — choose a different name.'
@@ -137,7 +174,7 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
           ...parsed,
           parameters: withFormatLabels(parsed.parameters, formatLabels),
         },
-        { name, domains, description },
+        { name, domains, description, ...(parent && { version: parent.version + 1 }) },
       )
     : null;
 
@@ -163,7 +200,8 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
 
         {wizard.step === 2 && parsed && previewModel && (
           <ToolReviewStep
-            title="New tool"
+            title={parent ? `New version of ${parent.name}` : 'New tool'}
+            locked={!!parent}
             nameNotice={nameNotice}
             descriptionPlaceholder="Taken from the file's doc: field - or write your own"
             previewModel={previewModel}
@@ -200,7 +238,7 @@ export function ManualUploadWizard({ onSuccess }: ManualUploadWizardProps) {
               disabled={isCreating || taken}
               className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90"
             >
-              {isCreating ? 'Creating...' : 'Create Tool'}
+              {isCreating ? 'Creating...' : parent ? 'Create Version' : 'Create Tool'}
             </Button>
           )}
         </div>

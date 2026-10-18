@@ -72,6 +72,7 @@ export function ComponentCard({ component, backTo, showBuilderLink = false, acti
         <div className="mt-3 flex items-center justify-between border-t pt-3 text-sm text-slate-500">
           <span>
             {component.authorDisplay}
+            {` · v${component.version}`}
             {component.kind === 'workflow' &&
               ` · ${component.stepCount} step${component.stepCount === 1 ? '' : 's'}`}
           </span>

@@ -101,6 +101,7 @@ class AddVersionRequestDto(EmptyRepoCommitShaToNoneMixin, EmptyDescriptionToNone
     cwl_file: UploadFile
     repo_commit_sha: str | None = None
     description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
+    format_labels: Json[list[FormatLabelDto]] = Field(default="[]", validate_default=True)
 
 
 class PackageToolRequestDto(DomainsValidatorMixin, RepoUrlValidatorMixin, EmptyDescriptionToNoneMixin, CamelModel):

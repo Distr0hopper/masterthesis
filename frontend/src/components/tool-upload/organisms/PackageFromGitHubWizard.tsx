@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FormProvider, useWatch } from 'react-hook-form';
 import { AxiosError } from 'axios';
@@ -58,12 +58,19 @@ const PACKAGING_HINT = (
   </>
 );
 
+interface PackageFromGitHubWizardProps {
+  /** a repo to start from - fetched right away, e.g. a packaged tool's own for its next version */
+  initialRepoUrl?: string;
+  /** keep the repo URL fixed - the new-version page packages exactly that tool's repo */
+  lockRepoUrl?: boolean;
+}
+
 /**
  * Package a MoveApps GitHub repo as a tool - the same source -> details & review
  * flow as ManualUploadWizard, with the repo URL as the source. A repo that's already
  * packaged becomes a new version of its tool instead (name and domains locked).
  */
-export function PackageFromGitHubWizard() {
+export function PackageFromGitHubWizard({ initialRepoUrl, lockRepoUrl = false }: PackageFromGitHubWizardProps = {}) {
   const navigate = useNavigate();
   const previewMutation = usePackagePreview();
   const {
@@ -76,7 +83,7 @@ export function PackageFromGitHubWizard() {
   const wizard = useUploadWizard();
   const { form, prefill } = useUploadMetadataForm();
 
-  const [repoUrl, setRepoUrl] = useState('');
+  const [repoUrl, setRepoUrl] = useState(initialRepoUrl ?? '');
   const [repoUrlError, setRepoUrlError] = useState<string>();
   const [formatLabels, setFormatLabels] = useState<FormatLabelDraft>({});
 
@@ -122,6 +129,15 @@ export function PackageFromGitHubWizard() {
       },
     });
   };
+
+  // a given repo is fetched once on mount - the ref keeps StrictMode's double effect from packaging twice
+  const fetchedInitial = useRef(false);
+  useEffect(() => {
+    if (!initialRepoUrl || fetchedInitial.current) return;
+    fetchedInitial.current = true;
+    fetchPreview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only ever the initial repo
+  }, []);
 
   const handleRepoUrlChange = (value: string) => {
     setRepoUrl(value);
@@ -228,6 +244,7 @@ export function PackageFromGitHubWizard() {
           id="package-repo-url"
           value={repoUrl}
           onChange={(e) => handleRepoUrlChange(e.target.value)}
+          readOnly={lockRepoUrl}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault();

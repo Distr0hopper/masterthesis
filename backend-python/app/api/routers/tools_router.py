@@ -199,6 +199,10 @@ async def package(
         status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
         status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Not the creator of this tool"},
         status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Tool not found"},
+        status.HTTP_409_CONFLICT: {
+            "model": ErrorResponse,
+            "description": "The tool is packaged from GitHub - its versions come from the repo",
+        },
     },
 )
 async def add_version(
@@ -218,7 +222,9 @@ async def add_version(
     _require_size(content)
 
     draft = ToolTransformer.from_add_version_dto(parent, dto, content.decode("utf-8"))
-    tool = await tools_service.add_manual_version(draft)
+    tool = await tools_service.add_uploaded_version(
+        draft, format_labels=ParameterTransformer.to_format_labels(dto.format_labels)
+    )
     logger.info(f"Added version {tool.version} to tool '{parent.name}' ({tool.id})")
     favorited_names = await components_service.favorited_names(current_user)
     return ComponentTransformer.to_detail(tool, tool.name in favorited_names, current_user)

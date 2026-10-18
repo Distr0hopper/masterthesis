@@ -18,6 +18,7 @@ from app.application.exception.component_exceptions import (
     ManualUploadCannotBeRepackagedError,
     MissingCommandPayloadError,
     PackagedCommitChangedError,
+    PackagedToolCannotTakeUploadError,
     PackagingFailedError,
     PackagingServiceUnavailableError,
 )
@@ -76,6 +77,12 @@ async def _packaging_service_unavailable_handler(request: Request, exc: Packagin
 
 async def _manual_upload_cannot_be_repackaged_handler(request: Request, exc: ManualUploadCannotBeRepackagedError) -> JSONResponse:
     return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
+
+
+async def _packaged_tool_cannot_take_upload_handler(
+    request: Request, exc: PackagedToolCannotTakeUploadError
+) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
 async def _already_packaged_handler(request: Request, exc: AlreadyPackagedError) -> JSONResponse:
@@ -248,6 +255,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(PackagedCommitChangedError, _packaged_commit_changed_handler)
     app.add_exception_handler(PackagingServiceUnavailableError, _packaging_service_unavailable_handler)
     app.add_exception_handler(ManualUploadCannotBeRepackagedError, _manual_upload_cannot_be_repackaged_handler)
+    app.add_exception_handler(PackagedToolCannotTakeUploadError, _packaged_tool_cannot_take_upload_handler)
     app.add_exception_handler(AlreadyPackagedError, _already_packaged_handler)
     app.add_exception_handler(ComponentNameAlreadyExistsError, _component_name_already_exists_handler)
     app.add_exception_handler(ComponentNotFoundError, _component_not_found_handler)

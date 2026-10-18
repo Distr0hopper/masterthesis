@@ -1696,6 +1696,16 @@
               }
             }
           },
+          "409": {
+            "description": "The tool is packaged from GitHub - its versions come from the repo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -2908,6 +2918,18 @@
               }
             ],
             "title": "Description"
+          },
+          "formatLabels": {
+            "type": "string",
+            "contentMediaType": "application/json",
+            "contentSchema": {
+              "items": {
+                "$ref": "#/components/schemas/FormatLabelDto"
+              },
+              "type": "array"
+            },
+            "title": "Formatlabels",
+            "default": "[]"
           }
         },
         "type": "object",

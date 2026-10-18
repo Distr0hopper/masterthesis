@@ -249,6 +249,47 @@ def test_publishing_a_tool_just_flips_it() -> None:
     assert publish(components_service, leaf).status == ComponentStatus.PUBLISHED
 
 
+def test_publishing_a_new_version_deprecates_the_published_older_ones_for_good() -> None:
+    v1, v2, v3 = tool("t"), tool("t", ComponentStatus.DEPRECATED), tool("t", ComponentStatus.DRAFT)
+    v2.version, v3.version = 2, 3
+    v2.deprecation_note = "broken"
+    other = tool("other")
+    components_service, _, _ = services(v1, v2, v3, other)
+
+    publish(components_service, v3)
+
+    assert (v1.status, v1.deprecation_note) == (ComponentStatus.DEPRECATED, "Superseded by v3")
+    # already deprecated - its own note stays
+    assert (v2.status, v2.deprecation_note) == (ComponentStatus.DEPRECATED, "broken")
+    assert other.status == ComponentStatus.PUBLISHED
+
+    # taking v3 back down doesn't put v1 on offer again
+    unpublish(components_service, v3)
+    assert v1.status == ComponentStatus.DEPRECATED
+
+
+def test_publishing_an_older_version_leaves_the_newer_published_one_alone() -> None:
+    v1, v2 = tool("t", ComponentStatus.DRAFT), tool("t")
+    v2.version = 2
+    components_service, _, _ = services(v1, v2)
+
+    publish(components_service, v1)
+
+    assert v1.status == v2.status == ComponentStatus.PUBLISHED
+
+
+def test_drafts_published_along_with_a_workflow_supersede_their_older_versions() -> None:
+    old = tool("t")
+    new = tool("t", ComponentStatus.DRAFT)
+    new.version = 2
+    root = workflow("w", new)
+    components_service, _, _ = services(root, old, new)
+
+    publish(components_service, root, publish_components=True)
+
+    assert old.status == ComponentStatus.DEPRECATED
+
+
 def test_a_workflow_with_unconfirmed_steps_cannot_be_published() -> None:
     root = workflow("w", tool("t"), step_status=StepMatchStatus.SUGGESTED)
     components_service, _, _ = services(root)

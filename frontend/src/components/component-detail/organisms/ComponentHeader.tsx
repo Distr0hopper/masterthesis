@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Archive,
   ArchiveRestore,
@@ -8,6 +8,7 @@ import {
   ExternalLink,
   Globe,
   GlobeLock,
+  FilePlus2,
   Pencil,
   Trash2,
   Workflow as WorkflowIcon,
@@ -27,11 +28,13 @@ import {
 import { toolsService } from '@/api/tools';
 import { StepMatchStatus, type ComponentSummaryDto } from '@/api/workflows';
 import {
+  canAddVersion,
   canFavorite,
   canDelete as hasDeleteLink,
   canDeprecate as hasDeprecateLink,
   canUndeprecate as hasUndeprecateLink,
   canPublish as hasPublishLink,
+  canRepackage,
   canUnpublish as hasUnpublishLink,
   canUpdateDescription as hasUpdateDescriptionLink,
   canUpdateDomain as hasUpdateDomainLink,
@@ -39,6 +42,7 @@ import {
   getLink,
 } from '@/api/permissions';
 import { getErrorMessage } from '@/lib/errors';
+import { ROUTES } from '@/lib/routes';
 import { downloadBlob } from '@/lib/download';
 import { ComponentFavoriteButton } from '@/components/ComponentFavoriteButton';
 import { DeleteComponentDialog } from '@/components/component-mine/organisms/DeleteComponentDialog';
@@ -93,7 +97,11 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
   const [deprecateDialogOpen, setDeprecateDialogOpen] = useState(false);
   const { mutate: undeprecateComponent, isPending: isUndeprecating } = useUndeprecateComponent();
 
+  const navigate = useNavigate();
   const isWorkflow = model.kind === 'workflow';
+  // a tool's next version: an uploaded CWL, or its GitHub repo packaged again - a workflow's
+  // come from the Workflow Builder
+  const canCreateVersion = model.kind === 'tool' && (canAddVersion(model._links) || canRepackage(model._links));
   const canDelete = hasDeleteLink(model._links);
   const canEdit =
     hasUpdateDescriptionLink(model._links) ||
@@ -123,11 +131,12 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
       {
         onSuccess: () => {
           setPublishDialogOpen(false);
-          toast.success(
+          const published =
             publishComponents && drafts.length > 0
               ? `${model.kindDisplay} published, along with the draft components it runs`
-              : `${model.kindDisplay} published`,
-          );
+              : `${model.kindDisplay} published`;
+          // the backend deprecates the older published versions this one supersedes
+          toast.success(model.version > 1 ? `${published} - older published versions are now deprecated` : published);
         },
         onError: (error) => toast.error(getErrorMessage(error)),
       },
@@ -215,6 +224,21 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
                 </Button>
               )}
 
+              {canCreateVersion && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate(ROUTES.toolNewVersion(model.id))}
+                  title={
+                    model.source === ComponentSource.AUTOMATED_PACKAGING
+                      ? 'Package the repository again as the next version'
+                      : 'Upload a changed CWL file as the next version'
+                  }
+                >
+                  <FilePlus2 className="mr-1 h-4 w-4" /> New version
+                </Button>
+              )}
+
               {canEdit && (
                 <Button variant="outline" size="sm" onClick={() => setEditDialogOpen(true)}>
                   <Pencil className="mr-1 h-4 w-4" /> Edit
@@ -227,7 +251,13 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
                   className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90"
                   onClick={handlePublish}
                   disabled={isPublishing || !allStepsSettled}
-                  title={allStepsSettled ? undefined : 'Confirm every step before publishing'}
+                  title={
+                    !allStepsSettled
+                      ? 'Confirm every step before publishing'
+                      : model.version > 1
+                        ? 'Older published versions of this lineage are deprecated - workflows running them keep working'
+                        : undefined
+                  }
                 >
                   <Globe className="mr-1 h-4 w-4" /> Publish
                 </Button>

@@ -44,3 +44,7 @@ def is_readable_by(user: User | None, component: Component) -> bool:
 
 def is_tool_owner(user: User | None, component: Component) -> bool:
     return component.is_tool and is_owner(user, component)
+
+
+def is_packaged_tool_owner(user: User | None, component: Component) -> bool:
+    return is_tool_owner(user, component) and component.is_packaged

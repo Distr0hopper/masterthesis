@@ -55,6 +55,7 @@ class ComponentLinkBuilder(BaseLinkBuilder[Component, ComponentPermissionValidat
                 # read before an unpublish or a delete - both are the owner's
                 return self._validator.can_update(entity)
             case "addVersion":
-                return entity.is_tool and self._validator.can_update(entity)
+                # a packaged tool's versions come from its repo - see the repackage rel
+                return entity.is_tool and not entity.is_packaged and self._validator.can_update(entity)
             case _:
                 return False

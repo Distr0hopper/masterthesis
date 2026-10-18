@@ -6,10 +6,10 @@ import { emptyUploadMetadata, uploadMetadataSchema, type UploadMetadataFormData 
  * The name/domains/description form of an upload wizard. The wizard provides it via
  * FormProvider; UploadMetadataFields renders it wherever it sits in the steps.
  */
-export function useUploadMetadataForm() {
+export function useUploadMetadataForm(initial?: Partial<UploadMetadataFormData>) {
   const form = useForm<UploadMetadataFormData>({
     resolver: zodResolver(uploadMetadataSchema),
-    defaultValues: emptyUploadMetadata,
+    defaultValues: { ...emptyUploadMetadata, ...initial },
   });
   // read during render so react-hook-form tracks dirtiness - prefill() depends on it
   const { dirtyFields } = form.formState;

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FormProvider, useWatch } from 'react-hook-form';
 import { AxiosError } from 'axios';
@@ -130,12 +130,10 @@ export function PackageFromGitHubWizard({ initialRepoUrl, lockRepoUrl = false }:
     });
   };
 
-  // a given repo is fetched once on mount - the ref keeps StrictMode's double effect from packaging twice
-  const fetchedInitial = useRef(false);
   useEffect(() => {
-    if (!initialRepoUrl || fetchedInitial.current) return;
-    fetchedInitial.current = true;
-    fetchPreview();
+    if (!initialRepoUrl) return;
+    const timer = setTimeout(fetchPreview, 0);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only ever the initial repo
   }, []);
 

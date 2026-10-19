@@ -9,6 +9,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.domain.models.component import Component, ComponentKind, ComponentStatus
 from app.domain.models.component_domain import DOMAIN_AGNOSTIC, ComponentDomain
 from app.domain.models.favorite import Favorite
+from app.domain.models.repo_url import REPO_URL_SUFFIX_PATTERN, repo_url_key
 from app.domain.models.tool import Tool
 from app.domain.models.workflow import Workflow
 from app.domain.models.workflow_step import WorkflowStep
@@ -223,10 +224,13 @@ class ComponentsRepository:
         return result.first()
 
     async def find_tool_by_repo_url(self, repo_url: str) -> Component | None:
+        """The newest tool packaged from this repo, however either URL is spelled - the stored
+        one is normalized here too, for rows saved before URLs were made canonical."""
+        stored_key = func.lower(func.regexp_replace(Component.repo_url, REPO_URL_SUFFIX_PATTERN, ""))
         query = (
             select(Component)
             .join(Tool, Tool.component_id == Component.id)
-            .where(Component.repo_url == repo_url)
+            .where(stored_key == repo_url_key(repo_url))
             .order_by(Component.version.desc())
         )
         result = await self.db.exec(query)

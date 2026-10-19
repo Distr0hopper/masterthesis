@@ -19,17 +19,20 @@ from app.api.dto.component import (
 from app.application.commands.commands import ToolCommandType
 from app.domain.models.component import MAX_DESCRIPTION_LENGTH, ComponentKind
 from app.domain.models.component_domain import VALID_DOMAINS
+from app.domain.models.repo_url import canonical_repo_url
 
 
 class RepoUrlValidatorMixin:
     @field_validator("repo_url")
     @classmethod
     def validate_repo_url(cls, value: str | None) -> str | None:
-        if value is not None:
-            parsed = urlparse(value)
-            if not (parsed.scheme and parsed.netloc):
-                raise ValueError("repoUrl must be a valid URL")
-        return value
+        if value is None:
+            return None
+        parsed = urlparse(value.strip())
+        if not (parsed.scheme and parsed.netloc):
+            raise ValueError("repoUrl must be a valid URL")
+        # canonical from here on - preview, lookup and the stored value all agree
+        return canonical_repo_url(value)
 
 
 class EmptyRepoCommitShaToNoneMixin:

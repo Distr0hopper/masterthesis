@@ -7,7 +7,7 @@ interface UploadSourceStepProps {
   /** info box under the source - defaults to the ontology/EDAM explanation */
   hint?: ReactNode;
   /** problems found while reading the source that block continuing */
-  issues?: string[];
+  issues?: ReactNode[];
   /** the source couldn't be read at all */
   error?: string;
   /** non-blocking information about what was read */
@@ -52,8 +52,8 @@ export function UploadSourceStep({
 
       {error && <p className="rounded-md bg-error px-3 py-2 text-sm text-error-foreground">{error}</p>}
 
-      {issues.map((issue) => (
-        <div key={issue} className="flex items-start gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+      {issues.map((issue, index) => (
+        <div key={index} className="flex items-start gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{issue}</span>
         </div>

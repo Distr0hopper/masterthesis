@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { componentKeys } from '@/api/components/queries';
 import { useCommandMutation } from '@/api/useCommandMutation';
 import type { FormatLabelDto } from '@/api/components/types';
@@ -13,8 +13,28 @@ export const useParseTool = () => {
   return useMutation({ mutationFn: (file: File) => toolsService.parse(file) });
 };
 
-export const usePackagePreview = () => {
-  return useMutation({ mutationFn: (repoUrl: string) => toolsService.packagePreview(repoUrl) });
+export const toolKeys = {
+  packagePreviews: ['tools', 'package-preview'] as const,
+  packagePreview: (repoUrl: string) => [...toolKeys.packagePreviews, repoUrl] as const,
+};
+
+/**
+ * A GitHub repo packaged for review, without persisting it - loaded while `repoUrl` is set.
+ * A query rather than a mutation: it reads, so mounting twice (StrictMode, back navigation)
+ * shares one request instead of losing its result.
+ */
+export const usePackagePreview = (repoUrl: string | null) => {
+  return useQuery({
+    queryKey: toolKeys.packagePreview(repoUrl ?? ''),
+    queryFn: () => toolsService.packagePreview(repoUrl!),
+    enabled: !!repoUrl,
+    // packaging takes seconds and fails for reasons a retry doesn't fix (no appspec.json, ...)
+    retry: false,
+    // only ever re-read on purpose ("Fetch again") or when the wizard is opened again
+    staleTime: 0,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
 };
 
 export const useUploadTool = () => {
@@ -47,6 +67,8 @@ export const usePackageTool = () => {
     mutationFn: (dto: PackageToolDto) => toolsService.package(dto),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: componentKeys.all });
+      // the repo is packaged now - a cached preview would still offer it as new
+      queryClient.removeQueries({ queryKey: toolKeys.packagePreviews });
     },
   });
 };

@@ -11,6 +11,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
+import { CanvasNotices } from '@/components/workflow-builder/CanvasNotices';
 import { WorkflowCanvas } from '@/components/workflow-builder/WorkflowCanvas';
 import { CanvasValidationDialog } from '@/components/workflow-builder/CanvasValidationDialog';
 import { WorkflowInspector } from '@/components/workflow-builder/WorkflowInspector';
@@ -77,6 +78,9 @@ export default function WorkflowBuilderPage() {
   const [restoredDraftId, setRestoredDraftId] = useState<string | null>(null);
   const restored = isNew || restoredDraftId === draftId;
 
+  // what restoring found wrong with the saved canvas - rendered by CanvasNotices
+  const [restoreReport, setRestoreReport] = useState({ unreadable: false, dropped: false });
+
   useEffect(() => {
     if (!draft || restoredDraftId === draft.id) return;
     setRestoredDraftId(draft.id);
@@ -85,31 +89,14 @@ export default function WorkflowBuilderPage() {
 
     const parsed = parseCanvasState(draft.canvasState);
     if (!parsed) {
-      toast.error('This workflow’s canvas could not be read.');
+      setRestoreReport({ unreadable: true, dropped: false });
       return;
     }
 
     setNodes(parsed.nodes);
     setEdges(parsed.edges);
-
-    const missing = new Set(draft.missingComponentIds);
-    setMissingComponentIds(missing);
-    const missingLabels = [
-      ...new Set(parsed.nodes.filter((n) => missing.has(n.data.componentId)).map((n) => n.data.label)),
-    ];
-    if (missingLabels.length > 0) {
-      toast.error(
-        `${missingLabels.length} component${missingLabels.length === 1 ? ' on this canvas was' : 's on this canvas were'} deleted from the repository.`,
-        {
-          description: `${missingLabels.join(', ')} - remove or replace ${missingLabels.length === 1 ? 'it' : 'them'} before saving or exporting.`,
-          duration: 10_000,
-        },
-      );
-    }
-
-    if (parsed.droppedNodeCount > 0 || parsed.droppedEdgeCount > 0) {
-      toast.warning('Some components or connections could not be restored - they may have been removed.');
-    }
+    setMissingComponentIds(new Set(draft.missingComponentIds));
+    setRestoreReport({ unreadable: false, dropped: parsed.droppedNodeCount > 0 || parsed.droppedEdgeCount > 0 });
   }, [draft, restoredDraftId, setNodes, setEdges]);
 
   // the nodes as rendered: deleted components flagged for ComponentNode. Derived rather
@@ -121,6 +108,12 @@ export default function WorkflowBuilderPage() {
         ? nodes
         : nodes.map((n) => (missingComponentIds.has(n.data.componentId) ? { ...n, data: { ...n.data, missing: true } } : n)),
     [nodes, missingComponentIds],
+  );
+
+  // the deleted components still on the canvas - the notice goes once the last is replaced
+  const missingLabels = useMemo(
+    () => [...new Set(displayNodes.filter((n) => n.data.missing).map((n) => n.data.label))],
+    [displayNodes],
   );
   const hasMissingNodes = displayNodes.some((n) => n.data.missing);
 
@@ -375,14 +368,24 @@ export default function WorkflowBuilderPage() {
               Loading workflow...
             </div>
           ) : (
-            <WorkflowCanvas
-              nodes={displayNodes}
-              edges={checkedEdges}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              onConnect={onConnect}
-              onAddNode={onAddNode}
-            />
+            <div className="flex min-w-0 flex-1 flex-col">
+              <CanvasNotices
+                missingLabels={missingLabels}
+                unreadable={restoreReport.unreadable}
+                dropped={restoreReport.dropped}
+                onDismissDropped={() => setRestoreReport((report) => ({ ...report, dropped: false }))}
+              />
+              <div className="flex min-h-0 flex-1">
+                <WorkflowCanvas
+                  nodes={displayNodes}
+                  edges={checkedEdges}
+                  onNodesChange={onNodesChange}
+                  onEdgesChange={onEdgesChange}
+                  onConnect={onConnect}
+                  onAddNode={onAddNode}
+                />
+              </div>
+            </div>
           )}
           {selectedNode && (
             <WorkflowInspector node={selectedNode} onParameterChange={onParameterChange} />

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FormProvider, useWatch } from 'react-hook-form';
 import { AxiosError } from 'axios';
@@ -11,7 +11,6 @@ import { FormField } from '@/components/common/FormField';
 import { UploadSourceStep } from '@/components/common/UploadSourceStep';
 import { UploadStepper } from '@/components/common/UploadStepper';
 import { ComponentLink } from '@/components/common/ComponentLink';
-import { useUploadWizard } from '@/components/common/useUploadWizard';
 import { useUploadMetadataForm } from '@/components/common/useUploadMetadataForm';
 import { ToolReviewStep } from './ToolReviewStep';
 import {
@@ -88,48 +87,19 @@ interface PackageFromGitHubWizardProps {
  * Package a MoveApps GitHub repo as a tool - the same source -> details & review
  * flow as ManualUploadWizard, with the repo URL as the source. A repo that's already
  * packaged becomes a new version of its tool instead (name and domains locked).
+ *
+ * This part owns only the URL and the preview query. Everything read from a preview - the
+ * form, the format labels, the step - lives in PackageWizardSteps, keyed by the preview:
+ * a new preview mounts it fresh with its initial state taken from it, so no effect has to
+ * copy the result over.
  */
 export function PackageFromGitHubWizard({ initialRepoUrl, lockRepoUrl = false }: PackageFromGitHubWizardProps = {}) {
-  const navigate = useNavigate();
-  const previewMutation = usePackagePreview();
-  const {
-    mutate: packageComponent,
-    isPending: isCreating,
-    error: createError,
-    reset: resetCreate,
-  } = usePackageTool();
-
-  const wizard = useUploadWizard();
-  const { form, prefill } = useUploadMetadataForm();
-
   const [repoUrl, setRepoUrl] = useState(initialRepoUrl ?? '');
   const [repoUrlError, setRepoUrlError] = useState<string>();
-  const [formatLabels, setFormatLabels] = useState<FormatLabelDraft>({});
-
-  const preview = previewMutation.data;
-  const existing = preview?.existing ?? null;
-  const isNewVersion = existing !== null;
-
-  const { name, domains, description } = useWatch({ control: form.control });
-  // a new version keeps its lineage's name, so there's nothing to check
-  const debouncedName = useDebouncedValue(isNewVersion ? '' : (name ?? ''));
-  const { data: availability } = useComponentNameAvailability(debouncedName);
-  const taken = !isNewVersion && availability?.available === false;
-
-  const sourceIssues = sourceIssuesOf(preview);
-
-  const applyPreview = (response: PackagePreviewDto) => {
-    if (response.existing) {
-      // a new version keeps its lineage's name and domains - shown locked
-      form.setValue('name', response.existing.name);
-      form.setValue('domains', response.existing.domains);
-    } else {
-      prefill({ name: response.repoName });
-    }
-    prefill({ description: response.description ?? '' });
-    // for a new version: the labels carried over from the previous one
-    setFormatLabels(initialFormatLabelDraft(response.parameters));
-  };
+  // the URL the preview is loaded for - set by Fetch, and from the start for a given repo
+  const [submittedUrl, setSubmittedUrl] = useState<string | null>(initialRepoUrl ?? null);
+  const previewQuery = usePackagePreview(submittedUrl);
+  const preview = previewQuery.data;
 
   const fetchPreview = () => {
     const result = repoUrlSchema.safeParse(repoUrl.trim());
@@ -138,49 +108,108 @@ export function PackageFromGitHubWizard({ initialRepoUrl, lockRepoUrl = false }:
       return;
     }
     setRepoUrlError(undefined);
-    resetCreate();
-    form.clearErrors();
-    previewMutation.mutate(result.data, {
-      onSuccess: (response) => {
-        applyPreview(response);
-        if (sourceIssuesOf(response).length > 0) wizard.backToSource();
-        else wizard.goTo(2);
-      },
-    });
+    if (result.data === submittedUrl) previewQuery.refetch();
+    else setSubmittedUrl(result.data);
   };
-
-  useEffect(() => {
-    if (!initialRepoUrl) return;
-    const timer = setTimeout(fetchPreview, 0);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only ever the initial repo
-  }, []);
 
   const handleRepoUrlChange = (value: string) => {
     setRepoUrl(value);
     // a different repo invalidates everything read from the previous one
-    if (previewMutation.data || previewMutation.error) {
-      if (existing) {
-        // the locked values belonged to that repo's tool - don't carry them over
-        form.setValue('name', '');
-        form.setValue('domains', []);
-      }
-      previewMutation.reset();
-      resetCreate();
-      setFormatLabels({});
-      form.clearErrors();
-      wizard.backToSource();
-    }
+    setSubmittedUrl(null);
   };
+
+  const repoSource = (
+    <FormField htmlFor="package-repo-url" label="Repository URL" error={repoUrlError}>
+      <div className="flex gap-2">
+        <Input
+          id="package-repo-url"
+          value={repoUrl}
+          onChange={(e) => handleRepoUrlChange(e.target.value)}
+          readOnly={lockRepoUrl}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              fetchPreview();
+            }
+          }}
+          placeholder="https://github.com/movestore/Remove_Outliers"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          onClick={fetchPreview}
+          disabled={previewQuery.isFetching || !repoUrl.trim()}
+        >
+          {previewQuery.isFetching ? 'Packaging...' : preview ? 'Fetch again' : 'Fetch'}
+        </Button>
+      </div>
+    </FormField>
+  );
+
+  return (
+    <PackageWizardSteps
+      // the same repo at the same commit keeps what was typed; anything else starts over
+      key={preview ? `${preview.repoUrl}@${preview.commitSha}#${preview.existing?.id ?? ''}:${preview.alreadyPackaged}` : 'none'}
+      preview={preview}
+      repoSource={repoSource}
+      isReading={previewQuery.isFetching}
+      readError={
+        previewQuery.error ? getErrorMessage(previewQuery.error, 'Could not package this repository.') : undefined
+      }
+      canFetch={!!repoUrl.trim()}
+      onFetch={fetchPreview}
+    />
+  );
+}
+
+interface PackageWizardStepsProps {
+  preview: PackagePreviewDto | undefined;
+  repoSource: ReactNode;
+  isReading: boolean;
+  readError: string | undefined;
+  canFetch: boolean;
+  onFetch: () => void;
+}
+
+/** The steps for one preview - mounted fresh for every new one, see PackageFromGitHubWizard. */
+function PackageWizardSteps({ preview, repoSource, isReading, readError, canFetch, onFetch }: PackageWizardStepsProps) {
+  const navigate = useNavigate();
+  const { mutate: packageComponent, isPending: isCreating, error: createError } = usePackageTool();
+
+  const existing = preview?.existing ?? null;
+  const isNewVersion = existing !== null;
+  const sourceIssues = sourceIssuesOf(preview);
+  const reviewable = !!preview && sourceIssues.length === 0;
+
+  // a preview that can be packaged opens on its review
+  const [step, setStep] = useState(reviewable ? 2 : 1);
+  const { form } = useUploadMetadataForm(
+    preview && {
+      // a new version keeps its lineage's name and domains - shown locked
+      name: existing?.name ?? preview.repoName,
+      domains: existing?.domains ?? [],
+      description: preview.description ?? '',
+    },
+  );
+  // for a new version: the labels carried over from the previous one
+  const [formatLabels, setFormatLabels] = useState<FormatLabelDraft>(() =>
+    preview ? initialFormatLabelDraft(preview.parameters) : {},
+  );
+
+  const { name, domains, description } = useWatch({ control: form.control });
+  // a new version keeps its lineage's name, so there's nothing to check
+  const debouncedName = useDebouncedValue(isNewVersion ? '' : (name ?? ''));
+  const { data: availability } = useComponentNameAvailability(debouncedName);
+  const taken = !isNewVersion && availability?.available === false;
 
   // back on the source step without changing it - or retrying a fetch that failed
   const handleContinue = () => {
-    if (preview && sourceIssues.length === 0) wizard.goTo(2);
-    else if (!preview) fetchPreview();
+    if (reviewable) setStep(2);
+    else if (!preview) onFetch();
   };
 
   const handleCreate = (values: UploadMetadataFormData) => {
-    if (!preview || sourceIssues.length > 0 || taken) return;
+    if (!preview || !reviewable || taken) return;
     packageComponent(
       {
         repoUrl: preview.repoUrl,
@@ -254,59 +283,27 @@ export function PackageFromGitHubWizard({ initialRepoUrl, lockRepoUrl = false }:
       )
     : null;
 
-  const repoSource = (
-    <FormField htmlFor="package-repo-url" label="Repository URL" error={repoUrlError}>
-      <div className="flex gap-2">
-        <Input
-          id="package-repo-url"
-          value={repoUrl}
-          onChange={(e) => handleRepoUrlChange(e.target.value)}
-          readOnly={lockRepoUrl}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              fetchPreview();
-            }
-          }}
-          placeholder="https://github.com/movestore/Remove_Outliers"
-        />
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => fetchPreview()}
-          disabled={previewMutation.isPending || !repoUrl.trim()}
-        >
-          {previewMutation.isPending ? 'Packaging...' : preview ? 'Fetch again' : 'Fetch'}
-        </Button>
-      </div>
-    </FormField>
-  );
-
   return (
     <FormProvider {...form}>
       <div>
-        <UploadStepper steps={STEPS} current={wizard.step} furthest={wizard.furthest} onSelect={wizard.goTo} />
+        <UploadStepper steps={STEPS} current={step} furthest={reviewable ? 2 : 1} onSelect={setStep} />
 
-        {wizard.step === 1 && (
+        {step === 1 && (
           <Card className="mt-6">
             <CardContent className="pt-6">
               <UploadSourceStep
                 source={repoSource}
                 hint={PACKAGING_HINT}
-                isReading={previewMutation.isPending}
+                isReading={isReading}
                 readingLabel="Packaging the repository - this takes a few seconds..."
                 issues={sourceIssues}
-                error={
-                  previewMutation.error
-                    ? getErrorMessage(previewMutation.error, 'Could not package this repository.')
-                    : undefined
-                }
+                error={readError}
               />
             </CardContent>
           </Card>
         )}
 
-        {wizard.step === 2 && preview && previewModel && (
+        {step === 2 && preview && previewModel && (
           <ToolReviewStep
             title={existing ? `New version of ${existing.name}` : 'New tool'}
             locked={isNewVersion}
@@ -323,29 +320,29 @@ export function PackageFromGitHubWizard({ initialRepoUrl, lockRepoUrl = false }:
           <div className="mt-4 flex flex-wrap items-center gap-3 rounded-md bg-error px-3 py-2 text-sm text-error-foreground">
             <span>{getErrorMessage(createError, 'Could not package this tool.')}</span>
             {createConflict && (
-              <Button size="sm" variant="outline" onClick={fetchPreview}>
-                Fetch again
+              <Button size="sm" variant="outline" onClick={onFetch} disabled={isReading}>
+                {isReading ? 'Packaging...' : 'Fetch again'}
               </Button>
             )}
           </div>
         )}
 
         <div className="mt-6 flex items-center gap-2">
-          {wizard.step > 1 && (
-            <Button variant="outline" onClick={() => wizard.goTo(wizard.step - 1)}>
+          {step > 1 && (
+            <Button variant="outline" onClick={() => setStep(step - 1)}>
               Back
             </Button>
           )}
-          {wizard.step === 1 && (
+          {step === 1 && (
             <Button
               onClick={handleContinue}
-              disabled={previewMutation.isPending || !repoUrl.trim() || sourceIssues.length > 0}
+              disabled={isReading || !canFetch || sourceIssues.length > 0}
               className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90"
             >
-              {previewMutation.isPending ? 'Packaging...' : 'Continue'}
+              {isReading ? 'Packaging...' : 'Continue'}
             </Button>
           )}
-          {wizard.step === 2 && (
+          {step === 2 && (
             <Button
               onClick={form.handleSubmit(handleCreate)}
               disabled={isCreating || taken}

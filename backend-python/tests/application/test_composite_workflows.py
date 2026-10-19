@@ -33,6 +33,7 @@ from app.application.exception.workflow_exceptions import (
     InlineStepNotBindableError,
     NestedWorkflowsNotReadyError,
     PublishedWorkflowStepsLockedError,
+    StepsEditedInBuilderError,
     UnpublishableWorkflowComponentsError,
     WorkflowCycleError,
     WorkflowHasUnpublishedComponentsError,
@@ -47,9 +48,12 @@ from app.domain.models.tool import Tool
 from app.domain.models.workflow import Workflow
 from app.domain.models.workflow_step import StepMatchStatus, WorkflowStep
 from app.domain.composite.lifecycle import IllegalStatusTransitionError
+from app.api.link.workflow_step import WorkflowStepLinkBuilder
+from app.domain.models.user import User
 from tests.application.fake_unit_of_work import FakeUnitOfWork
 
 OWNER = uuid.uuid4()
+OWNER_USER = User(id=OWNER, email="owner@example.com")
 STRANGER = uuid.uuid4()
 
 PIPELINE = """
@@ -652,6 +656,34 @@ def test_steps_of_a_published_workflow_are_locked() -> None:
         asyncio.run(
             workflows_service.execute_step_command(parent.steps[0], WorkflowStepCommand(type=WorkflowStepCommandType.CONFIRM))
         )
+
+
+def test_a_builder_workflows_steps_change_on_its_canvas_only() -> None:
+    # its step lost its component when that was deleted - the fix belongs on the canvas
+    parent = workflow("outer", tool("a"), step_status=StepMatchStatus.UNMATCHED, draft_id=uuid.uuid4())
+    replacement = tool("b")
+    _, workflows_service, _ = services(parent, replacement)
+    step = parent.steps[0]
+
+    with pytest.raises(StepsEditedInBuilderError):
+        asyncio.run(workflows_service.update_step_component(step.id, replacement.id, OWNER))
+    with pytest.raises(StepsEditedInBuilderError):
+        asyncio.run(workflows_service.execute_step_command(step, WorkflowStepCommand(type=WorkflowStepCommandType.CONFIRM)))
+    assert step.match_status == StepMatchStatus.UNMATCHED
+
+    links = WorkflowStepLinkBuilder(OWNER_USER)._filter_links(step)
+    assert "update" not in links and "confirm" not in links
+
+
+def test_once_its_canvas_is_deleted_a_builder_workflow_is_edited_on_its_page() -> None:
+    parent = workflow("outer", tool("a"), step_status=StepMatchStatus.UNMATCHED, draft_id=None)
+    replacement = tool("b")
+    _, workflows_service, _ = services(parent, replacement)
+
+    asyncio.run(workflows_service.update_step_component(parent.steps[0].id, replacement.id, OWNER))
+
+    assert parent.steps[0].component_id == replacement.id
+    assert set(WorkflowStepLinkBuilder(OWNER_USER)._filter_links(parent.steps[0])) == {"update", "confirm"}
 
 
 def test_a_new_step_cannot_run_a_deprecated_version() -> None:

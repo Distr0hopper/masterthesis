@@ -114,6 +114,15 @@ class PublishedWorkflowStepsLockedError(Exception):
         super().__init__(f"Workflow {workflow_id} is published - unpublish it before changing its steps")
 
 
+class StepsEditedInBuilderError(Exception):
+    """A builder workflow's steps come from its canvas - they change there, nowhere else."""
+
+    def __init__(self, workflow_id: uuid.UUID) -> None:
+        super().__init__(
+            f"Workflow {workflow_id} is edited in the Workflow Builder - change its steps on the canvas and save"
+        )
+
+
 class UnconfiguredWorkflowStepError(Exception):
     def __init__(self, step_ids: list[str]) -> None:
         super().__init__(

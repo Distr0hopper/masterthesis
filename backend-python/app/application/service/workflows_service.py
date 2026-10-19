@@ -18,6 +18,7 @@ from app.application.exception.workflow_exceptions import (
     InvalidWorkflowCwlError,
     MissingImportedFileError,
     PublishedWorkflowStepsLockedError,
+    StepsEditedInBuilderError,
     UnconfiguredWorkflowStepError,
     WorkflowCycleError,
     WorkflowStepNotFoundError,
@@ -760,6 +761,8 @@ class WorkflowsService:
 
     @staticmethod
     def _require_steps_editable(workflow: Component) -> None:
+        if lifecycle.edited_in_builder(workflow):
+            raise StepsEditedInBuilderError(workflow.id)
         # a public workflow is what other users see and nest - rebinding a step under
         # them would silently change it; the creator unpublishes first instead
         if not lifecycle.steps_editable(workflow):

@@ -248,10 +248,18 @@ def retract_impact(ancestors: Iterable[Component], actor_id: uuid.UUID) -> Retra
 # --- steps -----------------------------------------------------------------------------
 
 
+def edited_in_builder(workflow: Component) -> bool:
+    """Whether the workflow's builder canvas still exists - then that canvas is the source of
+    its steps and generated CWL, and every Save regenerates both from it. Rebinding a step
+    anywhere else would diverge from the canvas, wire the CWL to ports the new component may
+    not have, and be overwritten by the next Save."""
+    return workflow.workflow is not None and workflow.workflow.draft_id is not None
+
+
 def steps_editable(workflow: Component) -> bool:
     """A public workflow is what others see and nest - its steps only change once it is a
-    draft again, or as a new version."""
-    return is_draft(workflow)
+    draft again, or as a new version. A builder workflow's steps change in the builder only."""
+    return is_draft(workflow) and not edited_in_builder(workflow)
 
 
 def _step_transition(step: WorkflowStep, target: StepMatchStatus) -> None:

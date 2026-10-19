@@ -43,6 +43,7 @@ from app.application.exception.workflow_exceptions import (
     MissingImportedFileError,
     NestedWorkflowsNotReadyError,
     PublishedWorkflowStepsLockedError,
+    StepsEditedInBuilderError,
     UnconfiguredWorkflowStepError,
     UnpublishableWorkflowComponentsError,
     WorkflowCycleError,
@@ -149,6 +150,10 @@ async def _workflow_cycle_handler(request: Request, exc: WorkflowCycleError) -> 
 async def _published_workflow_steps_locked_handler(
     request: Request, exc: PublishedWorkflowStepsLockedError
 ) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=ErrorResponse(detail=str(exc)).model_dump())
+
+
+async def _steps_edited_in_builder_handler(request: Request, exc: StepsEditedInBuilderError) -> JSONResponse:
     return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
@@ -271,6 +276,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(NestedWorkflowsNotReadyError, _nested_workflows_not_ready_handler)
     app.add_exception_handler(WorkflowCycleError, _workflow_cycle_handler)
     app.add_exception_handler(PublishedWorkflowStepsLockedError, _published_workflow_steps_locked_handler)
+    app.add_exception_handler(StepsEditedInBuilderError, _steps_edited_in_builder_handler)
     app.add_exception_handler(WorkflowStepNotFoundError, _workflow_step_not_found_handler)
     app.add_exception_handler(InvalidWorkflowArchiveError, _invalid_workflow_archive_handler)
     app.add_exception_handler(InvalidWorkflowCwlError, _invalid_workflow_cwl_handler)

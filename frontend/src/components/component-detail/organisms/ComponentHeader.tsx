@@ -70,6 +70,9 @@ const DRAFT_NOTICE: Record<ComponentDetailDisplayModel['kind'], string> = {
     'This workflow is a draft and is only visible to you. Confirm every step below, then click Publish to make it public.',
 };
 
+const BUILDER_DRAFT_NOTICE =
+  'This workflow is a draft and is only visible to you. Its steps are edited in the Workflow Builder - click Publish to make it public.';
+
 /** The deprecated children a workflow's publish would give a new dependent - its direct steps' components. */
 function deprecatedChildren(model: ComponentDetailDisplayModel): ComponentSummaryDto[] {
   if (model.kind !== 'workflow') return [];
@@ -199,7 +202,7 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
               is already published, so this older version can't be published anymore.
             </>
           ) : (
-            DRAFT_NOTICE[model.kind]
+            builderDraftId ? BUILDER_DRAFT_NOTICE : DRAFT_NOTICE[model.kind]
           )}
         </div>
       )}
@@ -302,7 +305,13 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
                   // always confirmed, like unpublish, deprecate and delete - it makes the version visible to everyone
                   onClick={() => setPublishDialogOpen(true)}
                   disabled={isPublishing || !allStepsSettled}
-                  title={allStepsSettled ? undefined : 'Confirm every step before publishing'}
+                  title={
+                    allStepsSettled
+                      ? undefined
+                      : builderDraftId
+                        ? 'A step lost its component - replace it in the Workflow Builder first'
+                        : 'Confirm every step before publishing'
+                  }
                 >
                   <Globe className="mr-1 h-4 w-4" /> Publish
                 </Button>

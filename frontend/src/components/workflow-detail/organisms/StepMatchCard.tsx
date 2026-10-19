@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Search } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { AlertTriangle, PenLine, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
@@ -13,6 +14,7 @@ import {
 } from '@/api/workflows';
 import { canUpdate as hasUpdateLink, canConfirm as hasConfirmLink, getLink } from '@/api/permissions';
 import { getErrorMessage } from '@/lib/errors';
+import { ROUTES } from '@/lib/routes';
 import { ComponentPickerDialog } from '@/components/common/ComponentPickerDialog';
 import { ComponentLink } from '@/components/common/ComponentLink';
 import { DefinitionDisclosure } from '@/components/common/DefinitionDisclosure';
@@ -28,9 +30,10 @@ const STATUS_BADGE_VARIANT: Record<StepMatchStatus, 'secondary' | 'default' | 'd
 
 interface StepMatchCardProps {
   step: WorkflowStepDisplayModel;
+  builderDraftId?: string | null;
 }
 
-export function StepMatchCard({ step }: StepMatchCardProps) {
+export function StepMatchCard({ step, builderDraftId = null }: StepMatchCardProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [showDefinition, setShowDefinition] = useState(false);
   // only fetched once the definition is actually opened - a workflow can have many steps,
@@ -112,6 +115,21 @@ export function StepMatchCard({ step }: StepMatchCardProps) {
                   Change
                 </Button>
               )}
+            </div>
+          ) : builderDraftId ? (
+            <div className="flex flex-col gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              <p className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                <span>
+                  The component of this step was deleted. Replace it on the canvas in the Workflow Builder and save - the
+                  workflow can't be published until then.
+                </span>
+              </p>
+              <Button asChild variant="outline" size="sm" className="self-start bg-white">
+                <Link to={ROUTES.builderWorkflow(builderDraftId)}>
+                  <PenLine className="mr-1 h-4 w-4" /> Replace in Workflow Builder
+                </Link>
+              </Button>
             </div>
           ) : canUpdate ? (
             <Button type="button" variant="outline" disabled={isPending} onClick={() => setPickerOpen(true)}>

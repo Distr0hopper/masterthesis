@@ -10,6 +10,7 @@ import {
   GlobeLock,
   FilePlus2,
   Pencil,
+  PenLine,
   Trash2,
   Workflow as WorkflowIcon,
 } from 'lucide-react';
@@ -45,6 +46,7 @@ import {
 } from '@/api/permissions';
 import { getErrorMessage } from '@/lib/errors';
 import { ROUTES, componentDetailRoute } from '@/lib/routes';
+import { editableBuilderDraftId } from '@/lib/builderDraft';
 import { downloadBlob } from '@/lib/download';
 import { ComponentFavoriteButton } from '@/components/ComponentFavoriteButton';
 import { DeleteComponentDialog } from '@/components/component-mine/organisms/DeleteComponentDialog';
@@ -104,6 +106,14 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
   // shares its cache with the Versions card further down
   const { data: versions } = useComponentVersions(model.id);
   const versionCount = versions?.length ?? 0;
+  const builderDraftId = editableBuilderDraftId(model);
+  // one canvas per lineage - saving acts on the newest version, whichever one is viewed here
+  const head = versions?.reduce((newest, v) => (v.version > newest.version ? v : newest), versions[0]);
+  const builderSaveHint = !head
+    ? 'Open the canvas this workflow was saved from'
+    : head.status === ComponentStatus.DRAFT
+      ? `Saving in the builder updates the draft v${head.version}`
+      : `Saving in the builder creates v${head.version + 1} as a draft - v${head.version} stays unchanged until you publish`;
   const isWorkflow = model.kind === 'workflow';
   // a tool's next version: an uploaded CWL, or its GitHub repo packaged again - a workflow's
   // come from the Workflow Builder
@@ -268,6 +278,14 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
                   }
                 >
                   <FilePlus2 className="mr-1 h-4 w-4" /> New version
+                </Button>
+              )}
+
+              {builderDraftId && (
+                <Button asChild variant="outline" size="sm" title={builderSaveHint}>
+                  <Link to={ROUTES.builderWorkflow(builderDraftId)}>
+                    <PenLine className="mr-1 h-4 w-4" /> Edit in Workflow Builder
+                  </Link>
                 </Button>
               )}
 

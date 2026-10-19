@@ -5,10 +5,11 @@ import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { ComponentFavoriteButton } from '@/components/ComponentFavoriteButton';
-import { ComponentSource, ComponentStatus, type ComponentDisplayModel } from '@/api/components';
-import { canDelete, canFavorite } from '@/api/permissions';
+import { ComponentStatus, type ComponentDisplayModel } from '@/api/components';
+import { canFavorite } from '@/api/permissions';
 import { KIND_ROUTES, ROUTES } from '@/lib/routes';
 import { DomainBadges } from '@/components/common/DomainBadges';
+import { editableBuilderDraftId } from '@/lib/builderDraft';
 import { KIND_ICONS } from '@/lib/componentKinds';
 
 interface ComponentCardProps {
@@ -23,21 +24,8 @@ interface ComponentCardProps {
 export function ComponentCard({ component, backTo, showBuilderLink = false, actions }: ComponentCardProps) {
   const KindIcon = KIND_ICONS[component.kind];
 
-  // Three separate conditions, all required:
-  //  - showBuilderLink: this surface is an editing one (My Workflows), not the browse list
-  //  - source/draftId:  it came from the builder, and that draft still exists (the FK is
-  //                     ON DELETE SET NULL, so a deleted draft leaves the workflow intact
-  //                     but no longer editable)
-  //  - canDelete:       you own it. Drafts are owner-scoped, so the link would 404 for
-  //                     anyone else. `canDelete` is this codebase's ownership signal - the
-  //                     API only emits that link for the owner.
-  const builderDraftId =
-    showBuilderLink &&
-    component.kind === 'workflow' &&
-    component.source === ComponentSource.WORKFLOW_BUILDER &&
-    canDelete(component._links)
-      ? component.draftId
-      : null;
+  // only on an editing surface (My Workflows), not the browse list
+  const builderDraftId = showBuilderLink ? editableBuilderDraftId(component) : null;
 
   return (
     // four rows shared with the other cards of a grid row (subgrid): content, footer, View,

@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { PenLine } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card.tsx';
-import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { ComponentFavoriteButton } from '@/components/ComponentFavoriteButton';
 import { ComponentStatus, type ComponentDisplayModel } from '@/api/components';
@@ -10,6 +9,7 @@ import { canFavorite } from '@/api/permissions';
 import { KIND_ROUTES, ROUTES } from '@/lib/routes';
 import { DomainBadges } from '@/components/common/DomainBadges';
 import { KindBadge } from '@/components/common/KindBadge';
+import { StatusBadge } from '@/components/common/StatusBadge';
 import { VersionSwitcher } from '@/components/common/VersionSwitcher';
 import { editableBuilderDraftId } from '@/lib/builderDraft';
 
@@ -37,9 +37,7 @@ export function ComponentCard({ component, backTo, showBuilderLink = false, acti
             <div className="flex flex-wrap items-center gap-2">
               <KindBadge kind={component.kind} />
               {component.status !== ComponentStatus.PUBLISHED && (
-                <Badge variant="secondary" className="w-fit" title={component.statusHint ?? undefined}>
-                  {component.statusDisplay}
-                </Badge>
+                <StatusBadge status={component.status} label={component.statusDisplay} hint={component.statusHint} />
               )}
               <DomainBadges domains={component.domains} />
             </div>

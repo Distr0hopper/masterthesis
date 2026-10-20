@@ -53,6 +53,7 @@ import { ComponentFavoriteButton } from '@/components/ComponentFavoriteButton';
 import { DeleteComponentDialog } from '@/components/component-mine/organisms/DeleteComponentDialog';
 import { ConfirmPublishDialog } from './ConfirmPublishDialog';
 import { DomainBadges } from '@/components/common/DomainBadges';
+import { StatusBadge } from '@/components/common/StatusBadge';
 import { EditComponentDialog } from './EditComponentDialog';
 import { DeprecateComponentDialog } from './DeprecateComponentDialog';
 import { UnpublishComponentDialog } from './UnpublishComponentDialog';
@@ -200,9 +201,8 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
       <Link to={backTo} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900">
         <ChevronLeft className="h-4 w-4" /> {backLabel}
       </Link>
-
       {model.status === ComponentStatus.DRAFT && (
-        <div className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className="mt-4 rounded-md border border-jmu-blue-200 bg-jmu-blue-50 px-4 py-3 text-sm text-jmu-blue-900">
           {model.isTakenBack && !model.supersededBy ? (
             // taken back after it was public - hidden again, but its content is frozen for good
             <>
@@ -237,7 +237,7 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
       )}
 
       {model.status === ComponentStatus.DEPRECATED && (
-        <div role="status" className="mt-4 rounded-md border border-slate-300 bg-slate-100 px-4 py-3 text-sm text-slate-800">
+        <div role="status" className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <p className="font-medium">
             This version is deprecated{model.deprecationNote ? `: ${model.deprecationNote}` : '.'}
           </p>
@@ -273,6 +273,7 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
               <Badge variant="outline" className="w-fit" title="Version of this lineage">
                 v{model.version}
               </Badge>
+              <StatusBadge status={model.status} label={model.statusDisplay} hint={model.statusHint} />
               {versionCount > 1 && (
                 <a href={`#${VERSIONS_ANCHOR}`} className="text-xs text-slate-500 hover:text-jmu-blue-800 hover:underline">
                   {versionCount} versions

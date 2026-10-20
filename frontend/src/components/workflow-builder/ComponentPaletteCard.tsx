@@ -3,12 +3,12 @@ import {
   ComponentStatus,
   type ComponentDisplayModel,
 } from '@/api/components';
-import { Badge } from '@/components/ui/badge.tsx';
 import { cn } from '@/lib/utils';
 import { componentDetailRoute } from '@/lib/routes';
 import { NO_DATA_INPUTS_SCORE } from './lib/portKinds';
 import { DRAG_MIME, type ComponentDragPayload } from './types';
 import { DomainBadges } from '@/components/common/DomainBadges';
+import { StatusBadge } from '@/components/common/StatusBadge';
 import { WrappableName } from '@/components/common/WrappableName';
 
 interface ComponentPaletteCardProps {
@@ -92,13 +92,7 @@ export function ComponentPaletteCard({ component }: ComponentPaletteCardProps) {
 
       <div className="flex flex-wrap gap-1">
         {component.status === ComponentStatus.DRAFT && (
-          <Badge
-            variant="outline"
-            className="border-amber-300 text-amber-700"
-            title="Not published - only visible to you"
-          >
-            Draft
-          </Badge>
+          <StatusBadge status={component.status} hint="Not published - only visible to you" />
         )}
         <DomainBadges domains={component.domains} />
       </div>

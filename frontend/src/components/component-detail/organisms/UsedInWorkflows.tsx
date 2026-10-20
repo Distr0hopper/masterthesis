@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { Workflow } from 'lucide-react';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Card, CardContent } from '@/components/ui/card.tsx';
+import { StatusBadge } from '@/components/common/StatusBadge';
 import { ComponentStatus, useComponentUsages } from '@/api/components';
 import { ROUTES } from '@/lib/routes';
 
@@ -42,16 +43,7 @@ export function UsedInWorkflows({ componentId, version }: UsedInWorkflowsProps) 
                       uses {usage.componentVersions.map((v) => `v${v}`).join(', ')}
                     </Badge>
                   )}
-                  {usage.status === ComponentStatus.DRAFT && (
-                    <Badge variant="outline" className="border-amber-300 text-amber-700" title="Only visible to you">
-                      Draft
-                    </Badge>
-                  )}
-                  {usage.status === ComponentStatus.DEPRECATED && (
-                    <Badge variant="outline" className="border-slate-400 text-slate-700">
-                      Deprecated
-                    </Badge>
-                  )}
+                  {usage.status !== ComponentStatus.PUBLISHED && <StatusBadge status={usage.status} />}
                 </li>
               );
             })}

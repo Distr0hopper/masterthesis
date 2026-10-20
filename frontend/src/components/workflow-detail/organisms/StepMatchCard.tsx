@@ -18,6 +18,7 @@ import { getErrorMessage } from '@/lib/errors';
 import { ROUTES } from '@/lib/routes';
 import { ComponentPickerDialog } from '@/components/common/ComponentPickerDialog';
 import { ComponentLink } from '@/components/common/ComponentLink';
+import { StatusBadge } from '@/components/common/StatusBadge';
 import { DefinitionDisclosure } from '@/components/common/DefinitionDisclosure';
 import { ComponentDefinition } from '@/components/component-detail/organisms/ComponentDefinition';
 import { ComponentStatus, useComponent } from '@/api/components';
@@ -118,15 +119,12 @@ export function StepMatchCard({ step, builderDraftId = null, frozen = false, new
                 </Badge>
               )}
               {step.component.status === ComponentStatus.DEPRECATED && (
-                <Badge
-                  variant="outline"
-                  className="border-slate-400 text-slate-700"
-                  title={`Keeps working here, but can't be used in new workflows${
+                <StatusBadge
+                  status={step.component.status}
+                  hint={`Keeps working here, but can't be used in new workflows${
                     step.component.deprecationNote ? ` - ${step.component.deprecationNote}` : ''
                   }`}
-                >
-                  Deprecated
-                </Badge>
+                />
               )}
               {canUpdate && (
                 <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={() => setPickerOpen(true)}>

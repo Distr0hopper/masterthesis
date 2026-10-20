@@ -1,4 +1,5 @@
 import { Badge } from '@/components/ui/badge.tsx';
+import { StatusBadge } from '@/components/common/StatusBadge';
 import { ComponentStatus, type ComponentDisplayModelBase } from '@/api/components';
 
 interface VersionStatusBadgesProps {
@@ -16,20 +17,9 @@ export function VersionStatusBadges({ version, isLatest }: VersionStatusBadgesPr
           Latest
         </Badge>
       )}
-      {version.status === ComponentStatus.DRAFT && (
-        // "Draft", or "Unpublished" for one taken back - see isTakenBack
-        <Badge
-          variant="outline"
-          className="border-amber-300 text-amber-700"
-          title={version.statusHint ?? 'Only visible to you'}
-        >
-          {version.statusDisplay}
-        </Badge>
-      )}
-      {version.status === ComponentStatus.DEPRECATED && (
-        <Badge variant="outline" className="border-slate-400 text-slate-700">
-          {version.statusDisplay}
-        </Badge>
+      {/* "Latest" says it's the published one - a status badge only for the others */}
+      {version.status !== ComponentStatus.PUBLISHED && (
+        <StatusBadge status={version.status} label={version.statusDisplay} hint={version.statusHint} />
       )}
     </>
   );

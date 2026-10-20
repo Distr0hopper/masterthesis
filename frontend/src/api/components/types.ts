@@ -201,6 +201,7 @@ export interface ComponentListItemBaseDto extends WithHateoasLinks {
   firstPublishedAt?: string | null;
   createdAt: string;
   isFavorite: boolean;
+  versionCount?: number | null;
   parameters: ParameterDto[] | null;
   match?: ComponentMatchDto | null;
 }

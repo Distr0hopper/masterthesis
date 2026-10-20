@@ -6,3 +6,4 @@ export * from './transformer';
 export * from './variants';
 export * from './formatLabels';
 export * from './impact';
+export * from './versions';

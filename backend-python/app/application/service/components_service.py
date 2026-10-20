@@ -167,9 +167,14 @@ class ComponentsService:
         kind: ComponentKind | None,
         pagination: PaginatedList,
     ) -> tuple[list[Component], int]:
-        # the owner's own lists show every version - a taken-back v1 must not hide behind v2
-        filter = ComponentListFilter(created_by=created_by_id, statuses=statuses, kind=kind, latest_per_lineage=False)
+        filter = ComponentListFilter(created_by=created_by_id, statuses=statuses, kind=kind)
         return await self.uow.components.find_paginated(filter, pagination)
+
+    async def version_counts(self, components: list[Component]) -> dict[str, int]:
+        """{lineage name: its number of versions} - for an owner's own list rows, where a row
+        stands for its lineage and offers the other versions. Every version of an own lineage
+        is the owner's, so nothing hidden is counted."""
+        return await self.uow.components.count_versions_by_name(sorted({c.name for c in components}))
 
     async def list_all_components(self, filter: ComponentListFilter) -> list[Component]:
         """Every component list_components would page through, unpaged - for callers that

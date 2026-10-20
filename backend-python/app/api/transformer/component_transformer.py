@@ -63,6 +63,7 @@ class ComponentTransformer:
         is_favorite: bool,
         current_user: User | None,
         include_parameters: bool = False,
+        version_count: int | None = None,
     ) -> ToolListItemDto | WorkflowListItemDto:
         shared: dict[str, Any] = dict(
             id=component.id,
@@ -77,6 +78,7 @@ class ComponentTransformer:
             first_published_at=component.first_published_at,
             created_at=component.created_at,
             is_favorite=is_favorite,
+            version_count=version_count,
             parameters=(
                 [ParameterTransformer.to_parameter(p, component.ontology_url) for p in component.parameters]
                 if include_parameters

@@ -28,10 +28,6 @@ class ComponentListFilter:
     statuses: frozenset[ComponentStatus] | None = None
     drafts_of: uuid.UUID | None = None
     favorites_first_for: uuid.UUID | None = None
-    #: one row per lineage, its newest matching version - the catalogue's view. Off for an
-    #: owner's own lists, where every version is a thing of its own (a taken-back v1 next
-    #: to a fresh v2 draft)
-    latest_per_lineage: bool = True
 
 
 #: one level of the composite, eagerly: a workflow's steps, each step's child, and the
@@ -97,8 +93,6 @@ class ComponentsRepository:
     async def find_paginated(
         self, filter: ComponentListFilter, pagination: PaginatedList
     ) -> tuple[list[Component], int]:
-        if not filter.latest_per_lineage:
-            return await self._find_every_version(filter, pagination)
         base_query = self._apply_filters(select(Component).distinct(Component.name), filter)
 
         count_query = select(func.count()).select_from(base_query.subquery())
@@ -122,16 +116,14 @@ class ComponentsRepository:
         result = await self.db.exec(items_query.limit(pagination.limit).offset(pagination.offset))
         return list(result.all()), total
 
-    async def _find_every_version(
-        self, filter: ComponentListFilter, pagination: PaginatedList
-    ) -> tuple[list[Component], int]:
-        """find_paginated without collapsing lineages - a lineage's versions next to each
-        other, newest first."""
-        base_query = self._apply_filters(select(Component), filter)
-        total = (await self.db.exec(select(func.count()).select_from(base_query.subquery()))).one()
-        items_query = base_query.order_by(Component.name, Component.version.desc())
-        result = await self.db.exec(items_query.limit(pagination.limit).offset(pagination.offset))
-        return list(result.all()), total
+    async def count_versions_by_name(self, names: list[str]) -> dict[str, int]:
+        """{name: how many versions the lineage has} for these lineages - one query for a
+        whole page of list rows."""
+        if not names:
+            return {}
+        query = select(Component.name, func.count()).where(Component.name.in_(names)).group_by(Component.name)
+        result = await self.db.exec(query)
+        return {name: count for name, count in result.all()}
 
     async def find_all_filtered(self, filter: ComponentListFilter) -> list[Component]:
         """find_paginated without the paging - the latest version per name, by name."""

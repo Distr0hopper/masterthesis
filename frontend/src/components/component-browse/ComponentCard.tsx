@@ -10,6 +10,7 @@ import { canFavorite } from '@/api/permissions';
 import { KIND_ROUTES, ROUTES } from '@/lib/routes';
 import { DomainBadges } from '@/components/common/DomainBadges';
 import { KindBadge } from '@/components/common/KindBadge';
+import { VersionSwitcher } from '@/components/common/VersionSwitcher';
 import { editableBuilderDraftId } from '@/lib/builderDraft';
 
 interface ComponentCardProps {
@@ -48,11 +49,23 @@ export function ComponentCard({ component, backTo, showBuilderLink = false, acti
             )}
           </div>
 
-          <h3 className="font-mono text-lg font-bold text-slate-900">
-            {component.name}
-            {/* next to the name, so versions of one component - side by side in My lists - read apart */}
-            <span className="ml-2 font-sans text-sm font-normal text-slate-400">v{component.version}</span>
-          </h3>
+          <div>
+            <h3 className="font-mono text-lg font-bold text-slate-900">{component.name}</h3>
+            {/* always its own line under the name - a long name never pushes it beside or below */}
+            {component.versionCount !== null && component.versionCount > 1 ? (
+              // with other versions, the version opens them
+              <VersionSwitcher
+                componentId={component.id}
+                kind={component.kind}
+                version={component.version}
+                versionCount={component.versionCount}
+                backTo={backTo}
+                className="-ml-1"
+              />
+            ) : (
+              <p className="text-sm text-slate-400">v{component.version}</p>
+            )}
+          </div>
 
           {component.description && <p className="line-clamp-2 text-sm text-slate-500">{component.description}</p>}
         </div>

@@ -40,3 +40,10 @@ describe('toDisplayModelBase - a draft taken back after it was public', () => {
     expect(model.statusHint).toBeNull();
   });
 });
+
+describe('toDisplayModelBase - how many versions a list row stands for', () => {
+  it('carries the count where the response has one (own lists), and null elsewhere', () => {
+    expect(toDisplayModelBase({ ...dto(ComponentStatus.DRAFT, null), versionCount: 3 }).versionCount).toBe(3);
+    expect(toDisplayModelBase(dto(ComponentStatus.PUBLISHED, PUBLISHED_ON)).versionCount).toBeNull();
+  });
+});

@@ -88,6 +88,7 @@ export const toolTransformer = {
       statusHint: null,
       wasPublished: false,
       isTakenBack: false,
+      versionCount: null,
       supersededBy: null,
       createdAt: now,
       createdAtDisplay: formatDate(now),

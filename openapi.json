@@ -5436,6 +5436,17 @@
             "type": "boolean",
             "title": "Isfavorite"
           },
+          "versionCount": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Versioncount"
+          },
           "parameters": {
             "anyOf": [
               {
@@ -6217,6 +6228,17 @@
           "isFavorite": {
             "type": "boolean",
             "title": "Isfavorite"
+          },
+          "versionCount": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Versioncount"
           },
           "parameters": {
             "anyOf": [

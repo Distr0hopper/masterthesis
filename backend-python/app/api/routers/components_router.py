@@ -105,8 +105,8 @@ async def list_my_components(
     unpublished_pagination = PaginatedList(limit=limit, offset=unpublished_offset)
     deprecated_pagination = PaginatedList(limit=limit, offset=deprecated_offset)
 
-    # one bucket per status, each with every version in it - the owner's own versions are
-    # things of their own (a taken-back v1 next to a fresh v2 draft), unlike the catalogue
+    # one bucket per status - each shows a lineage's newest version in that status, and how
+    # many versions it has, so the row can offer the others (a taken-back v1 behind a v2 draft)
     published, published_total = await components_service.list_my_components_by_status(
         current_user.id, frozenset({ComponentStatus.PUBLISHED}), kind, published_pagination
     )
@@ -117,9 +117,15 @@ async def list_my_components(
         current_user.id, frozenset({ComponentStatus.DEPRECATED}), kind, deprecated_pagination
     )
     favorited_names = await components_service.favorited_names(current_user)
+    version_counts = await components_service.version_counts([*published, *unpublished, *deprecated])
 
     def to_items(components: list) -> list:
-        return [ComponentTransformer.to_list_item(c, c.name in favorited_names, current_user) for c in components]
+        return [
+            ComponentTransformer.to_list_item(
+                c, c.name in favorited_names, current_user, version_count=version_counts.get(c.name)
+            )
+            for c in components
+        ]
 
     return build_my_items_response(
         (to_items(published), published_total),

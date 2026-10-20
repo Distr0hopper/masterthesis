@@ -69,6 +69,7 @@ export interface ComponentDisplayModelBase extends WithHateoasLinks {
   deprecationNote: string | null;
   wasPublished: boolean;
   isTakenBack: boolean;
+  versionCount: number | null;
   createdAt: Date;
   createdAtDisplay: string;
   isFavorite: boolean;
@@ -166,6 +167,7 @@ export function toDisplayModelBase(dto: ComponentListItemBaseDto): ComponentDisp
     deprecationNote: dto.deprecationNote ?? null,
     wasPublished: !!dto.firstPublishedAt,
     isTakenBack: takenBack,
+    versionCount: dto.versionCount ?? null,
     createdAt,
     createdAtDisplay: formatDate(createdAt),
     isFavorite: dto.isFavorite,

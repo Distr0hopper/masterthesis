@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
-import { Badge } from '@/components/ui/badge.tsx';
 import { Card, CardContent } from '@/components/ui/card.tsx';
-import { ComponentStatus, useComponentVersions, type ComponentKind } from '@/api/components';
+import { VersionStatusBadges } from '@/components/common/VersionStatusBadges';
+import { latestPublished, newestFirst, useComponentVersions, type ComponentKind } from '@/api/components';
 import { componentDetailRoute } from '@/lib/routes';
 import { cn } from '@/lib/utils';
 
@@ -21,9 +21,7 @@ export function ComponentVersions({ componentId, kind }: ComponentVersionsProps)
   const { data: versions } = useComponentVersions(componentId);
   if (!versions || versions.length < 2) return null;
 
-  const newestFirst = [...versions].sort((a, b) => b.version - a.version);
-  // the one the catalogue lists - what "current" means to everyone else
-  const latestPublished = newestFirst.find((v) => v.status === ComponentStatus.PUBLISHED);
+  const latest = latestPublished(versions);
 
   return (
     <Card id={VERSIONS_ANCHOR} className="mt-6 scroll-mt-6">
@@ -31,7 +29,7 @@ export function ComponentVersions({ componentId, kind }: ComponentVersionsProps)
         <h3 className="font-semibold text-slate-900">Versions</h3>
 
         <ul className="mt-3 flex flex-col divide-y divide-slate-100">
-          {newestFirst.map((v) => {
+          {newestFirst(versions).map((v) => {
             const isViewed = v.id === componentId;
             return (
               <li
@@ -50,21 +48,7 @@ export function ComponentVersions({ componentId, kind }: ComponentVersionsProps)
                   </Link>
                 )}
 
-                {v.id === latestPublished?.id && (
-                  <Badge variant="secondary" title="The version listed in the catalogue and offered in the Workflow Builder">
-                    Latest
-                  </Badge>
-                )}
-                {v.status === ComponentStatus.DRAFT && (
-                  <Badge variant="outline" className="border-amber-300 text-amber-700" title="Only visible to you">
-                    Draft
-                  </Badge>
-                )}
-                {v.status === ComponentStatus.DEPRECATED && (
-                  <Badge variant="outline" className="border-slate-400 text-slate-700">
-                    Deprecated
-                  </Badge>
-                )}
+                <VersionStatusBadges version={v} isLatest={v.id === latest?.id} />
                 {v.deprecationNote && (
                   <span className="min-w-0 truncate text-xs text-slate-500" title={v.deprecationNote}>
                     {v.deprecationNote}

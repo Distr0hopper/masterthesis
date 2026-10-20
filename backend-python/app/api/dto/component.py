@@ -140,6 +140,7 @@ class ComponentListItemBaseDto(CamelModel, LinkModel):
     first_published_at: datetime | None = None
     created_at: datetime
     is_favorite: bool
+    version_count: int | None = None
     # opt-in only (`?includeParameters=true`), hence None rather than []: browse/home/mine
     # never read it and shouldn't pay for it, while the workflow builder needs the ports of
     # every listed component at once to rank its palette. Costs no extra query - the

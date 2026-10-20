@@ -28,6 +28,10 @@ class ComponentListFilter:
     statuses: frozenset[ComponentStatus] | None = None
     drafts_of: uuid.UUID | None = None
     favorites_first_for: uuid.UUID | None = None
+    #: one row per lineage, its newest matching version - the catalogue's view. Off for an
+    #: owner's own lists, where every version is a thing of its own (a taken-back v1 next
+    #: to a fresh v2 draft)
+    latest_per_lineage: bool = True
 
 
 #: one level of the composite, eagerly: a workflow's steps, each step's child, and the
@@ -93,6 +97,8 @@ class ComponentsRepository:
     async def find_paginated(
         self, filter: ComponentListFilter, pagination: PaginatedList
     ) -> tuple[list[Component], int]:
+        if not filter.latest_per_lineage:
+            return await self._find_every_version(filter, pagination)
         base_query = self._apply_filters(select(Component).distinct(Component.name), filter)
 
         count_query = select(func.count()).select_from(base_query.subquery())
@@ -113,6 +119,17 @@ class ComponentsRepository:
             )
             items_query = select(latest).order_by(case((is_favorite, 0), else_=1), latest.name)
 
+        result = await self.db.exec(items_query.limit(pagination.limit).offset(pagination.offset))
+        return list(result.all()), total
+
+    async def _find_every_version(
+        self, filter: ComponentListFilter, pagination: PaginatedList
+    ) -> tuple[list[Component], int]:
+        """find_paginated without collapsing lineages - a lineage's versions next to each
+        other, newest first."""
+        base_query = self._apply_filters(select(Component), filter)
+        total = (await self.db.exec(select(func.count()).select_from(base_query.subquery()))).one()
+        items_query = base_query.order_by(Component.name, Component.version.desc())
         result = await self.db.exec(items_query.limit(pagination.limit).offset(pagination.offset))
         return list(result.all()), total
 

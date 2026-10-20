@@ -1,4 +1,3 @@
-import { ComponentStatus } from '@/api/components';
 import { canAddVersion } from '@/api/permissions';
 import type { WorkflowDetailDisplayModel } from '@/api/workflows';
 import { editableBuilderDraftId } from '@/lib/builderDraft';
@@ -12,7 +11,7 @@ interface WorkflowStepsProps {
 export function WorkflowSteps({ model }: WorkflowStepsProps) {
   const builderDraftId = editableBuilderDraftId(model);
   // taken back after it was public: hidden again, but its steps stay as they were published
-  const frozen = model.status === ComponentStatus.DRAFT && model.wasPublished;
+  const frozen = model.isTakenBack;
   const newVersionRoute = canAddVersion(model._links) ? ROUTES.workflowNewVersion(model.id) : null;
   return (
     <>

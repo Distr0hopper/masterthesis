@@ -96,10 +96,10 @@ function draftChildren(model: ComponentDetailDisplayModel): ComponentSummaryDto[
     );
 }
 
-function builderSaveHint(head: { version: number; status: ComponentStatus; wasPublished: boolean } | undefined): string {
+function builderSaveHint(head: { version: number; status: ComponentStatus; isTakenBack: boolean } | undefined): string {
   if (!head) return 'Open the canvas this workflow was saved from';
   // a version that was ever public stays as it was - even taken back to a draft
-  if (head.status === ComponentStatus.DRAFT && !head.wasPublished) {
+  if (head.status === ComponentStatus.DRAFT && !head.isTakenBack) {
     return `Saving in the builder updates the draft v${head.version}`;
   }
   return `Saving in the builder creates v${head.version + 1} as a draft - v${head.version} stays unchanged`;
@@ -203,7 +203,7 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
 
       {model.status === ComponentStatus.DRAFT && (
         <div className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          {model.wasPublished && !model.supersededBy ? (
+          {model.isTakenBack && !model.supersededBy ? (
             // taken back after it was public - hidden again, but its content is frozen for good
             <>
               This version was published and has been taken back - only you see it now. What others saw as v

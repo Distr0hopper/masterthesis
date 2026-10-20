@@ -29,6 +29,19 @@ export const STATUS_LABELS: Record<ComponentStatus, string> = {
   [ComponentStatus.DEPRECATED]: 'Deprecated',
 };
 
+/** A draft that was public once - hidden again, but frozen for good (see `isTakenBack`). */
+export const TAKEN_BACK_LABEL = 'Unpublished';
+export const TAKEN_BACK_HINT = 'Was published and taken back - only you see it, and it no longer changes';
+
+/**
+ * Whether a version is a draft again after it was public: only its owner sees it, but its
+ * content never changes anymore - changes go into a new version. Not the same as a draft
+ * never published, which is still being worked on.
+ */
+export function isTakenBack(component: { status: ComponentStatus; wasPublished: boolean }): boolean {
+  return component.status === ComponentStatus.DRAFT && component.wasPublished;
+}
+
 export const KIND_LABELS: Record<ComponentKind, string> = {
   tool: 'Tool',
   workflow: 'Workflow',
@@ -52,8 +65,10 @@ export interface ComponentDisplayModelBase extends WithHateoasLinks {
   domainsDisplay: string[];
   status: ComponentStatus;
   statusDisplay: string;
+  statusHint: string | null;
   deprecationNote: string | null;
   wasPublished: boolean;
+  isTakenBack: boolean;
   createdAt: Date;
   createdAtDisplay: string;
   isFavorite: boolean;
@@ -134,6 +149,7 @@ export function splitPorts(parameters: ParameterDisplayModel[]): Pick<ComponentD
 /** The base list display fields of any component DTO. */
 export function toDisplayModelBase(dto: ComponentListItemBaseDto): ComponentDisplayModelBase {
   const createdAt = new Date(dto.createdAt);
+  const takenBack = isTakenBack({ status: dto.status, wasPublished: !!dto.firstPublishedAt });
   return {
     kind: dto.kind,
     kindDisplay: KIND_LABELS[dto.kind],
@@ -145,9 +161,11 @@ export function toDisplayModelBase(dto: ComponentListItemBaseDto): ComponentDisp
     domains: dto.domains,
     domainsDisplay: dto.domains.map(getDomainLabel),
     status: dto.status,
-    statusDisplay: STATUS_LABELS[dto.status],
+    statusDisplay: takenBack ? TAKEN_BACK_LABEL : STATUS_LABELS[dto.status],
+    statusHint: takenBack ? TAKEN_BACK_HINT : null,
     deprecationNote: dto.deprecationNote ?? null,
     wasPublished: !!dto.firstPublishedAt,
+    isTakenBack: takenBack,
     createdAt,
     createdAtDisplay: formatDate(createdAt),
     isFavorite: dto.isFavorite,

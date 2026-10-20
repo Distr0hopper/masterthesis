@@ -105,8 +105,8 @@ async def list_my_components(
     unpublished_pagination = PaginatedList(limit=limit, offset=unpublished_offset)
     deprecated_pagination = PaginatedList(limit=limit, offset=deprecated_offset)
 
-    # one bucket per status - each shows a lineage's newest version in that status, so a
-    # deprecated v1 sits in its own section rather than hiding behind a published v2
+    # one bucket per status, each with every version in it - the owner's own versions are
+    # things of their own (a taken-back v1 next to a fresh v2 draft), unlike the catalogue
     published, published_total = await components_service.list_my_components_by_status(
         current_user.id, frozenset({ComponentStatus.PUBLISHED}), kind, published_pagination
     )

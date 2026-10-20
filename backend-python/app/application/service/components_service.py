@@ -167,7 +167,8 @@ class ComponentsService:
         kind: ComponentKind | None,
         pagination: PaginatedList,
     ) -> tuple[list[Component], int]:
-        filter = ComponentListFilter(created_by=created_by_id, statuses=statuses, kind=kind)
+        # the owner's own lists show every version - a taken-back v1 must not hide behind v2
+        filter = ComponentListFilter(created_by=created_by_id, statuses=statuses, kind=kind, latest_per_lineage=False)
         return await self.uow.components.find_paginated(filter, pagination)
 
     async def list_all_components(self, filter: ComponentListFilter) -> list[Component]:

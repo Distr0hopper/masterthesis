@@ -36,7 +36,7 @@ export function ComponentCard({ component, backTo, showBuilderLink = false, acti
             <div className="flex flex-wrap items-center gap-2">
               <KindBadge kind={component.kind} />
               {component.status !== ComponentStatus.PUBLISHED && (
-                <Badge variant="secondary" className="w-fit">
+                <Badge variant="secondary" className="w-fit" title={component.statusHint ?? undefined}>
                   {component.statusDisplay}
                 </Badge>
               )}
@@ -48,7 +48,11 @@ export function ComponentCard({ component, backTo, showBuilderLink = false, acti
             )}
           </div>
 
-          <h3 className="font-mono text-lg font-bold text-slate-900">{component.name}</h3>
+          <h3 className="font-mono text-lg font-bold text-slate-900">
+            {component.name}
+            {/* next to the name, so versions of one component - side by side in My lists - read apart */}
+            <span className="ml-2 font-sans text-sm font-normal text-slate-400">v{component.version}</span>
+          </h3>
 
           {component.description && <p className="line-clamp-2 text-sm text-slate-500">{component.description}</p>}
         </div>
@@ -56,7 +60,6 @@ export function ComponentCard({ component, backTo, showBuilderLink = false, acti
         <div className="mt-3 flex items-center justify-between border-t pt-3 text-sm text-slate-500">
           <span>
             {component.authorDisplay}
-            {` · v${component.version}`}
             {component.kind === 'workflow' &&
               ` · ${component.stepCount} step${component.stepCount === 1 ? '' : 's'}`}
           </span>

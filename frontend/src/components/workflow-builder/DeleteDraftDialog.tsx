@@ -19,7 +19,7 @@ export function DeleteDraftDialog({ draft, open, onOpenChange, onDeleted }: Dele
       {
         onSuccess: () => {
           toast.success(
-            deleteLinkedWorkflow ? 'Workflow and its My Workflows copy deleted' : 'Workflow deleted',
+            deleteLinkedWorkflow ? 'Workflow and its My Components copy deleted' : 'Workflow deleted',
           );
           onOpenChange(false);
           onDeleted?.();
@@ -40,7 +40,7 @@ export function DeleteDraftDialog({ draft, open, onOpenChange, onDeleted }: Dele
           ? {
               label: (
                 <>
-                  Also delete its copy in <span className="font-medium">My Workflows</span>. Leave
+                  Also delete its copy in <span className="font-medium">My Components</span>. Leave
                   unchecked to keep that copy (including if it has been published).
                 </>
               ),

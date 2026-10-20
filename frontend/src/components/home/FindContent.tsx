@@ -1,13 +1,13 @@
 import { Link } from 'react-router-dom';
 import { FolderKanban, FolderOpen, GitMerge, LayoutGrid, Upload, Workflow } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card.tsx';
-import { ROUTES, browseRoute } from '@/lib/routes';
+import { ROUTES, browseRoute, myComponentsRoute } from '@/lib/routes';
 
 const FIND_CONTENT_LINKS = [
   { label: 'Browse Tools', to: browseRoute({ kind: 'tool' }), icon: LayoutGrid },
   { label: 'Browse Workflows', to: browseRoute({ kind: 'workflow' }), icon: Workflow },
-  { label: 'My Tools', to: ROUTES.myTools, icon: FolderOpen },
-  { label: 'My Workflows', to: ROUTES.myWorkflows, icon: FolderKanban },
+  { label: 'My Tools', to: myComponentsRoute({ kind: 'tool' }), icon: FolderOpen },
+  { label: 'My Workflows', to: myComponentsRoute({ kind: 'workflow' }), icon: FolderKanban },
   { label: 'Upload a Tool', to: ROUTES.toolUpload, icon: Upload },
   { label: 'Build a Workflow', to: ROUTES.builder, icon: GitMerge },
 ];

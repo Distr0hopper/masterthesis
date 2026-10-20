@@ -9,7 +9,6 @@ export interface KindCopy {
   plural: string;
   /** "tools" / "workflows" - mid-sentence */
   pluralLower: string;
-  mineSubtitle: string;
 }
 
 export const KIND_COPY: Record<ComponentKind, KindCopy> = {
@@ -17,16 +16,21 @@ export const KIND_COPY: Record<ComponentKind, KindCopy> = {
     singular: 'Tool',
     plural: 'Tools',
     pluralLower: 'tools',
-    mineSubtitle: "Tools you've uploaded or packaged, including drafts that are still only visible to you.",
   },
   workflow: {
     singular: 'Workflow',
     plural: 'Workflows',
     pluralLower: 'workflows',
-    mineSubtitle:
-      "Workflows you've uploaded or built in the Workflow Builder, including drafts that are still only visible to you.",
   },
 };
+
+/** Every kind, in the order lists and filters show them. */
+export const KINDS = Object.keys(KIND_COPY) as ComponentKind[];
+
+/** `value` as a kind, or undefined when it is none - for kinds read from the URL. */
+export function parseKind(value: string | null): ComponentKind | undefined {
+  return KINDS.find((kind) => kind === value);
+}
 
 /** The icon standing for each kind - on cards, in menus and in search results. */
 export const KIND_ICONS: Record<ComponentKind, LucideIcon> = {

@@ -1,19 +1,14 @@
 import { useSearchParams } from 'react-router-dom';
-import { useComponents, useDomains, type ComponentKind } from '@/api/components';
+import { useComponents, useDomains } from '@/api/components';
 import { ComponentCard } from '@/components/component-browse/ComponentCard';
 import { ListFilters } from '@/components/common/ListFilters';
 import { Pagination } from '@/components/common/Pagination';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuthStore } from '@/store/auth.store';
 import { usePageParams } from '@/lib/usePageParams';
-import { KIND_COPY, KIND_ICONS } from '@/lib/componentKinds';
+import { KIND_COPY, KIND_ICONS, KINDS, parseKind } from '@/lib/componentKinds';
 
-const KINDS = Object.keys(KIND_COPY) as ComponentKind[];
 const ALL = 'all';
-
-function parseKind(value: string): ComponentKind | undefined {
-  return KINDS.find((kind) => kind === value);
-}
 
 /** The public browse list of both kinds - `?kind=` narrows it to Tools or Workflows. */
 export default function ComponentsPage() {

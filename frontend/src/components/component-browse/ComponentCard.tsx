@@ -16,7 +16,7 @@ import { editableBuilderDraftId } from '@/lib/builderDraft';
 interface ComponentCardProps {
   component: ComponentDisplayModel;
   backTo?: string;
-  /** an editing surface (My Workflows) - offer "Edit in Workflow Builder" where possible */
+  /** an editing surface (My Components) - offer "Edit in Workflow Builder" where possible */
   showBuilderLink?: boolean;
   actions?: ReactNode;
 }
@@ -24,7 +24,7 @@ interface ComponentCardProps {
 /** One card for either kind - only the kind snippet, a workflow's step count and the builder link differ. */
 export function ComponentCard({ component, backTo, showBuilderLink = false, actions }: ComponentCardProps) {
 
-  // only on an editing surface (My Workflows), not the browse list
+  // only on an editing surface (My Components), not the browse list
   const builderDraftId = showBuilderLink ? editableBuilderDraftId(component) : null;
 
   return (

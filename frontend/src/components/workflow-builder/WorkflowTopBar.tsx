@@ -53,7 +53,7 @@ export function WorkflowTopBar({
         {savedAgo && <span className="shrink-0 text-xs text-slate-400">Saved {savedAgo}</span>}
 
         <div className="flex items-center gap-2">
-          {/* Save also syncs the workflow into "My Workflows"; publishing happens there */}
+          {/* Save also syncs the workflow into "My Components"; publishing happens there */}
           <Button variant="outline" onClick={onSave} disabled={isSaving}>
             {isSaving ? 'Saving...' : 'Save'}
           </Button>

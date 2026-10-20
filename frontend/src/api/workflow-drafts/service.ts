@@ -26,7 +26,7 @@ export const workflowDraftsService = {
     return apiClient.put(`${ENDPOINT}/${id}`, dto);
   },
 
-  // deleteLinkedWorkflow: also drop the Workflow this draft was synced to in My Workflows
+  // deleteLinkedWorkflow: also drop the Workflow this draft was synced to in My Components
   delete(id: string, deleteLinkedWorkflow = false): Promise<void> {
     const query = deleteLinkedWorkflow ? '?deleteLinkedWorkflow=true' : '';
     return apiClient.delete(`${ENDPOINT}/${id}${query}`);
@@ -43,7 +43,7 @@ export const workflowDraftsService = {
     return apiClient.getBlob(`${ENDPOINT}/${id}/export/inputs`, 'inputs.yaml');
   },
 
-  // materialises the canvas as a Workflow row in My Workflows (idempotent per draft).
+  // materialises the canvas as a Workflow row in My Components (idempotent per draft).
   syncToMyWorkflows(id: string): Promise<SyncedWorkflowDto> {
     return apiClient.post(`${ENDPOINT}/${id}/sync`);
   },

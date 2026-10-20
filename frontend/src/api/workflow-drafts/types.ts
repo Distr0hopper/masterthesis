@@ -3,7 +3,7 @@ export interface WorkflowDraftListItemDto {
   name: string;
   nodeCount: number;
   updatedAt: string;
-  /** the Workflow this draft is synced to in My Workflows, or null if it was never synced */
+  /** the Workflow this draft is synced to in My Components, or null if it was never synced */
   linkedWorkflowId: string | null;
 }
 

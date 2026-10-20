@@ -83,7 +83,7 @@ export const useDeleteDraft = () => {
     onSuccess: (_result, { id, deleteLinkedWorkflow }) => {
       queryClient.removeQueries({ queryKey: draftKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: draftKeys.lists() });
-      // the My Workflows lists change when the linked workflow is dropped too
+      // the My Components lists change when the linked workflow is dropped too
       if (deleteLinkedWorkflow) {
         queryClient.invalidateQueries({ queryKey: componentKeys.all });
       }

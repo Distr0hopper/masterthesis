@@ -17,8 +17,8 @@ interface UseSplitPageParamsResult {
 }
 
 /**
- * URL-backed pagination for a page with independently paged sections (My Tools, My
- * Workflows). Every bucket reads the same shared `limit` key but owns a distinct offset
+ * URL-backed pagination for a page with independently paged sections (My
+ * Components). Every bucket reads the same shared `limit` key but owns a distinct offset
  * key, matching the `publishedOffset`/`unpublishedOffset`/`deprecatedOffset` params `/mine` takes.
  */
 export function useSplitPageParams(): UseSplitPageParamsResult {

@@ -9,7 +9,7 @@ import { ComponentVersions } from '@/components/component-detail/organisms/Compo
 import { ToolTabs } from '@/components/tool-detail/organisms/ToolTabs';
 import { WorkflowDefinition } from '@/components/workflow-detail/organisms/WorkflowDefinition';
 import { WorkflowSteps } from '@/components/workflow-detail/organisms/WorkflowSteps';
-import { KIND_ROUTES } from '@/lib/routes';
+import { KIND_ROUTES, ROUTES } from '@/lib/routes';
 import { KIND_COPY } from '@/lib/componentKinds';
 
 interface ComponentDetailPageProps {
@@ -31,7 +31,7 @@ export default function ComponentDetailPage({ kind }: ComponentDetailPageProps) 
   const routes = KIND_ROUTES[kind];
   const copy = KIND_COPY[kind];
   const backTo = (location.state as { from?: string } | null)?.from ?? routes.browse;
-  const backLabel = backTo === routes.mine ? `Back to My ${copy.plural}` : 'Back to Browse';
+  const backLabel = backTo.startsWith(ROUTES.myComponents) ? 'Back to My Components' : 'Back to Browse';
 
   if (isLoading) {
     return <p className="text-slate-500">Loading...</p>;

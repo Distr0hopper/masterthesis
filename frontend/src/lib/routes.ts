@@ -7,11 +7,11 @@ export const ROUTES = {
   home: '/',
   /** the one public list of both kinds - `?kind=` narrows it, see browseRoute */
   browse: '/browse',
-  myTools: '/my-tools',
   toolUpload: '/tools/upload',
   toolDetail: (id: string) => `/tools/${id}`,
   toolNewVersion: (id: string) => `/tools/${id}/new-version`,
-  myWorkflows: '/my-workflows',
+  /** the caller's own components of both kinds - `?kind=` narrows it, see myComponentsRoute */
+  myComponents: '/my-components',
   workflowUpload: '/workflows/upload',
   workflowDetail: (id: string) => `/workflows/${id}`,
   workflowNewVersion: (id: string) => `/workflows/${id}/new-version`,
@@ -32,19 +32,22 @@ export function browseRoute({ kind, search }: { kind?: ComponentKind; search?: s
   return query ? `${ROUTES.browse}?${query}` : ROUTES.browse;
 }
 
+/** The caller's own components, optionally pre-filtered to one kind. */
+export function myComponentsRoute({ kind }: { kind?: ComponentKind } = {}): string {
+  return kind ? `${ROUTES.myComponents}?kind=${kind}` : ROUTES.myComponents;
+}
+
 /** The routes of one kind of component. */
 export interface KindRoutes {
   browse: string;
-  mine: string;
   upload: string;
   detail: (id: string) => string;
 }
 
 export const KIND_ROUTES: Record<ComponentKind, KindRoutes> = {
-  tool: { browse: browseRoute({ kind: 'tool' }), mine: ROUTES.myTools, upload: ROUTES.toolUpload, detail: ROUTES.toolDetail },
+  tool: { browse: browseRoute({ kind: 'tool' }), upload: ROUTES.toolUpload, detail: ROUTES.toolDetail },
   workflow: {
     browse: browseRoute({ kind: 'workflow' }),
-    mine: ROUTES.myWorkflows,
     upload: ROUTES.workflowUpload,
     detail: ROUTES.workflowDetail,
   },

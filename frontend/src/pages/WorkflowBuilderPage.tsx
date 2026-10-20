@@ -44,7 +44,7 @@ import {
 } from '@/api/workflow-drafts';
 import type { ComponentEdgeData, ComponentFlowNode } from '@/components/workflow-builder/types';
 import { getErrorMessage } from '@/lib/errors';
-import { ROUTES } from '@/lib/routes';
+import { ROUTES, myComponentsRoute } from '@/lib/routes';
 
 export default function WorkflowBuilderPage() {
   const { id } = useParams<{ id: string }>();
@@ -271,7 +271,7 @@ export default function WorkflowBuilderPage() {
     const missing = new Set(saved.missingComponentIds);
     const missingLabels = [...new Set(nodes.filter((n) => missing.has(n.data.componentId)).map((n) => n.data.label))];
     if (missingLabels.length > 0) {
-      toast.warning('Workflow saved, but not added to My Workflows yet.', {
+      toast.warning('Workflow saved, but not added to My Components yet.', {
         description: `Deleted component${missingLabels.length === 1 ? '' : 's'} on the canvas: ${missingLabels.join(', ')}. Remove or replace ${missingLabels.length === 1 ? 'it' : 'them'}, then save again.`,
       });
       return;
@@ -279,12 +279,12 @@ export default function WorkflowBuilderPage() {
 
     try {
       await syncToMyWorkflows(saved.id);
-      toast.success('Saved to My Workflows.', {
-        description: 'Publishing is done from the My Workflows page.',
-        action: { label: 'My Workflows', onClick: () => navigate(ROUTES.myWorkflows) },
+      toast.success('Saved to My Components.', {
+        description: 'Publishing is done from the My Components page.',
+        action: { label: 'My Components', onClick: () => navigate(myComponentsRoute({ kind: 'workflow' })) },
       });
     } catch (error) {
-      toast.warning('Workflow saved, but not added to My Workflows yet.', {
+      toast.warning('Workflow saved, but not added to My Components yet.', {
         description: getErrorMessage(error, 'Finish the canvas, then save again.'),
       });
     }

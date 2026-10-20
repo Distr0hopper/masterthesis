@@ -9,6 +9,7 @@ import pytest
 from app.application.commands.commands import ManualFormatLabel
 from app.application.exception.component_exceptions import (
     AlreadyPackagedError,
+    ComponentKindMismatchError,
     ManualUploadCannotBeRepackagedError,
     PackagedCommitChangedError,
     PackagedToolCannotTakeUploadError,
@@ -17,7 +18,7 @@ from app.application.service.components_service import ComponentsService
 from app.application.service.tools_service import ToolsService
 from app.domain.models.component import MAX_DESCRIPTION_LENGTH, Component, ComponentKind, ComponentSource
 from app.domain.models.component_domain import ComponentDomain
-from app.domain.models.parameter import ParameterDirection
+from app.domain.models.parameter import Parameter, ParameterDirection
 from app.infrastructure.packaging.packaging_service_client import PackagingResult
 from tests.application.fake_unit_of_work import FakeUnitOfWork
 from tests.application.test_composite_workflows import FakeComponentsRepository
@@ -48,15 +49,16 @@ class FakeRepository(FakeComponentsRepository):
 
 
 class FakePackagingClient:
-    def __init__(self, commit_sha: str = "c2", description: str | None = "From the README"):
+    def __init__(self, commit_sha: str = "c2", description: str | None = "From the README", cwl: str | None = None):
         self.commit_sha = commit_sha
         self.description = description
+        self.cwl = cwl
 
     async def package(self, repo_url: str) -> PackagingResult:
         # the packager writes no top-level doc: - the README description comes alongside
         return PackagingResult(
             repo_name="thin-data",
-            cwl=TOOL_CWL.replace("doc: {doc}\n", ""),
+            cwl=self.cwl or TOOL_CWL.replace("doc: {doc}\n", ""),
             inputs_yaml="",
             commit_sha=self.commit_sha,
             description=self.description,
@@ -215,3 +217,78 @@ def test_repackaging_from_an_old_version_builds_on_the_lineage_head() -> None:
 
     assert v3.version == 3
     assert [d.domain for d in v3.domains] == ["animal_behavior"]
+
+
+# --- a tool's next version, read and saved ------------------------------------------------
+
+#: File ports written out in full - the shorthand `data: File` is read as a string port
+LABELLABLE_CWL = """
+cwlVersion: v1.2
+class: CommandLineTool
+baseCommand: echo
+inputs:
+  data:
+    type: File
+outputs:
+  out:
+    type: File
+"""
+
+
+def manual(version: int) -> Component:
+    return Component(
+        id=uuid.uuid4(),
+        kind=ComponentKind.TOOL,
+        name="m",
+        version=version,
+        cwl_content=LABELLABLE_CWL,
+        created_by_id=OWNER,
+    )
+
+
+def upload(name: str = "m") -> Component:
+    """A tool's next version as the upload endpoint hands it over - not yet numbered."""
+    return Component(kind=ComponentKind.TOOL, name=name, cwl_content=LABELLABLE_CWL, created_by_id=OWNER)
+
+
+def test_an_uploaded_version_follows_the_lineages_newest_one() -> None:
+    # uploaded from v1's page while v2 already exists - the new one is v3, not a second v2
+    v1, v2 = manual(1), manual(2)
+    tools_service, _ = service(v1, v2)
+
+    v3 = asyncio.run(tools_service.add_uploaded_version(upload()))
+
+    assert v3.version == 3
+
+
+def test_a_workflow_lineage_takes_no_tool_version() -> None:
+    workflow = Component(
+        id=uuid.uuid4(), kind=ComponentKind.WORKFLOW, name="m", cwl_content="class: Workflow", created_by_id=OWNER
+    )
+    tools_service, _ = service(workflow)
+
+    with pytest.raises(ComponentKindMismatchError):
+        asyncio.run(tools_service.add_uploaded_version(upload()))
+
+
+@pytest.mark.parametrize(("commit_sha", "already_packaged"), [("c1", True), ("c2", False)])
+def test_the_preview_of_a_packaged_repo_names_its_tool_and_carries_its_labels(
+    commit_sha: str, already_packaged: bool
+) -> None:
+    head = packaged(1, "c1")
+    head.parameters = [Parameter(name="data", cwl_type="File", direction=ParameterDirection.INPUT, format_label="CSV")]
+    tools_service, _ = service(head, packaging=FakePackagingClient(commit_sha=commit_sha, cwl=LABELLABLE_CWL))
+
+    preview = asyncio.run(tools_service.preview_package(REPO))
+
+    # the wizard locks name and domains to it, or stops when there's nothing new
+    assert preview.existing is head
+    assert preview.already_packaged is already_packaged
+    # reviewed on top of the labels the new version will carry over anyway
+    assert {p.name: p.format_label for p in preview.parsed.parameters if p.format_label} == {"data": "CSV"}
+
+
+def test_a_repo_never_packaged_has_no_tool_to_version() -> None:
+    tools_service, _ = service()
+    preview = asyncio.run(tools_service.preview_package(REPO))
+    assert (preview.existing, preview.already_packaged) == (None, False)

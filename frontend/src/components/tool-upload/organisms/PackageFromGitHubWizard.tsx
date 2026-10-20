@@ -13,9 +13,9 @@ import { UploadStepper } from '@/components/common/UploadStepper';
 import { ComponentLink } from '@/components/common/ComponentLink';
 import { useUploadMetadataForm } from '@/components/common/useUploadMetadataForm';
 import { ToolReviewStep } from './ToolReviewStep';
+import { sourceIssuesOf } from '../lib/sourceIssues';
 import {
   ComponentSource,
-  ComponentStatus,
   initialFormatLabelDraft,
   toFormatLabelDtos,
   useComponentNameAvailability,
@@ -38,35 +38,6 @@ const STEPS = [
   { id: 1, label: 'Repository' },
   { id: 2, label: 'Details & review' },
 ];
-
-/** Why a fetched repo can't be packaged at all - shown on the source step, blocks continuing. */
-function sourceIssuesOf(preview: PackagePreviewDto | undefined): ReactNode[] {
-  const existing = preview?.existing;
-  if (!preview || !existing) return [];
-  // the tool the repo is already packaged as - where to go instead
-  const existingLink = (
-    <ComponentLink
-      componentId={existing.id}
-      kind={existing.kind}
-      name={existing.name}
-      version={existing.version}
-      className="inline-flex"
-    />
-  );
-  if (preview.alreadyPackaged) {
-    return [
-      <>
-        Already up to date - commit <code className="text-xs">{preview.commitSha.slice(0, 7)}</code> is already
-        packaged as {existingLink}
-        {existing.status === ComponentStatus.DRAFT ? ', which is still a draft - publish it from its page.' : '.'}
-      </>,
-    ];
-  }
-  if (!existing.canAddVersion) {
-    return [<>This repository is already packaged as {existingLink}, and only its owner can add new versions.</>];
-  }
-  return [];
-}
 
 const PACKAGING_HINT = (
   <>

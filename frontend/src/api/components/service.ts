@@ -45,6 +45,7 @@ export const componentsService = {
         publishedOffset: params.publishedOffset,
         unpublishedOffset: params.unpublishedOffset,
         deprecatedOffset: params.deprecatedOffset,
+        search: params.search || undefined,
       },
     });
   },

@@ -100,6 +100,7 @@ async def list_my_components(
     published_offset: Annotated[int, Query(alias="publishedOffset", ge=0)] = 0,
     unpublished_offset: Annotated[int, Query(alias="unpublishedOffset", ge=0)] = 0,
     deprecated_offset: Annotated[int, Query(alias="deprecatedOffset", ge=0)] = 0,
+    search: Annotated[str | None, Query()] = None,
 ) -> MyItemsResponseDtoV1[ComponentListItemDto]:
     published_pagination = PaginatedList(limit=limit, offset=published_offset)
     unpublished_pagination = PaginatedList(limit=limit, offset=unpublished_offset)
@@ -108,13 +109,13 @@ async def list_my_components(
     # one bucket per status - each shows a lineage's newest version in that status, and how
     # many versions it has, so the row can offer the others (a taken-back v1 behind a v2 draft)
     published, published_total = await components_service.list_my_components_by_status(
-        current_user.id, frozenset({ComponentStatus.PUBLISHED}), kind, published_pagination
+        current_user.id, frozenset({ComponentStatus.PUBLISHED}), kind, search, published_pagination
     )
     unpublished, unpublished_total = await components_service.list_my_components_by_status(
-        current_user.id, frozenset({ComponentStatus.DRAFT}), kind, unpublished_pagination
+        current_user.id, frozenset({ComponentStatus.DRAFT}), kind, search, unpublished_pagination
     )
     deprecated, deprecated_total = await components_service.list_my_components_by_status(
-        current_user.id, frozenset({ComponentStatus.DEPRECATED}), kind, deprecated_pagination
+        current_user.id, frozenset({ComponentStatus.DEPRECATED}), kind, search, deprecated_pagination
     )
     favorited_names = await components_service.favorited_names(current_user)
     version_counts = await components_service.version_counts([*published, *unpublished, *deprecated])

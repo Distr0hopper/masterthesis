@@ -300,6 +300,8 @@ export interface ComponentListQueryParams extends PageParams<ComponentListItemDt
 
 export interface MyComponentsQueryParams extends MineQueryParams {
   kind?: ComponentKind;
+  /** narrows every status bucket to names containing this */
+  search?: string;
 }
 
 export type MyComponentsResponseDto = SplitPageResponse<ComponentListItemDto>;

@@ -53,9 +53,34 @@ function fromPrevious(preview: WorkflowStepPreviewDto): Partial<ComponentConfigS
   };
 }
 
-function initialState(preview: WorkflowStepPreviewDto): ComponentConfigState {
+/** Where a freshly previewed step's configuration starts. */
+export function initialConfigState(preview: WorkflowStepPreviewDto): ComponentConfigState {
   const base = defaultState(preview);
   return { ...base, ...fromPrevious(preview) };
+}
+
+/** What one step's configuration is sent as - see ComponentConfigDto. */
+export function toConfigDto(preview: WorkflowStepPreviewDto, config: ComponentConfigState): ComponentConfigDto {
+  if (config.mode === 'reuse') {
+    return { stepId: preview.stepId, reuseComponentId: config.reuseComponentId };
+  }
+  if (config.mode === 'version') {
+    return {
+      stepId: preview.stepId,
+      newVersionOfId: preview.previous!.componentId,
+      description: config.description.trim() || null,
+      // only the labels written here - the tool's own carry over by themselves, and a
+      // blank entry would clear them
+      formatLabels: toFormatLabelDtos(preview.parameters, config.formatLabels).filter((label) => label.label),
+    };
+  }
+  return {
+    stepId: preview.stepId,
+    name: config.name.trim(),
+    domains: config.domains,
+    description: config.description.trim() || null,
+    formatLabels: toFormatLabelDtos(preview.parameters, config.formatLabels),
+  };
 }
 
 function defaultState(preview: WorkflowStepPreviewDto): ComponentConfigState {
@@ -99,7 +124,7 @@ export function useComponentConfigs(previews: WorkflowStepPreviewDto[]) {
   const [nameConflicts, setNameConflicts] = useState<NameConflicts>({});
 
   const reset = useCallback((next: WorkflowStepPreviewDto[]) => {
-    setConfigs(Object.fromEntries(next.map((p) => [p.stepId, initialState(p)])));
+    setConfigs(Object.fromEntries(next.map((p) => [p.stepId, initialConfigState(p)])));
     setNameConflicts({});
   }, []);
 
@@ -165,30 +190,7 @@ export function useComponentConfigs(previews: WorkflowStepPreviewDto[]) {
   const isComplete = previews.length > 0 && Object.keys(errors).length === 0;
 
   const toDtos = useCallback(
-    (): ComponentConfigDto[] =>
-      previews.map((preview) => {
-        const config = configs[preview.stepId];
-        if (config.mode === 'reuse') {
-          return { stepId: preview.stepId, reuseComponentId: config.reuseComponentId };
-        }
-        if (config.mode === 'version') {
-          return {
-            stepId: preview.stepId,
-            newVersionOfId: preview.previous!.componentId,
-            description: config.description.trim() || null,
-            // only the labels written here - the tool's own carry over by themselves, and a
-            // blank entry would clear them
-            formatLabels: toFormatLabelDtos(preview.parameters, config.formatLabels).filter((label) => label.label),
-          };
-        }
-        return {
-          stepId: preview.stepId,
-          name: config.name.trim(),
-          domains: config.domains,
-          description: config.description.trim() || null,
-          formatLabels: toFormatLabelDtos(preview.parameters, config.formatLabels),
-        };
-      }),
+    (): ComponentConfigDto[] => previews.map((preview) => toConfigDto(preview, configs[preview.stepId])),
     [previews, configs],
   );
 

@@ -1,7 +1,12 @@
 import yaml
 
 from app.domain.models.parameter import Parameter, ParameterDirection
-from app.infrastructure.cwl.cwl_parser import generate_inputs_yaml, inject_cwl_version, inject_description
+from app.infrastructure.cwl.cwl_parser import (
+    generate_inputs_yaml,
+    inject_cwl_version,
+    inject_description,
+    same_cwl_document,
+)
 
 TOOL = "cwlVersion: v1.2\nclass: CommandLineTool\nbaseCommand: [echo]\ninputs: {}\noutputs: {}\n"
 UMLAUTS = "Hier ist eine äußerst längere Description mit vielen Umlauten wie Öl, Übung und Grüße"
@@ -34,3 +39,30 @@ def test_inputs_yaml_keeps_umlauts_in_string_defaults() -> None:
     )
     inputs = generate_inputs_yaml([parameter], "tool", 1)
     assert "label: Grüße" in inputs
+
+
+# --- comparing two CWL texts ------------------------------------------------------------
+
+REFORMATTED_TOOL = """
+baseCommand:
+  - echo
+class: CommandLineTool
+cwlVersion: v1.2
+inputs: {}
+outputs: {}
+"""
+
+
+def test_reformatting_a_document_is_no_change() -> None:
+    # reindented, keys reordered, flow list written as block list
+    assert same_cwl_document(TOOL, REFORMATTED_TOOL)
+
+
+def test_changing_what_a_document_says_is_a_change() -> None:
+    assert not same_cwl_document(TOOL, TOOL.replace("echo", "cat"))
+
+
+def test_text_that_isnt_yaml_is_compared_as_text() -> None:
+    broken = "class: [unclosed"
+    assert same_cwl_document(broken, broken)
+    assert not same_cwl_document(broken, broken + " ")

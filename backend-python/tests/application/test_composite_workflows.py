@@ -16,6 +16,7 @@ from app.api.dto.workflow import WorkflowListItemDto
 from app.api.transformer.component_transformer import ComponentTransformer
 from app.application.commands.commands import (
     ComponentCommand,
+    ManualFormatLabel,
     ComponentCommandType,
     WorkflowStepCommand,
     WorkflowStepCommandType,
@@ -46,6 +47,7 @@ from app.application.service.components_service import ComponentsService
 from app.application.service.tools_service import ToolsService
 from app.application.service.workflows_service import ComponentConfig, StepBinding, WorkflowsService
 from app.domain.models.component import Component, ComponentKind, ComponentSource, ComponentStatus
+from app.domain.models.parameter import ParameterDirection
 from app.domain.models.tool import Tool
 from app.domain.models.workflow import Workflow
 from app.domain.models.workflow_step import StepMatchStatus, WorkflowStep
@@ -910,6 +912,174 @@ def test_a_step_versions_only_one_of_the_actors_uploaded_tools_once(problem: str
     with pytest.raises((InvalidComponentConfigError, PackagedToolCannotTakeUploadError)):
         asyncio.run(workflows_service.add_version_from_upload(v1, upload_zip(), "x.zip", None, configs, OWNER))
     assert workflows_service.uow.commits == 0  # type: ignore[attr-defined]
+
+
+def test_an_upload_creates_its_tools_and_the_workflow_as_version_one() -> None:
+    configs = {sid: ComponentConfig(step_id=sid, name=f"tool-{sid}", domains=["other"]) for sid in ("a", "b")}
+    _, workflows_service, _ = services()
+
+    wf = asyncio.run(
+        workflows_service.create_from_upload(upload_zip(), "x.zip", "wf", None, ["other"], configs, OWNER)
+    )
+
+    assert (wf.name, wf.version, wf.status) == ("wf", 1, ComponentStatus.DRAFT)
+    assert [(s.step_id, s.component.name, s.component.version) for s in wf.steps] == [
+        ("a", "tool-a", 1),
+        ("b", "tool-b", 1),
+    ]
+    assert all(s.match_status == StepMatchStatus.CONFIRMED for s in wf.steps)
+    assert workflows_service.uow.commits == 1  # type: ignore[attr-defined]
+
+
+INLINE_PIPELINE = """
+cwlVersion: v1.2
+class: Workflow
+inputs:
+  data: File
+outputs:
+  result:
+    type: File
+    outputSource: a/out
+steps:
+  a:
+    run:
+      class: CommandLineTool
+      baseCommand: cat
+      inputs:
+        inp:
+          type: File
+      outputs:
+        out:
+          type: File
+    in: {inp: data}
+    out: [out]
+"""
+
+
+def test_an_inline_step_versioning_a_tool_runs_a_file_named_after_that_tool() -> None:
+    # the stored pipeline swaps the inline body for a run: reference - named after the
+    # lineage the step joins, not after anything in the upload
+    tool_a = tool("Tool A")
+    v1 = workflow("wf", tool_a, status=ComponentStatus.PUBLISHED)
+    v1.workflow.steps[0].step_id = "a"
+    _, workflows_service, _ = services(v1, tool_a)
+    configs = {"a": ComponentConfig(step_id="a", new_version_of_id=tool_a.id)}
+
+    v2 = asyncio.run(
+        workflows_service.add_version_from_upload(
+            v1, INLINE_PIPELINE.encode(), "wf.cwl", None, configs, OWNER
+        )
+    )
+
+    (step,) = v2.steps
+    assert step.run_reference == "tool-a.cwl"
+    assert "run: tool-a.cwl" in v2.cwl_content
+    assert (step.component.name, step.component.version) == ("Tool A", 2)
+
+
+def test_a_step_versions_its_tool_after_the_lineages_newest_version() -> None:
+    # the workflow still runs tool-a v1, but the lineage has moved on to v3 meanwhile
+    v1, tool_a, tool_b = uploaded_v1()
+    tool_a_v2, tool_a_v3 = tool("tool-a"), tool("tool-a")
+    tool_a_v2.version, tool_a_v3.version = 2, 3
+    _, workflows_service, _ = services(v1, tool_a, tool_a_v2, tool_a_v3, tool_b)
+    configs = {
+        "a": ComponentConfig(step_id="a", new_version_of_id=tool_a.id),
+        "b": ComponentConfig(step_id="b", reuse_component_id=tool_b.id),
+    }
+
+    v2 = asyncio.run(
+        workflows_service.add_version_from_upload(v1, upload_zip(a_tool=CHANGED_TOOL), "x.zip", None, configs, OWNER)
+    )
+
+    assert v2.steps[0].component.version == 4
+
+
+LABELLED_TOOL = """
+cwlVersion: v1.2
+class: CommandLineTool
+baseCommand: echo
+inputs:
+  inp:
+    type: File
+outputs:
+  out:
+    type: File
+"""
+
+
+@pytest.mark.parametrize(
+    ("sent", "expected"),
+    [
+        # nothing reviewed - the previous version's hand labels carry over
+        ([], {"inp": "CSV"}),
+        # reviewed labels add to them, or override them
+        ([ManualFormatLabel("out", ParameterDirection.OUTPUT, "GeoTIFF")], {"inp": "CSV", "out": "GeoTIFF"}),
+        ([ManualFormatLabel("inp", ParameterDirection.INPUT, "TSV")], {"inp": "TSV"}),
+    ],
+)
+def test_a_step_versioning_a_tool_keeps_its_hand_labels(
+    sent: list[ManualFormatLabel], expected: dict[str, str]
+) -> None:
+    _, workflows_service, repository = services()
+    tool_a = asyncio.run(
+        workflows_service.tools_service.create_manual(  # type: ignore[attr-defined]
+            Component(kind=ComponentKind.TOOL, name="tool-a", cwl_content=LABELLED_TOOL, created_by_id=OWNER),
+            format_labels=[ManualFormatLabel("inp", ParameterDirection.INPUT, "CSV")],
+        )
+    )
+    tool_b = tool("tool-b")
+    v1 = workflow("wf", tool_a, tool_b, status=ComponentStatus.PUBLISHED)
+    v1.workflow.steps[0].step_id, v1.workflow.steps[1].step_id = "a", "b"
+    asyncio.run(repository.add_all([v1, tool_b]))
+    configs = {
+        "a": ComponentConfig(step_id="a", new_version_of_id=tool_a.id, format_labels=sent),
+        "b": ComponentConfig(step_id="b", reuse_component_id=tool_b.id),
+    }
+
+    v2 = asyncio.run(
+        workflows_service.add_version_from_upload(
+            v1, upload_zip(a_tool=LABELLED_TOOL.replace("echo", "cat")), "x.zip", None, configs, OWNER
+        )
+    )
+
+    labels = {p.name: p.format_label for p in v2.steps[0].component.parameters if p.format_label}
+    assert labels == expected
+
+
+def test_a_failing_step_rolls_back_the_tool_version_added_before_it() -> None:
+    v1, tool_a, tool_b = uploaded_v1()
+    _, workflows_service, _ = services(v1, tool_a, tool_b)
+    configs = {
+        "a": ComponentConfig(step_id="a", new_version_of_id=tool_a.id),
+        # only found while creating b - after tool-a's next version is already added
+        "b": ComponentConfig(step_id="b", name="tool-b-new", domains=["other"]),
+    }
+    broken_b = UPLOAD_TOOL.replace("CommandLineTool", "Operation")
+
+    with pytest.raises(InvalidCwlError):
+        asyncio.run(
+            workflows_service.add_version_from_upload(
+                v1, upload_zip(a_tool=CHANGED_TOOL, b_tool=broken_b), "x.zip", None, configs, OWNER
+            )
+        )
+
+    assert (workflows_service.uow.commits, workflows_service.uow.rollbacks) == (0, 1)  # type: ignore[attr-defined]
+
+
+def test_a_step_that_ran_a_workflow_or_nothing_before_cannot_be_versioned() -> None:
+    inner = workflow("inner", tool("x"), status=ComponentStatus.PUBLISHED)
+    # v1 has only step a - and it ran a nested workflow, not a tool
+    v1 = workflow("wf", inner, status=ComponentStatus.PUBLISHED)
+    v1.workflow.steps[0].step_id = "a"
+    _, workflows_service, _ = services(v1, inner)
+
+    preview = asyncio.run(workflows_service.parse_workflow_upload(upload_zip(), "x.zip", v1, OWNER))
+
+    previous = {p.step_id: p.previous for p in preview.component_previews}
+    assert previous["a"] is not None and previous["a"].can_add_version is False
+    # b is new in this version - nothing to start from
+    assert previous["b"] is None
 
 
 # --- the polymorphic DTO ----------------------------------------------------------------

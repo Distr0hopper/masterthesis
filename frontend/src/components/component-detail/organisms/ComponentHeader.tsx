@@ -3,11 +3,13 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   Archive,
   ArchiveRestore,
+  ChevronDown,
   ChevronLeft,
   Download,
   ExternalLink,
   Globe,
   GlobeLock,
+  MoreHorizontal,
   FilePlus2,
   Pencil,
   PenLine,
@@ -16,6 +18,13 @@ import {
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Button } from '@/components/ui/button.tsx';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   ComponentSource,
   ComponentStatus,
@@ -290,7 +299,31 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
 
           {model.description && <p className="text-slate-600">{model.description}</p>}
 
+          {/* grouped by intent: the next step stands out, the rest waits in two menus */}
           <div className="flex flex-wrap items-center gap-2">
+            {canPublish && (
+              <Button
+                size="sm"
+                className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90"
+                // always confirmed, like unpublish, deprecate and delete - it makes the version visible to everyone
+                onClick={() => setPublishDialogOpen(true)}
+                disabled={isPublishing || !allStepsSettled}
+                title={publishBlockedHint(allStepsSettled, !!builderDraftId)}
+              >
+                <Globe className="mr-1 h-4 w-4" /> Publish
+              </Button>
+            )}
+            {canUndeprecate && (
+              <Button
+                size="sm"
+                className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90"
+                onClick={handleUndeprecate}
+                disabled={isUndeprecating}
+              >
+                <ArchiveRestore className="mr-1 h-4 w-4" /> Undeprecate
+              </Button>
+            )}
+
             {model.kind === 'tool' ? (
               // the run bundle: the .cwl, an inputs.yaml template and its imported files
               <Button asChild variant="outline" size="sm">
@@ -306,81 +339,86 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
               </Button>
             )}
 
-            {canCreateVersion && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigate(newVersionRoute)}
-                title={newVersionHint(model)}
-              >
-                <FilePlus2 className="mr-1 h-4 w-4" /> New version
-              </Button>
+            {/* modal={false}: an item opens a dialog, and a modal menu would steal its focus back */}
+            {(canEdit || canUndeprecate || canCreateVersion || builderDraftId) && (
+              <DropdownMenu modal={false}>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Pencil className="mr-1 h-4 w-4" /> Edit <ChevronDown className="ml-1 h-3.5 w-3.5" aria-hidden />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-64">
+                  {canEdit && (
+                    <DropdownMenuItem className="cursor-pointer" onSelect={() => setEditDialogOpen(true)}>
+                      <Pencil className="h-4 w-4 text-slate-500" /> Edit details
+                    </DropdownMenuItem>
+                  )}
+                  {canUndeprecate && (
+                    <DropdownMenuItem className="cursor-pointer" onSelect={() => setDeprecateDialogOpen(true)}>
+                      <Pencil className="h-4 w-4 text-slate-500" /> Edit deprecation note
+                    </DropdownMenuItem>
+                  )}
+                  {(canCreateVersion || builderDraftId) && (canEdit || canUndeprecate) && <DropdownMenuSeparator />}
+                  {canCreateVersion && (
+                    <DropdownMenuItem
+                      className="cursor-pointer"
+                      onSelect={() => navigate(newVersionRoute)}
+                      title={newVersionHint(model)}
+                    >
+                      <FilePlus2 className="h-4 w-4 text-slate-500" /> New version
+                    </DropdownMenuItem>
+                  )}
+                  {builderDraftId && (
+                    <DropdownMenuItem className="cursor-pointer" asChild title={builderSaveHint(head)}>
+                      <Link to={ROUTES.builderWorkflow(builderDraftId)}>
+                        <PenLine className="h-4 w-4 text-slate-500" /> Edit in Workflow Builder
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
 
-            {builderDraftId && (
-              <Button asChild variant="outline" size="sm" title={builderSaveHint(head)}>
-                <Link to={ROUTES.builderWorkflow(builderDraftId)}>
-                  <PenLine className="mr-1 h-4 w-4" /> Edit in Workflow Builder
-                </Link>
-              </Button>
-            )}
-
-            {canEdit && (
-              <Button variant="outline" size="sm" onClick={() => setEditDialogOpen(true)}>
-                <Pencil className="mr-1 h-4 w-4" /> Edit
-              </Button>
-            )}
-
-            {canPublish && (
-              <Button
-                size="sm"
-                className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90"
-                // always confirmed, like unpublish, deprecate and delete - it makes the version visible to everyone
-                onClick={() => setPublishDialogOpen(true)}
-                disabled={isPublishing || !allStepsSettled}
-                title={publishBlockedHint(allStepsSettled, !!builderDraftId)}
-              >
-                <Globe className="mr-1 h-4 w-4" /> Publish
-              </Button>
-            )}
-
-            {canUnpublish && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setUnpublishDialogOpen(true)}
-                title={`Hide this ${model.kindDisplay.toLowerCase()} from the public list and the Workflow Builder again`}
-              >
-                <GlobeLock className="mr-1 h-4 w-4" /> Unpublish
-              </Button>
-            )}
-
-            {canDeprecate && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setDeprecateDialogOpen(true)}
-                title="Stop offering this version for new workflows - existing ones keep working"
-              >
-                <Archive className="mr-1 h-4 w-4" /> Deprecate
-              </Button>
-            )}
-
-            {canUndeprecate && (
-              <>
-                <Button variant="outline" size="sm" onClick={() => setDeprecateDialogOpen(true)}>
-                  <Pencil className="mr-1 h-4 w-4" /> Edit note
-                </Button>
-                <Button variant="outline" size="sm" onClick={handleUndeprecate} disabled={isUndeprecating}>
-                  <ArchiveRestore className="mr-1 h-4 w-4" /> Undeprecate
-                </Button>
-              </>
-            )}
-
-            {canDelete && (
-              <Button variant="destructive" size="sm" onClick={() => setDeleteDialogOpen(true)}>
-                <Trash2 className="mr-1 h-4 w-4" /> Delete
-              </Button>
+            {(canUnpublish || canDeprecate || canDelete) && (
+              <DropdownMenu modal={false}>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" aria-label="More actions" title="More actions">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-64">
+                  {canUnpublish && (
+                    <DropdownMenuItem
+                      className="cursor-pointer"
+                      onSelect={() => setUnpublishDialogOpen(true)}
+                      title={`Hide this ${model.kindDisplay.toLowerCase()} from the public list and the Workflow Builder again`}
+                    >
+                      <GlobeLock className="h-4 w-4 text-slate-500" /> Unpublish
+                    </DropdownMenuItem>
+                  )}
+                  {canDeprecate && (
+                    <DropdownMenuItem
+                      className="cursor-pointer"
+                      onSelect={() => setDeprecateDialogOpen(true)}
+                      title="Stop offering this version for new workflows - existing ones keep working"
+                    >
+                      <Archive className="h-4 w-4 text-slate-500" /> Deprecate
+                    </DropdownMenuItem>
+                  )}
+                  {canDelete && (
+                    <>
+                      {/* set apart at the bottom, in red - the one step that can't be undone */}
+                      {(canUnpublish || canDeprecate) && <DropdownMenuSeparator />}
+                      <DropdownMenuItem
+                        onSelect={() => setDeleteDialogOpen(true)}
+                        className="cursor-pointer text-red-600 focus:bg-red-50 focus:text-red-700"
+                      >
+                        <Trash2 className="h-4 w-4" /> Delete
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </div>
 

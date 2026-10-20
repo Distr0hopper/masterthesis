@@ -74,6 +74,7 @@ class ComponentTransformer:
             domains=ComponentTransformer.to_domains(component),
             status=component.status,
             deprecation_note=component.deprecation_note,
+            first_published_at=component.first_published_at,
             created_at=component.created_at,
             is_favorite=is_favorite,
             parameters=(
@@ -126,6 +127,7 @@ class ComponentTransformer:
             source=component.source,
             status=component.status,
             deprecation_note=component.deprecation_note,
+            first_published_at=component.first_published_at,
             superseded_by=(
                 SupersedingVersionDto(id=component.superseded_by[0], version=component.superseded_by[1])
                 if component.superseded_by is not None

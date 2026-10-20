@@ -202,7 +202,7 @@ async def add_version(
         status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Step or component not found"},
         status.HTTP_409_CONFLICT: {
             "model": ErrorResponse,
-            "description": "The workflow is published, the step runs an inline definition, the component "
+            "description": "The workflow was ever published, the step runs an inline definition, the component "
             "is deprecated, or it would make the workflow contain itself",
         },
     },
@@ -233,7 +233,7 @@ async def update_step(
         status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
         status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Insufficient permission for this command"},
         status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Step not found"},
-        status.HTTP_409_CONFLICT: {"model": ErrorResponse, "description": "The workflow is published"},
+        status.HTTP_409_CONFLICT: {"model": ErrorResponse, "description": "The workflow was ever published - its steps only change in a new version"},
         status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErrorResponse, "description": "Unknown command"},
     },
 )

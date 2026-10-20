@@ -132,13 +132,12 @@ class ComponentListItemBaseDto(CamelModel, LinkModel):
     name: str
     description: str | None
     author_name: str | None
-    # the uploading user - the frontend shows them when author_name is empty
     created_by: ComponentCreatorDto | None
     version: int
     domains: list[str]
     status: ComponentStatus
-    #: why the version is deprecated - set only while it is
     deprecation_note: str | None = None
+    first_published_at: datetime | None = None
     created_at: datetime
     is_favorite: bool
     # opt-in only (`?includeParameters=true`), hence None rather than []: browse/home/mine
@@ -178,6 +177,8 @@ class ComponentDetailBaseDto(CamelModel, LinkModel):
     status: ComponentStatus
     #: why the version is deprecated - set only while it is
     deprecation_note: str | None = None
+    #: when the version first went public - set, its content is frozen even as a draft again
+    first_published_at: datetime | None = None
     #: the newest published version above this one - while set, this version can't be
     #: published or undeprecated
     superseded_by: SupersedingVersionDto | None = None

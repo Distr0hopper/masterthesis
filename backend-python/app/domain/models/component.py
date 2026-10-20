@@ -107,6 +107,9 @@ class Component(SQLModel, table=True):
     deprecation_note: str | None = Field(
         default=None, sa_column=Column(String(MAX_DEPRECATION_NOTE_LENGTH), nullable=True)
     )
+    #: when the version first went public - set once, never reset (see lifecycle.was_published):
+    #: unpublishing hides a version, it never makes what others saw under its number editable
+    first_published_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
     created_at: datetime = Field(sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False))
     updated_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

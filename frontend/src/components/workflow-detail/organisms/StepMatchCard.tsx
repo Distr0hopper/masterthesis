@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, PenLine, Search } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { AlertTriangle, FilePlus2, PenLine, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Badge } from '@/components/ui/badge.tsx';
@@ -31,9 +32,26 @@ const STATUS_BADGE_VARIANT: Record<StepMatchStatus, 'secondary' | 'default' | 'd
 interface StepMatchCardProps {
   step: WorkflowStepDisplayModel;
   builderDraftId?: string | null;
+  /** the workflow version was published once - its steps never change again, even as a draft */
+  frozen?: boolean;
+  /** where a frozen version's fix goes - its next version, when the viewer may add one */
+  newVersionRoute?: string | null;
 }
 
-export function StepMatchCard({ step, builderDraftId = null }: StepMatchCardProps) {
+/** A step whose component was deleted - what is wrong, and the one place it gets fixed. */
+function LostComponentNotice({ children, action }: { children: ReactNode; action?: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+      <p className="flex items-start gap-2">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+        <span>{children}</span>
+      </p>
+      {action}
+    </div>
+  );
+}
+
+export function StepMatchCard({ step, builderDraftId = null, frozen = false, newVersionRoute = null }: StepMatchCardProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [showDefinition, setShowDefinition] = useState(false);
   // only fetched once the definition is actually opened - a workflow can have many steps,
@@ -117,20 +135,34 @@ export function StepMatchCard({ step, builderDraftId = null }: StepMatchCardProp
               )}
             </div>
           ) : builderDraftId ? (
-            <div className="flex flex-col gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              <p className="flex items-start gap-2">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-                <span>
-                  The component of this step was deleted. Replace it on the canvas in the Workflow Builder and save - the
-                  workflow can't be published until then.
-                </span>
-              </p>
-              <Button asChild variant="outline" size="sm" className="self-start bg-white">
-                <Link to={ROUTES.builderWorkflow(builderDraftId)}>
-                  <PenLine className="mr-1 h-4 w-4" /> Replace in Workflow Builder
-                </Link>
-              </Button>
-            </div>
+            <LostComponentNotice
+              action={
+                <Button asChild variant="outline" size="sm" className="self-start bg-white">
+                  <Link to={ROUTES.builderWorkflow(builderDraftId)}>
+                    <PenLine className="mr-1 h-4 w-4" /> Replace in Workflow Builder
+                  </Link>
+                </Button>
+              }
+            >
+              {frozen
+                ? 'The component of this step was deleted. This version was published, so it stays as it is - replace the component on the canvas and save to create the next version.'
+                : "The component of this step was deleted. Replace it on the canvas in the Workflow Builder and save - the workflow can't be published until then."}
+            </LostComponentNotice>
+          ) : frozen ? (
+            <LostComponentNotice
+              action={
+                newVersionRoute && (
+                  <Button asChild variant="outline" size="sm" className="self-start bg-white">
+                    <Link to={newVersionRoute}>
+                      <FilePlus2 className="mr-1 h-4 w-4" /> New version
+                    </Link>
+                  </Button>
+                )
+              }
+            >
+              The component of this step was deleted. This version was published, so its steps can&apos;t change
+              anymore - put the fix into a new version.
+            </LostComponentNotice>
           ) : canUpdate ? (
             <Button type="button" variant="outline" disabled={isPending} onClick={() => setPickerOpen(true)}>
               <Search className="mr-1 h-4 w-4" /> Browse Components

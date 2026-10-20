@@ -60,7 +60,7 @@ export default function WorkflowNewVersionPage() {
           <div className="flex flex-col items-start gap-3 rounded-md bg-slate-50 px-4 py-3 text-sm text-slate-700">
             <p>
               This workflow is edited in the Workflow Builder - saving its canvas creates the next version once v
-              {head.version} is published.
+              {head.version} has been published - even if it was taken back since.
             </p>
             <Button asChild variant="outline" size="sm">
               <Link to={ROUTES.builderWorkflow(builderDraftId)}>

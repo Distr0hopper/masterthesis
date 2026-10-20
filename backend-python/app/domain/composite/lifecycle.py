@@ -13,11 +13,17 @@ Three statuses, three questions - never answer one with another's check:
   taken for a draft and silently re-published along with its parent;
 - "visible to everyone" is `is_public` (published or deprecated);
 - "listed and offered for new use" is LISTED_STATUSES (published only).
+
+And one fact that outlives every status: whether a version was ever public (`was_published`).
+A version's content is frozen from its first publish on - unpublishing hides it again, but
+what others saw, ran or downloaded under its number never changes. Changes go into the next
+version instead.
 """
 
 import uuid
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 from app.domain.composite.tree import descendants
 from app.domain.models.component import Component, ComponentStatus
@@ -83,6 +89,12 @@ def is_draft(component: Component) -> bool:
     return component.status == ComponentStatus.DRAFT
 
 
+def was_published(component: Component) -> bool:
+    """Whether the version was ever public - then its content is frozen for good, whatever
+    its status is now (see mark_published)."""
+    return component.first_published_at is not None
+
+
 def is_deprecated(component: Component) -> bool:
     return component.status == ComponentStatus.DEPRECATED
 
@@ -109,6 +121,9 @@ def _transition(component: Component, target: ComponentStatus) -> None:
 def mark_published(components: Iterable[Component]) -> None:
     for component in components:
         _transition(component, ComponentStatus.PUBLISHED)
+        # the first publish only - publishing again after an unpublish keeps it
+        if component.first_published_at is None:
+            component.first_published_at = datetime.now(UTC)
         # the note belongs to the deprecated status - it never outlives it
         component.deprecation_note = None
 
@@ -257,9 +272,10 @@ def edited_in_builder(workflow: Component) -> bool:
 
 
 def steps_editable(workflow: Component) -> bool:
-    """A public workflow is what others see and nest - its steps only change once it is a
-    draft again, or as a new version. A builder workflow's steps change in the builder only."""
-    return is_draft(workflow) and not edited_in_builder(workflow)
+    """Only a workflow version never published changes its steps - once public, others may
+    have seen, nested or downloaded it, so a change goes into the next version even after it
+    is unpublished again. A builder workflow's steps change in the builder only."""
+    return is_draft(workflow) and not was_published(workflow) and not edited_in_builder(workflow)
 
 
 def _step_transition(step: WorkflowStep, target: StepMatchStatus) -> None:

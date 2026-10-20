@@ -87,11 +87,12 @@ def _move_workflows_into_components() -> None:
         """
         INSERT INTO components (
             id, kind, name, version, description, created_by_id, cwl_content,
-            source, status, created_at, updated_at
+            source, status, first_published_at, created_at, updated_at
         )
         SELECT
             id, 'workflow', name, 1, description, created_by_id, cwl_content, source,
             CASE status WHEN 'validated' THEN 'published' ELSE 'draft' END,
+            CASE status WHEN 'validated' THEN created_at END,
             created_at, updated_at
         FROM workflows_old
         """

@@ -52,12 +52,11 @@ export interface ComponentDisplayModelBase extends WithHateoasLinks {
   domainsDisplay: string[];
   status: ComponentStatus;
   statusDisplay: string;
-  /** why the version is deprecated - null unless it is */
   deprecationNote: string | null;
+  wasPublished: boolean;
   createdAt: Date;
   createdAtDisplay: string;
   isFavorite: boolean;
-  /** the component's ports - a workflow's are its own inputs/outputs */
   parameters: ParameterDisplayModel[];
   match: ComponentMatchDto | null;
 }
@@ -148,6 +147,7 @@ export function toDisplayModelBase(dto: ComponentListItemBaseDto): ComponentDisp
     status: dto.status,
     statusDisplay: STATUS_LABELS[dto.status],
     deprecationNote: dto.deprecationNote ?? null,
+    wasPublished: !!dto.firstPublishedAt,
     createdAt,
     createdAtDisplay: formatDate(createdAt),
     isFavorite: dto.isFavorite,

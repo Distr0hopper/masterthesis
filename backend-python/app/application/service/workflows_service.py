@@ -752,9 +752,9 @@ class WorkflowsService:
         """Keep a workflow lineage in sync with a builder draft.
 
         The first sync of a draft creates version 1; every later Save re-generates the
-        newest version's CWL and steps - in place while it is still a DRAFT, or as the
-        next version once it is PUBLISHED, since a published version is what other users
-        see (and nest) and must not change under them. The lineage is only reused when the
+        newest version's CWL and steps - in place while it was never published, or as the
+        next version once it was, since a published version is what other users saw (and
+        nested) and must not change under them - not even after it is unpublished again. The lineage is only reused when the
         caller owns it; anything else falls through to a fresh one.
 
         Runs inside the caller's unit of work and returns the workflow unreloaded - reload
@@ -795,7 +795,7 @@ class WorkflowsService:
             assert latest is not None
         await self._require_acyclic(latest, [b.component_id for b in bindings])
 
-        if lifecycle.is_draft(latest):
+        if lifecycle.is_draft(latest) and not lifecycle.was_published(latest):
             latest.cwl_content = pipeline_content
             # cascade="all, delete-orphan" on Workflow.steps / Component.parameters deletes
             # the replaced rows
@@ -918,8 +918,8 @@ class WorkflowsService:
     def _require_steps_editable(workflow: Component) -> None:
         if lifecycle.edited_in_builder(workflow):
             raise StepsEditedInBuilderError(workflow.id)
-        # a public workflow is what other users see and nest - rebinding a step under
-        # them would silently change it; the creator unpublishes first instead
+        # a version that was ever public is what others saw, nested or downloaded - rebinding
+        # a step would silently change it under them, so a change goes into the next version
         if not lifecycle.steps_editable(workflow):
             raise PublishedWorkflowStepsLockedError(workflow.id)
 

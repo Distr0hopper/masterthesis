@@ -20,7 +20,9 @@ from app.domain.composite.lifecycle import (
     mark_published,
     mark_undeprecated,
     retract_impact,
+    steps_editable,
     unbind_step,
+    was_published,
 )
 from app.domain.models.component import Component, ComponentKind, ComponentStatus
 from app.domain.models.tool import Tool
@@ -135,6 +137,32 @@ def test_the_note_lives_and_dies_with_the_deprecated_status() -> None:
     assert component.deprecation_note == "use v4"
     mark_undeprecated(component)
     assert (component.status, component.deprecation_note) == (PUBLISHED, None)
+
+
+def test_the_first_publish_is_remembered_for_good() -> None:
+    component = tool("t", DRAFT)
+    assert not was_published(component)
+
+    mark_published([component])
+    first = component.first_published_at
+    assert first is not None
+
+    # unpublishing hides the version - it doesn't make it never-published
+    mark_draft([component])
+    assert was_published(component)
+    # nor does publishing it again move the date
+    mark_published([component])
+    assert component.first_published_at == first
+
+
+def test_only_a_never_published_draft_changes_its_steps() -> None:
+    never = workflow("w", tool("a"))
+    taken_back = workflow("w", tool("a"))
+    mark_published([taken_back])
+    mark_draft([taken_back])
+
+    assert steps_editable(never)
+    assert not steps_editable(taken_back)
 
 
 def test_only_a_deprecated_version_can_be_undeprecated() -> None:

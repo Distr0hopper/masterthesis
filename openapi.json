@@ -2370,7 +2370,7 @@
             }
           },
           "409": {
-            "description": "The workflow is published, the step runs an inline definition, the component is deprecated, or it would make the workflow contain itself",
+            "description": "The workflow was ever published, the step runs an inline definition, the component is deprecated, or it would make the workflow contain itself",
             "content": {
               "application/json": {
                 "schema": {
@@ -2478,7 +2478,7 @@
             }
           },
           "409": {
-            "description": "The workflow is published",
+            "description": "The workflow was ever published - its steps only change in a new version",
             "content": {
               "application/json": {
                 "schema": {
@@ -5231,6 +5231,18 @@
             ],
             "title": "Deprecationnote"
           },
+          "firstPublishedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Firstpublishedat"
+          },
           "supersededBy": {
             "anyOf": [
               {
@@ -5402,6 +5414,18 @@
               }
             ],
             "title": "Deprecationnote"
+          },
+          "firstPublishedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Firstpublishedat"
           },
           "createdAt": {
             "type": "string",
@@ -5873,6 +5897,18 @@
             ],
             "title": "Deprecationnote"
           },
+          "firstPublishedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Firstpublishedat"
+          },
           "supersededBy": {
             "anyOf": [
               {
@@ -6160,6 +6196,18 @@
               }
             ],
             "title": "Deprecationnote"
+          },
+          "firstPublishedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Firstpublishedat"
           },
           "createdAt": {
             "type": "string",

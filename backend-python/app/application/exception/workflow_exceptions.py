@@ -107,11 +107,13 @@ class WorkflowCycleError(Exception):
 
 
 class PublishedWorkflowStepsLockedError(Exception):
-    """A published workflow is what other users see and nest - its steps only change after
-    it is unpublished, or as a new version."""
+    """A workflow version that was ever published is what others saw, nested or downloaded -
+    its steps only change in the next version, even once it is unpublished again."""
 
     def __init__(self, workflow_id: uuid.UUID) -> None:
-        super().__init__(f"Workflow {workflow_id} is published - unpublish it before changing its steps")
+        super().__init__(
+            f"Workflow {workflow_id} was published - its steps can't change anymore, create a new version instead"
+        )
 
 
 class StepsEditedInBuilderError(Exception):

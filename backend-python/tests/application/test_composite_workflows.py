@@ -51,6 +51,7 @@ from app.domain.models.parameter import ParameterDirection
 from app.domain.models.tool import Tool
 from app.domain.models.workflow import Workflow
 from app.domain.models.workflow_step import StepMatchStatus, WorkflowStep
+from app.domain.composite import lifecycle
 from app.domain.composite.lifecycle import IllegalStatusTransitionError
 from app.api.link.workflow_step import WorkflowStepLinkBuilder
 from app.domain.models.user import User
@@ -606,6 +607,21 @@ def test_resyncing_a_published_version_creates_the_next_version() -> None:
     assert [s.component_id for s in first.steps] == [a.id]
 
 
+def test_saving_the_canvas_of_an_unpublished_version_creates_the_next_version() -> None:
+    # v1 went public and was taken back - what others saw as v1 must stay v1
+    a, b = tool("a"), tool("b")
+    _, workflows_service, _ = services(a, b)
+    draft_id = uuid.uuid4()
+    first = sync(workflows_service, draft_id, a)
+    lifecycle.mark_published([first])
+    lifecycle.mark_draft([first])
+
+    second = sync(workflows_service, draft_id, a, b)
+
+    assert second.id != first.id and second.version == 2
+    assert [s.component_id for s in first.steps] == [a.id]
+
+
 def test_renaming_the_canvas_renames_the_whole_lineage() -> None:
     a = tool("a")
     _, workflows_service, repository = services(a)
@@ -688,6 +704,26 @@ def test_once_its_canvas_is_deleted_a_builder_workflow_is_edited_on_its_page() -
 
     assert parent.steps[0].component_id == replacement.id
     assert set(WorkflowStepLinkBuilder(OWNER_USER)._filter_links(parent.steps[0])) == {"update", "confirm"}
+
+
+def test_the_steps_of_an_unpublished_version_stay_as_they_were_published() -> None:
+    # unpublish, rebind, publish again would otherwise change v1 under everyone who saw it
+    published_tool = tool("a")
+    parent = workflow("outer", published_tool, step_status=StepMatchStatus.SUGGESTED)
+    other = tool("b")
+    lifecycle.mark_published([parent])
+    lifecycle.mark_draft([parent])
+    _, workflows_service, _ = services(parent, other)
+    step = parent.steps[0]
+
+    with pytest.raises(PublishedWorkflowStepsLockedError):
+        asyncio.run(workflows_service.update_step_component(step.id, other.id, OWNER))
+    with pytest.raises(PublishedWorkflowStepsLockedError):
+        asyncio.run(workflows_service.execute_step_command(step, WorkflowStepCommand(type=WorkflowStepCommandType.CONFIRM)))
+    assert (step.component_id, step.match_status) == (published_tool.id, StepMatchStatus.SUGGESTED)
+
+    links = WorkflowStepLinkBuilder(OWNER_USER)._filter_links(step)
+    assert "update" not in links and "confirm" not in links
 
 
 def test_a_new_step_cannot_run_a_deprecated_version() -> None:

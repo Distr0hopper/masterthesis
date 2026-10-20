@@ -197,8 +197,8 @@ export interface ComponentListItemBaseDto extends WithHateoasLinks {
   version: number;
   domains: ComponentDomain[];
   status: ComponentStatus;
-  /** why the version is deprecated - set only while it is */
   deprecationNote?: string | null;
+  firstPublishedAt?: string | null;
   createdAt: string;
   isFavorite: boolean;
   parameters: ParameterDto[] | null;
@@ -224,6 +224,8 @@ export interface ComponentDetailBaseDto extends WithHateoasLinks {
   status: ComponentStatus;
   /** why the version is deprecated - set only while it is */
   deprecationNote?: string | null;
+  /** when the version first went public - set, its content is frozen even as a draft again */
+  firstPublishedAt?: string | null;
   /** the newest published version above this one - while set, this one can't be published or undeprecated */
   supersededBy?: SupersedingVersionDto | null;
   parameters: ParameterDto[];

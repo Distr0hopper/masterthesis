@@ -5,9 +5,6 @@ import { latestPublished, newestFirst, useComponentVersions, type ComponentKind 
 import { componentDetailRoute } from '@/lib/routes';
 import { cn } from '@/lib/utils';
 
-/** Anchor of the card - the header's "N versions" link jumps here. */
-export const VERSIONS_ANCHOR = 'versions';
-
 interface ComponentVersionsProps {
   componentId: string;
   kind: ComponentKind;
@@ -24,7 +21,7 @@ export function ComponentVersions({ componentId, kind }: ComponentVersionsProps)
   const latest = latestPublished(versions);
 
   return (
-    <Card id={VERSIONS_ANCHOR} className="mt-6 scroll-mt-6">
+    <Card className="mt-6">
       <CardContent className="pt-6">
         <h3 className="font-semibold text-slate-900">Versions</h3>
 

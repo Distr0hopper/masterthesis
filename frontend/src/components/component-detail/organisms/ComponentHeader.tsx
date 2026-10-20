@@ -12,11 +12,9 @@ import {
   Pencil,
   PenLine,
   Trash2,
-  Workflow as WorkflowIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card.tsx';
-import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import {
   ComponentSource,
@@ -54,10 +52,11 @@ import { DeleteComponentDialog } from '@/components/component-mine/organisms/Del
 import { ConfirmPublishDialog } from './ConfirmPublishDialog';
 import { DomainBadges } from '@/components/common/DomainBadges';
 import { StatusBadge } from '@/components/common/StatusBadge';
+import { VersionSwitcher } from '@/components/common/VersionSwitcher';
+import { KIND_ICONS } from '@/lib/componentKinds';
 import { EditComponentDialog } from './EditComponentDialog';
 import { DeprecateComponentDialog } from './DeprecateComponentDialog';
 import { UnpublishComponentDialog } from './UnpublishComponentDialog';
-import { VERSIONS_ANCHOR } from './ComponentVersions';
 
 interface ComponentHeaderProps {
   model: ComponentDetailDisplayModel;
@@ -134,6 +133,7 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
   const builderDraftId = editableBuilderDraftId(model);
   const head = newestVersion(versions);
   const isWorkflow = model.kind === 'workflow';
+  const KindIcon = KIND_ICONS[model.kind];
   const canCreateVersion = canAddVersion(model._links) || canRepackage(model._links);
   const newVersionRoute = isWorkflow ? ROUTES.workflowNewVersion(model.id) : ROUTES.toolNewVersion(model.id);
   const canDelete = hasDeleteLink(model._links);
@@ -259,149 +259,167 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
 
       <Card className="mt-4">
         <CardContent className="flex flex-col gap-3 pt-6">
-          <div className="flex items-center justify-between">
-            <div className="flex flex-wrap items-center gap-2">
-              <DomainBadges domains={model.domains} />
-
-              {isWorkflow && (
-                <Badge variant="secondary" className="w-fit gap-1">
-                  {model.source === ComponentSource.WORKFLOW_BUILDER && <WorkflowIcon className="h-3 w-3" aria-hidden />}
-                  {model.sourceDisplay}
-                </Badge>
-              )}
-
-              <Badge variant="outline" className="w-fit" title="Version of this lineage">
-                v{model.version}
-              </Badge>
-              <StatusBadge status={model.status} label={model.statusDisplay} hint={model.statusHint} />
-              {versionCount > 1 && (
-                <a href={`#${VERSIONS_ANCHOR}`} className="text-xs text-slate-500 hover:text-jmu-blue-800 hover:underline">
-                  {versionCount} versions
-                </a>
-              )}
-
-              {canFavorite(model._links) && <ComponentFavoriteButton links={model._links!} isFavorite={model.isFavorite} />}
+          {/* what it is, which version, and where that version stands - read top to bottom */}
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex min-w-0 flex-col gap-1">
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">
+                <KindIcon className="h-3.5 w-3.5" aria-hidden />
+                {model.kindDisplay}
+              </span>
+              <h1 className="font-mono text-2xl font-bold text-slate-900">{model.name}</h1>
+              {/* a lineage's versions can stand in different states - the state belongs to this one */}
+              <div className="flex flex-wrap items-center gap-2">
+                {versionCount > 1 ? (
+                  <VersionSwitcher
+                    componentId={model.id}
+                    kind={model.kind}
+                    version={model.version}
+                    versionCount={versionCount}
+                    backTo={backTo}
+                    className="-ml-1"
+                  />
+                ) : (
+                  <span className="text-sm text-slate-500">v{model.version}</span>
+                )}
+                <StatusBadge status={model.status} label={model.statusDisplay} hint={model.statusHint} />
+              </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {model.kind === 'tool' ? (
-                // the run bundle: the .cwl, an inputs.yaml template and its imported files
-                <Button asChild variant="outline" size="sm">
-                  <a href={toolsService.getBundleUrl(model.id)}>
-                    <Download className="mr-1 h-4 w-4" /> Download
-                  </a>
-                </Button>
-              ) : (
-                // the whole tree: the pipeline, every step document below it - nested
-                // workflows included - and everything they import
-                <Button variant="outline" size="sm" onClick={handleDownload} disabled={isDownloading}>
-                  <Download className="mr-1 h-4 w-4" /> Download
-                </Button>
-              )}
-
-              {canCreateVersion && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigate(newVersionRoute)}
-                  title={newVersionHint(model)}
-                >
-                  <FilePlus2 className="mr-1 h-4 w-4" /> New version
-                </Button>
-              )}
-
-              {builderDraftId && (
-                <Button asChild variant="outline" size="sm" title={builderSaveHint(head)}>
-                  <Link to={ROUTES.builderWorkflow(builderDraftId)}>
-                    <PenLine className="mr-1 h-4 w-4" /> Edit in Workflow Builder
-                  </Link>
-                </Button>
-              )}
-
-              {canEdit && (
-                <Button variant="outline" size="sm" onClick={() => setEditDialogOpen(true)}>
-                  <Pencil className="mr-1 h-4 w-4" /> Edit
-                </Button>
-              )}
-
-              {canPublish && (
-                <Button
-                  size="sm"
-                  className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90"
-                  // always confirmed, like unpublish, deprecate and delete - it makes the version visible to everyone
-                  onClick={() => setPublishDialogOpen(true)}
-                  disabled={isPublishing || !allStepsSettled}
-                  title={publishBlockedHint(allStepsSettled, !!builderDraftId)}
-                >
-                  <Globe className="mr-1 h-4 w-4" /> Publish
-                </Button>
-              )}
-
-              {canUnpublish && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setUnpublishDialogOpen(true)}
-                  title={`Hide this ${model.kindDisplay.toLowerCase()} from the public list and the Workflow Builder again`}
-                >
-                  <GlobeLock className="mr-1 h-4 w-4" /> Unpublish
-                </Button>
-              )}
-
-              {canDeprecate && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setDeprecateDialogOpen(true)}
-                  title="Stop offering this version for new workflows - existing ones keep working"
-                >
-                  <Archive className="mr-1 h-4 w-4" /> Deprecate
-                </Button>
-              )}
-
-              {canUndeprecate && (
-                <>
-                  <Button variant="outline" size="sm" onClick={() => setDeprecateDialogOpen(true)}>
-                    <Pencil className="mr-1 h-4 w-4" /> Edit note
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleUndeprecate} disabled={isUndeprecating}>
-                    <ArchiveRestore className="mr-1 h-4 w-4" /> Undeprecate
-                  </Button>
-                </>
-              )}
-
-              {canDelete && (
-                <Button variant="destructive" size="sm" onClick={() => setDeleteDialogOpen(true)}>
-                  <Trash2 className="mr-1 h-4 w-4" /> Delete
-                </Button>
-              )}
-            </div>
+            {canFavorite(model._links) && <ComponentFavoriteButton links={model._links!} isFavorite={model.isFavorite} />}
           </div>
-
-          <h1 className="font-mono text-2xl font-bold text-slate-900">{model.name}</h1>
 
           {model.description && <p className="text-slate-600">{model.description}</p>}
 
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t pt-3 text-sm text-slate-500">
-            <span>{model.authorDisplay}</span>
-            <span>Created {model.createdAtDisplay}</span>
-            <span>Updated {model.updatedAtDisplay}</span>
-            {model.repoUrl && (
-              <a
-                href={model.repoUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 text-jmu-blue-800 hover:underline"
-              >
-                <ExternalLink className="h-4 w-4" /> GitHub
-              </a>
+          <div className="flex flex-wrap items-center gap-2">
+            {model.kind === 'tool' ? (
+              // the run bundle: the .cwl, an inputs.yaml template and its imported files
+              <Button asChild variant="outline" size="sm">
+                <a href={toolsService.getBundleUrl(model.id)}>
+                  <Download className="mr-1 h-4 w-4" /> Download
+                </a>
+              </Button>
+            ) : (
+              // the whole tree: the pipeline, every step document below it - nested
+              // workflows included - and everything they import
+              <Button variant="outline" size="sm" onClick={handleDownload} disabled={isDownloading}>
+                <Download className="mr-1 h-4 w-4" /> Download
+              </Button>
             )}
-            {model.repoCommitShaShort && (
-              <Badge variant="secondary" className="font-mono">
-                {model.repoCommitShaShort}
-              </Badge>
+
+            {canCreateVersion && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(newVersionRoute)}
+                title={newVersionHint(model)}
+              >
+                <FilePlus2 className="mr-1 h-4 w-4" /> New version
+              </Button>
+            )}
+
+            {builderDraftId && (
+              <Button asChild variant="outline" size="sm" title={builderSaveHint(head)}>
+                <Link to={ROUTES.builderWorkflow(builderDraftId)}>
+                  <PenLine className="mr-1 h-4 w-4" /> Edit in Workflow Builder
+                </Link>
+              </Button>
+            )}
+
+            {canEdit && (
+              <Button variant="outline" size="sm" onClick={() => setEditDialogOpen(true)}>
+                <Pencil className="mr-1 h-4 w-4" /> Edit
+              </Button>
+            )}
+
+            {canPublish && (
+              <Button
+                size="sm"
+                className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90"
+                // always confirmed, like unpublish, deprecate and delete - it makes the version visible to everyone
+                onClick={() => setPublishDialogOpen(true)}
+                disabled={isPublishing || !allStepsSettled}
+                title={publishBlockedHint(allStepsSettled, !!builderDraftId)}
+              >
+                <Globe className="mr-1 h-4 w-4" /> Publish
+              </Button>
+            )}
+
+            {canUnpublish && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setUnpublishDialogOpen(true)}
+                title={`Hide this ${model.kindDisplay.toLowerCase()} from the public list and the Workflow Builder again`}
+              >
+                <GlobeLock className="mr-1 h-4 w-4" /> Unpublish
+              </Button>
+            )}
+
+            {canDeprecate && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setDeprecateDialogOpen(true)}
+                title="Stop offering this version for new workflows - existing ones keep working"
+              >
+                <Archive className="mr-1 h-4 w-4" /> Deprecate
+              </Button>
+            )}
+
+            {canUndeprecate && (
+              <>
+                <Button variant="outline" size="sm" onClick={() => setDeprecateDialogOpen(true)}>
+                  <Pencil className="mr-1 h-4 w-4" /> Edit note
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleUndeprecate} disabled={isUndeprecating}>
+                  <ArchiveRestore className="mr-1 h-4 w-4" /> Undeprecate
+                </Button>
+              </>
+            )}
+
+            {canDelete && (
+              <Button variant="destructive" size="sm" onClick={() => setDeleteDialogOpen(true)}>
+                <Trash2 className="mr-1 h-4 w-4" /> Delete
+              </Button>
             )}
           </div>
+
+          {/* the facts, each named - a badge on its own doesn't say what it stands for */}
+          <dl className="grid grid-cols-[max-content_1fr] items-center gap-x-6 gap-y-2 border-t pt-3 text-sm">
+            <dt className="text-slate-500">Domains</dt>
+            <dd className="flex flex-wrap gap-1.5">
+              {model.domains.length > 0 ? <DomainBadges domains={model.domains} /> : <span className="text-slate-400">None</span>}
+            </dd>
+
+            <dt className="text-slate-500">Source</dt>
+            <dd className="flex flex-wrap items-center gap-x-2 gap-y-1 text-slate-700">
+              {model.sourceDisplay}
+              {model.repoUrl && (
+                <a
+                  href={model.repoUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-jmu-blue-800 hover:underline"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" aria-hidden /> GitHub
+                </a>
+              )}
+              {model.repoCommitShaShort && (
+                <span className="font-mono text-xs text-slate-500" title="Commit this version was packaged from">
+                  {model.repoCommitShaShort}
+                </span>
+              )}
+            </dd>
+
+            <dt className="text-slate-500">Author</dt>
+            <dd className="text-slate-700">{model.authorDisplay}</dd>
+
+            <dt className="text-slate-500">Created</dt>
+            <dd className="text-slate-700">
+              {model.createdAtDisplay}
+              <span className="text-slate-500"> · updated {model.updatedAtDisplay}</span>
+            </dd>
+          </dl>
         </CardContent>
       </Card>
 

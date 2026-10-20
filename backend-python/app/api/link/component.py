@@ -40,6 +40,8 @@ class ComponentLinkBuilder(BaseLinkBuilder[Component, ComponentPermissionValidat
             for spec in TOOL_COMMANDS.values():
                 links[spec.rel] = Link(href=tool_commands, method=HttpMethod.POST)
             links["addVersion"] = Link(href=Endpoints.tool_versions_by_id(entity.id), method=HttpMethod.POST)
+        else:
+            links["addVersion"] = Link(href=Endpoints.workflow_versions_by_id(entity.id), method=HttpMethod.POST)
         return links
 
     def _is_link_allowed(self, rel: str, entity: Component) -> bool:
@@ -59,7 +61,6 @@ class ComponentLinkBuilder(BaseLinkBuilder[Component, ComponentPermissionValidat
                 # read before a publish - offered wherever the publish itself is
                 return self._validator.can_execute(entity, ComponentCommandType.PUBLISH)
             case "addVersion":
-                # a packaged tool's versions come from its repo - see the repackage rel
-                return entity.is_tool and not entity.is_packaged and self._validator.can_update(entity)
+                return self._validator.can_add_uploaded_version(entity)
             case _:
                 return False

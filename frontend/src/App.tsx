@@ -9,6 +9,7 @@ import ToolUploadPage from '@/pages/ToolUploadPage';
 import ToolNewVersionPage from '@/pages/ToolNewVersionPage';
 import MyComponentsPage from '@/pages/MyComponentsPage';
 import WorkflowUploadPage from '@/pages/WorkflowUploadPage';
+import WorkflowNewVersionPage from '@/pages/WorkflowNewVersionPage';
 import LoginPage from '@/pages/LoginPage';
 import HomePage from "@/pages/HomePage.tsx";
 import AboutPage from "@/pages/AboutPage.tsx";
@@ -45,6 +46,7 @@ export default function App() {
             <Route path={ROUTES.myTools} element={<ProtectedRoute> <MyComponentsPage key="tool" kind="tool" /> </ProtectedRoute>} />
             <Route path={ROUTES.workflowUpload} element={<ProtectedRoute> <WorkflowUploadPage /> </ProtectedRoute>} />
             <Route path={ROUTES.workflowDetail(':id')} element={<ComponentDetailPage key="workflow" kind="workflow" />} />
+            <Route path={ROUTES.workflowNewVersion(':id')} element={<ProtectedRoute> <WorkflowNewVersionPage /> </ProtectedRoute>} />
             <Route path={ROUTES.myWorkflows} element={<ProtectedRoute> <MyComponentsPage key="workflow" kind="workflow" /> </ProtectedRoute>} />
 
             <Route path={ROUTES.login} element={<LoginPage />} />

@@ -7,7 +7,12 @@ from typing import Annotated
 from fastapi import Depends
 
 from app.application.commands.commands import ManualFormatLabel, WorkflowStepCommand, WorkflowStepCommandType
-from app.application.exception.component_exceptions import ComponentDeprecatedError, ComponentNotFoundError
+from app.application.exception.component_exceptions import (
+    ComponentDeprecatedError,
+    ComponentKindMismatchError,
+    ComponentNotFoundError,
+    PackagedToolCannotTakeUploadError,
+)
 from app.application.exception.workflow_exceptions import (
     DuplicateExtractedComponentNameError,
     ExtractedComponentNameCollisionError,
@@ -44,6 +49,7 @@ from app.infrastructure.cwl.cwl_parser import (
     extract_dockerfile_content,
     extract_parameters,
     inject_cwl_version,
+    same_cwl_document,
 )
 from app.infrastructure.cwl.workflow_generator import cwl_filename_for
 from app.infrastructure.cwl.workflow_parser import (
@@ -101,15 +107,33 @@ class ComponentPreview:
     parameters: list[Parameter]
     name_conflict: ComponentMatch | None
     suggested_match: ComponentMatch | None
+    #: uploading a new version only - what the same step runs in the newest version
+    previous: "PreviousStepComponent | None" = None
+
+
+@dataclass(frozen=True)
+class PreviousStepComponent:
+    """What a step of the uploaded new version ran in the workflow's newest version - so its
+    configuration can start from there instead of from scratch."""
+
+    component: Component
+    #: the uploaded step's CWL is not the one that component holds
+    cwl_changed: bool
+    #: the step may become that tool's next version: the actor's own tool, not packaged
+    #: from GitHub (those get versions from their repo)
+    can_add_version: bool
 
 
 @dataclass
 class ComponentConfig:
-    """The user's decision for one step: reuse an existing Component, or create a new one
-    from the previewed CWL with this name/domain/description."""
+    """The user's decision for one step: reuse an existing Component, add the previewed CWL
+    as the next version of one of the actor's tools, or create a new one from it with this
+    name/domain/description."""
 
     step_id: str
     reuse_component_id: uuid.UUID | None = None
+    #: the tool the step's CWL becomes the next version of - name and domains are its lineage's
+    new_version_of_id: uuid.UUID | None = None
     name: str | None = None
     domains: list[str] | None = None
     description: str | None = None
@@ -118,6 +142,10 @@ class ComponentConfig:
     @property
     def is_reuse(self) -> bool:
         return self.reuse_component_id is not None
+
+    @property
+    def is_new_version(self) -> bool:
+        return self.new_version_of_id is not None
 
 
 @dataclass
@@ -199,7 +227,13 @@ class WorkflowsService:
     ) -> "WorkflowsService":
         return WorkflowsService(uow, components_service, tools_service)
 
-    async def parse_workflow_upload(self, content: bytes, filename: str | None = None) -> WorkflowUploadPreview:
+    async def parse_workflow_upload(
+        self,
+        content: bytes,
+        filename: str | None = None,
+        parent: Component | None = None,
+        actor_id: uuid.UUID | None = None,
+    ) -> WorkflowUploadPreview:
         """Analyse an uploaded workflow file without persisting anything - auto-detects
         whether `content` is a .zip archive or a bare .cwl file, then classifies it as
         external-only / self-contained / mixed. For a zip, also cross-references each
@@ -209,6 +243,9 @@ class WorkflowsService:
         stripped) as a fallback workflow name when the document has no `label:` - for a
         zip this is overridden by the name of the file that actually contains
         `class: Workflow`.
+
+        With `parent` - the upload is to become its next version - every step also reports
+        what the same step runs in the lineage's newest version (see PreviousStepComponent).
         """
         upload = self._load_upload_content(content, filename)
 
@@ -237,7 +274,9 @@ class WorkflowsService:
             or (strip_cwl_extension(upload.pipeline_filename) if upload.pipeline_filename else None),
             description=extract_description(upload.cwl_content),
             step_count=overview.step_count,
-            component_previews=await self._build_component_previews(upload, overview.cwl_version),
+            component_previews=await self._build_component_previews(
+                upload, overview.cwl_version, await self._previous_step_components(parent), actor_id
+            ),
             external_refs=overview.external_refs,
             inline_only_steps=overview.inline_only_steps,
             missing_external_refs=missing_external_refs,
@@ -245,8 +284,21 @@ class WorkflowsService:
             missing_imports=missing_imports,
         )
 
+    async def _previous_step_components(self, parent: Component | None) -> dict[str, Component]:
+        """{step_id: component} of the newest version of `parent`'s lineage - {} without one."""
+        if parent is None:
+            return {}
+        head = (await self.uow.components.find_versions_by_name(parent.name))[-1]
+        # one composite level loaded - the steps and the components they run
+        head = await self.uow.components.find_by_id(head.id) or head
+        return {step.step_id: step.component for step in head.steps if step.component is not None}
+
     async def _build_component_previews(
-        self, upload: WorkflowUploadContent, cwl_version: str | None
+        self,
+        upload: WorkflowUploadContent,
+        cwl_version: str | None,
+        previous_by_step_id: dict[str, Component] | None = None,
+        actor_id: uuid.UUID | None = None,
     ) -> list[ComponentPreview]:
         """Every step of the upload rendered as the Component it would become.
 
@@ -312,9 +364,27 @@ class WorkflowsService:
                     parameters=parameters,
                     name_conflict=self._to_component_match(existing, None) if existing is not None else None,
                     suggested_match=suggested_match,
+                    previous=self._previous_step_component(
+                        (previous_by_step_id or {}).get(step_id), cwl_content, actor_id
+                    ),
                 )
             )
         return previews
+
+    @staticmethod
+    def _previous_step_component(
+        component: Component | None, cwl_content: str, actor_id: uuid.UUID | None
+    ) -> PreviousStepComponent | None:
+        if component is None:
+            return None
+        return PreviousStepComponent(
+            component=component,
+            cwl_changed=not same_cwl_document(cwl_content, component.cwl_content),
+            can_add_version=component.is_tool
+            and not component.is_packaged
+            and actor_id is not None
+            and component.created_by_id == actor_id,
+        )
 
     @staticmethod
     def _to_component_match(component: Component, score: float | None) -> ComponentMatch:
@@ -378,8 +448,26 @@ class WorkflowsService:
         before any CWL is processed.
         """
         seen: set[str] = set()
+        versioned: set[str] = set()
         for step_id, _definition in step_definitions:
             config = configs[step_id]
+
+            if config.is_new_version:
+                assert config.new_version_of_id is not None
+                target = await self.uow.components.find_by_id(config.new_version_of_id)
+                if target is None:
+                    raise ComponentNotFoundError(config.new_version_of_id)
+                if not target.is_tool or target.created_by_id != actor_id:
+                    raise InvalidComponentConfigError(step_id, "only your own tools can get a new version here")
+                if target.is_packaged:
+                    raise PackagedToolCannotTakeUploadError(target.name)
+                # one upload, one next version per lineage - a second would fight over the number
+                if target.name in versioned:
+                    raise InvalidComponentConfigError(
+                        step_id, f"'{target.name}' already gets its next version from another step"
+                    )
+                versioned.add(target.name)
+                continue
 
             if config.is_reuse:
                 if config.reuse_component_id is not None:
@@ -399,7 +487,7 @@ class WorkflowsService:
 
         for step_id, _definition in step_definitions:
             config = configs[step_id]
-            if config.is_reuse or config.name is None:
+            if config.is_reuse or config.is_new_version or config.name is None:
                 continue
             # names are one key across both kinds, so a workflow's name collides too
             if await self.uow.components.find_latest_by_name(config.name) is not None:
@@ -416,17 +504,65 @@ class WorkflowsService:
         created_by_id: uuid.UUID,
     ) -> Component:
         """Persists any of the 3 manual-upload shapes (external-only zip, self-contained
-        bare .cwl, or a zip mixing both) as a real Workflow.
+        bare .cwl, or a zip mixing both) as a real Workflow - see _persist_upload."""
+        await self.components_service.require_name_available(name)
+        return await self._persist_upload(
+            content, filename, name, description, domains, component_configs, created_by_id
+        )
+
+    async def add_version_from_upload(
+        self,
+        parent: Component,
+        content: bytes,
+        filename: str | None,
+        description: str | None,
+        component_configs: dict[str, ComponentConfig],
+        actor_id: uuid.UUID,
+    ) -> Component:
+        """An uploaded workflow as the next version of `parent`'s lineage - its name and
+        domains, the next number. Starts as a draft, like every new version; publishing it
+        supersedes the older ones.
+
+        Not for a workflow still edited in the builder: its versions come from saving the
+        canvas, and an upload would diverge from it."""
+        if not parent.is_workflow:
+            raise ComponentKindMismatchError(parent.name, ComponentKind(parent.kind).value)
+        head = (await self.uow.components.find_versions_by_name(parent.name))[-1]
+        if lifecycle.edited_in_builder(head):
+            raise StepsEditedInBuilderError(head.id)
+        return await self._persist_upload(
+            content,
+            filename,
+            head.name,
+            description,
+            [d.domain for d in head.domains],
+            component_configs,
+            actor_id,
+            version=head.version + 1,
+        )
+
+    async def _persist_upload(
+        self,
+        content: bytes,
+        filename: str | None,
+        name: str,
+        description: str | None,
+        domains: list[str],
+        component_configs: dict[str, ComponentConfig],
+        created_by_id: uuid.UUID,
+        version: int = 1,
+    ) -> Component:
+        """An upload as workflow `name` v`version`.
 
         Every step must carry a ComponentConfig (keyed by step_id, as previewed by
-        parse_workflow_upload): either reuse_component_id, binding the step to an existing
-        catalogue Component, or a name/domain/description to create a new one from that
-        step's CWL. Nothing is auto-created behind the user's back and nothing is left to
-        post-save fuzzy triage - an unconfigured step is an error, not a guess.
+        parse_workflow_upload): reuse_component_id, binding the step to an existing
+        catalogue Component; new_version_of_id, adding the step's CWL as the next version of
+        one of the actor's tools; or a name/domain/description to create a new one from it.
+        Nothing is auto-created behind the user's back and nothing is left to post-save
+        fuzzy triage - an unconfigured step is an error, not a guess.
 
         One transaction: the new tools and the workflow are created together or not at all.
         """
-        await self.components_service.require_name_available(name)
         upload = self._load_upload_content(content, filename)
 
         try:
@@ -479,24 +615,32 @@ class WorkflowsService:
             for step_id, config in component_configs.items()
             if config.reuse_component_id is not None
         }
+        versioned_tools = {
+            step_id: await self.uow.components.find_by_id(config.new_version_of_id)
+            for step_id, config in component_configs.items()
+            if config.new_version_of_id is not None
+        }
+
+        def lineage_name(step_id: str) -> str | None:
+            """The name the step's component goes by - an existing lineage's, or the new one's."""
+            config = component_configs[step_id]
+            if config.is_reuse:
+                return reused_components[step_id].name  # type: ignore[union-attr]
+            if config.is_new_version:
+                return versioned_tools[step_id].name  # type: ignore[union-attr]
+            return config.name
 
         # every inline step gets its run: rewritten to a filename, including one bound to
         # an existing component (named after that component) - otherwise the stored
         # pipeline would keep an inline tool body that no longer describes the step. An
         # archive step is left alone: it already points at a real file that still carries
         # that name inside the zip, so renaming its Component must not rename the reference.
-        run_references = {
-            step_id: cwl_filename_for(
-                reused_components[step_id].name
-                if component_configs[step_id].is_reuse
-                else component_configs[step_id].name
-            )
-            for step_id in extracted_by_step_id
-        }
+        run_references = {step_id: cwl_filename_for(lineage_name(step_id)) for step_id in extracted_by_step_id}
         pipeline_content = externalize_inline_steps(upload.cwl_content, run_references)
 
         steps: list[WorkflowStep] = []
-        pending_components: list[tuple[WorkflowStep, Component, list[ManualFormatLabel]]] = []
+        #: (step, component, its labels, whether it is an existing tool's next version)
+        pending_components: list[tuple[WorkflowStep, Component, list[ManualFormatLabel], bool]] = []
         for order, (step_id, definition) in enumerate(step_definitions):
             run_value = definition["run"]
             is_inline = not isinstance(run_value, str)
@@ -545,10 +689,16 @@ class WorkflowsService:
                 cwl_content = upload.files[run_value]
                 fallback_description = extract_description(cwl_content)
 
+            target = versioned_tools.get(step_id)
             component = Component(
                 kind=ComponentKind.TOOL,
-                name=config.name,
-                domains=[ComponentDomain(domain=d) for d in (config.domains or [])],
+                # a next version keeps its lineage's name, domains and credits
+                name=target.name if target is not None else config.name,
+                domains=[
+                    ComponentDomain(domain=d)
+                    for d in ([d.domain for d in target.domains] if target is not None else (config.domains or []))
+                ],
+                author_name=target.author_name if target is not None else None,
                 cwl_content=cwl_content,
                 source=ComponentSource.MANUAL_UPLOAD,
                 created_by_id=created_by_id,
@@ -564,12 +714,16 @@ class WorkflowsService:
                 match_status=StepMatchStatus.CONFIRMED,
                 match_score=None,
             )
-            pending_components.append((step, component, config.format_labels))
+            pending_components.append((step, component, config.format_labels, target is not None))
             steps.append(step)
 
         async with self.uow:
-            for step, component, format_labels in pending_components:
-                created = await self.tools_service.create_tool(component, format_labels=format_labels)
+            for step, component, format_labels, is_next_version in pending_components:
+                created = (
+                    await self.tools_service.add_uploaded_version_in_transaction(component, format_labels)
+                    if is_next_version
+                    else await self.tools_service.create_tool(component, format_labels=format_labels)
+                )
                 step.component_id = created.id
                 step.component = created
 
@@ -582,6 +736,7 @@ class WorkflowsService:
                 steps=steps,
                 source=ComponentSource.MANUAL_UPLOAD,
                 files=self._files_for(pipeline_content, auxiliary),
+                version=version,
             )
             await self.uow.commit()
         return await self.components_service.reload(workflow)

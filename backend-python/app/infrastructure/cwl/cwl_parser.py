@@ -26,6 +26,15 @@ def inject_cwl_version(cwl_content: str, cwl_version: str | None) -> str:
     return yaml.dump(doc, default_flow_style=False, sort_keys=False, width=float("inf"), allow_unicode=True)
 
 
+def same_cwl_document(a: str, b: str) -> bool:
+    """Whether two CWL texts describe the same document - compared as parsed YAML, so
+    re-indenting, reordering keys or reflowing a long doc: line is no change."""
+    try:
+        return load_cwl(a) == load_cwl(b)
+    except YAMLError:
+        return a == b
+
+
 def extract_description(cwl_content: str) -> str | None:
     try:
         doc: Any = load_cwl(cwl_content)

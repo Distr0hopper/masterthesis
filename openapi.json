@@ -2184,6 +2184,115 @@
         ]
       }
     },
+    "/workflows/{workflow_id}/versions": {
+      "post": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "Add Version",
+        "description": "An uploaded workflow as the next version of this one - like POST /workflows, with the\nlineage's name and domains. Its steps can also become the next version of the caller's\ntools (componentConfigs[].newVersionOfId).",
+        "operationId": "add_version_workflows__workflow_id__versions_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workflow Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/AddWorkflowVersionRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowDetailDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid workflow file/archive, file too large, or a step configured wrongly",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not the creator of this workflow",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workflow not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The workflow is edited in the Workflow Builder, a configured tool's name already exists, or a step versions a tool packaged from GitHub",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/workflows/steps/{step_id}": {
       "patch": {
         "tags": [
@@ -3028,6 +3137,45 @@
         ],
         "title": "AddVersionRequestDto"
       },
+      "AddWorkflowVersionRequestDto": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "componentConfigs": {
+            "type": "string",
+            "contentMediaType": "application/json",
+            "contentSchema": {
+              "items": {
+                "$ref": "#/components/schemas/ComponentConfigDto"
+              },
+              "type": "array"
+            },
+            "title": "Componentconfigs",
+            "default": "[]"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "AddWorkflowVersionRequestDto",
+        "description": "An upload as the next version of a workflow - name and domains are its lineage's."
+      },
       "AuthResponseDto": {
         "properties": {
           "accessToken": {
@@ -3238,6 +3386,18 @@
             ],
             "title": "Reusecomponentid"
           },
+          "newVersionOfId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Newversionofid"
+          },
           "name": {
             "anyOf": [
               {
@@ -3296,7 +3456,7 @@
           "stepId"
         ],
         "title": "ComponentConfigDto",
-        "description": "The user's decision for one previewed step, keyed by WorkflowStepPreviewDto.step_id.\n\nExactly one branch: reuse_component_id binds the step to an existing catalogue\ncomponent, or name+domain create a new tool from that step's CWL."
+        "description": "The user's decision for one previewed step, keyed by WorkflowStepPreviewDto.step_id.\n\nExactly one branch: reuse_component_id binds the step to an existing catalogue\ncomponent, new_version_of_id adds the step's CWL as the next version of one of the\ncaller's tools, or name+domain create a new tool from it."
       },
       "ComponentCreatorDto": {
         "properties": {
@@ -4415,6 +4575,18 @@
             "type": "string",
             "contentMediaType": "application/octet-stream",
             "title": "File"
+          },
+          "parentId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parentid"
           }
         },
         "type": "object",
@@ -4621,6 +4793,49 @@
         ],
         "title": "PreviewParameterDto",
         "description": "A previewed port. Deliberately NOT ParameterDto: that carries a real uuid primary\nkey, and these are never persisted - the id here is a synthetic, stable-within-one-\nresponse string that only exists to give the UI a list key."
+      },
+      "PreviousStepComponentDto": {
+        "properties": {
+          "componentId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Componentid"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ComponentKind"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ComponentStatus"
+          },
+          "cwlChanged": {
+            "type": "boolean",
+            "title": "Cwlchanged"
+          },
+          "canAddVersion": {
+            "type": "boolean",
+            "title": "Canaddversion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "componentId",
+          "kind",
+          "name",
+          "version",
+          "status",
+          "cwlChanged",
+          "canAddVersion"
+        ],
+        "title": "PreviousStepComponentDto",
+        "description": "What a step of an uploaded new version ran in the workflow's newest version."
       },
       "PublishImpactDto": {
         "properties": {
@@ -6217,6 +6432,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/StepComponentMatchDto"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "previous": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PreviousStepComponentDto"
               },
               {
                 "type": "null"

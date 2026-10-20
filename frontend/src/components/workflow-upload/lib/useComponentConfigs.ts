@@ -1,15 +1,27 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { ComponentConfigDto, WorkflowStepPreviewDto } from '@/api/workflows';
-import { toFormatLabelDtos, type ComponentKind, type ExistingComponentDto, type FormatLabelDraft } from '@/api/components';
+import {
+  ComponentStatus,
+  toFormatLabelDtos,
+  type ComponentKind,
+  type ExistingComponentDto,
+  type FormatLabelDraft,
+} from '@/api/components';
 
-export type ConfigMode = 'create' | 'reuse';
+/**
+ * - create: a new tool from the step's CWL
+ * - reuse: bind an existing component, nothing created
+ * - version: the step's CWL as the next version of the tool it ran before (uploading a new
+ *   workflow version only - the target is the step's `previous`)
+ */
+export type ConfigMode = 'create' | 'reuse' | 'version';
 
 export interface ComponentConfigState {
   mode: ConfigMode;
   name: string;
   domains: string[];
   description: string;
-  /** 'create' mode - hand-written labels for File ports without an ontology format */
+  /** 'create' and 'version' modes - hand-written labels for File ports without an ontology format */
   formatLabels: FormatLabelDraft;
   /** set in 'reuse' mode - the catalogue component this step binds to */
   reuseComponentId: string | null;
@@ -21,7 +33,32 @@ export interface ComponentConfigState {
 /** The component a step's name currently collides with, as last reported by a card. */
 export type NameConflicts = Record<string, ExistingComponentDto | null>;
 
+/**
+ * Uploading a new workflow version: start each step from what it ran before - its tool's
+ * next version when the CWL changed and that tool is yours to version, the same component
+ * when nothing changed. Null when the previous version gives no sensible default: the step
+ * is new, changed but someone else's tool, or ran a now deprecated version.
+ */
+function fromPrevious(preview: WorkflowStepPreviewDto): Partial<ComponentConfigState> | null {
+  const previous = preview.previous;
+  if (!previous) return null;
+  if (previous.cwlChanged) return previous.canAddVersion ? { mode: 'version' } : null;
+  if (previous.status === ComponentStatus.DEPRECATED) return null;
+  return {
+    mode: 'reuse',
+    reuseComponentId: previous.componentId,
+    reuseKind: previous.kind,
+    reuseName: previous.name,
+    reuseVersion: previous.version,
+  };
+}
+
 function initialState(preview: WorkflowStepPreviewDto): ComponentConfigState {
+  const base = defaultState(preview);
+  return { ...base, ...fromPrevious(preview) };
+}
+
+function defaultState(preview: WorkflowStepPreviewDto): ComponentConfigState {
   // the description starts as the step's CWL doc: field, editable like any other input
   // an archive step whose run: filename matches a catalogue component defaults to reusing
   // it - re-importing a component the repository already holds is almost never intended
@@ -91,7 +128,7 @@ export function useComponentConfigs(previews: WorkflowStepPreviewDto[]) {
     const nameCounts = new Map<string, number>();
     for (const preview of previews) {
       const config = configs[preview.stepId];
-      if (!config || config.mode === 'reuse') continue;
+      if (!config || config.mode !== 'create') continue;
       const name = config.name.trim();
       if (name) nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
     }
@@ -104,6 +141,10 @@ export function useComponentConfigs(previews: WorkflowStepPreviewDto[]) {
       }
       if (config.mode === 'reuse') {
         if (!config.reuseComponentId) result[preview.stepId] = 'Pick a component to reuse.';
+        continue;
+      }
+      if (config.mode === 'version') {
+        if (!preview.previous?.canAddVersion) result[preview.stepId] = 'This step has no tool to add a version to.';
         continue;
       }
       const name = config.name.trim();
@@ -129,6 +170,16 @@ export function useComponentConfigs(previews: WorkflowStepPreviewDto[]) {
         const config = configs[preview.stepId];
         if (config.mode === 'reuse') {
           return { stepId: preview.stepId, reuseComponentId: config.reuseComponentId };
+        }
+        if (config.mode === 'version') {
+          return {
+            stepId: preview.stepId,
+            newVersionOfId: preview.previous!.componentId,
+            description: config.description.trim() || null,
+            // only the labels written here - the tool's own carry over by themselves, and a
+            // blank entry would clear them
+            formatLabels: toFormatLabelDtos(preview.parameters, config.formatLabels).filter((label) => label.label),
+          };
         }
         return {
           stepId: preview.stepId,

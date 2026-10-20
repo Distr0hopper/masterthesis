@@ -22,6 +22,7 @@ from app.api.transformer.workflow_transformer import WorkflowTransformer
 from app.application.commands.commands import ComponentCommand
 from app.application.service.compatibility_service import RankedComponent
 from app.application.service.components_service import ComponentImpact, ComponentUsage, SupersededVersion
+from app.domain.composite import lifecycle
 from app.domain.models.component import Component
 from app.domain.models.user import User
 from app.infrastructure.cwl.cwl_parser import inject_description
@@ -147,7 +148,6 @@ class ComponentTransformer:
         else:
             dto = WorkflowDetailDto(
                 **shared,
-                # the pipeline as stored - its description is shown beside it, not injected
                 cwl_content=component.cwl_content,
                 steps=[WorkflowTransformer.to_step(s, current_user) for s in component.steps],
                 draft_id=component.workflow.draft_id if component.workflow is not None else None,
@@ -164,8 +164,8 @@ class ComponentTransformer:
             domains=ComponentTransformer.to_domains(component),
             status=component.status,
             created_at=component.created_at,
-            # only a tool lineage takes uploaded versions - a workflow's come from the builder
-            can_add_version=component.is_tool and ComponentPermissionValidator(current_user).can_update(component),
+            can_add_version=ComponentPermissionValidator(current_user).can_update(component)
+            and (component.is_tool or not lifecycle.edited_in_builder(component)),
         )
 
     @staticmethod

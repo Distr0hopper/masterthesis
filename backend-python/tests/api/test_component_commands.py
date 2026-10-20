@@ -58,7 +58,18 @@ def test_only_a_manual_tool_takes_an_uploaded_version(source: ComponentSource, o
     tool = component(ComponentKind.TOOL, source)
     assert ("addVersion" in ComponentLinkBuilder(OWNER)._filter_links(tool)) is offered
     assert "addVersion" not in ComponentLinkBuilder(STRANGER)._filter_links(tool)
-    assert "addVersion" not in ComponentLinkBuilder(OWNER)._filter_links(component(ComponentKind.WORKFLOW))
+
+
+def test_an_uploaded_workflow_takes_an_uploaded_version_a_builder_one_does_not() -> None:
+    uploaded = component(ComponentKind.WORKFLOW)
+    links = ComponentLinkBuilder(OWNER)._filter_links(uploaded)
+    assert links["addVersion"].href == f"/workflows/{uploaded.id}/versions"
+    assert "addVersion" not in ComponentLinkBuilder(STRANGER)._filter_links(uploaded)
+
+    # its versions come from saving the canvas
+    from_builder = component(ComponentKind.WORKFLOW)
+    from_builder.workflow.draft_id = uuid.uuid4()
+    assert "addVersion" not in ComponentLinkBuilder(OWNER)._filter_links(from_builder)
 
 
 @pytest.mark.parametrize("kind", list(ComponentKind))

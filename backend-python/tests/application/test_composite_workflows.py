@@ -27,9 +27,11 @@ from app.application.exception.component_exceptions import (
     ComponentNotFoundError,
     ComponentUsedByOthersError,
     InvalidCwlError,
+    PackagedToolCannotTakeUploadError,
     SupersededVersionError,
 )
 from app.application.exception.workflow_exceptions import (
+    InvalidComponentConfigError,
     InlineStepNotBindableError,
     NestedWorkflowsNotReadyError,
     PublishedWorkflowStepsLockedError,
@@ -43,7 +45,7 @@ from app.application.exception.workflow_exceptions import (
 from app.application.service.components_service import ComponentsService
 from app.application.service.tools_service import ToolsService
 from app.application.service.workflows_service import ComponentConfig, StepBinding, WorkflowsService
-from app.domain.models.component import Component, ComponentKind, ComponentStatus
+from app.domain.models.component import Component, ComponentKind, ComponentSource, ComponentStatus
 from app.domain.models.tool import Tool
 from app.domain.models.workflow import Workflow
 from app.domain.models.workflow_step import StepMatchStatus, WorkflowStep
@@ -810,6 +812,104 @@ def test_a_failing_step_rolls_back_the_tools_created_before_it() -> None:
         )
 
     assert (workflows_service.uow.commits, workflows_service.uow.rollbacks) == (0, 1)  # type: ignore[attr-defined]
+
+
+def upload_zip(a_tool: str = UPLOAD_TOOL, b_tool: str = UPLOAD_TOOL) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as zf:
+        zf.writestr("pipeline.cwl", UPLOAD_PIPELINE)
+        zf.writestr("a.cwl", a_tool)
+        zf.writestr("b.cwl", b_tool)
+    return buffer.getvalue()
+
+
+def uploaded_v1() -> tuple[Component, Component, Component]:
+    """An uploaded workflow 'wf' v1 whose steps a and b run the owner's tools tool-a and tool-b."""
+    tool_a, tool_b = tool("tool-a"), tool("tool-b")
+    tool_a.cwl_content = tool_b.cwl_content = UPLOAD_TOOL
+    v1 = workflow("wf", tool_a, tool_b, status=ComponentStatus.PUBLISHED)
+    v1.workflow.steps[0].step_id, v1.workflow.steps[1].step_id = "a", "b"
+    return v1, tool_a, tool_b
+
+
+CHANGED_TOOL = UPLOAD_TOOL.replace("baseCommand: echo", "baseCommand: cat")
+
+
+def test_the_preview_of_a_new_version_reports_what_each_step_ran_before() -> None:
+    v1, tool_a, tool_b = uploaded_v1()
+    _, workflows_service, _ = services(v1, tool_a, tool_b)
+
+    preview = asyncio.run(workflows_service.parse_workflow_upload(upload_zip(a_tool=CHANGED_TOOL), "x.zip", v1, OWNER))
+
+    previous = {p.step_id: p.previous for p in preview.component_previews}
+    assert previous["a"] is not None and previous["b"] is not None
+    assert (previous["a"].component.id, previous["a"].cwl_changed, previous["a"].can_add_version) == (
+        tool_a.id,
+        True,
+        True,
+    )
+    # reformatting is no change - compared as parsed YAML
+    assert previous["b"].cwl_changed is False
+    # someone else's tool can't take the step as its next version
+    other = asyncio.run(workflows_service.parse_workflow_upload(upload_zip(), "x.zip", v1, STRANGER))
+    assert all(not p.previous.can_add_version for p in other.component_previews if p.previous)
+
+
+def test_an_uploaded_new_version_keeps_the_lineage_and_versions_a_changed_tool() -> None:
+    v1, tool_a, tool_b = uploaded_v1()
+    _, workflows_service, repository = services(v1, tool_a, tool_b)
+    configs = {
+        "a": ComponentConfig(step_id="a", new_version_of_id=tool_a.id),
+        "b": ComponentConfig(step_id="b", reuse_component_id=tool_b.id),
+    }
+
+    v2 = asyncio.run(
+        workflows_service.add_version_from_upload(v1, upload_zip(a_tool=CHANGED_TOOL), "x.zip", None, configs, OWNER)
+    )
+
+    assert (v2.name, v2.version, v2.status) == ("wf", 2, ComponentStatus.DRAFT)
+    step_a, step_b = v2.steps
+    # tool-a's next version, a draft until published with the workflow
+    assert (step_a.component.name, step_a.component.version, step_a.component.status) == (
+        "tool-a",
+        2,
+        ComponentStatus.DRAFT,
+    )
+    assert step_b.component_id == tool_b.id
+    assert workflows_service.uow.commits == 1  # type: ignore[attr-defined]
+
+
+def test_a_builder_workflow_takes_no_uploaded_version() -> None:
+    v1, tool_a, tool_b = uploaded_v1()
+    v1.workflow.draft_id = uuid.uuid4()
+    _, workflows_service, _ = services(v1, tool_a, tool_b)
+    configs = {sid: ComponentConfig(step_id=sid, reuse_component_id=tool_b.id) for sid in ("a", "b")}
+
+    with pytest.raises(StepsEditedInBuilderError):
+        asyncio.run(workflows_service.add_version_from_upload(v1, upload_zip(), "x.zip", None, configs, OWNER))
+
+
+@pytest.mark.parametrize("problem", ["someone else's", "packaged", "twice"])
+def test_a_step_versions_only_one_of_the_actors_uploaded_tools_once(problem: str) -> None:
+    v1, tool_a, tool_b = uploaded_v1()
+    target = tool_a
+    if problem == "someone else's":
+        target = tool("theirs", owner=STRANGER)
+    if problem == "packaged":
+        target.source = ComponentSource.AUTOMATED_PACKAGING
+    _, workflows_service, _ = services(v1, tool_a, tool_b, target)
+    configs = {
+        "a": ComponentConfig(step_id="a", new_version_of_id=target.id),
+        "b": (
+            ComponentConfig(step_id="b", new_version_of_id=target.id)
+            if problem == "twice"
+            else ComponentConfig(step_id="b", reuse_component_id=tool_b.id)
+        ),
+    }
+
+    with pytest.raises((InvalidComponentConfigError, PackagedToolCannotTakeUploadError)):
+        asyncio.run(workflows_service.add_version_from_upload(v1, upload_zip(), "x.zip", None, configs, OWNER))
+    assert workflows_service.uow.commits == 0  # type: ignore[attr-defined]
 
 
 # --- the polymorphic DTO ----------------------------------------------------------------

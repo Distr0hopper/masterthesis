@@ -42,6 +42,15 @@ class ComponentPermissionValidator(PermissionValidator[Component]):
             return False
         return TOOL_COMMANDS[command].allowed(self.user, component)
 
+    def can_add_uploaded_version(self, component: Component) -> bool:
+        """An upload as the next version is the owner's - except where versions come from
+        elsewhere: a packaged tool's from its repo, a builder workflow's from its canvas."""
+        if not self.can_update(component):
+            return False
+        if component.is_tool:
+            return not component.is_packaged
+        return not lifecycle.edited_in_builder(component)
+
     def can_edit_steps(self, workflow: Component) -> bool:
         """A workflow's steps are its creator's to rebind - while it is a draft. A published
         workflow is what others see and nest, so it is unpublished first."""

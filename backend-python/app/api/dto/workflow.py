@@ -64,25 +64,33 @@ class ComponentConfigDto(CamelModel):
     """The user's decision for one previewed step, keyed by WorkflowStepPreviewDto.step_id.
 
     Exactly one branch: reuse_component_id binds the step to an existing catalogue
-    component, or name+domain create a new tool from that step's CWL.
+    component, new_version_of_id adds the step's CWL as the next version of one of the
+    caller's tools, or name+domain create a new tool from it.
     """
 
     step_id: str
     reuse_component_id: uuid.UUID | None = None
+    #: the caller's tool the step's CWL becomes the next version of - keeps its name and domains
+    new_version_of_id: uuid.UUID | None = None
     name: str | None = None
     domains: list[str] | None = Field(default=None, json_schema_extra={"items": {"enum": VALID_DOMAINS}})
     description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
-    #: create branch only - hand-written labels for File ports without an ontology format
+    #: create and new-version branches - hand-written labels for File ports without an ontology format
     format_labels: list[FormatLabelDto] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_exactly_one_branch(self) -> "ComponentConfigDto":
-        if self.reuse_component_id is not None:
+        if self.reuse_component_id is not None and self.new_version_of_id is not None:
+            raise ValueError(f"step '{self.step_id}': reuseComponentId cannot be combined with newVersionOfId")
+        if self.reuse_component_id is not None or self.new_version_of_id is not None:
             if self.name or self.domains:
-                raise ValueError(f"step '{self.step_id}': reuseComponentId cannot be combined with name/domains")
+                branch = "reuseComponentId" if self.reuse_component_id is not None else "newVersionOfId"
+                raise ValueError(f"step '{self.step_id}': {branch} cannot be combined with name/domains")
             return self
         if not self.name:
-            raise ValueError(f"step '{self.step_id}': either reuseComponentId or a name is required")
+            raise ValueError(
+                f"step '{self.step_id}': either reuseComponentId, newVersionOfId or a name is required"
+            )
         if not self.domains:
             raise ValueError(f"step '{self.step_id}': at least one domain is required to create a new component")
         invalid = [d for d in self.domains if d not in VALID_DOMAINS]
@@ -103,9 +111,22 @@ class CreateWorkflowRequestDto(DomainsValidatorMixin, EmptyDescriptionToNoneMixi
     component_configs: Json[list[ComponentConfigDto]] = Field(default="[]", validate_default=True)
 
 
+class AddWorkflowVersionRequestDto(EmptyDescriptionToNoneMixin, CamelModel):
+    """An upload as the next version of a workflow - name and domains are its lineage's."""
+
+    # may be a bare .cwl file or a .zip archive - the endpoint detects which
+    file: UploadFile
+    description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
+    #: as for CreateWorkflowRequestDto - one entry per step, JSON-encoded
+    component_configs: Json[list[ComponentConfigDto]] = Field(default="[]", validate_default=True)
+
+
 class ParseWorkflowRequestDto(CamelModel):
     # may be a bare .cwl file or a .zip archive - the endpoint detects which
     file: UploadFile
+    #: the workflow the upload is to become the next version of - each step then reports
+    #: what it runs there (WorkflowStepPreviewDto.previous)
+    parent_id: uuid.UUID | None = None
 
 
 class StepComponentMatchDto(CamelModel):
@@ -122,6 +143,20 @@ class StepComponentMatchDto(CamelModel):
     status: ComponentStatus
 
 
+class PreviousStepComponentDto(CamelModel):
+    """What a step of an uploaded new version ran in the workflow's newest version."""
+
+    component_id: uuid.UUID
+    kind: ComponentKind
+    name: str
+    version: int
+    status: ComponentStatus
+    #: the uploaded step's CWL differs from what that component holds
+    cwl_changed: bool
+    #: the step may become that tool's next version - the caller's own, not from GitHub
+    can_add_version: bool
+
+
 class WorkflowStepPreviewDto(ToolPreviewDto):
     """One workflow step rendered as the tool it would become, so the user can review and
     configure it before the workflow is saved."""
@@ -136,6 +171,8 @@ class WorkflowStepPreviewDto(ToolPreviewDto):
     name_conflict: StepComponentMatchDto | None
     #: archive origin only - the catalogue tool this step's run: filename matches
     suggested_match: StepComponentMatchDto | None
+    #: uploading a new version only - what the same step runs in the workflow's newest version
+    previous: PreviousStepComponentDto | None = None
 
 
 class ParseWorkflowResponseDto(CamelModel):

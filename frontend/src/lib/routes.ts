@@ -10,11 +10,11 @@ export const ROUTES = {
   myTools: '/my-tools',
   toolUpload: '/tools/upload',
   toolDetail: (id: string) => `/tools/${id}`,
-  /** the next version of the tool's lineage - an uploaded CWL, or its GitHub repo packaged again */
   toolNewVersion: (id: string) => `/tools/${id}/new-version`,
   myWorkflows: '/my-workflows',
   workflowUpload: '/workflows/upload',
   workflowDetail: (id: string) => `/workflows/${id}`,
+  workflowNewVersion: (id: string) => `/workflows/${id}/new-version`,
   about: '/about',
   builder: '/builder',
   builderNew: '/builder/new',

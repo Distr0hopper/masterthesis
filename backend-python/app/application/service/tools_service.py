@@ -241,6 +241,16 @@ class ToolsService:
             raise PackagedToolCannotTakeUploadError(tool.name)
         return await self.add_manual_version(tool, format_labels)
 
+    async def add_uploaded_version_in_transaction(
+        self, tool: Component, format_labels: list[ManualFormatLabel] | None = None
+    ) -> Component:
+        """add_uploaded_version without the transaction - runs inside the caller's unit of
+        work, like create_tool. The workflow upload uses it for a step that becomes the next
+        version of one of the actor's tools."""
+        if tool.is_packaged:
+            raise PackagedToolCannotTakeUploadError(tool.name)
+        return await self._add_version(tool, format_labels)
+
     async def add_manual_version(
         self, tool: Component, format_labels: list[ManualFormatLabel] | None = None
     ) -> Component:

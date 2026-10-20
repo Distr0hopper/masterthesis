@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
-import { useComponent, useComponentVersions } from '@/api/components';
+import { useLineageHead } from '@/api/components';
 import { canAddVersion, canRepackage } from '@/api/permissions';
 import { ManualUploadWizard } from '@/components/tool-upload/organisms/ManualUploadWizard';
 import { PackageFromGitHubWizard } from '@/components/tool-upload/organisms/PackageFromGitHubWizard';
@@ -13,9 +13,7 @@ import { ROUTES } from '@/lib/routes';
  */
 export default function ToolNewVersionPage() {
   const { id = '' } = useParams<{ id: string }>();
-  const { data: versions, isLoading: versionsLoading, error: versionsError } = useComponentVersions(id);
-  const headId = versions?.reduce((head, v) => (v.version > head.version ? v : head), versions[0])?.id ?? '';
-  const { data: head, isLoading: headLoading, error: headError } = useComponent(headId);
+  const { data: head, isLoading, error } = useLineageHead(id);
 
   const back = (
     <Link to={ROUTES.toolDetail(id)} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900">
@@ -23,11 +21,11 @@ export default function ToolNewVersionPage() {
     </Link>
   );
 
-  if (versionsLoading || headLoading) {
+  if (isLoading) {
     return <p className="text-slate-500">Loading...</p>;
   }
 
-  if (versionsError || headError || !head || head.kind !== 'tool') {
+  if (error || !head || head.kind !== 'tool') {
     return (
       <div>
         {back}

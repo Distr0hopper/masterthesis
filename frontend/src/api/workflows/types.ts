@@ -69,16 +69,19 @@ export interface WorkflowStepCommandExecuteRequest {
 
 /**
  * The user's decision for one previewed step, keyed by WorkflowStepPreviewDto.stepId.
- * Exactly one branch: reuseComponentId binds the step to an existing component, or
- * name+domains create a new tool from that step's CWL.
+ * Exactly one branch: reuseComponentId binds the step to an existing component,
+ * newVersionOfId adds its CWL as the next version of one of your tools, or name+domains
+ * create a new tool from it.
  */
 export interface ComponentConfigDto {
   stepId: string;
   reuseComponentId?: string | null;
+  /** your tool the step's CWL becomes the next version of - keeps its name and domains */
+  newVersionOfId?: string | null;
   name?: string | null;
   domains?: string[] | null;
   description?: string | null;
-  /** create branch only - hand-written labels for File ports without an ontology format */
+  /** create and new-version branches - hand-written labels for File ports without an ontology format */
   formatLabels?: FormatLabelDto[];
 }
 
@@ -111,6 +114,25 @@ export interface StepComponentMatchDto {
   status: ComponentStatus;
 }
 
+/** Uploading a new version: what the same step ran in the workflow's newest version. */
+export interface PreviousStepComponentDto {
+  componentId: string;
+  kind: ComponentKind;
+  name: string;
+  version: number;
+  status: ComponentStatus;
+  /** the uploaded step's CWL differs from what that component holds */
+  cwlChanged: boolean;
+  /** the step may become that tool's next version - your own, not packaged from GitHub */
+  canAddVersion: boolean;
+}
+
+/** An upload as the next version of a workflow - name and domains are its lineage's. */
+export interface AddWorkflowVersionDto {
+  description?: string | null;
+  componentConfigs: ComponentConfigDto[];
+}
+
 export interface WorkflowStepPreviewDto extends ToolPreviewDto {
   stepId: string;
   origin: ComponentOrigin;
@@ -118,6 +140,8 @@ export interface WorkflowStepPreviewDto extends ToolPreviewDto {
   suggestedName: string;
   nameConflict: StepComponentMatchDto | null;
   suggestedMatch: StepComponentMatchDto | null;
+  /** uploading a new version only - what the same step runs in the workflow's newest version */
+  previous?: PreviousStepComponentDto | null;
 }
 
 export interface ParseWorkflowResponseDto {

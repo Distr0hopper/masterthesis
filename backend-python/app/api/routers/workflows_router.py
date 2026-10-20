@@ -10,6 +10,8 @@ from fastapi import APIRouter, Depends, Form, HTTPException, status
 
 from app.api.dto.common import ErrorResponse
 from app.api.dto.workflow import (
+    AddWorkflowVersionRequestDto,
+    ComponentConfigDto,
     CreateWorkflowRequestDto,
     ParseWorkflowRequestDto,
     ParseWorkflowResponseDto,
@@ -24,13 +26,30 @@ from app.api.transformer.component_transformer import ComponentTransformer
 from app.api.transformer.parameter_transformer import ParameterTransformer
 from app.api.transformer.workflow_transformer import WorkflowTransformer
 from app.application.service.auth_service import AuthService
+from app.application.service.components_service import ComponentsService
 from app.application.service.workflows_service import ComponentConfig, WorkflowsService
+from app.domain.models.component import ComponentKind
 from app.domain.models.user import User
 
 router = APIRouter(prefix="/workflows", tags=["workflows"])
 logger = logging.getLogger("app.api.routers.workflows_router")
 
 MAX_WORKFLOW_ZIP_SIZE = 10 * 1024 * 1024
+
+
+def _configs_by_step(configs: list[ComponentConfigDto]) -> dict[str, ComponentConfig]:
+    return {
+        c.step_id: ComponentConfig(
+            step_id=c.step_id,
+            reuse_component_id=c.reuse_component_id,
+            new_version_of_id=c.new_version_of_id,
+            name=c.name,
+            domains=c.domains,
+            description=c.description,
+            format_labels=ParameterTransformer.to_format_labels(c.format_labels),
+        )
+        for c in configs
+    }
 
 
 def _require_size(content: bytes) -> None:
@@ -69,17 +88,7 @@ async def create(
     content = await dto.file.read()
     _require_size(content)
 
-    configs_by_step = {
-        c.step_id: ComponentConfig(
-            step_id=c.step_id,
-            reuse_component_id=c.reuse_component_id,
-            name=c.name,
-            domains=c.domains,
-            description=c.description,
-            format_labels=ParameterTransformer.to_format_labels(c.format_labels),
-        )
-        for c in dto.component_configs
-    }
+    configs_by_step = _configs_by_step(dto.component_configs)
     logger.info(f"Creating workflow '{dto.name}' for user {current_user.id}")
     workflow = await workflows_service.create_from_upload(
         content,
@@ -109,12 +118,19 @@ async def parse_workflow(
     dto: Annotated[ParseWorkflowRequestDto, Form(media_type="multipart/form-data")],
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
     workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
+    components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
 ) -> ParseWorkflowResponseDto:
     content = await dto.file.read()
     _require_size(content)
 
+    parent = None
+    if dto.parent_id is not None:
+        parent = await components_service.get_component(dto.parent_id, ComponentKind.WORKFLOW)
+        if not ComponentPermissionValidator(current_user).can_update(parent):
+            raise ForbiddenException("Insufficient permission to add a version to this workflow")
+
     logger.info(f"Parsing workflow upload '{dto.file.filename}' for user {current_user.id}")
-    preview = await workflows_service.parse_workflow_upload(content, dto.file.filename)
+    preview = await workflows_service.parse_workflow_upload(content, dto.file.filename, parent, current_user.id)
 
     return ParseWorkflowResponseDto(
         is_zip=preview.is_zip,
@@ -129,6 +145,52 @@ async def parse_workflow(
         auxiliary_files=preview.auxiliary_files,
         missing_imports=preview.missing_imports,
     )
+
+
+@router.post(
+    "/{workflow_id}/versions",
+    response_model=WorkflowDetailDto,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        status.HTTP_400_BAD_REQUEST: {
+            "model": ErrorResponse,
+            "description": "Invalid workflow file/archive, file too large, or a step configured wrongly",
+        },
+        status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
+        status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Not the creator of this workflow"},
+        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Workflow not found"},
+        status.HTTP_409_CONFLICT: {
+            "model": ErrorResponse,
+            "description": "The workflow is edited in the Workflow Builder, a configured tool's name already "
+            "exists, or a step versions a tool packaged from GitHub",
+        },
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErrorResponse, "description": "Request validation failed"},
+    },
+)
+async def add_version(
+    workflow_id: uuid.UUID,
+    dto: Annotated[AddWorkflowVersionRequestDto, Form(media_type="multipart/form-data")],
+    current_user: Annotated[User, Depends(AuthService.get_current_user)],
+    workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
+    components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
+) -> WorkflowDetailDto:
+    """An uploaded workflow as the next version of this one - like POST /workflows, with the
+    lineage's name and domains. Its steps can also become the next version of the caller's
+    tools (componentConfigs[].newVersionOfId)."""
+    parent = await components_service.get_component(workflow_id, ComponentKind.WORKFLOW)
+    if not ComponentPermissionValidator(current_user).can_update(parent):
+        logger.warning(f"User {current_user.id} not permitted to add a version to workflow {workflow_id}")
+        raise ForbiddenException("Insufficient permission to add a version to this workflow")
+
+    content = await dto.file.read()
+    _require_size(content)
+
+    workflow = await workflows_service.add_version_from_upload(
+        parent, content, dto.file.filename, dto.description, _configs_by_step(dto.component_configs), current_user.id
+    )
+    logger.info(f"Added version {workflow.version} to workflow '{workflow.name}' ({workflow.id})")
+    favorited_names = await components_service.favorited_names(current_user)
+    return ComponentTransformer.to_detail(workflow, workflow.name in favorited_names, current_user)
 
 
 @router.patch(

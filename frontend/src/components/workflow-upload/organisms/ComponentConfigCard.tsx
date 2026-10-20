@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, FileCode, Package, Search } from 'lucide-react';
+import { AlertTriangle, FileCode, History, Package, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { Card, CardContent } from '@/components/ui/card.tsx';
@@ -58,11 +58,15 @@ export function ComponentConfigCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reused?.id, reused?.kind, reused?.name, reused?.version]);
 
+  // uploading a new workflow version: what this step ran in the previous one
+  const previous = preview.previous ?? null;
+  const canVersion = !!previous?.canAddVersion;
+
   // a step's own CWL always previews as the tool it would become
   const model = toolTransformer.toPreviewDisplayModel(
     { ...preview, parameters: withFormatLabels(preview.parameters, config.formatLabels) },
     {
-      name: config.name,
+      name: config.mode === 'version' && previous ? previous.name : config.name,
       domains: config.domains,
       description: config.description,
     },
@@ -97,10 +101,68 @@ export function ComponentConfigCard({
             >
               Reuse existing
             </Button>
+            {canVersion && (
+              <Button
+                type="button"
+                size="sm"
+                variant={config.mode === 'version' ? 'default' : 'ghost'}
+                onClick={() => onChange({ mode: 'version' })}
+              >
+                New version
+              </Button>
+            )}
           </div>
         </div>
 
-        {config.mode === 'create' ? (
+        {previous && (
+          <div className="flex flex-col gap-1 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            <p className="flex flex-wrap items-center gap-1">
+              <History className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
+              In the previous version this step ran
+              <ComponentLink
+                componentId={previous.componentId}
+                kind={previous.kind}
+                name={previous.name}
+                version={previous.version}
+              />
+              <span>- {previous.cwlChanged ? 'its CWL has changed since.' : 'its CWL is unchanged.'}</span>
+            </p>
+            {previous.cwlChanged && !canVersion && (
+              <p className="text-xs text-slate-500">
+                You can&apos;t add a version to it (someone else&apos;s, or packaged from GitHub) - create a new tool
+                from this CWL, or reuse the old one unchanged.
+              </p>
+            )}
+          </div>
+        )}
+
+        {config.mode === 'version' && previous ? (
+          <>
+            <p className="text-sm text-slate-600">
+              This step&apos;s CWL becomes the next version of{' '}
+              <span className="font-mono font-semibold text-slate-900">{previous.name}</span>, keeping its name and
+              domains. It starts as a draft and is published together with the workflow.
+            </p>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor={`component-description-${preview.stepId}`}>Description (optional)</Label>
+              <Textarea
+                id={`component-description-${preview.stepId}`}
+                rows={3}
+                placeholder="Taken from the CWL doc: field when left blank"
+                value={config.description}
+                onChange={(e) => onChange({ description: e.target.value })}
+              />
+            </div>
+
+            <FormatLabelFields
+              parameters={preview.parameters}
+              value={config.formatLabels}
+              onChange={(formatLabels) => onChange({ formatLabels })}
+              idPrefix={preview.stepId}
+            />
+          </>
+        ) : config.mode === 'create' ? (
           <>
             <div className="flex flex-col gap-2">
               <Label htmlFor={`component-name-${preview.stepId}`}>Name</Label>

@@ -35,6 +35,10 @@ class Endpoints:
         return f"{Endpoints.TOOLS_ROOT}/{tool_id}/versions"
 
     @staticmethod
+    def workflow_versions_by_id(workflow_id: uuid.UUID) -> str:
+        return f"{Endpoints.WORKFLOWS_ROOT}/{workflow_id}/versions"
+
+    @staticmethod
     def workflow_step_by_id(step_id: uuid.UUID) -> str:
         return f"{Endpoints.WORKFLOWS_ROOT}/steps/{step_id}"
 

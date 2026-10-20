@@ -4,7 +4,7 @@ import { useCommandMutation } from '@/api/useCommandMutation';
 import type { HateoasLink } from '@/api/types';
 import { workflowsService } from './service';
 import { WorkflowStepCommand } from './types';
-import type { CreateWorkflowDto } from './types';
+import type { AddWorkflowVersionDto, CreateWorkflowDto } from './types';
 
 // workflows live in the shared component cache - every mutation here invalidates componentKeys.all
 
@@ -19,9 +19,21 @@ export const useCreateWorkflow = () => {
   });
 };
 
+export const useAddWorkflowVersion = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, file, dto }: { id: string; file: File; dto: AddWorkflowVersionDto }) =>
+      workflowsService.addVersion(id, file, dto),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: componentKeys.all });
+    },
+  });
+};
+
 export const useParseWorkflow = () => {
   return useMutation({
-    mutationFn: (file: File) => workflowsService.parse(file),
+    mutationFn: ({ file, parentId }: { file: File; parentId?: string }) => workflowsService.parse(file, parentId),
   });
 };
 

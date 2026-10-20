@@ -1,5 +1,6 @@
 from app.api.dto.workflow import (
     ComponentSummaryDto,
+    PreviousStepComponentDto,
     StepComponentMatchDto,
     WorkflowStepCommandExecuteRequestDto,
     WorkflowStepDto,
@@ -9,7 +10,7 @@ from app.api.link.workflow_step import WorkflowStepLinkBuilder
 from app.api.permission.component_permission_validator import ComponentPermissionValidator
 from app.api.transformer.parameter_transformer import ParameterTransformer
 from app.application.commands.commands import WorkflowStepCommand
-from app.application.service.workflows_service import ComponentMatch, ComponentPreview
+from app.application.service.workflows_service import ComponentMatch, ComponentPreview, PreviousStepComponent
 from app.domain.models.component import Component
 from app.domain.models.user import User
 from app.domain.models.workflow_step import WorkflowStep
@@ -83,4 +84,20 @@ class WorkflowTransformer:
             ],
             name_conflict=WorkflowTransformer.to_step_component_match(preview.name_conflict),
             suggested_match=WorkflowTransformer.to_step_component_match(preview.suggested_match),
+            previous=WorkflowTransformer.to_previous_step_component(preview.previous),
+        )
+
+    @staticmethod
+    def to_previous_step_component(previous: PreviousStepComponent | None) -> PreviousStepComponentDto | None:
+        if previous is None:
+            return None
+        component = previous.component
+        return PreviousStepComponentDto(
+            component_id=component.id,
+            kind=component.kind,
+            name=component.name,
+            version=component.version,
+            status=component.status,
+            cwl_changed=previous.cwl_changed,
+            can_add_version=previous.can_add_version,
         )

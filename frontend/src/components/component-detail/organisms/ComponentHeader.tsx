@@ -24,6 +24,7 @@ import {
   useDownloadComponent,
   usePublishComponent,
   useComponentVersions,
+  newestVersion,
   usePublishImpact,
   useUndeprecateComponent,
   type ComponentDetailDisplayModel,
@@ -95,6 +96,24 @@ function draftChildren(model: ComponentDetailDisplayModel): ComponentSummaryDto[
     );
 }
 
+function builderSaveHint(head: { version: number; status: ComponentStatus } | undefined): string {
+  if (!head) return 'Open the canvas this workflow was saved from';
+  if (head.status === ComponentStatus.DRAFT) return `Saving in the builder updates the draft v${head.version}`;
+  return `Saving in the builder creates v${head.version + 1} as a draft - v${head.version} stays unchanged until you publish`;
+}
+
+function newVersionHint(model: ComponentDetailDisplayModel): string {
+  if (model.kind === 'workflow') return 'Upload the changed workflow as the next version';
+  if (model.source === ComponentSource.AUTOMATED_PACKAGING) return 'Package the repository again as the next version';
+  return 'Upload a changed CWL file as the next version';
+}
+
+function publishBlockedHint(allStepsSettled: boolean, editedInBuilder: boolean): string | undefined {
+  if (allStepsSettled) return undefined;
+  if (editedInBuilder) return 'A step lost its component - replace it in the Workflow Builder first';
+  return 'Confirm every step before publishing';
+}
+
 export function ComponentHeader({ model, backTo, backLabel, onDeleted }: ComponentHeaderProps) {
   const { mutate: publishComponent, isPending: isPublishing } = usePublishComponent();
   const { mutate: downloadComponent, isPending: isDownloading } = useDownloadComponent();
@@ -106,21 +125,13 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
   const { mutate: undeprecateComponent, isPending: isUndeprecating } = useUndeprecateComponent();
 
   const navigate = useNavigate();
-  // shares its cache with the Versions card further down
   const { data: versions } = useComponentVersions(model.id);
   const versionCount = versions?.length ?? 0;
   const builderDraftId = editableBuilderDraftId(model);
-  // one canvas per lineage - saving acts on the newest version, whichever one is viewed here
-  const head = versions?.reduce((newest, v) => (v.version > newest.version ? v : newest), versions[0]);
-  const builderSaveHint = !head
-    ? 'Open the canvas this workflow was saved from'
-    : head.status === ComponentStatus.DRAFT
-      ? `Saving in the builder updates the draft v${head.version}`
-      : `Saving in the builder creates v${head.version + 1} as a draft - v${head.version} stays unchanged until you publish`;
+  const head = newestVersion(versions);
   const isWorkflow = model.kind === 'workflow';
-  // a tool's next version: an uploaded CWL, or its GitHub repo packaged again - a workflow's
-  // come from the Workflow Builder
-  const canCreateVersion = model.kind === 'tool' && (canAddVersion(model._links) || canRepackage(model._links));
+  const canCreateVersion = canAddVersion(model._links) || canRepackage(model._links);
+  const newVersionRoute = isWorkflow ? ROUTES.workflowNewVersion(model.id) : ROUTES.toolNewVersion(model.id);
   const canDelete = hasDeleteLink(model._links);
   const canEdit =
     hasUpdateDescriptionLink(model._links) ||
@@ -142,11 +153,8 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
   const canUnpublish = hasUnpublishLink(model._links) && model.status === ComponentStatus.PUBLISHED;
   const canDeprecate = hasDeprecateLink(model._links) && model.status === ComponentStatus.PUBLISHED;
   const canUndeprecate = hasUndeprecateLink(model._links) && model.status === ComponentStatus.DEPRECATED;
-  // only the direct children are known here; the backend also checks the drafts published along
   const deprecated = deprecatedChildren(model);
 
-  // only the direct children are listed here; the backend checks the whole tree and names
-  // any deeper drafts in its answer
   const drafts = draftChildren(model);
   const blockedByOthers = drafts.filter((component) => !component.canPublish);
 
@@ -273,19 +281,15 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => navigate(ROUTES.toolNewVersion(model.id))}
-                  title={
-                    model.source === ComponentSource.AUTOMATED_PACKAGING
-                      ? 'Package the repository again as the next version'
-                      : 'Upload a changed CWL file as the next version'
-                  }
+                  onClick={() => navigate(newVersionRoute)}
+                  title={newVersionHint(model)}
                 >
                   <FilePlus2 className="mr-1 h-4 w-4" /> New version
                 </Button>
               )}
 
               {builderDraftId && (
-                <Button asChild variant="outline" size="sm" title={builderSaveHint}>
+                <Button asChild variant="outline" size="sm" title={builderSaveHint(head)}>
                   <Link to={ROUTES.builderWorkflow(builderDraftId)}>
                     <PenLine className="mr-1 h-4 w-4" /> Edit in Workflow Builder
                   </Link>
@@ -305,13 +309,7 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
                   // always confirmed, like unpublish, deprecate and delete - it makes the version visible to everyone
                   onClick={() => setPublishDialogOpen(true)}
                   disabled={isPublishing || !allStepsSettled}
-                  title={
-                    allStepsSettled
-                      ? undefined
-                      : builderDraftId
-                        ? 'A step lost its component - replace it in the Workflow Builder first'
-                        : 'Confirm every step before publishing'
-                  }
+                  title={publishBlockedHint(allStepsSettled, !!builderDraftId)}
                 >
                   <Globe className="mr-1 h-4 w-4" /> Publish
                 </Button>

@@ -136,6 +136,24 @@ export const useComponentVersions = (id: string) => {
   });
 };
 
+/** The lineage's head - the version with the highest number, undefined while none are loaded. */
+export const newestVersion = <T extends { version: number }>(versions: T[] | undefined): T | undefined =>
+  versions?.reduce((newest, v) => (v.version > newest.version ? v : newest), versions[0]);
+
+/**
+ * The newest version of the lineage `id` belongs to, whichever version `id` is - what a new
+ * version builds on. Loading while either the versions or that detail are.
+ */
+export const useLineageHead = (id: string) => {
+  const versions = useComponentVersions(id);
+  const head = useComponent(newestVersion(versions.data)?.id ?? '');
+  return {
+    data: head.data,
+    isLoading: versions.isLoading || head.isLoading,
+    error: versions.error ?? head.error,
+  };
+};
+
 export const useDomains = () => {
   return useQuery({
     queryKey: componentKeys.domains(),

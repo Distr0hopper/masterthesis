@@ -1,6 +1,7 @@
 import { apiClient } from '../client';
 import type { HateoasLink } from '@/api/types';
 import type {
+  AddWorkflowVersionDto,
   CreateWorkflowDto,
   ParseWorkflowResponseDto,
   WorkflowDetailDto,
@@ -22,9 +23,19 @@ export const workflowsService = {
     return apiClient.post(ENDPOINT, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
 
-  parse(file: File): Promise<ParseWorkflowResponseDto> {
+  addVersion(id: string, file: File, dto: AddWorkflowVersionDto): Promise<WorkflowDetailDto> {
     const formData = new FormData();
     formData.append('file', file);
+    if (dto.description) formData.append('description', dto.description);
+    formData.append('componentConfigs', JSON.stringify(dto.componentConfigs));
+    return apiClient.post(`${ENDPOINT}/${id}/versions`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+
+  /** parentId: the workflow the upload is to become the next version of - steps then report `previous` */
+  parse(file: File, parentId?: string): Promise<ParseWorkflowResponseDto> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (parentId) formData.append('parentId', parentId);
     return apiClient.post(`${ENDPOINT}/parse`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
 

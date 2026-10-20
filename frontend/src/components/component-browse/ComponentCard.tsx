@@ -9,8 +9,8 @@ import { ComponentStatus, type ComponentDisplayModel } from '@/api/components';
 import { canFavorite } from '@/api/permissions';
 import { KIND_ROUTES, ROUTES } from '@/lib/routes';
 import { DomainBadges } from '@/components/common/DomainBadges';
+import { KindBadge } from '@/components/common/KindBadge';
 import { editableBuilderDraftId } from '@/lib/builderDraft';
-import { KIND_ICONS } from '@/lib/componentKinds';
 
 interface ComponentCardProps {
   component: ComponentDisplayModel;
@@ -22,7 +22,6 @@ interface ComponentCardProps {
 
 /** One card for either kind - only the kind snippet, a workflow's step count and the builder link differ. */
 export function ComponentCard({ component, backTo, showBuilderLink = false, actions }: ComponentCardProps) {
-  const KindIcon = KIND_ICONS[component.kind];
 
   // only on an editing surface (My Workflows), not the browse list
   const builderDraftId = showBuilderLink ? editableBuilderDraftId(component) : null;
@@ -35,10 +34,7 @@ export function ComponentCard({ component, backTo, showBuilderLink = false, acti
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className="w-fit gap-1 text-slate-700">
-                <KindIcon className="h-3.5 w-3.5" />
-                {component.kindDisplay}
-              </Badge>
+              <KindBadge kind={component.kind} />
               {component.status !== ComponentStatus.PUBLISHED && (
                 <Badge variant="secondary" className="w-fit">
                   {component.statusDisplay}

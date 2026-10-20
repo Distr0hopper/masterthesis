@@ -285,10 +285,9 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
                     version={model.version}
                     versionCount={versionCount}
                     backTo={backTo}
-                    className="-ml-1"
-                  />
+                      />
                 ) : (
-                  <span className="text-sm text-slate-500">v{model.version}</span>
+                  <span className="text-sm text-slate-400">v{model.version}</span>
                 )}
                 <StatusBadge status={model.status} label={model.statusDisplay} hint={model.statusHint} />
               </div>

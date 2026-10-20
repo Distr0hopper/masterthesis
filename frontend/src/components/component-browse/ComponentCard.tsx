@@ -58,7 +58,6 @@ export function ComponentCard({ component, backTo, showBuilderLink = false, acti
                 version={component.version}
                 versionCount={component.versionCount}
                 backTo={backTo}
-                className="-ml-1"
               />
             ) : (
               <p className="text-sm text-slate-400">v{component.version}</p>

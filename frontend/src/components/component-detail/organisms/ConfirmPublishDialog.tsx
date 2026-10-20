@@ -7,10 +7,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog.tsx';
+import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { ComponentLink } from '@/components/common/ComponentLink';
-import type { ComponentDisplayModelBase, SupersededVersionDto } from '@/api/components';
+import { KIND_LABELS, type ComponentDisplayModelBase, type SupersededVersionDto } from '@/api/components';
 import type { ComponentSummaryDto } from '@/api/workflows';
+import { KIND_ICONS } from '@/lib/componentKinds';
 
 interface ConfirmPublishDialogProps {
   open: boolean;
@@ -136,17 +138,27 @@ export function ConfirmPublishDialog({
               {supersedes.length === 1 ? 'This version will be deprecated' : 'These versions will be deprecated'}
             </p>
             <ul className="divide-y rounded-md border border-input">
-              {supersedes.map((s) => (
-                <li key={s.id} className="flex flex-col gap-0.5 px-3 py-2">
-                  <ComponentLink componentId={s.id} kind={s.kind} name={s.name} version={s.version} />
-                  <span className="text-xs text-slate-600">
-                    {s.workflowCount > 0
-                      ? `Used in ${plural(s.workflowCount, 'workflow')} - they keep working.`
-                      : 'Not used in any workflow.'}{' '}
-                    Its note will read "Superseded by v{s.supersededByVersion}".
-                  </span>
-                </li>
-              ))}
+              {supersedes.map((s) => {
+                // a workflow's publish can also supersede versions of the tools it publishes along
+                const KindIcon = KIND_ICONS[s.kind];
+                return (
+                  <li key={s.id} className="flex flex-col gap-0.5 px-3 py-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline" className="w-fit gap-1 text-slate-700">
+                        <KindIcon className="h-3.5 w-3.5" aria-hidden />
+                        {KIND_LABELS[s.kind]}
+                      </Badge>
+                      <ComponentLink componentId={s.id} kind={s.kind} name={s.name} version={s.version} />
+                    </div>
+                    <span className="text-xs text-slate-600">
+                      {s.workflowCount > 0
+                        ? `Used in ${plural(s.workflowCount, 'workflow')} - they keep working.`
+                        : 'Not used in any workflow.'}{' '}
+                      Its note will read "Superseded by v{s.supersededByVersion}".
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
 
             <div className="flex items-start gap-2 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">

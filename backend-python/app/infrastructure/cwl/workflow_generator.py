@@ -5,6 +5,7 @@ directly unit-testable and has no dependency on the ORM or the request cycle.
 """
 
 import io
+import posixpath
 import re
 import zipfile
 from dataclasses import dataclass, field
@@ -142,15 +143,39 @@ def assemble_cwl_zip(
     if main_filename in step_names:
         main_filename = f"{slug}-workflow.cwl"
 
+    # every path is relative to the main document - one that climbs out of its folder (an
+    # upload's `$import: ../types/x.yml`) needs the documents one folder down for it to
+    # resolve, or the entry would point outside the archive
+    base = _documents_folder([name for name, _ in step_files] + [path for path, _ in extra_files or []])
+
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr(main_filename, pipeline_cwl)
+        archive.writestr(_archive_path(base, main_filename), pipeline_cwl)
         for name, content in step_files:
-            archive.writestr(name, content)
+            archive.writestr(_archive_path(base, name), content)
         for path, content in extra_files or []:
-            archive.writestr(path, content)
+            archive.writestr(_archive_path(base, path), content)
 
     return f"{slug}.zip", buffer.getvalue()
+
+
+def _documents_folder(paths: list[str]) -> str:
+    """Where the CWL documents go so no path relative to them leaves the archive - "" when
+    none climbs up, else as many folders as the deepest `../` needs."""
+    depth = 0
+    for path in paths:
+        climbed = 0
+        for part in posixpath.normpath(path).split("/"):
+            if part != "..":
+                break
+            climbed += 1
+        depth = max(depth, climbed)
+    return "/".join(["workflow"] * depth)
+
+
+def _archive_path(base: str, path: str) -> str:
+    """`path` relative to the documents' folder, as an entry inside the archive."""
+    return posixpath.normpath(posixpath.join(base, path)).lstrip("/")
 
 
 def _workflow_input_id(step_id: str, port_name: str) -> str:

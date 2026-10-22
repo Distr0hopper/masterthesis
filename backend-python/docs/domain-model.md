@@ -190,6 +190,19 @@ Shared data is attached to `components`, so it behaves the same for both kinds:
 - **Steps that ran the deleted component** keep existing, with `component_id = NULL`. Before the delete, `ComponentsService.detach` marks them `unmatched`.
 - **Deleting a builder draft** leaves its synced workflows in place, with `draft_id = NULL`.
 
+### A builder draft and its workflow lineage
+
+`workflows.draft_id` is the only link between a builder canvas and the workflows saved from it. Every version saved from one canvas carries its id. The draft holds no pointer back; its side is derived from that column by a query.
+
+- **Save** (`POST /workflow-drafts/{id}/sync`, `WorkflowsService.upsert_from_draft`) creates v1 on the first call. After that it overwrites the newest version in place while that version is a draft, or adds the next version once it has been public. Renaming the canvas renames the whole lineage.
+- **The canvas is the source.** While it exists (`lifecycle.edited_in_builder`), a builder workflow's steps cannot be rebound and no version can be uploaded. Its content changes in the builder only.
+- **Deleting either side** only unlinks by default. Taking the other side along is opt-in in both directions: `deleteLinkedWorkflow` on the draft, `deleteLinkedDraft` on the component.
+
+The API exposes the two directions differently, on purpose:
+
+- **Workflow → draft** is the HATEOAS link `builderDraft`, next to the plain `draftId` field. A workflow can be read by other users, so the API has to say whether this viewer may open the canvas. Only the owner may, so only the owner gets the link. The link answers whether; `draftId` answers which, for the frontend route.
+- **Draft → workflow** is the plain field `linkedWorkflow` (`id`, `version`, `status` of the newest version). A draft is only ever served to its owner, who may always open their own workflow, so there is no permission to express. `status` and `version` tell the builder what the next Save will do.
+
 ### Two links without a foreign key
 
 - **`favorites.component_name`** points at a lineage name, which has no unique constraint of its own.

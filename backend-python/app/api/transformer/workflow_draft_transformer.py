@@ -1,4 +1,9 @@
-from app.api.dto.workflow_draft import LinkedWorkflowDto, WorkflowDraftDetailDto, WorkflowDraftListItemDto
+from app.api.dto.workflow_draft import (
+    LinkedWorkflowDto,
+    SyncedWorkflowDto,
+    WorkflowDraftDetailDto,
+    WorkflowDraftListItemDto,
+)
 from app.domain.models.component import Component, ComponentStatus
 from app.domain.models.workflow_draft import WorkflowDraft
 
@@ -35,4 +40,14 @@ class WorkflowDraftTransformer:
             created_at=draft.created_at,
             linked_workflow=WorkflowDraftTransformer.to_linked_workflow(linked_workflow),
             missing_component_ids=missing_component_ids or [],
+        )
+
+    @staticmethod
+    def to_synced(workflow: Component) -> SyncedWorkflowDto:
+        return SyncedWorkflowDto(
+            workflow_id=workflow.id,
+            name=workflow.name,
+            step_count=len(workflow.steps),
+            version=workflow.version,
+            status=ComponentStatus(workflow.status),
         )

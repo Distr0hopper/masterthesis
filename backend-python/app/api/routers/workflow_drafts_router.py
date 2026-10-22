@@ -16,8 +16,8 @@ from app.api.permission.workflow_draft_permission_validator import WorkflowDraft
 from app.api.transformer.workflow_draft_transformer import WorkflowDraftTransformer
 from app.application.service.auth_service import AuthService
 from app.application.service.workflow_draft_service import WorkflowDraftService
-from app.domain.models.component import ComponentStatus
 from app.domain.models.user import User
+from app.domain.models.workflow_draft import WorkflowDraft
 
 router = APIRouter(prefix="/workflow-drafts", tags=["workflow-drafts"])
 logger = logging.getLogger("app.api.routers.workflow_drafts_router")
@@ -27,6 +27,15 @@ _OWNED_RESPONSES = {
     status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Not the owner of this draft"},
     status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Draft does not exist"},
 }
+
+
+async def _to_detail(draft: WorkflowDraft, service: WorkflowDraftService) -> WorkflowDraftDetailDto:
+    """Every response that replaces the client's cached draft carries what the canvas is
+    linked to and which of its components are gone - the builder reads both off it."""
+    linked = await service.linked_workflows({draft.id})
+    return WorkflowDraftTransformer.to_detail(
+        draft, linked.get(draft.id), missing_component_ids=await service.missing_component_ids(draft)
+    )
 
 
 @router.get("", response_model=list[WorkflowDraftListItemDto])
@@ -63,7 +72,7 @@ async def create_draft(
         user_id=current_user.id,
     )
     logger.info(f"Created workflow draft {draft.id} for user {current_user.id}")
-    return WorkflowDraftTransformer.to_detail(draft, missing_component_ids=await service.missing_component_ids(draft))
+    return await _to_detail(draft, service)
 
 
 @router.get("/{draft_id}", response_model=WorkflowDraftDetailDto, responses=_OWNED_RESPONSES)
@@ -76,10 +85,7 @@ async def get_draft(
     if not WorkflowDraftPermissionValidator(current_user).can_read(draft):
         raise ForbiddenException("Insufficient permission to open this workflow draft")
 
-    linked = await service.linked_workflows({draft.id})
-    return WorkflowDraftTransformer.to_detail(
-        draft, linked.get(draft.id), missing_component_ids=await service.missing_component_ids(draft)
-    )
+    return await _to_detail(draft, service)
 
 
 @router.put("/{draft_id}", response_model=WorkflowDraftDetailDto, responses=_OWNED_RESPONSES)
@@ -100,12 +106,7 @@ async def update_draft(
         node_count=dto.node_count,
     )
     logger.info(f"Updated workflow draft {draft_id}")
-    # what it is linked to doesn't change on a canvas update - but the response replaces the
-    # client's cached draft, so it has to carry the link along
-    linked = await service.linked_workflows({updated.id})
-    return WorkflowDraftTransformer.to_detail(
-        updated, linked.get(updated.id), missing_component_ids=await service.missing_component_ids(updated)
-    )
+    return await _to_detail(updated, service)
 
 
 @router.delete("/{draft_id}", status_code=status.HTTP_204_NO_CONTENT, responses=_OWNED_RESPONSES)
@@ -215,10 +216,4 @@ async def sync_draft_to_my_components(
     workflow = await service.sync_to_my_components(draft)
 
     logger.info(f"Synced workflow draft {draft_id} into My Components as workflow {workflow.id}")
-    return SyncedWorkflowDto(
-        workflow_id=workflow.id,
-        name=workflow.name,
-        step_count=len(workflow.steps),
-        version=workflow.version,
-        status=ComponentStatus(workflow.status),
-    )
+    return WorkflowDraftTransformer.to_synced(workflow)

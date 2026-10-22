@@ -1,5 +1,6 @@
 import logging
 import uuid
+from dataclasses import dataclass
 from typing import Annotated, Any
 
 from fastapi import Depends
@@ -41,6 +42,18 @@ logger = logging.getLogger("app.application.service.workflow_draft_service")
 
 def _is_file_type(cwl_type: str) -> bool:
     return cwl_type.strip().lower().startswith("file")
+
+
+@dataclass(frozen=True)
+class _GeneratedWorkflow:
+    """A canvas turned into a Workflow document, with what it was built from - export
+    and sync each need a different part of it, so the canvas is parsed only once."""
+
+    document: dict[str, Any]
+    #: in topological order - the order the steps are numbered and stored in
+    ordered_nodes: list[dict[str, Any]]
+    components: dict[str, Component]
+    ports: dict[str, PortSpec]
 
 
 class WorkflowDraftService:
@@ -187,12 +200,12 @@ class WorkflowDraftService:
         Returns (filename, zip_bytes). Raises ExportValidationError for anything that
         makes the canvas unexportable.
         """
-        workflow_doc, components, ports = await self._build_workflow_document(draft)
+        generated = await self._build_workflow_document(draft)
         files: dict[str, str] = {}
         extras: dict[str, str] = {}
         try:
-            for cid, spec in ports.items():
-                component = components[cid]
+            for cid, spec in generated.ports.items():
+                component = generated.components[cid]
                 documents = [(cwl_filename_for(spec.name), component.cwl_content), *step_files(component)]
                 for name, content in documents:
                     if files.setdefault(name, content) != content:
@@ -205,7 +218,7 @@ class WorkflowDraftService:
                 f"Two different documents on the canvas need the file name '{err.path}' - rename one of them"
             ) from err
         filename, zip_bytes = assemble_cwl_zip(
-            draft.name, render_workflow_cwl(workflow_doc), sorted(files.items()), sorted(extras.items())
+            draft.name, render_workflow_cwl(generated.document), sorted(files.items()), sorted(extras.items())
         )
         logger.info(f"Generated archive for draft {draft.id}: {len(files)} step file(s)")
         return filename, zip_bytes
@@ -216,14 +229,15 @@ class WorkflowDraftService:
         Returns (filename, yaml). Built from the same document as export_to_zip, so it
         always matches the .cwl that export produces.
         """
-        workflow_doc, _components, _ports = await self._build_workflow_document(draft)
-        return f"{safe_workflow_slug(draft.name)}-inputs.yaml", generate_workflow_inputs_yaml(draft.name, workflow_doc)
+        generated = await self._build_workflow_document(draft)
+        return (
+            f"{safe_workflow_slug(draft.name)}-inputs.yaml",
+            generate_workflow_inputs_yaml(draft.name, generated.document),
+        )
 
-    async def _build_workflow_document(
-        self, draft: WorkflowDraft
-    ) -> tuple[dict[str, Any], dict[str, Component], dict[str, PortSpec]]:
-        """The draft's canvas as a Workflow document, plus the components and port specs it
-        was built from. Raises ExportValidationError for anything that makes it unexportable."""
+    async def _build_workflow_document(self, draft: WorkflowDraft) -> _GeneratedWorkflow:
+        """The draft's canvas as a Workflow document, plus what it was built from. Raises
+        ExportValidationError for anything that makes it unexportable."""
         try:
             nodes, edges = parse_canvas(draft.canvas_state)
         except CanvasFormatError as err:
@@ -245,14 +259,14 @@ class WorkflowDraftService:
         except CanvasCycleError as err:
             raise ExportValidationError(str(err)) from err
 
-        workflow_doc = build_workflow_document(
+        document = build_workflow_document(
             workflow_name=draft.name,
             ordered_nodes=ordered_nodes,
             edges=edges,
             ports=ports,
             has_subworkflows=any(c.is_workflow for c in components.values()),
         )
-        return workflow_doc, components, ports
+        return _GeneratedWorkflow(document, ordered_nodes, components, ports)
 
     async def sync_to_my_components(self, draft: WorkflowDraft) -> Component:
         """Mirror the draft's generated archive into the user's My Components list.
@@ -269,22 +283,20 @@ class WorkflowDraftService:
         Each step is bound to exactly the component its node was dropped from - the canvas
         already knows, so nothing is matched by file name.
         """
-        workflow_doc, _components, ports = await self._build_workflow_document(draft)
-        nodes, edges = parse_canvas(draft.canvas_state)
-        ordered_nodes = topological_sort(nodes, edges)
-        step_ids = assign_step_ids(ordered_nodes, ports)
+        generated = await self._build_workflow_document(draft)
+        step_ids = assign_step_ids(generated.ordered_nodes, generated.ports)
         bindings = [
             StepBinding(
                 step_id=step_ids[node["id"]],
-                run_reference=cwl_filename_for(ports[node_component_id(node)].name),
+                run_reference=cwl_filename_for(generated.ports[node_component_id(node)].name),
                 component_id=uuid.UUID(node_component_id(node)),
             )
-            for node in ordered_nodes
+            for node in generated.ordered_nodes
         ]
 
         async with self.uow:
             workflow = await self.workflows_service.upsert_from_draft(
-                pipeline_content=render_workflow_cwl(workflow_doc),
+                pipeline_content=render_workflow_cwl(generated.document),
                 bindings=bindings,
                 name=draft.name,
                 # the link the UI follows back into the builder, and the key this upsert is on

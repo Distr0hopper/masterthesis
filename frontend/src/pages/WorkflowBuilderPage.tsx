@@ -40,7 +40,7 @@ import {
   useCreateDraft,
   useExportDraft,
   useExportDraftInputs,
-  useSyncDraftToMyWorkflows,
+  useSyncDraftToMyComponents,
   useUpdateDraft,
   useWorkflowDraft,
 } from '@/api/workflow-drafts';
@@ -65,7 +65,7 @@ export default function WorkflowBuilderPage() {
   const { mutateAsync: updateDraft, isPending: isUpdating } = useUpdateDraft(draftId);
   const { mutateAsync: exportDraft, isPending: isExporting } = useExportDraft();
   const { mutateAsync: exportDraftInputs, isPending: isExportingInputs } = useExportDraftInputs();
-  const { mutateAsync: syncToMyWorkflows } = useSyncDraftToMyWorkflows();
+  const { mutateAsync: syncToMyComponents } = useSyncDraftToMyComponents();
 
   // components the backend reports as deleted - refreshed from every draft response, so a
   // component deleted while the builder is open is flagged on the next save
@@ -298,7 +298,7 @@ export default function WorkflowBuilderPage() {
     }
 
     try {
-      const synced = await syncToMyWorkflows(saved.id);
+      const synced = await syncToMyComponents(saved.id);
       setNotSynced(null);
       toast.success(`Saved - v${synced.version} in My Components is up to date.`);
     } catch (error) {
@@ -306,7 +306,7 @@ export default function WorkflowBuilderPage() {
       toast.success('Workflow saved.');
     }
     return true;
-  }, [persist, nodes, syncToMyWorkflows]);
+  }, [persist, nodes, syncToMyComponents]);
 
   // compared on every render - cheap next to what React Flow does per frame
   const isDirty =

@@ -2,7 +2,7 @@ import { useSearchParams } from 'react-router-dom';
 
 interface UsePageParamsOptions {
   defaultLimit?: number;
-  /** overridable so a page can own more than one paginated list against the same URL (e.g. MyWorkflowsPage) */
+  /** overridable so a page can own more than one paginated list against the same URL (e.g. the published/unpublished/deprecated lists of My Components) */
   offsetKey?: string;
 }
 

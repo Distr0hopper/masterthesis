@@ -66,11 +66,11 @@ export const useExportDraftInputs = () => {
   });
 };
 
-export const useSyncDraftToMyWorkflows = () => {
+export const useSyncDraftToMyComponents = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => workflowDraftsService.syncToMyWorkflows(id),
+    mutationFn: (id: string) => workflowDraftsService.syncToMyComponents(id),
     onSuccess: (synced, id) => {
       // the first sync creates the link back to My Components, a sync after publishing moves
       // it to the new version - the cached draft (staleTime: Infinity) would miss both
@@ -94,7 +94,6 @@ export const useDeleteDraft = () => {
     onSuccess: (_result, { id, deleteLinkedWorkflow }) => {
       queryClient.removeQueries({ queryKey: draftKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: draftKeys.lists() });
-      // the My Components lists change when the linked workflow is dropped too
       if (deleteLinkedWorkflow) {
         queryClient.invalidateQueries({ queryKey: componentKeys.all });
       }

@@ -67,7 +67,7 @@ class WorkflowDraftService:
         return await self.uow.drafts.find_all_by_user(user_id)
 
     async def linked_workflows(self, draft_ids: set[uuid.UUID]) -> dict[uuid.UUID, Component]:
-        """{draft_id: newest workflow version} for the drafts synced to a My Workflows entry."""
+        """{draft_id: newest workflow version} for the drafts synced to a My Components entry."""
         return await self.workflows_service.linked_workflows(draft_ids)
 
     async def get_draft(self, draft_id: uuid.UUID, user_id: uuid.UUID) -> WorkflowDraft:
@@ -116,7 +116,7 @@ class WorkflowDraftService:
     async def delete_draft(
         self, draft: WorkflowDraft, user_id: uuid.UUID, delete_linked_workflow: bool = False
     ) -> None:
-        # by default the FK is ON DELETE SET NULL, so the synced My Workflows copy just
+        # by default the FK is ON DELETE SET NULL, so the synced My Components copy just
         # loses its "edit in builder" link and stays. The user can opt to drop it too -
         # every version synced from this canvas. One transaction either way.
         async with self.uow:
@@ -259,11 +259,11 @@ class WorkflowDraftService:
         )
         return workflow_doc, components, ports
 
-    async def sync_to_my_workflows(self, draft: WorkflowDraft, user_id: uuid.UUID) -> Component:
-        """Mirror the draft's generated archive into the user's My Workflows list.
+    async def sync_to_my_components(self, draft: WorkflowDraft, user_id: uuid.UUID) -> Component:
+        """Mirror the draft's generated archive into the user's My Components list.
 
         Not the same as making a workflow public - that stays a separate, explicit action
-        on the My Workflows page (WorkflowsService.publish). This only materialises the
+        on its My Components page (WorkflowsService.publish). This only materialises the
         canvas as a DRAFT workflow.
 
         Deliberately separate from export: downloading a file should not create rows.
@@ -298,5 +298,5 @@ class WorkflowDraftService:
             )
             await self.uow.commit()
         workflow = await self.components_service.reload(workflow)
-        logger.info(f"Synced draft {draft.id} into My Workflows as workflow {workflow.id}")
+        logger.info(f"Synced draft {draft.id} into My Components as workflow {workflow.id}")
         return workflow

@@ -212,7 +212,7 @@ class WorkflowsService:
 
     create_from_upload, update_step_component and execute_step_command are use cases, each
     one transaction. upsert_from_draft is not: it runs inside the unit of work of
-    WorkflowDraftService.sync_to_my_workflows."""
+    WorkflowDraftService.sync_to_my_components."""
 
     def __init__(self, uow: UnitOfWork, components_service: ComponentsService, tools_service: ToolsService):
         self.uow = uow
@@ -856,7 +856,7 @@ class WorkflowsService:
                 raise WorkflowCycleError(parent.name, child.name)
 
     async def linked_workflows(self, draft_ids: set[uuid.UUID]) -> dict[uuid.UUID, Component]:
-        """{draft_id: newest workflow version} for the drafts synced to My Workflows."""
+        """{draft_id: newest workflow version} for the drafts synced to My Components."""
         workflows = await self.uow.workflows.find_all_by_draft_ids(draft_ids)
         return {w.workflow.draft_id: w for w in workflows if w.workflow is not None and w.workflow.draft_id}
 

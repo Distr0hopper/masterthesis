@@ -44,7 +44,7 @@ export const workflowDraftsService = {
   },
 
   // materialises the canvas as a Workflow row in My Components (idempotent per draft).
-  syncToMyWorkflows(id: string): Promise<SyncedWorkflowDto> {
+  syncToMyComponents(id: string): Promise<SyncedWorkflowDto> {
     return apiClient.post(`${ENDPOINT}/${id}/sync`);
   },
 };

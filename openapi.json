@@ -3017,9 +3017,9 @@
         "tags": [
           "workflow-drafts"
         ],
-        "summary": "Sync Draft To My Workflows",
-        "description": "Mirror the draft into My Workflows as a Workflow row. Idempotent per draft.",
-        "operationId": "sync_draft_to_my_workflows_workflow_drafts__draft_id__sync_post",
+        "summary": "Sync Draft To My Components",
+        "description": "Mirror the draft into My Components as a Workflow row. Idempotent per draft.",
+        "operationId": "sync_draft_to_my_components_workflow_drafts__draft_id__sync_post",
         "security": [
           {
             "HTTPBearer": []

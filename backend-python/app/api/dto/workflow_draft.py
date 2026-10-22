@@ -26,8 +26,8 @@ class WorkflowDraftListItemDto(CamelModel):
     name: str
     node_count: int
     updated_at: datetime
-    # the Workflow this draft has been synced to in My Workflows, if any - drives the
-    # "also delete the My Workflows copy?" prompt on delete
+    # the Workflow this draft has been synced to in My Components, if any - drives the
+    # "also delete its versions in My Components?" prompt on delete
     linked_workflow: LinkedWorkflowDto | None = None
 
 

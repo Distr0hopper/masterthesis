@@ -102,7 +102,7 @@ async def delete_draft(
     draft_id: uuid.UUID,
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
     service: Annotated[WorkflowDraftService, Depends(WorkflowDraftService.get_service)],
-    # opt-in: also delete the Workflow this draft was synced to in My Workflows
+    # opt-in: also delete the Workflow this draft was synced to in My Components
     delete_linked_workflow: Annotated[bool, Query(alias="deleteLinkedWorkflow")] = False,
 ) -> Response:
     draft = await service.get_draft(draft_id, current_user.id)
@@ -182,16 +182,16 @@ async def export_draft_inputs(
         status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse, "description": "Canvas cannot be synced"},
     },
 )
-async def sync_draft_to_my_workflows(
+async def sync_draft_to_my_components(
     draft_id: uuid.UUID,
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
     service: Annotated[WorkflowDraftService, Depends(WorkflowDraftService.get_service)],
 ) -> SyncedWorkflowDto:
-    """Mirror the draft into My Workflows as a Workflow row. Idempotent per draft."""
+    """Mirror the draft into My Components as a Workflow row. Idempotent per draft."""
     draft = await service.get_draft(draft_id, current_user.id)
-    workflow = await service.sync_to_my_workflows(draft, current_user.id)
+    workflow = await service.sync_to_my_components(draft, current_user.id)
 
-    logger.info(f"Synced workflow draft {draft_id} into My Workflows as workflow {workflow.id}")
+    logger.info(f"Synced workflow draft {draft_id} into My Components as workflow {workflow.id}")
     return SyncedWorkflowDto(
         workflow_id=workflow.id,
         name=workflow.name,

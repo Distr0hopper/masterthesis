@@ -88,6 +88,25 @@ export function serializeCanvasState(nodes: ComponentFlowNode[], edges: Edge[]):
 }
 
 /**
+ * What a Save would change, as one comparable string: the name as it would be saved, each
+ * node's place and settings, each edge's ports. Leaves out what React Flow adds on its own
+ * (selection, measured size, dragging), so clicking around never counts as an edit.
+ */
+export function canvasFingerprint(name: string, nodes: ComponentFlowNode[], edges: Edge[]): string {
+  return JSON.stringify({
+    name: name.trim() || DEFAULT_WORKFLOW_NAME,
+    nodes: nodes.map(({ id, type, position, data }) => ({ id, type, position, data })),
+    edges: edges.map(({ id, source, target, sourceHandle, targetHandle }) => ({
+      id,
+      source,
+      target,
+      sourceHandle,
+      targetHandle,
+    })),
+  });
+}
+
+/**
  * Parse a stored `canvasState` string back into a usable canvas, dropping anything
  * malformed rather than failing the whole restore. Returns null when the payload is not
  * even readable JSON. Pure - no React, no network - so it is directly unit-testable.

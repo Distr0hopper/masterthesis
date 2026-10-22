@@ -16,6 +16,7 @@ interface WorkflowTopBarProps {
   onExportInputs: () => void;
   isExportingInputs: boolean;
   updatedAt: string | null;
+  isDirty: boolean;
   linkedWorkflowId: string | null;
 }
 
@@ -29,6 +30,7 @@ export function WorkflowTopBar({
   onExportInputs,
   isExportingInputs,
   updatedAt,
+  isDirty,
   linkedWorkflowId,
 }: WorkflowTopBarProps) {
   const savedAgo = useRelativeTime(updatedAt);
@@ -54,7 +56,13 @@ export function WorkflowTopBar({
       </div>
 
       <div className="flex items-center gap-3">
-        {savedAgo && <span className="shrink-0 text-xs text-slate-400">Saved {savedAgo}</span>}
+        {isDirty ? (
+          <span className="inline-flex shrink-0 items-center gap-1.5 text-xs text-slate-500">
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden /> Unsaved changes
+          </span>
+        ) : (
+          savedAgo && <span className="shrink-0 text-xs text-slate-400">Saved {savedAgo}</span>
+        )}
 
         {/* the way back to where the detail page's "Edit in Workflow Builder" came from */}
         {linkedWorkflowId && (

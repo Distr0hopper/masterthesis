@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useBlocker, useNavigate, useParams } from 'react-router-dom';
 import {
   ReactFlowProvider,
   addEdge,
@@ -14,6 +14,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { CanvasNotices } from '@/components/workflow-builder/CanvasNotices';
 import { WorkflowCanvas } from '@/components/workflow-builder/WorkflowCanvas';
 import { CanvasValidationDialog } from '@/components/workflow-builder/CanvasValidationDialog';
+import { UnsavedChangesDialog } from '@/components/workflow-builder/UnsavedChangesDialog';
 import { WorkflowInspector } from '@/components/workflow-builder/WorkflowInspector';
 import { WorkflowSidebar } from '@/components/workflow-builder/WorkflowSidebar';
 import { WorkflowTopBar } from '@/components/workflow-builder/WorkflowTopBar';
@@ -26,6 +27,7 @@ import {
 } from '@/api/compatibility';
 import {
   DEFAULT_WORKFLOW_NAME,
+  canvasFingerprint,
   parseCanvasState,
   serializeCanvasState,
 } from '@/components/workflow-builder/lib/canvasState';
@@ -81,6 +83,12 @@ export default function WorkflowBuilderPage() {
   // what restoring found wrong with the saved canvas - rendered by CanvasNotices
   const [restoreReport, setRestoreReport] = useState({ unreadable: false, dropped: false });
 
+  // the canvas as the server last stored it - set on restore and after every persist; an
+  // empty canvas counts as saved, so opening /builder/new and leaving again asks nothing
+  const [savedFingerprint, setSavedFingerprint] = useState<string | null>(() =>
+    isNew ? canvasFingerprint(DEFAULT_WORKFLOW_NAME, [], []) : null,
+  );
+
   useEffect(() => {
     if (!draft || restoredDraftId === draft.id) return;
     setRestoredDraftId(draft.id);
@@ -89,10 +97,12 @@ export default function WorkflowBuilderPage() {
 
     const parsed = parseCanvasState(draft.canvasState);
     if (!parsed) {
+      setSavedFingerprint(canvasFingerprint(draft.name, [], []));
       setRestoreReport({ unreadable: true, dropped: false });
       return;
     }
 
+    setSavedFingerprint(canvasFingerprint(draft.name, parsed.nodes, parsed.edges));
     setNodes(parsed.nodes);
     setEdges(parsed.edges);
     setMissingComponentIds(new Set(draft.missingComponentIds));
@@ -244,27 +254,33 @@ export default function WorkflowBuilderPage() {
       canvasState: serializeCanvasState(nodes, edges),
       nodeCount: nodes.length,
     };
+    // what this request stores - edits made while it is in flight still count as unsaved
+    const fingerprint = canvasFingerprint(name, nodes, edges);
 
     if (isNew) {
       const created = await createDraft(dto);
       setRestoredDraftId(created.id);
+      setSavedFingerprint(fingerprint);
       setMissingComponentIds(new Set(created.missingComponentIds));
-      navigate(ROUTES.builderWorkflow(created.id), { replace: true });
+      // flagged for the blocker: this render still sees the canvas as unsaved
+      navigate(ROUTES.builderWorkflow(created.id), { replace: true, state: { saved: true } });
       return { id: created.id, missingComponentIds: created.missingComponentIds };
     }
 
     const updated = await updateDraft(dto);
+    setSavedFingerprint(fingerprint);
     setMissingComponentIds(new Set(updated.missingComponentIds));
     return { id: draftId, missingComponentIds: updated.missingComponentIds };
   }, [isNew, draftId, workflowName, nodes, edges, createDraft, updateDraft, navigate]);
 
-  const handleSave = useCallback(async () => {
+  /** Resolves whether the canvas is stored now - syncing to My Components may still have failed. */
+  const handleSave = useCallback(async (): Promise<boolean> => {
     let saved: { id: string; missingComponentIds: string[] };
     try {
       saved = await persist();
     } catch (error) {
       toast.error(getErrorMessage(error, 'Could not save this workflow.'));
-      return;
+      return false;
     }
 
     // syncing would only fail on the deleted components - say so instead of a generic error
@@ -274,7 +290,7 @@ export default function WorkflowBuilderPage() {
       toast.warning('Workflow saved, but not added to My Components yet.', {
         description: `Deleted component${missingLabels.length === 1 ? '' : 's'} on the canvas: ${missingLabels.join(', ')}. Remove or replace ${missingLabels.length === 1 ? 'it' : 'them'}, then save again.`,
       });
-      return;
+      return true;
     }
 
     try {
@@ -288,7 +304,36 @@ export default function WorkflowBuilderPage() {
         description: getErrorMessage(error, 'Finish the canvas, then save again.'),
       });
     }
+    return true;
   }, [persist, nodes, syncToMyWorkflows, navigate]);
+
+  // compared on every render - cheap next to what React Flow does per frame
+  const isDirty =
+    restored && savedFingerprint !== null && canvasFingerprint(workflowName, nodes, edges) !== savedFingerprint;
+
+  // leaving within the app: asked in our own dialog, with saving as one of the answers
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      isDirty &&
+      currentLocation.pathname !== nextLocation.pathname &&
+      !(nextLocation.state as { saved?: boolean } | null)?.saved,
+  );
+  const [isSavingToLeave, setIsSavingToLeave] = useState(false);
+  const saveAndLeave = useCallback(async () => {
+    setIsSavingToLeave(true);
+    const saved = await handleSave();
+    setIsSavingToLeave(false);
+    if (saved) blocker.proceed?.();
+    else blocker.reset?.();
+  }, [handleSave, blocker]);
+
+  // closing the tab or reloading: only the browser's own prompt can stop that
+  useEffect(() => {
+    if (!isDirty) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [isDirty]);
 
   const runExport = useCallback(async () => {
     try {
@@ -349,13 +394,14 @@ export default function WorkflowBuilderPage() {
         <WorkflowTopBar
           workflowName={workflowName}
           onWorkflowNameChange={setWorkflowName}
-          onSave={handleSave}
+          onSave={() => void handleSave()}
           isSaving={isCreating || isUpdating}
           onExport={handleExport}
           isExporting={isExporting}
           onExportInputs={() => void handleExportInputs()}
           isExportingInputs={isExportingInputs}
           updatedAt={draft?.updatedAt ?? null}
+          isDirty={isDirty}
           linkedWorkflowId={draft?.linkedWorkflowId ?? null}
         />
         <div className="flex min-h-0 flex-1">
@@ -399,6 +445,13 @@ export default function WorkflowBuilderPage() {
         onOpenChange={setValidationOpen}
         errors={validationErrors}
         onProceed={handleProceedAnyway}
+      />
+      <UnsavedChangesDialog
+        open={blocker.state === 'blocked'}
+        onStay={() => blocker.reset?.()}
+        onLeave={() => blocker.proceed?.()}
+        onSaveAndLeave={() => void saveAndLeave()}
+        isSaving={isSavingToLeave}
       />
     </ReactFlowProvider>
   );

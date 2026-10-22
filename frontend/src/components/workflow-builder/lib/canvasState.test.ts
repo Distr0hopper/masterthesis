@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseCanvasState, serializeCanvasState } from './canvasState';
+import { canvasFingerprint, parseCanvasState, serializeCanvasState } from './canvasState';
 import { COMPONENT_EDGE_TYPE } from '../types';
 import type { ComponentFlowNode } from '../types';
 
@@ -212,5 +212,32 @@ describe('parseCanvasState', () => {
     expect(parsed.nodes).toEqual([]);
     expect(parsed.edges).toEqual([]);
     expect(parsed.droppedNodeCount).toBe(0);
+  });
+});
+
+// the fixtures predate the node kind - the fingerprint doesn't care what is in data
+const flowNode = (n: object) => n as unknown as ComponentFlowNode;
+
+describe('what counts as an unsaved change', () => {
+  const saved = () => canvasFingerprint('pipeline', [flowNode(node('a'))], [edge('e', 'a', 'a')]);
+
+  it('ignores what React Flow adds on its own - selecting or measuring a node', () => {
+    const touched = { ...node('a'), selected: true, dragging: false, measured: { width: 200, height: 80 } };
+    const selectedEdge = { ...edge('e', 'a', 'a'), selected: true };
+    expect(canvasFingerprint('pipeline', [flowNode(touched)], [selectedEdge])).toBe(saved());
+  });
+
+  it('ignores whitespace the save trims off the name', () => {
+    expect(canvasFingerprint(' pipeline ', [flowNode(node('a'))], [edge('e', 'a', 'a')])).toBe(saved());
+  });
+
+  it('counts a moved node, a changed setting, a removed edge and a new name', () => {
+    const moved = { ...node('a'), position: { x: 99, y: 20 } };
+    const configured = { ...node('a'), data: { ...node('a').data, parameterValues: { k: '3' } } };
+
+    expect(canvasFingerprint('pipeline', [flowNode(moved)], [edge('e', 'a', 'a')])).not.toBe(saved());
+    expect(canvasFingerprint('pipeline', [flowNode(configured)], [edge('e', 'a', 'a')])).not.toBe(saved());
+    expect(canvasFingerprint('pipeline', [flowNode(node('a'))], [])).not.toBe(saved());
+    expect(canvasFingerprint('renamed', [flowNode(node('a'))], [edge('e', 'a', 'a')])).not.toBe(saved());
   });
 });

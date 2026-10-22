@@ -20,7 +20,7 @@ STRANGER = User(id=uuid.uuid4(), email="stranger@example.com")
 OWNER_COMMAND_RELS = {"updateDescription", "updateDomain", "publish", "unpublish", "deprecate", "undeprecate"}
 LOGGED_IN_COMMAND_RELS = {"favorite", "unfavorite"}
 TOOL_COMMAND_RELS = {"updateFormatLabels", "repackage"}
-OTHER_RELS = {"self", "download", "delete", "impact", "publishImpact", "addVersion"}
+OTHER_RELS = {"self", "download", "delete", "impact", "publishImpact", "addVersion", "builderDraft"}
 
 
 def component(kind: ComponentKind, source: ComponentSource = ComponentSource.MANUAL_UPLOAD) -> Component:
@@ -132,6 +132,24 @@ def test_delete_is_offered_only_on_drafts(status: ComponentStatus, offered: bool
     c.status = status
     assert ("delete" in ComponentLinkBuilder(OWNER)._filter_links(c)) is offered
     assert "delete" not in ComponentLinkBuilder(STRANGER)._filter_links(c)
+
+
+@pytest.mark.parametrize("status", list(ComponentStatus))
+def test_the_builder_canvas_is_offered_to_its_owner_in_every_status(status: ComponentStatus) -> None:
+    # a published version has no delete link anymore - the way back into the builder must not hang on it
+    c = component(ComponentKind.WORKFLOW)
+    c.status = status
+    draft_id = uuid.uuid4()
+    c.workflow.draft_id = draft_id
+
+    assert ComponentLinkBuilder(OWNER)._filter_links(c)["builderDraft"].href == f"/workflow-drafts/{draft_id}"
+    assert "builderDraft" not in ComponentLinkBuilder(STRANGER)._filter_links(c)
+
+
+def test_no_builder_canvas_is_offered_once_it_is_deleted_or_for_an_upload() -> None:
+    # ON DELETE SET NULL: the workflow outlives its canvas
+    assert "builderDraft" not in ComponentLinkBuilder(OWNER)._filter_links(component(ComponentKind.WORKFLOW))
+    assert "builderDraft" not in ComponentLinkBuilder(OWNER)._filter_links(component(ComponentKind.TOOL))
 
 
 def test_command_links_point_at_the_commands_endpoint_of_the_kind() -> None:

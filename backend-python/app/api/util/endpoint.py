@@ -5,6 +5,7 @@ class Endpoints:
     COMPONENTS_ROOT = "/components"
     TOOLS_ROOT = "/tools"
     WORKFLOWS_ROOT = "/workflows"
+    WORKFLOW_DRAFTS_ROOT = "/workflow-drafts"
 
     @staticmethod
     def component_by_id(component_id: uuid.UUID) -> str:
@@ -37,6 +38,10 @@ class Endpoints:
     @staticmethod
     def workflow_versions_by_id(workflow_id: uuid.UUID) -> str:
         return f"{Endpoints.WORKFLOWS_ROOT}/{workflow_id}/versions"
+
+    @staticmethod
+    def workflow_draft_by_id(draft_id: uuid.UUID) -> str:
+        return f"{Endpoints.WORKFLOW_DRAFTS_ROOT}/{draft_id}"
 
     @staticmethod
     def workflow_step_by_id(step_id: uuid.UUID) -> str:

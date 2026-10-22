@@ -43,6 +43,9 @@ class ComponentLinkBuilder(BaseLinkBuilder[Component, ComponentPermissionValidat
             links["addVersion"] = Link(href=Endpoints.tool_versions_by_id(entity.id), method=HttpMethod.POST)
         else:
             links["addVersion"] = Link(href=Endpoints.workflow_versions_by_id(entity.id), method=HttpMethod.POST)
+            if lifecycle.edited_in_builder(entity):
+                draft_id = entity.workflow.draft_id
+                links["builderDraft"] = Link(href=Endpoints.workflow_draft_by_id(draft_id), method=HttpMethod.GET)
         return links
 
     def _is_link_allowed(self, rel: str, entity: Component) -> bool:
@@ -66,5 +69,9 @@ class ComponentLinkBuilder(BaseLinkBuilder[Component, ComponentPermissionValidat
                 return self._validator.can_execute(entity, publish) and COMPONENT_COMMANDS[publish].available(entity)
             case "addVersion":
                 return self._validator.can_add_uploaded_version(entity)
+            case "builderDraft":
+                # the canvas its versions are saved from - drafts are owner-scoped, and it
+                # stays the way to the next version whatever this one's status
+                return self._validator.can_update(entity)
             case _:
                 return False

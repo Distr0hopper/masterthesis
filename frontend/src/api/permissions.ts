@@ -59,3 +59,5 @@ export const canConfirm = (links: HateoasLinks | undefined | null): boolean => h
 export const canAddVersion = (links: HateoasLinks | undefined | null): boolean => hasLink(links, 'addVersion');
 
 export const canRepackage = (links: HateoasLinks | undefined | null): boolean => hasLink(links, 'repackage');
+
+export const canEditInBuilder = (links: HateoasLinks | undefined | null): boolean => hasLink(links, 'builderDraft');

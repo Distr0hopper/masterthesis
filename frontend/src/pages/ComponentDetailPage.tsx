@@ -31,7 +31,11 @@ export default function ComponentDetailPage({ kind }: ComponentDetailPageProps) 
   const routes = KIND_ROUTES[kind];
   const copy = KIND_COPY[kind];
   const backTo = (location.state as { from?: string } | null)?.from ?? routes.browse;
-  const backLabel = backTo.startsWith(ROUTES.myComponents) ? 'Back to My Components' : 'Back to Browse';
+  const backLabel = backTo.startsWith(ROUTES.myComponents)
+    ? 'Back to My Components'
+    : backTo.startsWith(ROUTES.builder)
+      ? 'Back to Workflow Builder'
+      : 'Back to Browse';
 
   if (isLoading) {
     return <p className="text-slate-500">Loading...</p>;

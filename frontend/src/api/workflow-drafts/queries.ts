@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth.store';
 import { componentKeys } from '@/api/components/queries';
 import { workflowDraftsService } from './service';
-import type { WriteWorkflowDraftDto } from './types';
+import type { WorkflowDraftDetailDto, WriteWorkflowDraftDto } from './types';
 
 export const draftKeys = {
   all: ['workflow-drafts'] as const,
@@ -70,7 +70,15 @@ export const useSyncDraftToMyWorkflows = () => {
 
   return useMutation({
     mutationFn: (id: string) => workflowDraftsService.syncToMyWorkflows(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: componentKeys.all }),
+    onSuccess: (synced, id) => {
+      // the first sync creates the link back to My Components, a sync after publishing moves
+      // it to the new version - the cached draft (staleTime: Infinity) would miss both
+      queryClient.setQueryData<WorkflowDraftDetailDto>(draftKeys.detail(id), (draft) =>
+        draft ? { ...draft, linkedWorkflowId: synced.workflowId } : draft,
+      );
+      queryClient.invalidateQueries({ queryKey: draftKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: componentKeys.all });
+    },
   });
 };
 

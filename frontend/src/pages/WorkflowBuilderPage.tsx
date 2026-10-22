@@ -356,6 +356,7 @@ export default function WorkflowBuilderPage() {
           onExportInputs={() => void handleExportInputs()}
           isExportingInputs={isExportingInputs}
           updatedAt={draft?.updatedAt ?? null}
+          linkedWorkflowId={draft?.linkedWorkflowId ?? null}
         />
         <div className="flex min-h-0 flex-1">
           <WorkflowSidebar rankAgainst={rankAgainst} />

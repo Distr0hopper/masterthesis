@@ -1,7 +1,10 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button.tsx';
+import { ComponentKind } from '@/api/components';
 import type { WorkflowDraftListItemDto } from '@/api/workflow-drafts';
+import { ROUTES, componentDetailRoute } from '@/lib/routes';
 import { DeleteDraftDialog } from './DeleteDraftDialog';
 
 interface DraftCardActionsProps {
@@ -13,9 +16,21 @@ export function DraftCardActions({ draft }: DraftCardActionsProps) {
 
   return (
     <>
+      {draft.linkedWorkflowId && (
+        <Button asChild variant="outline" size="sm" title="Its page in My Components - publish it, set its details, see its versions">
+          <Link
+            to={componentDetailRoute(ComponentKind.WORKFLOW, draft.linkedWorkflowId)}
+            state={{ from: ROUTES.builder }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            View in My Components
+          </Link>
+        </Button>
+      )}
       <Button
         variant="destructive"
         size="sm"
+        className="ml-auto"
         onClick={(e) => {
           e.stopPropagation();
           setDeleteDialogOpen(true);

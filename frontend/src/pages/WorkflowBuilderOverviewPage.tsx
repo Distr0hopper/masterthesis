@@ -66,6 +66,7 @@ export default function WorkflowBuilderOverviewPage() {
               tabIndex={0}
               onClick={() => navigate(ROUTES.builderWorkflow(draft.id))}
               onKeyDown={(e) => {
+                if (e.target !== e.currentTarget) return;
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
                   navigate(ROUTES.builderWorkflow(draft.id));
@@ -83,7 +84,7 @@ export default function WorkflowBuilderOverviewPage() {
                   Saved {formatRelativeTime(draft.updatedAt)}
                 </p>
 
-                <div className="flex justify-end border-t pt-3">
+                <div className="flex items-center gap-2 border-t pt-3">
                   <DraftCardActions draft={draft} />
                 </div>
               </CardContent>

@@ -11,6 +11,8 @@ from app.api.dto.workflow_draft import (
     WorkflowDraftListItemDto,
     WorkflowDraftWriteRequestDto,
 )
+from app.api.exception.exceptions import ForbiddenException
+from app.api.permission.workflow_draft_permission_validator import WorkflowDraftPermissionValidator
 from app.api.transformer.workflow_draft_transformer import WorkflowDraftTransformer
 from app.application.service.auth_service import AuthService
 from app.application.service.workflow_draft_service import WorkflowDraftService
@@ -51,6 +53,9 @@ async def create_draft(
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
     service: Annotated[WorkflowDraftService, Depends(WorkflowDraftService.get_service)],
 ) -> WorkflowDraftDetailDto:
+    if not WorkflowDraftPermissionValidator(current_user).can_create():
+        raise ForbiddenException("Insufficient permission to create a workflow draft")
+
     draft = await service.create_draft(
         name=dto.name,
         canvas_state=dto.canvas_state,
@@ -67,7 +72,10 @@ async def get_draft(
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
     service: Annotated[WorkflowDraftService, Depends(WorkflowDraftService.get_service)],
 ) -> WorkflowDraftDetailDto:
-    draft = await service.get_draft(draft_id, current_user.id)
+    draft = await service.get_draft(draft_id)
+    if not WorkflowDraftPermissionValidator(current_user).can_read(draft):
+        raise ForbiddenException("Insufficient permission to open this workflow draft")
+
     linked = await service.linked_workflows({draft.id})
     return WorkflowDraftTransformer.to_detail(
         draft, linked.get(draft.id), missing_component_ids=await service.missing_component_ids(draft)
@@ -81,7 +89,10 @@ async def update_draft(
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
     service: Annotated[WorkflowDraftService, Depends(WorkflowDraftService.get_service)],
 ) -> WorkflowDraftDetailDto:
-    draft = await service.get_draft(draft_id, current_user.id)
+    draft = await service.get_draft(draft_id)
+    if not WorkflowDraftPermissionValidator(current_user).can_update(draft):
+        raise ForbiddenException("Insufficient permission to update this workflow draft")
+
     updated = await service.update_draft(
         draft=draft,
         name=dto.name,
@@ -105,8 +116,11 @@ async def delete_draft(
     # opt-in: also delete the Workflow this draft was synced to in My Components
     delete_linked_workflow: Annotated[bool, Query(alias="deleteLinkedWorkflow")] = False,
 ) -> Response:
-    draft = await service.get_draft(draft_id, current_user.id)
-    await service.delete_draft(draft, current_user.id, delete_linked_workflow)
+    draft = await service.get_draft(draft_id)
+    if not WorkflowDraftPermissionValidator(current_user).can_delete(draft):
+        raise ForbiddenException("Insufficient permission to delete this workflow draft")
+
+    await service.delete_draft(draft, delete_linked_workflow)
     logger.info(
         f"Deleted workflow draft {draft_id}"
         f"{' and its linked workflow' if delete_linked_workflow else ''}"
@@ -128,7 +142,10 @@ async def export_draft(
     current_user: Annotated[User, Depends(AuthService.get_current_user)],
     service: Annotated[WorkflowDraftService, Depends(WorkflowDraftService.get_service)],
 ) -> Response:
-    draft = await service.get_draft(draft_id, current_user.id)
+    draft = await service.get_draft(draft_id)
+    if not WorkflowDraftPermissionValidator(current_user).can_read(draft):
+        raise ForbiddenException("Insufficient permission to export this workflow draft")
+
     filename, zip_bytes = await service.export_to_zip(draft)
 
     logger.info(f"Exported workflow draft {draft_id} as '{filename}'")
@@ -159,7 +176,10 @@ async def export_draft_inputs(
     service: Annotated[WorkflowDraftService, Depends(WorkflowDraftService.get_service)],
 ) -> Response:
     """The inputs.yaml for the workflow /export produces: one placeholder per workflow input."""
-    draft = await service.get_draft(draft_id, current_user.id)
+    draft = await service.get_draft(draft_id)
+    if not WorkflowDraftPermissionValidator(current_user).can_read(draft):
+        raise ForbiddenException("Insufficient permission to export this workflow draft")
+
     filename, inputs_yaml = await service.export_inputs_yaml(draft)
 
     logger.info(f"Exported inputs of workflow draft {draft_id} as '{filename}'")
@@ -188,8 +208,11 @@ async def sync_draft_to_my_components(
     service: Annotated[WorkflowDraftService, Depends(WorkflowDraftService.get_service)],
 ) -> SyncedWorkflowDto:
     """Mirror the draft into My Components as a Workflow row. Idempotent per draft."""
-    draft = await service.get_draft(draft_id, current_user.id)
-    workflow = await service.sync_to_my_components(draft, current_user.id)
+    draft = await service.get_draft(draft_id)
+    if not WorkflowDraftPermissionValidator(current_user).can_update(draft):
+        raise ForbiddenException("Insufficient permission to sync this workflow draft")
+
+    workflow = await service.sync_to_my_components(draft)
 
     logger.info(f"Synced workflow draft {draft_id} into My Components as workflow {workflow.id}")
     return SyncedWorkflowDto(

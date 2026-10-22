@@ -6,7 +6,6 @@ from fastapi import Depends
 
 from app.application.exception.workflow_draft_exceptions import (
     ExportValidationError,
-    WorkflowDraftForbiddenError,
     WorkflowDraftNotFoundError,
 )
 from app.application.service.components_service import ComponentsService
@@ -70,13 +69,11 @@ class WorkflowDraftService:
         """{draft_id: newest workflow version} for the drafts synced to a My Components entry."""
         return await self.workflows_service.linked_workflows(draft_ids)
 
-    async def get_draft(self, draft_id: uuid.UUID, user_id: uuid.UUID) -> WorkflowDraft:
-        """Fetch one draft, enforcing ownership. Every mutating path goes through this."""
+    async def get_draft(self, draft_id: uuid.UUID) -> WorkflowDraft:
+        """Fetch one draft - who may open it is the router's check (WorkflowDraftPermissionValidator)."""
         draft = await self.uow.drafts.find_by_id(draft_id)
         if draft is None:
             raise WorkflowDraftNotFoundError(draft_id)
-        if draft.created_by_id != user_id:
-            raise WorkflowDraftForbiddenError()
         return draft
 
     async def create_draft(
@@ -113,15 +110,13 @@ class WorkflowDraftService:
             await self.uow.commit()
         return draft
 
-    async def delete_draft(
-        self, draft: WorkflowDraft, user_id: uuid.UUID, delete_linked_workflow: bool = False
-    ) -> None:
+    async def delete_draft(self, draft: WorkflowDraft, delete_linked_workflow: bool = False) -> None:
         # by default the FK is ON DELETE SET NULL, so the synced My Components copy just
         # loses its "edit in builder" link and stays. The user can opt to drop it too -
         # every version synced from this canvas. One transaction either way.
         async with self.uow:
             if delete_linked_workflow:
-                await self.components_service.remove_synced_from_draft(draft.id, user_id)
+                await self.components_service.remove_synced_from_draft(draft.id, draft.created_by_id)
             await self.uow.drafts.delete(draft)
             await self.uow.commit()
 
@@ -259,7 +254,7 @@ class WorkflowDraftService:
         )
         return workflow_doc, components, ports
 
-    async def sync_to_my_components(self, draft: WorkflowDraft, user_id: uuid.UUID) -> Component:
+    async def sync_to_my_components(self, draft: WorkflowDraft) -> Component:
         """Mirror the draft's generated archive into the user's My Components list.
 
         Not the same as making a workflow public - that stays a separate, explicit action
@@ -294,7 +289,8 @@ class WorkflowDraftService:
                 name=draft.name,
                 # the link the UI follows back into the builder, and the key this upsert is on
                 draft_id=draft.id,
-                created_by_id=user_id,
+                # the canvas's owner - drafts are owner-only, so that is who saved it
+                created_by_id=draft.created_by_id,
             )
             await self.uow.commit()
         workflow = await self.components_service.reload(workflow)

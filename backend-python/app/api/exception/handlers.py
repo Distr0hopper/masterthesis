@@ -31,7 +31,6 @@ from app.application.exception.favorites_exceptions import FavoritesRequireAuthE
 from app.application.exception.otp_exceptions import OtpRequestRateLimitedError
 from app.application.exception.workflow_draft_exceptions import (
     ExportValidationError,
-    WorkflowDraftForbiddenError,
     WorkflowDraftNotFoundError,
 )
 from app.application.exception.workflow_exceptions import (
@@ -185,10 +184,6 @@ async def _workflow_draft_not_found_handler(request: Request, exc: WorkflowDraft
     return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
-async def _workflow_draft_forbidden_handler(request: Request, exc: WorkflowDraftForbiddenError) -> JSONResponse:
-    return JSONResponse(status_code=status.HTTP_403_FORBIDDEN, content=ErrorResponse(detail=str(exc)).model_dump())
-
-
 async def _export_validation_handler(request: Request, exc: ExportValidationError) -> JSONResponse:
     return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
 
@@ -287,7 +282,6 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(WorkflowStepNotMatchedError, _workflow_step_not_matched_handler)
     app.add_exception_handler(WorkflowNotReadyToPublishError, _workflow_not_ready_to_publish_handler)
     app.add_exception_handler(WorkflowDraftNotFoundError, _workflow_draft_not_found_handler)
-    app.add_exception_handler(WorkflowDraftForbiddenError, _workflow_draft_forbidden_handler)
     app.add_exception_handler(ExportValidationError, _export_validation_handler)
     app.add_exception_handler(MissingCommandPayloadError, _missing_command_payload_handler)
     app.add_exception_handler(ConflictingAuxiliaryFileError, _conflicting_auxiliary_file_handler)

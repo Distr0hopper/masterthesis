@@ -7,11 +7,6 @@ class WorkflowDraftNotFoundError(Exception):
         self.draft_id = draft_id
 
 
-class WorkflowDraftForbiddenError(Exception):
-    def __init__(self, message: str = "Access denied") -> None:
-        super().__init__(message)
-
-
 class ExportValidationError(Exception):
     """The canvas cannot be turned into a valid CWL Workflow."""
 

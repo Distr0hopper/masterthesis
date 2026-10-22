@@ -36,11 +36,11 @@ export function DeleteDraftDialog({ draft, open, onOpenChange, onDeleted }: Dele
       title="Delete workflow?"
       description={`This will permanently remove "${draft.name}" from your saved workflows.`}
       linkedOption={
-        draft.linkedWorkflowId
+        draft.linkedWorkflow
           ? {
               label: (
                 <>
-                  Also delete its unpublished versions in <span className="font-medium">My Workflows</span>.
+                  Also delete its unpublished versions in <span className="font-medium">My Components</span>.
                   Published or deprecated versions always stay - others may already use them.
                 </>
               ),

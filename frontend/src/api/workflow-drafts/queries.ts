@@ -26,6 +26,7 @@ export const useWorkflowDraft = (id: string, enabled = true) => {
     queryFn: () => workflowDraftsService.getById(id),
     enabled: enabled && !!id,
     staleTime: Infinity,
+    refetchOnMount: 'always',
   });
 };
 
@@ -74,7 +75,9 @@ export const useSyncDraftToMyWorkflows = () => {
       // the first sync creates the link back to My Components, a sync after publishing moves
       // it to the new version - the cached draft (staleTime: Infinity) would miss both
       queryClient.setQueryData<WorkflowDraftDetailDto>(draftKeys.detail(id), (draft) =>
-        draft ? { ...draft, linkedWorkflowId: synced.workflowId } : draft,
+        draft
+          ? { ...draft, linkedWorkflow: { id: synced.workflowId, version: synced.version, status: synced.status } }
+          : draft,
       );
       queryClient.invalidateQueries({ queryKey: draftKeys.lists() });
       queryClient.invalidateQueries({ queryKey: componentKeys.all });

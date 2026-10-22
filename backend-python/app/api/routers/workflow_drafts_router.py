@@ -14,6 +14,7 @@ from app.api.dto.workflow_draft import (
 from app.api.transformer.workflow_draft_transformer import WorkflowDraftTransformer
 from app.application.service.auth_service import AuthService
 from app.application.service.workflow_draft_service import WorkflowDraftService
+from app.domain.models.component import ComponentStatus
 from app.domain.models.user import User
 
 router = APIRouter(prefix="/workflow-drafts", tags=["workflow-drafts"])
@@ -32,7 +33,7 @@ async def list_my_drafts(
     service: Annotated[WorkflowDraftService, Depends(WorkflowDraftService.get_service)],
 ) -> list[WorkflowDraftListItemDto]:
     drafts = await service.list_my_drafts(current_user.id)
-    linked = await service.linked_workflow_ids({d.id for d in drafts})
+    linked = await service.linked_workflows({d.id for d in drafts})
     return [WorkflowDraftTransformer.to_list_item(d, linked.get(d.id)) for d in drafts]
 
 
@@ -67,7 +68,7 @@ async def get_draft(
     service: Annotated[WorkflowDraftService, Depends(WorkflowDraftService.get_service)],
 ) -> WorkflowDraftDetailDto:
     draft = await service.get_draft(draft_id, current_user.id)
-    linked = await service.linked_workflow_ids({draft.id})
+    linked = await service.linked_workflows({draft.id})
     return WorkflowDraftTransformer.to_detail(
         draft, linked.get(draft.id), missing_component_ids=await service.missing_component_ids(draft)
     )
@@ -88,8 +89,11 @@ async def update_draft(
         node_count=dto.node_count,
     )
     logger.info(f"Updated workflow draft {draft_id}")
+    # what it is linked to doesn't change on a canvas update - but the response replaces the
+    # client's cached draft, so it has to carry the link along
+    linked = await service.linked_workflows({updated.id})
     return WorkflowDraftTransformer.to_detail(
-        updated, missing_component_ids=await service.missing_component_ids(updated)
+        updated, linked.get(updated.id), missing_component_ids=await service.missing_component_ids(updated)
     )
 
 
@@ -192,4 +196,6 @@ async def sync_draft_to_my_workflows(
         workflow_id=workflow.id,
         name=workflow.name,
         step_count=len(workflow.steps),
+        version=workflow.version,
+        status=ComponentStatus(workflow.status),
     )

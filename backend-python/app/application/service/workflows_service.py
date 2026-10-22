@@ -855,10 +855,10 @@ class WorkflowsService:
             if would_create_cycle(parent, child):
                 raise WorkflowCycleError(parent.name, child.name)
 
-    async def linked_workflow_ids(self, draft_ids: set[uuid.UUID]) -> dict[uuid.UUID, uuid.UUID]:
-        """{draft_id: newest workflow version id} for the drafts synced to My Workflows."""
+    async def linked_workflows(self, draft_ids: set[uuid.UUID]) -> dict[uuid.UUID, Component]:
+        """{draft_id: newest workflow version} for the drafts synced to My Workflows."""
         workflows = await self.uow.workflows.find_all_by_draft_ids(draft_ids)
-        return {w.workflow.draft_id: w.id for w in workflows if w.workflow is not None and w.workflow.draft_id}
+        return {w.workflow.draft_id: w for w in workflows if w.workflow is not None and w.workflow.draft_id}
 
     async def get_step_with_workflow(self, step_id: uuid.UUID) -> tuple[WorkflowStep, Component]:
         step = await self.uow.workflows.find_step_by_id(step_id)

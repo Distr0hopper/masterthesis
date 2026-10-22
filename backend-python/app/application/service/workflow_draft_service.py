@@ -66,9 +66,9 @@ class WorkflowDraftService:
     async def list_my_drafts(self, user_id: uuid.UUID) -> list[WorkflowDraft]:
         return await self.uow.drafts.find_all_by_user(user_id)
 
-    async def linked_workflow_ids(self, draft_ids: set[uuid.UUID]) -> dict[uuid.UUID, uuid.UUID]:
-        """{draft_id: newest workflow version id} for the drafts synced to a My Workflows entry."""
-        return await self.workflows_service.linked_workflow_ids(draft_ids)
+    async def linked_workflows(self, draft_ids: set[uuid.UUID]) -> dict[uuid.UUID, Component]:
+        """{draft_id: newest workflow version} for the drafts synced to a My Workflows entry."""
+        return await self.workflows_service.linked_workflows(draft_ids)
 
     async def get_draft(self, draft_id: uuid.UUID, user_id: uuid.UUID) -> WorkflowDraft:
         """Fetch one draft, enforcing ownership. Every mutating path goes through this."""

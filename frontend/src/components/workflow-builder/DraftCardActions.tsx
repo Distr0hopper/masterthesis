@@ -15,14 +15,11 @@ export function DraftCardActions({ draft }: DraftCardActionsProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   return (
-    // the card opens the canvas on click - nothing in here may trigger that, the dialog
-    // included: its portal leaves the DOM, but React still bubbles its clicks up to the card.
-    // `contents` keeps the buttons flex items of the card's footer
     <div className="contents" onClick={(e) => e.stopPropagation()}>
-      {draft.linkedWorkflowId && (
+      {draft.linkedWorkflow && (
         <Button asChild variant="outline" size="sm" title="Its page in My Components - publish it, set its details, see its versions">
           <Link
-            to={componentDetailRoute(ComponentKind.WORKFLOW, draft.linkedWorkflowId)}
+            to={componentDetailRoute(ComponentKind.WORKFLOW, draft.linkedWorkflow.id)}
             state={{ from: ROUTES.builder }}
           >
             View in My Components

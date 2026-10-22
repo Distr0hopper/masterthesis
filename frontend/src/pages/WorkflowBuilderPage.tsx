@@ -46,7 +46,7 @@ import {
 } from '@/api/workflow-drafts';
 import type { ComponentEdgeData, ComponentFlowNode } from '@/components/workflow-builder/types';
 import { getErrorMessage } from '@/lib/errors';
-import { ROUTES, myComponentsRoute } from '@/lib/routes';
+import { ROUTES } from '@/lib/routes';
 
 export default function WorkflowBuilderPage() {
   const { id } = useParams<{ id: string }>();
@@ -60,7 +60,7 @@ export default function WorkflowBuilderPage() {
   const [nodes, setNodes, onNodesChange] = useNodesState<ComponentFlowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
-  const { data: draft, isLoading, isError } = useWorkflowDraft(draftId, !isNew);
+  const { data: draft, isLoading, isFetching, isError } = useWorkflowDraft(draftId, !isNew);
   const { mutateAsync: createDraft, isPending: isCreating } = useCreateDraft();
   const { mutateAsync: updateDraft, isPending: isUpdating } = useUpdateDraft(draftId);
   const { mutateAsync: exportDraft, isPending: isExporting } = useExportDraft();
@@ -90,7 +90,8 @@ export default function WorkflowBuilderPage() {
   );
 
   useEffect(() => {
-    if (!draft || restoredDraftId === draft.id) return;
+    // waits for the fetch on open, not the cached copy from the last visit
+    if (!draft || isFetching || restoredDraftId === draft.id) return;
     setRestoredDraftId(draft.id);
 
     setWorkflowName(draft.name);
@@ -107,7 +108,7 @@ export default function WorkflowBuilderPage() {
     setEdges(parsed.edges);
     setMissingComponentIds(new Set(draft.missingComponentIds));
     setRestoreReport({ unreadable: false, dropped: parsed.droppedNodeCount > 0 || parsed.droppedEdgeCount > 0 });
-  }, [draft, restoredDraftId, setNodes, setEdges]);
+  }, [draft, isFetching, restoredDraftId, setNodes, setEdges]);
 
   // the nodes as rendered: deleted components flagged for ComponentNode. Derived rather
   // than stored (like checkedEdges), so the flag never ends up in a saved draft; only the
@@ -273,6 +274,9 @@ export default function WorkflowBuilderPage() {
     return { id: draftId, missingComponentIds: updated.missingComponentIds };
   }, [isNew, draftId, workflowName, nodes, edges, createDraft, updateDraft, navigate]);
 
+  // why the last Save couldn't reach My Components - shown above the canvas until one does
+  const [notSynced, setNotSynced] = useState<string | null>(null);
+
   /** Resolves whether the canvas is stored now - syncing to My Components may still have failed. */
   const handleSave = useCallback(async (): Promise<boolean> => {
     let saved: { id: string; missingComponentIds: string[] };
@@ -287,25 +291,22 @@ export default function WorkflowBuilderPage() {
     const missing = new Set(saved.missingComponentIds);
     const missingLabels = [...new Set(nodes.filter((n) => missing.has(n.data.componentId)).map((n) => n.data.label))];
     if (missingLabels.length > 0) {
-      toast.warning('Workflow saved, but not added to My Components yet.', {
-        description: `Deleted component${missingLabels.length === 1 ? '' : 's'} on the canvas: ${missingLabels.join(', ')}. Remove or replace ${missingLabels.length === 1 ? 'it' : 'them'}, then save again.`,
-      });
+      // the deleted components already have their own notice - this one says what it costs
+      setNotSynced(`replace the deleted component${missingLabels.length === 1 ? '' : 's'}, then save again.`);
+      toast.success('Workflow saved.');
       return true;
     }
 
     try {
-      await syncToMyWorkflows(saved.id);
-      toast.success('Saved to My Components.', {
-        description: 'Publishing is done from the My Components page.',
-        action: { label: 'My Components', onClick: () => navigate(myComponentsRoute({ kind: 'workflow' })) },
-      });
+      const synced = await syncToMyWorkflows(saved.id);
+      setNotSynced(null);
+      toast.success(`Saved - v${synced.version} in My Components is up to date.`);
     } catch (error) {
-      toast.warning('Workflow saved, but not added to My Components yet.', {
-        description: getErrorMessage(error, 'Finish the canvas, then save again.'),
-      });
+      setNotSynced(getErrorMessage(error, 'finish the canvas, then save again.'));
+      toast.success('Workflow saved.');
     }
     return true;
-  }, [persist, nodes, syncToMyWorkflows, navigate]);
+  }, [persist, nodes, syncToMyWorkflows]);
 
   // compared on every render - cheap next to what React Flow does per frame
   const isDirty =
@@ -402,7 +403,7 @@ export default function WorkflowBuilderPage() {
           isExportingInputs={isExportingInputs}
           updatedAt={draft?.updatedAt ?? null}
           isDirty={isDirty}
-          linkedWorkflowId={draft?.linkedWorkflowId ?? null}
+          linkedWorkflow={draft?.linkedWorkflow ?? null}
         />
         <div className="flex min-h-0 flex-1">
           <WorkflowSidebar rankAgainst={rankAgainst} />
@@ -421,6 +422,7 @@ export default function WorkflowBuilderPage() {
                 unreadable={restoreReport.unreadable}
                 dropped={restoreReport.dropped}
                 onDismissDropped={() => setRestoreReport((report) => ({ ...report, dropped: false }))}
+                notSynced={notSynced}
               />
               <div className="flex min-h-0 flex-1">
                 <WorkflowCanvas

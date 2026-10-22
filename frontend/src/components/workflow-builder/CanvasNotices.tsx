@@ -5,6 +5,7 @@ interface CanvasNoticesProps {
   unreadable: boolean;
   dropped: boolean;
   onDismissDropped: () => void;
+  notSynced: string | null;
 }
 
 /**
@@ -12,8 +13,8 @@ interface CanvasNoticesProps {
  * the canvas state on every render rather than announced once, so it can't be missed,
  * shown twice, or outlive the problem: replacing the last deleted component clears it.
  */
-export function CanvasNotices({ missingLabels, unreadable, dropped, onDismissDropped }: CanvasNoticesProps) {
-  if (missingLabels.length === 0 && !unreadable && !dropped) return null;
+export function CanvasNotices({ missingLabels, unreadable, dropped, onDismissDropped, notSynced }: CanvasNoticesProps) {
+  if (missingLabels.length === 0 && !unreadable && !dropped && !notSynced) return null;
   const count = missingLabels.length;
 
   return (
@@ -34,6 +35,15 @@ export function CanvasNotices({ missingLabels, unreadable, dropped, onDismissDro
               the repository:
             </span>{' '}
             {missingLabels.join(', ')}. Remove or replace {count === 1 ? 'it' : 'them'} before saving or exporting.
+          </span>
+        </p>
+      )}
+
+      {notSynced && (
+        <p role="status" className="flex items-start gap-2 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">
+          <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          <span>
+            <span className="font-medium">Saved, but not in My Components yet:</span> {notSynced}
           </span>
         </p>
       )}

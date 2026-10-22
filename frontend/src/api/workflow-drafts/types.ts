@@ -1,10 +1,18 @@
+import type { ComponentStatus } from '@/api/components';
+
+/** The newest version Save synced into My Components - the next Save works on it. */
+export interface LinkedWorkflowDto {
+  id: string;
+  version: number;
+  status: ComponentStatus;
+}
+
 export interface WorkflowDraftListItemDto {
   id: string;
   name: string;
   nodeCount: number;
   updatedAt: string;
-  /** the Workflow this draft is synced to in My Components, or null if it was never synced */
-  linkedWorkflowId: string | null;
+  linkedWorkflow: LinkedWorkflowDto | null;
 }
 
 export interface WorkflowDraftDetailDto {
@@ -14,7 +22,7 @@ export interface WorkflowDraftDetailDto {
   nodeCount: number;
   updatedAt: string;
   createdAt: string;
-  linkedWorkflowId: string | null;
+  linkedWorkflow: LinkedWorkflowDto | null;
   /** componentIds on the canvas whose component has since been deleted */
   missingComponentIds: string[];
 }
@@ -29,4 +37,6 @@ export interface SyncedWorkflowDto {
   workflowId: string;
   name: string;
   stepCount: number;
+  version: number;
+  status: ComponentStatus;
 }

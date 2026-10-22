@@ -3,6 +3,9 @@ import { ArrowUpRight, ChevronLeft, Download, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button.tsx';
 import { Input } from '@/components/ui/input.tsx';
 import { ComponentKind } from '@/api/components';
+import type { LinkedWorkflowDto } from '@/api/workflow-drafts';
+import { StatusBadge } from '@/components/common/StatusBadge';
+import { saveTarget } from './lib/saveTarget';
 import { ROUTES, componentDetailRoute } from '@/lib/routes';
 import { useRelativeTime } from '@/lib/useRelativeTime';
 
@@ -17,7 +20,7 @@ interface WorkflowTopBarProps {
   isExportingInputs: boolean;
   updatedAt: string | null;
   isDirty: boolean;
-  linkedWorkflowId: string | null;
+  linkedWorkflow: LinkedWorkflowDto | null;
 }
 
 export function WorkflowTopBar({
@@ -31,10 +34,11 @@ export function WorkflowTopBar({
   isExportingInputs,
   updatedAt,
   isDirty,
-  linkedWorkflowId,
+  linkedWorkflow,
 }: WorkflowTopBarProps) {
   const savedAgo = useRelativeTime(updatedAt);
   const { pathname } = useLocation();
+  const save = saveTarget(linkedWorkflow);
 
   return (
     <div className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white px-4">
@@ -64,25 +68,26 @@ export function WorkflowTopBar({
           savedAgo && <span className="shrink-0 text-xs text-slate-400">Saved {savedAgo}</span>
         )}
 
-        {/* the way back to where the detail page's "Edit in Workflow Builder" came from */}
-        {linkedWorkflowId && (
-          <Link
-            to={componentDetailRoute(ComponentKind.WORKFLOW, linkedWorkflowId)}
-            state={{ from: pathname }}
-            className="flex shrink-0 items-center gap-1 text-sm text-jmu-blue-800 hover:underline"
-            title="Its page in My Components - publish it, set its details, see its versions. Shows what was last saved."
-          >
-            View in My Components
-            <ArrowUpRight className="h-4 w-4" aria-hidden />
-          </Link>
+        {linkedWorkflow && (
+          <span className="flex shrink-0 items-center gap-2 text-sm">
+            <Link
+              to={componentDetailRoute(ComponentKind.WORKFLOW, linkedWorkflow.id)}
+              state={{ from: pathname }}
+              className="flex items-center gap-1 text-jmu-blue-800 hover:underline"
+              title="Its page in My Components - publish it, set its details, see its versions. Shows what was last saved."
+            >
+              View in My Components
+              <ArrowUpRight className="h-4 w-4" aria-hidden />
+            </Link>
+            <span className="text-slate-400">v{linkedWorkflow.version}</span>
+            <StatusBadge status={linkedWorkflow.status} />
+          </span>
         )}
 
         <div className="flex items-center gap-2">
-          {/* Save also syncs the workflow into "My Components"; publishing happens there */}
-          <Button variant="outline" onClick={onSave} disabled={isSaving}>
-            {isSaving ? 'Saving...' : 'Save'}
+          <Button variant="outline" onClick={onSave} disabled={isSaving} title={save.hint}>
+            {isSaving ? 'Saving...' : save.label}
           </Button>
-          {/* both exports persist first, so neither may start while a save is in flight */}
           <Button
             variant="outline"
             onClick={onExportInputs}

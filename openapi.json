@@ -4157,6 +4157,30 @@
         ],
         "title": "Link"
       },
+      "LinkedWorkflowDto": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ComponentStatus"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "version",
+          "status"
+        ],
+        "title": "LinkedWorkflowDto",
+        "description": "The newest version a draft's Save synced into My Components - what the next Save\noverwrites while it is a draft, and builds the next version on once it isn't."
+      },
       "MyItemsResponseDtoV1_Annotated_Union_ToolListItemDto__WorkflowListItemDto___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
         "properties": {
           "published": {
@@ -5066,13 +5090,22 @@
           "stepCount": {
             "type": "integer",
             "title": "Stepcount"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ComponentStatus"
           }
         },
         "type": "object",
         "required": [
           "workflowId",
           "name",
-          "stepCount"
+          "stepCount",
+          "version",
+          "status"
         ],
         "title": "SyncedWorkflowDto"
       },
@@ -6075,17 +6108,15 @@
             "format": "date-time",
             "title": "Createdat"
           },
-          "linkedWorkflowId": {
+          "linkedWorkflow": {
             "anyOf": [
               {
-                "type": "string",
-                "format": "uuid"
+                "$ref": "#/components/schemas/LinkedWorkflowDto"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Linkedworkflowid"
+            ]
           },
           "missingComponentIds": {
             "items": {
@@ -6127,17 +6158,15 @@
             "format": "date-time",
             "title": "Updatedat"
           },
-          "linkedWorkflowId": {
+          "linkedWorkflow": {
             "anyOf": [
               {
-                "type": "string",
-                "format": "uuid"
+                "$ref": "#/components/schemas/LinkedWorkflowDto"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Linkedworkflowid"
+            ]
           }
         },
         "type": "object",

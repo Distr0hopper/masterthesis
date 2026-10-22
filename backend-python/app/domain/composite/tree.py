@@ -6,7 +6,7 @@ tree has to be loaded first (see ComponentsRepository.load_tree). Each one walks
 structure the same way a caller would want it treated - uniformly, whatever the kind.
 """
 
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterator
 
 from app.domain.models.component import Component
 
@@ -97,17 +97,6 @@ def auxiliary_files(root: Component) -> list[tuple[str, str]]:
                 raise ConflictingTreeFileError(file.path)
             merged[file.path] = file.content
     return sorted(merged.items())
-
-
-def inherited_domains(children: Iterable[Component]) -> list[str]:
-    """The domains a workflow takes over from the components its steps run - their union, in
-    first-seen order. The default for a workflow that never got domains of its own (one
-    built on the canvas); its owner can change them later."""
-    seen: dict[str, None] = {}
-    for child in children:
-        for domain in child.domains:
-            seen.setdefault(domain.domain, None)
-    return list(seen)
 
 
 def has_nested_workflows(root: Component) -> bool:

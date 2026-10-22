@@ -13,6 +13,7 @@ import {
   FilePlus2,
   Pencil,
   PenLine,
+  Plus,
   Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -145,6 +146,8 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
   const canCreateVersion = canAddVersion(model._links) || canRepackage(model._links);
   const newVersionRoute = isWorkflow ? ROUTES.workflowNewVersion(model.id) : ROUTES.toolNewVersion(model.id);
   const canDelete = hasDeleteLink(model._links);
+  // nothing goes public without a domain - point the owner at the empty slot before they hit Publish
+  const needsDomain = model.domains.length === 0 && hasUpdateDomainLink(model._links);
   const canEdit =
     hasUpdateDescriptionLink(model._links) ||
     hasUpdateDomainLink(model._links) ||
@@ -218,7 +221,19 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
               is already published, so this older version can't be published anymore.
             </>
           ) : (
-            builderDraftId ? BUILDER_DRAFT_NOTICE : DRAFT_NOTICE[model.kind]
+            <>
+              {builderDraftId ? BUILDER_DRAFT_NOTICE : DRAFT_NOTICE[model.kind]}
+              {needsDomain && (
+                <>
+                  {' '}
+                  Before publishing,{' '}
+                  <button type="button" className="font-medium underline" onClick={() => setEditDialogOpen(true)}>
+                    add a domain
+                  </button>{' '}
+                  - others find and filter components by it.
+                </>
+              )}
+            </>
           )}
         </div>
       )}
@@ -407,7 +422,19 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
           <dl className="grid grid-cols-[max-content_1fr] items-center gap-x-6 gap-y-2 border-t pt-3 text-sm">
             <dt className="text-slate-500">Domains</dt>
             <dd className="flex flex-wrap gap-1.5">
-              {model.domains.length > 0 ? <DomainBadges domains={model.domains} /> : <span className="text-slate-400">None</span>}
+              {model.domains.length > 0 ? (
+                <DomainBadges domains={model.domains} />
+              ) : needsDomain ? (
+                <button
+                  type="button"
+                  onClick={() => setEditDialogOpen(true)}
+                  className="inline-flex items-center gap-1 rounded-md border border-dashed border-slate-300 px-2 py-0.5 text-xs font-medium text-slate-600 hover:border-jmu-blue-800 hover:text-jmu-blue-800"
+                >
+                  <Plus className="h-3.5 w-3.5" aria-hidden /> Add domain
+                </button>
+              ) : (
+                <span className="text-slate-400">None</span>
+              )}
             </dd>
 
             <dt className="text-slate-500">Source</dt>

@@ -653,17 +653,13 @@ def test_first_sync_creates_version_one_with_confirmed_steps_and_ports() -> None
     assert sorted((p.name, p.direction.value) for p in created.parameters) == [("data", "input"), ("result", "output")]
 
 
-def test_the_first_sync_takes_the_domains_of_its_steps_components() -> None:
-    # the canvas asks for no domains - a workflow of its tools serves what they serve
-    a, b, c = tool("a"), tool("b"), tool("c")
-    a.domains = [ComponentDomain(domain="animal_behavior")]
-    b.domains = [ComponentDomain(domain="earth_observation"), ComponentDomain(domain="animal_behavior")]
-    c.domains = [ComponentDomain(domain="earth_observation")]
-    _, workflows_service, _ = services(a, b, c)
+def test_the_first_sync_sets_no_domains_the_owner_picks_them_before_publishing() -> None:
+    a = tool("a")
+    _, workflows_service, _ = services(a)
 
-    workflow_v1 = sync(workflows_service, uuid.uuid4(), a, b, c)
+    created = sync(workflows_service, uuid.uuid4(), a)
 
-    assert [d.domain for d in workflow_v1.domains] == ["animal_behavior", "earth_observation"]
+    assert created.domains == []
 
 
 def test_resyncing_a_draft_version_updates_it_in_place() -> None:

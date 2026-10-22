@@ -16,7 +16,6 @@ import { editableBuilderDraftId } from '@/lib/builderDraft';
 interface ComponentCardProps {
   component: ComponentDisplayModel;
   backTo?: string;
-  /** an editing surface (My Components) - offer "Edit in Workflow Builder" where possible */
   showBuilderLink?: boolean;
   actions?: ReactNode;
 }
@@ -28,17 +27,12 @@ export function ComponentCard({ component, backTo, showBuilderLink = false, acti
   const builderDraftId = showBuilderLink ? editableBuilderDraftId(component) : null;
 
   return (
-    // four rows shared with the other cards of a grid row (subgrid): content, footer, View,
-    // extra actions - so View lines up even when one card has more actions than another
     <Card className="row-span-4 grid grid-rows-subgrid gap-0">
       <CardContent className="row-span-4 grid grid-rows-subgrid gap-0 pt-6">
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <div className="flex flex-wrap items-center gap-2">
               <KindBadge kind={component.kind} />
-              {component.status !== ComponentStatus.PUBLISHED && (
-                <StatusBadge status={component.status} />
-              )}
               <DomainBadges domains={component.domains} />
             </div>
 
@@ -49,19 +43,20 @@ export function ComponentCard({ component, backTo, showBuilderLink = false, acti
 
           <div>
             <h3 className="font-mono text-lg font-bold text-slate-900">{component.name}</h3>
-            {/* always its own line under the name - a long name never pushes it beside or below */}
-            {component.versionCount !== null && component.versionCount > 1 ? (
-              // with other versions, the version opens them
-              <VersionSwitcher
-                componentId={component.id}
-                kind={component.kind}
-                version={component.version}
-                versionCount={component.versionCount}
-                backTo={backTo}
-              />
-            ) : (
-              <p className="text-sm text-slate-400">v{component.version}</p>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              {component.versionCount !== null && component.versionCount > 1 ? (
+                <VersionSwitcher
+                  componentId={component.id}
+                  kind={component.kind}
+                  version={component.version}
+                  versionCount={component.versionCount}
+                  backTo={backTo}
+                />
+              ) : (
+                <span className="text-sm text-slate-400">v{component.version}</span>
+              )}
+              {component.status !== ComponentStatus.PUBLISHED && <StatusBadge status={component.status} />}
+            </div>
           </div>
 
           {component.description && <p className="line-clamp-2 text-sm text-slate-500">{component.description}</p>}

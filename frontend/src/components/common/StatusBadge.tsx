@@ -2,13 +2,16 @@ import { Badge } from '@/components/ui/badge.tsx';
 import { ComponentStatus, STATUS_LABELS } from '@/api/components';
 import { cn } from '@/lib/utils';
 
-// green: live for everyone. Yellow: careful - still runs, but not for new use (no red - it is
-// no error). Grey: not public, only yours. Neutral gray, not slate - slate's blue tint reads
-// as a colour of its own
 const STATUS_STYLE: Record<ComponentStatus, string> = {
-  [ComponentStatus.PUBLISHED]: 'border-emerald-300 text-emerald-700',
-  [ComponentStatus.DRAFT]: 'border-gray-300 text-gray-600',
-  [ComponentStatus.DEPRECATED]: 'border-amber-300 text-amber-700',
+  [ComponentStatus.PUBLISHED]: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+  [ComponentStatus.DRAFT]: 'border-gray-300 bg-gray-100 text-gray-700',
+  [ComponentStatus.DEPRECATED]: 'border-amber-200 bg-amber-50 text-amber-800',
+};
+
+const DOT_STYLE: Record<ComponentStatus, string> = {
+  [ComponentStatus.PUBLISHED]: 'bg-emerald-500',
+  [ComponentStatus.DRAFT]: 'bg-gray-400',
+  [ComponentStatus.DEPRECATED]: 'bg-amber-500',
 };
 
 const STATUS_HINT: Record<ComponentStatus, string> = {
@@ -27,7 +30,12 @@ interface StatusBadgeProps {
 /** Where a version stands - the same colours and words wherever a status is shown. */
 export function StatusBadge({ status, hint, className }: StatusBadgeProps) {
   return (
-    <Badge variant="outline" className={cn('w-fit', STATUS_STYLE[status], className)} title={hint ?? STATUS_HINT[status]}>
+    <Badge
+      variant="outline"
+      className={cn('w-fit gap-1.5', STATUS_STYLE[status], className)}
+      title={hint ?? STATUS_HINT[status]}
+    >
+      <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', DOT_STYLE[status])} aria-hidden />
       {STATUS_LABELS[status]}
     </Badge>
   );

@@ -149,14 +149,12 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
     hasUpdateDescriptionLink(model._links) ||
     hasUpdateDomainLink(model._links) ||
     hasUpdateFormatLabelsLink(model._links);
-  // a workflow publishes only once every step is settled - a tool has none to settle
   const allStepsSettled =
     !isWorkflow ||
     model.steps.every(
       (step) => step.matchStatus === StepMatchStatus.CONFIRMED || step.matchStatus === StepMatchStatus.INLINE,
     );
   const canPublish = hasPublishLink(model._links) && model.status === ComponentStatus.DRAFT;
-  // what the publish would deprecate - read once its dialog opens, like the delete dialog's impact
   const { data: publishImpact, isLoading: isLoadingPublishImpact } = usePublishImpact(
     getLink(model._links, 'publishImpact'),
     canPublish && publishDialogOpen,
@@ -212,7 +210,6 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
       {model.status === ComponentStatus.DRAFT && (
         <div className="mt-4 rounded-md border border-jmu-blue-200 bg-jmu-blue-50 px-4 py-3 text-sm text-jmu-blue-900">
           {model.supersededBy ? (
-            // no Publish button here - a newer version is published, so this one is superseded
             <>
               This version is a draft and only visible to you.{' '}
               <Link to={componentDetailRoute(model.kind, model.supersededBy.id)} className="font-medium underline">
@@ -272,7 +269,6 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
                 )}
                 <StatusBadge status={model.status} />
                 {model.unpublishableUntilDisplay && (
-                  // the one chance to take an accidental publish back - say when it ends
                   <span className="text-xs text-slate-500">
                     Can be unpublished until {model.unpublishableUntilDisplay} - after that only deprecated
                   </span>
@@ -311,7 +307,6 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
             )}
 
             {model.kind === 'tool' ? (
-              // the run bundle: the .cwl, an inputs.yaml template and its imported files
               <Button asChild variant="outline" size="sm">
                 <a href={toolsService.getBundleUrl(model.id)}>
                   <Download className="mr-1 h-4 w-4" /> Download

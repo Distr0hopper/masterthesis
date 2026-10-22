@@ -307,6 +307,8 @@ export interface MyComponentsQueryParams extends MineQueryParams {
   kind?: ComponentKind;
   /** narrows every status bucket to names containing this */
   search?: string;
+  /** narrows every status bucket to one origin, e.g. what the automated packaging produced */
+  source?: ComponentSource;
 }
 
 export type MyComponentsResponseDto = SplitPageResponse<ComponentListItemDto>;

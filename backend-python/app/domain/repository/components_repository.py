@@ -6,7 +6,7 @@ from sqlalchemy.orm import aliased, selectinload
 from sqlmodel import and_, func, or_, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.domain.models.component import Component, ComponentKind, ComponentStatus
+from app.domain.models.component import Component, ComponentKind, ComponentSource, ComponentStatus
 from app.domain.models.component_domain import DOMAIN_AGNOSTIC, ComponentDomain
 from app.domain.models.favorite import Favorite
 from app.domain.models.repo_url import REPO_URL_SUFFIX_PATTERN, repo_url_key
@@ -20,6 +20,7 @@ from app.infrastructure.db.session import require_unit_of_work
 @dataclass
 class ComponentListFilter:
     kind: ComponentKind | None = None
+    source: ComponentSource | None = None
     domains: list[str] = field(default_factory=list)
     created_by: uuid.UUID | None = None
     exclude_created_by: uuid.UUID | None = None
@@ -51,6 +52,8 @@ class ComponentsRepository:
     def _apply_filters(self, query, filter: ComponentListFilter):
         if filter.kind is not None:
             query = query.where(Component.kind == filter.kind)
+        if filter.source is not None:
+            query = query.where(Component.source == filter.source)
         if filter.domains:
             matching = {*filter.domains, DOMAIN_AGNOSTIC}
             query = query.where(

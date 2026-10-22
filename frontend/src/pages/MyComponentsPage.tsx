@@ -2,6 +2,7 @@ import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { ComponentStatus, useMyComponents } from '@/api/components';
 import { ComponentSection } from '@/components/component-mine/organisms/ComponentSection';
 import { Pagination } from '@/components/common/Pagination';
+import { SourceFilter } from '@/components/common/SourceFilter';
 import { StatusFilter } from '@/components/common/StatusFilter';
 import { Input } from '@/components/ui/input.tsx';
 import { Label } from '@/components/ui/label.tsx';
@@ -9,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSplitPageParams } from '@/lib/useSplitPageParams';
 import { KIND_ROUTES, ROUTES } from '@/lib/routes';
 import { KIND_COPY, KIND_ICONS, KINDS, parseKind } from '@/lib/componentKinds';
+import { parseSource, sourcesFor } from '@/lib/componentSources';
 import { parseStatus, STATUS_GROUP_TITLES } from '@/lib/componentStatuses';
 
 const ALL = 'all';
@@ -25,8 +27,12 @@ export default function MyComponentsPage() {
 
   const kind = parseKind(searchParams.get('kind'));
   const statusFilter = parseStatus(searchParams.get('status'));
+  const sources = sourcesFor(kind);
+  // a source the chosen kind can't come from (e.g. packaged, on the Workflows tab) filters nothing
+  const sourceFilter = parseSource(searchParams.get('source'));
+  const activeSource = sourceFilter && sources.includes(sourceFilter) ? sourceFilter : undefined;
   const searchTerm = searchParams.get('search') ?? '';
-  const isFiltered = !!statusFilter || !!searchTerm;
+  const isFiltered = !!statusFilter || !!activeSource || !!searchTerm;
   const itemLabel = kind ? KIND_COPY[kind].pluralLower : 'tools and workflows';
   const sectionNoun = kind ? KIND_COPY[kind].plural : 'Components';
 
@@ -47,6 +53,7 @@ export default function MyComponentsPage() {
     unpublishedOffset: unpublished.offset,
     deprecatedOffset: deprecated.offset,
     search: searchTerm || undefined,
+    source: activeSource,
   });
 
   const sections = [
@@ -87,6 +94,16 @@ export default function MyComponentsPage() {
             placeholder="Search by name..."
             value={searchTerm}
             onChange={(e) => setFilter('search', e.target.value)}
+          />
+        </div>
+
+        <div className="flex flex-col gap-2 sm:w-56">
+          <Label htmlFor="source">Source</Label>
+          <SourceFilter
+            id="source"
+            value={activeSource}
+            sources={sources}
+            onValueChange={(value) => setFilter('source', value ?? '')}
           />
         </div>
 

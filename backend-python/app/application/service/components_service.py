@@ -175,10 +175,13 @@ class ComponentsService:
         created_by_id: uuid.UUID,
         statuses: frozenset[ComponentStatus],
         kind: ComponentKind | None,
+        source: ComponentSource | None,
         search: str | None,
         pagination: PaginatedList,
     ) -> tuple[list[Component], int]:
-        filter = ComponentListFilter(created_by=created_by_id, statuses=statuses, kind=kind, search=search)
+        filter = ComponentListFilter(
+            created_by=created_by_id, statuses=statuses, kind=kind, source=source, search=search
+        )
         return await self.uow.components.find_paginated(filter, pagination)
 
     async def version_counts(self, components: list[Component]) -> dict[str, int]:

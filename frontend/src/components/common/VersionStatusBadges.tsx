@@ -3,7 +3,7 @@ import { StatusBadge } from '@/components/common/StatusBadge';
 import { ComponentStatus, type ComponentDisplayModelBase } from '@/api/components';
 
 interface VersionStatusBadgesProps {
-  version: Pick<ComponentDisplayModelBase, 'status' | 'statusDisplay' | 'statusHint'>;
+  version: Pick<ComponentDisplayModelBase, 'status'>;
   /** the version the catalogue lists */
   isLatest: boolean;
 }
@@ -19,7 +19,7 @@ export function VersionStatusBadges({ version, isLatest }: VersionStatusBadgesPr
       )}
       {/* "Latest" says it's the published one - a status badge only for the others */}
       {version.status !== ComponentStatus.PUBLISHED && (
-        <StatusBadge status={version.status} label={version.statusDisplay} hint={version.statusHint} />
+        <StatusBadge status={version.status} />
       )}
     </>
   );

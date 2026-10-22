@@ -178,8 +178,10 @@ class ComponentDetailBaseDto(CamelModel, LinkModel):
     status: ComponentStatus
     #: why the version is deprecated - set only while it is
     deprecation_note: str | None = None
-    #: when the version first went public - set, its content is frozen even as a draft again
     first_published_at: datetime | None = None
+    #: until when the published version may still be unpublished (and then deleted) - None
+    #: once its window has closed, or while it isn't published
+    unpublishable_until: datetime | None = None
     #: the newest published version above this one - while set, this version can't be
     #: published or undeprecated
     superseded_by: SupersedingVersionDto | None = None
@@ -216,6 +218,9 @@ class ComponentAncestorDto(CamelModel):
     version: int
     status: ComponentStatus
     created_by: ComponentCreatorDto | None
+    #: own published workflows only: still within its unpublish window, so it can become a
+    #: draft along with the version - false blocks the unpublish
+    unpublishable: bool = False
 
 
 class SupersededVersionDto(CamelModel):
@@ -236,6 +241,8 @@ class PublishImpactDto(CamelModel):
     Includes the older versions of draft components a workflow publishes along with it."""
 
     supersedes: list[SupersededVersionDto]
+    #: how long after publishing it may still be unpublished - after that only deprecated
+    unpublish_window_seconds: int
 
 
 class ComponentImpactDto(CamelModel):

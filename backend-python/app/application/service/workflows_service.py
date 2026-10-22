@@ -795,7 +795,7 @@ class WorkflowsService:
             assert latest is not None
         await self._require_acyclic(latest, [b.component_id for b in bindings])
 
-        if lifecycle.is_draft(latest) and not lifecycle.was_published(latest):
+        if lifecycle.is_draft(latest):
             latest.cwl_content = pipeline_content
             # cascade="all, delete-orphan" on Workflow.steps / Component.parameters deletes
             # the replaced rows

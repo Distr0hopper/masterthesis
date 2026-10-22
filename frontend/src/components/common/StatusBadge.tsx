@@ -19,18 +19,16 @@ const STATUS_HINT: Record<ComponentStatus, string> = {
 
 interface StatusBadgeProps {
   status: ComponentStatus;
-  /** what to call it - a display model's `statusDisplay` (e.g. "Unpublished"); else the plain status */
-  label?: string;
-  /** what it means - a display model's `statusHint`, or a more specific text; else the status's own */
+  /** what it means, more specifically than the status's own hint (e.g. a deprecation note) */
   hint?: string | null;
   className?: string;
 }
 
 /** Where a version stands - the same colours and words wherever a status is shown. */
-export function StatusBadge({ status, label, hint, className }: StatusBadgeProps) {
+export function StatusBadge({ status, hint, className }: StatusBadgeProps) {
   return (
     <Badge variant="outline" className={cn('w-fit', STATUS_STYLE[status], className)} title={hint ?? STATUS_HINT[status]}>
-      {label ?? STATUS_LABELS[status]}
+      {STATUS_LABELS[status]}
     </Badge>
   );
 }

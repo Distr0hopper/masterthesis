@@ -2,6 +2,7 @@
 both directions - publishing a tree, and taking a version out of public view."""
 
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -22,12 +23,16 @@ from app.domain.composite.lifecycle import (
     retract_impact,
     steps_editable,
     unbind_step,
-    was_published,
+    unpublishable_until,
+    within_unpublish_window,
 )
 from app.domain.models.component import Component, ComponentKind, ComponentStatus
 from app.domain.models.tool import Tool
 from app.domain.models.workflow import Workflow
 from app.domain.models.workflow_step import StepMatchStatus, WorkflowStep
+
+NOW = datetime.now(UTC)
+WINDOW = timedelta(hours=24)
 
 ME = uuid.uuid4()
 THEM = uuid.uuid4()
@@ -42,7 +47,8 @@ UNMATCHED, SUGGESTED, CONFIRMED, INLINE = (
 
 def tool(name: str, status: ComponentStatus = PUBLISHED, owner: uuid.UUID = ME) -> Component:
     component = Component(
-        id=uuid.uuid4(), kind=ComponentKind.TOOL, name=name, cwl_content="", status=status, created_by_id=owner
+        id=uuid.uuid4(), kind=ComponentKind.TOOL, name=name, cwl_content="", status=status, created_by_id=owner,
+        first_published_at=None if status == DRAFT else NOW,
     )
     component.tool = Tool()
     return component
@@ -56,7 +62,8 @@ def workflow(
     step_status: StepMatchStatus = CONFIRMED,
 ) -> Component:
     component = Component(
-        id=uuid.uuid4(), kind=ComponentKind.WORKFLOW, name=name, cwl_content="", status=status, created_by_id=owner
+        id=uuid.uuid4(), kind=ComponentKind.WORKFLOW, name=name, cwl_content="", status=status, created_by_id=owner,
+        first_published_at=None if status == DRAFT else NOW,
     )
     component.workflow = Workflow(
         steps=[
@@ -139,30 +146,36 @@ def test_the_note_lives_and_dies_with_the_deprecated_status() -> None:
     assert (component.status, component.deprecation_note) == (PUBLISHED, None)
 
 
-def test_the_first_publish_is_remembered_for_good() -> None:
+def test_a_version_can_be_unpublished_only_within_its_window() -> None:
+    fresh = tool("t", PUBLISHED)
+    fresh.first_published_at = NOW - WINDOW + timedelta(minutes=1)
+    old = tool("t", PUBLISHED)
+    old.first_published_at = NOW - WINDOW - timedelta(minutes=1)
+
+    assert within_unpublish_window(fresh, NOW, WINDOW)
+    assert unpublishable_until(fresh, WINDOW) == fresh.first_published_at + WINDOW
+    # past it, a version is only ever deprecated
+    assert not within_unpublish_window(old, NOW, WINDOW)
+    # only a published version has a window at all
+    assert not within_unpublish_window(tool("t", DRAFT), NOW, WINDOW)
+    assert not within_unpublish_window(tool("t", DEPRECATED), NOW, WINDOW)
+
+
+def test_back_to_a_draft_counts_as_never_published() -> None:
     component = tool("t", DRAFT)
-    assert not was_published(component)
-
     mark_published([component])
-    first = component.first_published_at
-    assert first is not None
+    assert component.first_published_at is not None
 
-    # unpublishing hides the version - it doesn't make it never-published
+    # an accidental publish undone - editable again, and the next publish starts a new window
     mark_draft([component])
-    assert was_published(component)
-    # nor does publishing it again move the date
+    assert component.first_published_at is None
     mark_published([component])
-    assert component.first_published_at == first
+    assert within_unpublish_window(component, datetime.now(UTC), WINDOW)
 
 
-def test_only_a_never_published_draft_changes_its_steps() -> None:
-    never = workflow("w", tool("a"))
-    taken_back = workflow("w", tool("a"))
-    mark_published([taken_back])
-    mark_draft([taken_back])
-
-    assert steps_editable(never)
-    assert not steps_editable(taken_back)
+def test_only_a_draft_changes_its_steps() -> None:
+    assert steps_editable(workflow("w", tool("a")))
+    assert not steps_editable(workflow("w", tool("a"), status=PUBLISHED))
 
 
 def test_only_a_deprecated_version_can_be_undeprecated() -> None:
@@ -325,7 +338,7 @@ def test_retract_splits_public_ancestors_by_owner_and_ignores_drafts() -> None:
     foreign = workflow("theirs", status=PUBLISHED, owner=THEM)
     private = workflow("private", status=DRAFT, owner=THEM)
 
-    impact = retract_impact([own_grandparent, foreign, private, own_parent], ME)
+    impact = retract_impact([own_grandparent, foreign, private, own_parent], ME, NOW, WINDOW)
 
     assert [a.name for a in impact.own] == ["a-own", "b-own"]
     assert [a.name for a in impact.foreign] == ["theirs"]
@@ -333,7 +346,7 @@ def test_retract_splits_public_ancestors_by_owner_and_ignores_drafts() -> None:
 
 
 def test_retract_without_public_ancestors_is_free() -> None:
-    impact = retract_impact([workflow("draft", status=DRAFT)], ME)
+    impact = retract_impact([workflow("draft", status=DRAFT)], ME, NOW, WINDOW)
     assert impact.own == impact.foreign == [] and not impact.blocked
 
 
@@ -341,15 +354,28 @@ def test_own_deprecated_ancestors_get_their_own_blocking_bucket() -> None:
     published = workflow("published", status=PUBLISHED)
     deprecated = workflow("deprecated", status=DEPRECATED)
 
-    impact = retract_impact([published, deprecated], ME)
+    impact = retract_impact([published, deprecated], ME, NOW, WINDOW)
 
     assert [a.name for a in impact.own] == ["published"]
     assert [a.name for a in impact.own_deprecated] == ["deprecated"]
     assert impact.foreign == [] and impact.blocked
 
 
+def test_own_ancestors_past_their_window_block_the_cascade() -> None:
+    fresh = workflow("fresh", status=PUBLISHED)
+    old = workflow("old", status=PUBLISHED)
+    old.first_published_at = NOW - WINDOW - timedelta(hours=1)
+
+    impact = retract_impact([fresh, old], ME, NOW, WINDOW)
+
+    # the fresh one can go back to a draft along with it - the old one can't anymore
+    assert [a.name for a in impact.own] == ["fresh"]
+    assert [a.name for a in impact.own_locked] == ["old"]
+    assert impact.blocked
+
+
 def test_a_foreign_deprecated_ancestor_blocks_like_any_foreign_one() -> None:
-    impact = retract_impact([workflow("theirs", status=DEPRECATED, owner=THEM)], ME)
+    impact = retract_impact([workflow("theirs", status=DEPRECATED, owner=THEM)], ME, NOW, WINDOW)
     assert [a.name for a in impact.foreign] == ["theirs"] and impact.blocked
 
 

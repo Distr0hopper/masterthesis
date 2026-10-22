@@ -77,7 +77,9 @@ erDiagram
         string kind "tool | workflow"
         string name "lineage key, UQ(name, version)"
         int version
-        string status "draft | published"
+        string status "draft | published | deprecated"
+        string deprecation_note "while deprecated"
+        timestamptz first_published_at "clock of the unpublish window"
         string source "manual_upload | automated_packaging | workflow_builder"
         text cwl_content "tool doc or pipeline doc"
         string ontology_url
@@ -178,13 +180,14 @@ Binding a step rejects cycles by lineage name, so a workflow can never contain a
 Shared data is attached to `components`, so it behaves the same for both kinds:
 
 - **Parameters.** A workflow's ports are its own inputs and outputs. They are what a parent wires to when it nests the workflow.
-- **Domains, files, versions and status.** One code path serves both kinds.
+- **Domains, files, versions and status.** One code path serves both kinds. Which status changes are allowed is described in [status-lifecycle.md](status-lifecycle.md).
 - **Lineage name.** A lineage is every version sharing one `name`, and that name is unique across both kinds. Favorites and "used in" lookups use it.
 
 ### Deletes follow the arrows
 
 - **Deleting a component** cascades to its `tools`/`workflows` row, parameters, domains and files. A workflow's own steps cascade with it.
-- **Steps that ran the deleted component** keep existing, with `component_id = NULL`. Before the delete, `ComponentsService.detach` marks them `unmatched` and unpublishes their parent workflows.
+- **Only drafts are ever deleted** (see [status-lifecycle.md](status-lifecycle.md)); a public version is deprecated instead.
+- **Steps that ran the deleted component** keep existing, with `component_id = NULL`. Before the delete, `ComponentsService.detach` marks them `unmatched`.
 - **Deleting a builder draft** leaves its synced workflows in place, with `draft_id = NULL`.
 
 ### Two links without a foreign key

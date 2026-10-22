@@ -107,6 +107,34 @@ class ComponentHasPublicParentsError(Exception):
         )
 
 
+class UnpublishWindowClosedError(Exception):
+    """The version went public too long ago to become a draft again - others may already run,
+    nest or cite it. It can only be deprecated now."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(f"{label} was published too long ago to be unpublished - deprecate it instead")
+
+
+class OnlyDraftsCanBeDeletedError(Exception):
+    """A version that is public (or was, past its unpublish window) is never deleted - others
+    may reference it. Deprecating it retracts it without breaking anyone."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(f"{label} is public - only drafts can be deleted, deprecate it instead")
+
+
+class ComponentHasLockedParentsError(Exception):
+    """The caller's own published workflows running this version are past their unpublish
+    window - they can't become drafts anymore, so they block the cascade."""
+
+    def __init__(self, workflows: list[str]) -> None:
+        self.workflows = workflows
+        super().__init__(
+            f"Used by your workflow(s) {', '.join(workflows)}, published too long ago to be unpublished "
+            "- deprecate this version instead"
+        )
+
+
 class ComponentHasDeprecatedParentsError(Exception):
     """The caller's own public workflows running this version include deprecated ones - a
     deprecated version never goes straight back to draft, so they block the cascade."""

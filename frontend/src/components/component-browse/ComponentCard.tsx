@@ -37,7 +37,7 @@ export function ComponentCard({ component, backTo, showBuilderLink = false, acti
             <div className="flex flex-wrap items-center gap-2">
               <KindBadge kind={component.kind} />
               {component.status !== ComponentStatus.PUBLISHED && (
-                <StatusBadge status={component.status} label={component.statusDisplay} hint={component.statusHint} />
+                <StatusBadge status={component.status} />
               )}
               <DomainBadges domains={component.domains} />
             </div>

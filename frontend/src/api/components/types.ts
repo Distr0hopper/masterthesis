@@ -148,6 +148,8 @@ export interface ComponentAncestorDto {
   version: number;
   status: ComponentStatus;
   createdBy: ComponentCreatorDto | null;
+  /** own published workflows: still within its unpublish window - false blocks the unpublish */
+  unpublishable: boolean;
 }
 
 /** An older published version that publishing would deprecate. */
@@ -168,6 +170,8 @@ export interface SupersededVersionDto {
  */
 export interface PublishImpactDto {
   supersedes: SupersededVersionDto[];
+  /** how long after publishing it may still be unpublished - after that only deprecated */
+  unpublishWindowSeconds: number;
 }
 
 /** What unpublishing or deleting one exact component version touches - read by both dialogs beforehand. */
@@ -225,8 +229,9 @@ export interface ComponentDetailBaseDto extends WithHateoasLinks {
   status: ComponentStatus;
   /** why the version is deprecated - set only while it is */
   deprecationNote?: string | null;
-  /** when the version first went public - set, its content is frozen even as a draft again */
   firstPublishedAt?: string | null;
+  /** until when the published version may still be unpublished - null once that window has closed */
+  unpublishableUntil?: string | null;
   /** the newest published version above this one - while set, this one can't be published or undeprecated */
   supersededBy?: SupersedingVersionDto | null;
   parameters: ParameterDto[];

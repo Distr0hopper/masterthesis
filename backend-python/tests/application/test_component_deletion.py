@@ -4,6 +4,7 @@ workflows and drafts that use it."""
 import asyncio
 import json
 import uuid
+from datetime import UTC, datetime
 
 from app.application.exception.workflow_draft_exceptions import ExportValidationError
 from app.application.service.components_service import ComponentsService
@@ -95,7 +96,9 @@ def component() -> Component:
 
 def workflow(name: str, status: ComponentStatus, created_by: uuid.UUID = OWNER) -> Component:
     wf = Component(
-        id=uuid.uuid4(), kind=ComponentKind.WORKFLOW, name=name, cwl_content="", status=status, created_by_id=created_by
+        id=uuid.uuid4(), kind=ComponentKind.WORKFLOW, name=name, cwl_content="", status=status, created_by_id=created_by,
+        # a public one was published just now - still within its unpublish window
+        first_published_at=None if status == ComponentStatus.DRAFT else datetime.now(UTC),
     )
     wf.workflow = Workflow(component_id=wf.id)
     return wf

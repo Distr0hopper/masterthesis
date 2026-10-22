@@ -9,6 +9,7 @@ from app.application.exception.component_exceptions import (
     AlreadyPackagedError,
     ComponentDeprecatedError,
     ComponentHasDeprecatedParentsError,
+    ComponentHasLockedParentsError,
     ComponentHasPublicParentsError,
     ComponentKindMismatchError,
     ComponentNameAlreadyExistsError,
@@ -17,11 +18,13 @@ from app.application.exception.component_exceptions import (
     InvalidCwlError,
     ManualUploadCannotBeRepackagedError,
     MissingCommandPayloadError,
+    OnlyDraftsCanBeDeletedError,
     PackagedCommitChangedError,
     PackagedToolCannotTakeUploadError,
     SupersededVersionError,
     PackagingFailedError,
     PackagingServiceUnavailableError,
+    UnpublishWindowClosedError,
 )
 from app.application.exception.favorites_exceptions import FavoritesRequireAuthError
 from app.application.exception.otp_exceptions import OtpRequestRateLimitedError
@@ -303,6 +306,9 @@ def register_exception_handlers(app: FastAPI) -> None:
         ComponentUsedByOthersError,
         ComponentHasPublicParentsError,
         ComponentHasDeprecatedParentsError,
+        ComponentHasLockedParentsError,
+        UnpublishWindowClosedError,
+        OnlyDraftsCanBeDeletedError,
         ComponentDeprecatedError,
         WorkflowRunsDeprecatedComponentsError,
         InlineStepNotBindableError,

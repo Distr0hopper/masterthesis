@@ -14,16 +14,17 @@ Three statuses, three questions - never answer one with another's check:
 - "visible to everyone" is `is_public` (published or deprecated);
 - "listed and offered for new use" is LISTED_STATUSES (published only).
 
-And one fact that outlives every status: whether a version was ever public (`was_published`).
-A version's content is frozen from its first publish on - unpublishing hides it again, but
-what others saw, ran or downloaded under its number never changes. Changes go into the next
-version instead.
+A published version is a promise to others - they saw, ran, nested or cited it. So it can
+only be taken back to a draft within a short window after it first went public (see
+within_unpublish_window), and only drafts are ever deleted. After the window it stays public
+for good: retracted, at most, by deprecating it. Changes always go into a new version - a
+public version's content never changes.
 """
 
 import uuid
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from app.domain.composite.tree import descendants
 from app.domain.models.component import Component, ComponentStatus
@@ -89,10 +90,19 @@ def is_draft(component: Component) -> bool:
     return component.status == ComponentStatus.DRAFT
 
 
-def was_published(component: Component) -> bool:
-    """Whether the version was ever public - then its content is frozen for good, whatever
-    its status is now (see mark_published)."""
-    return component.first_published_at is not None
+def unpublishable_until(component: Component, window: timedelta) -> datetime | None:
+    """Until when the published version may still go back to a draft - None once it isn't
+    published, or has no first publish recorded."""
+    if component.status != ComponentStatus.PUBLISHED or component.first_published_at is None:
+        return None
+    return component.first_published_at + window
+
+
+def within_unpublish_window(component: Component, now: datetime, window: timedelta) -> bool:
+    """Whether the published version is still young enough to go back to a draft - an
+    accidental publish is undone, anything older is only ever deprecated."""
+    until = unpublishable_until(component, window)
+    return until is not None and now <= until
 
 
 def is_deprecated(component: Component) -> bool:
@@ -129,9 +139,12 @@ def mark_published(components: Iterable[Component]) -> None:
 
 
 def mark_draft(components: Iterable[Component]) -> None:
+    """Back to a draft - only ever within the unpublish window, so it counts as never
+    published: editable again, and its next publish starts a new window."""
     for component in components:
         _transition(component, ComponentStatus.DRAFT)
         component.deprecation_note = None
+        component.first_published_at = None
 
 
 def mark_deprecated(component: Component, note: str | None) -> None:
@@ -241,22 +254,29 @@ class RetractImpact:
     #: other users' public ones, in any public status - they block, only their owners may
     #: take them down
     foreign: list[Component] = field(default_factory=list)
+    #: the actor's own published ones past their unpublish window - they block: they can't
+    #: become drafts anymore (deprecating this version instead breaks nothing)
+    own_locked: list[Component] = field(default_factory=list)
 
     @property
     def blocked(self) -> bool:
-        return bool(self.foreign or self.own_deprecated)
+        return bool(self.foreign or self.own_deprecated or self.own_locked)
 
 
-def retract_impact(ancestors: Iterable[Component], actor_id: uuid.UUID) -> RetractImpact:
+def retract_impact(
+    ancestors: Iterable[Component], actor_id: uuid.UUID, now: datetime, window: timedelta
+) -> RetractImpact:
     """`ancestors`: every workflow nesting the version, at any depth (see
     ComponentsRepository.find_ancestors). All public ones count, not just the direct parents:
     once a parent becomes a draft, the public workflow nesting that parent runs a draft too."""
     public = sorted((a for a in ancestors if is_public(a)), key=lambda a: (a.name, a.version))
     own = [a for a in public if a.created_by_id == actor_id]
+    published = [a for a in own if not is_deprecated(a)]
     return RetractImpact(
-        own=[a for a in own if not is_deprecated(a)],
+        own=[a for a in published if within_unpublish_window(a, now, window)],
         own_deprecated=[a for a in own if is_deprecated(a)],
         foreign=[a for a in public if a.created_by_id != actor_id],
+        own_locked=[a for a in published if not within_unpublish_window(a, now, window)],
     )
 
 
@@ -272,10 +292,10 @@ def edited_in_builder(workflow: Component) -> bool:
 
 
 def steps_editable(workflow: Component) -> bool:
-    """Only a workflow version never published changes its steps - once public, others may
-    have seen, nested or downloaded it, so a change goes into the next version even after it
-    is unpublished again. A builder workflow's steps change in the builder only."""
-    return is_draft(workflow) and not was_published(workflow) and not edited_in_builder(workflow)
+    """A public workflow is what others see and nest - its steps only change as a new
+    version (or as a draft again, within the unpublish window). A builder workflow's steps
+    change in the builder only."""
+    return is_draft(workflow) and not edited_in_builder(workflow)
 
 
 def _step_transition(step: WorkflowStep, target: StepMatchStatus) -> None:

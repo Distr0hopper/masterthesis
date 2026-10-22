@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from typing import Any
 
 from app.api.dto.component import (
@@ -20,6 +21,7 @@ from app.api.permission.component_permission_validator import ComponentPermissio
 from app.api.transformer.parameter_transformer import ParameterTransformer
 from app.api.transformer.workflow_transformer import WorkflowTransformer
 from app.application.commands.commands import ComponentCommand
+from app.application.commands.registry import unpublish_window
 from app.application.service.compatibility_service import RankedComponent
 from app.application.service.components_service import ComponentImpact, ComponentUsage, SupersededVersion
 from app.domain.composite import lifecycle
@@ -130,6 +132,11 @@ class ComponentTransformer:
             status=component.status,
             deprecation_note=component.deprecation_note,
             first_published_at=component.first_published_at,
+            unpublishable_until=(
+                lifecycle.unpublishable_until(component, unpublish_window())
+                if lifecycle.within_unpublish_window(component, datetime.now(UTC), unpublish_window())
+                else None
+            ),
             superseded_by=(
                 SupersedingVersionDto(id=component.superseded_by[0], version=component.superseded_by[1])
                 if component.superseded_by is not None
@@ -183,13 +190,14 @@ class ComponentTransformer:
         )
 
     @staticmethod
-    def to_ancestor(component: Component) -> ComponentAncestorDto:
+    def to_ancestor(component: Component, unpublishable: bool = False) -> ComponentAncestorDto:
         return ComponentAncestorDto(
             id=component.id,
             name=component.name,
             version=component.version,
             status=component.status,
             created_by=ComponentTransformer.to_creator(component),
+            unpublishable=unpublishable,
         )
 
     @staticmethod
@@ -205,13 +213,17 @@ class ComponentTransformer:
                     workflow_count=s.workflow_count,
                 )
                 for s in superseded
-            ]
+            ],
+            unpublish_window_seconds=int(unpublish_window().total_seconds()),
         )
 
     @staticmethod
     def to_impact(impact: ComponentImpact) -> ComponentImpactDto:
         return ComponentImpactDto(
-            own_public_ancestors=[ComponentTransformer.to_ancestor(a) for a in impact.own_public_ancestors],
+            own_public_ancestors=[
+                ComponentTransformer.to_ancestor(a, unpublishable=a.id in impact.unpublishable_ancestor_ids)
+                for a in impact.own_public_ancestors
+            ],
             foreign_public_ancestors=[ComponentTransformer.to_ancestor(a) for a in impact.foreign_public_ancestors],
             workflows=[ComponentTransformer.to_usage(u) for u in impact.workflows],
             hidden_workflow_count=impact.hidden_workflow_count,

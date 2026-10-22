@@ -5,7 +5,7 @@ import asyncio
 import io
 import uuid
 import zipfile
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from pydantic import TypeAdapter
@@ -24,12 +24,15 @@ from app.application.commands.commands import (
 from app.application.exception.component_exceptions import (
     ComponentDeprecatedError,
     ComponentHasDeprecatedParentsError,
+    ComponentHasLockedParentsError,
     ComponentHasPublicParentsError,
     ComponentNotFoundError,
     ComponentUsedByOthersError,
     InvalidCwlError,
+    OnlyDraftsCanBeDeletedError,
     PackagedToolCannotTakeUploadError,
     SupersededVersionError,
+    UnpublishWindowClosedError,
 )
 from app.application.exception.workflow_exceptions import (
     InvalidComponentConfigError,
@@ -158,6 +161,10 @@ class FakeWorkflowsRepository:
     def __init__(self, components: FakeComponentsRepository):
         self.components = components
 
+    async def find_all_synced_from_draft(self, draft_id: uuid.UUID) -> list[Component]:
+        synced = [c for c in self.components.by_id.values() if c.workflow is not None and c.workflow.draft_id == draft_id]
+        return sorted(synced, key=lambda c: c.version)
+
     async def find_latest_by_draft_id(self, draft_id: uuid.UUID) -> Component | None:
         synced = [
             c
@@ -188,6 +195,8 @@ def tool(name: str, status: ComponentStatus = ComponentStatus.PUBLISHED, owner: 
     component = Component(
         id=uuid.uuid4(), kind=ComponentKind.TOOL, name=name, cwl_content="class: CommandLineTool",
         status=status, created_by_id=owner,
+        # a public one was published just now - still within its unpublish window
+        first_published_at=None if status == ComponentStatus.DRAFT else datetime.now(UTC),
     )
     component.tool = Tool(component_id=component.id)
     return component
@@ -205,6 +214,7 @@ def workflow(
     component = Component(
         id=uuid.uuid4(), kind=ComponentKind.WORKFLOW, name=name, version=version, cwl_content=PIPELINE,
         status=status, created_by_id=owner,
+        first_published_at=None if status == ComponentStatus.DRAFT else datetime.now(UTC),
     )
     component.workflow = Workflow(
         component_id=component.id,
@@ -411,18 +421,16 @@ def test_bug1_unpublishing_a_tool_another_users_public_workflow_runs_is_refused(
     assert components_service.uow.commits == 0  # type: ignore[attr-defined]
 
 
-def test_bug2_deleting_a_tool_reverts_every_public_ancestor_not_just_the_parent() -> None:
-    leaf = tool("t")
-    parent = workflow("parent", leaf, status=ComponentStatus.PUBLISHED)
-    grandparent = workflow("grandparent", parent, status=ComponentStatus.PUBLISHED)
-    components_service, _, repository = services(leaf, parent, grandparent)
+def test_a_public_version_is_never_deleted() -> None:
+    # others may run, nest or cite it - it is deprecated instead
+    published, deprecated = tool("published"), tool("deprecated", ComponentStatus.DEPRECATED)
+    components_service, _, repository = services(published, deprecated)
 
-    asyncio.run(components_service.remove(leaf, OWNER, unpublish_parents=True))
-
-    assert leaf.id not in repository.by_id
-    assert parent.status == grandparent.status == ComponentStatus.DRAFT
-    assert parent.steps[0].match_status == StepMatchStatus.UNMATCHED
-
+    for public in (published, deprecated):
+        with pytest.raises(OnlyDraftsCanBeDeletedError):
+            asyncio.run(components_service.remove(public, OWNER))
+        assert public.id in repository.by_id
+    assert components_service.uow.commits == 0  # type: ignore[attr-defined]
 
 def test_unpublishing_takes_own_public_ancestors_along_only_when_opted_into() -> None:
     leaf = tool("t")
@@ -447,7 +455,8 @@ def test_unpublishing_a_draft_is_a_no_op() -> None:
 
 
 def test_another_users_public_grandparent_blocks_a_delete() -> None:
-    leaf = tool("t")
+    # a draft run by public workflows only exists in data from before the invariant - still guarded
+    leaf = tool("t", ComponentStatus.DRAFT)
     parent = workflow("parent", leaf, status=ComponentStatus.PUBLISHED)
     theirs = workflow("theirs", parent, status=ComponentStatus.PUBLISHED, owner=STRANGER)
     components_service, _, repository = services(leaf, parent, theirs)
@@ -459,6 +468,41 @@ def test_another_users_public_grandparent_blocks_a_delete() -> None:
     assert parent.status == theirs.status == ComponentStatus.PUBLISHED
     assert parent.steps[0].match_status == StepMatchStatus.CONFIRMED
     assert components_service.uow.commits == 0  # type: ignore[attr-defined]
+
+
+def test_a_version_past_its_unpublish_window_is_only_deprecated() -> None:
+    leaf = tool("t")
+    leaf.first_published_at = datetime.now(UTC) - timedelta(days=2)
+    components_service, _, _ = services(leaf)
+
+    with pytest.raises(UnpublishWindowClosedError):
+        unpublish(components_service, leaf)
+    assert leaf.status == ComponentStatus.PUBLISHED
+
+    deprecate(components_service, leaf, "use v2")
+    assert leaf.status == ComponentStatus.DEPRECATED
+
+
+def test_own_parents_past_their_window_block_unpublishing() -> None:
+    leaf = tool("t")
+    parent = workflow("parent", leaf, status=ComponentStatus.PUBLISHED)
+    parent.first_published_at = datetime.now(UTC) - timedelta(days=2)
+    components_service, _, _ = services(leaf, parent)
+
+    with pytest.raises(ComponentHasLockedParentsError):
+        unpublish(components_service, leaf, unpublish_parents=True)
+    assert leaf.status == parent.status == ComponentStatus.PUBLISHED
+
+
+def test_unpublishing_within_the_window_makes_a_normal_draft_again() -> None:
+    leaf = tool("t")
+    components_service, _, _ = services(leaf)
+
+    unpublish(components_service, leaf)
+
+    # as if never published - and deletable now
+    assert (leaf.status, leaf.first_published_at) == (ComponentStatus.DRAFT, None)
+    asyncio.run(components_service.remove(leaf, OWNER))
 
 
 # --- deprecation ------------------------------------------------------------------------
@@ -514,7 +558,8 @@ def test_an_own_deprecated_ancestor_blocks_unpublish_and_delete_and_changes_noth
     with pytest.raises(ComponentHasDeprecatedParentsError) as err:
         unpublish(components_service, leaf, unpublish_parents=True)
     assert err.value.workflows == ["grandparent v1"]
-    with pytest.raises(ComponentHasDeprecatedParentsError):
+    # and a public version is never deleted in the first place
+    with pytest.raises(OnlyDraftsCanBeDeletedError):
         asyncio.run(components_service.remove(leaf, OWNER, unpublish_parents=True))
 
     assert leaf.id in repository.by_id
@@ -607,8 +652,8 @@ def test_resyncing_a_published_version_creates_the_next_version() -> None:
     assert [s.component_id for s in first.steps] == [a.id]
 
 
-def test_saving_the_canvas_of_an_unpublished_version_creates_the_next_version() -> None:
-    # v1 went public and was taken back - what others saw as v1 must stay v1
+def test_saving_the_canvas_after_an_early_unpublish_updates_it_in_place() -> None:
+    # unpublished within its window, v1 is a plain draft again - the next save rewrites it
     a, b = tool("a"), tool("b")
     _, workflows_service, _ = services(a, b)
     draft_id = uuid.uuid4()
@@ -618,9 +663,25 @@ def test_saving_the_canvas_of_an_unpublished_version_creates_the_next_version() 
 
     second = sync(workflows_service, draft_id, a, b)
 
-    assert second.id != first.id and second.version == 2
-    assert [s.component_id for s in first.steps] == [a.id]
+    assert second.id == first.id and second.version == 1
+    assert [s.component_id for s in second.steps] == [a.id, b.id]
 
+
+def test_deleting_a_canvas_with_its_workflows_keeps_the_public_versions() -> None:
+    draft_id = uuid.uuid4()
+    public = workflow("w", tool("a"), status=ComponentStatus.PUBLISHED, draft_id=draft_id)
+    fresh = workflow("w", tool("a"), version=2, draft_id=draft_id)
+    components_service, _, repository = services(public, fresh)
+
+    async def in_unit_of_work() -> int:
+        async with components_service.uow:
+            removed = await components_service.remove_synced_from_draft(draft_id, OWNER)
+            await components_service.uow.commit()
+        return removed
+
+    # only drafts are ever deleted - the published v1 stays, just without its canvas
+    assert asyncio.run(in_unit_of_work()) == 1
+    assert public.id in repository.by_id and fresh.id not in repository.by_id
 
 def test_renaming_the_canvas_renames_the_whole_lineage() -> None:
     a = tool("a")
@@ -706,25 +767,19 @@ def test_once_its_canvas_is_deleted_a_builder_workflow_is_edited_on_its_page() -
     assert set(WorkflowStepLinkBuilder(OWNER_USER)._filter_links(parent.steps[0])) == {"update", "confirm"}
 
 
-def test_the_steps_of_an_unpublished_version_stay_as_they_were_published() -> None:
-    # unpublish, rebind, publish again would otherwise change v1 under everyone who saw it
+def test_after_an_early_unpublish_its_steps_are_editable_again() -> None:
     published_tool = tool("a")
     parent = workflow("outer", published_tool, step_status=StepMatchStatus.SUGGESTED)
     other = tool("b")
     lifecycle.mark_published([parent])
     lifecycle.mark_draft([parent])
     _, workflows_service, _ = services(parent, other)
-    step = parent.steps[0]
 
-    with pytest.raises(PublishedWorkflowStepsLockedError):
-        asyncio.run(workflows_service.update_step_component(step.id, other.id, OWNER))
-    with pytest.raises(PublishedWorkflowStepsLockedError):
-        asyncio.run(workflows_service.execute_step_command(step, WorkflowStepCommand(type=WorkflowStepCommandType.CONFIRM)))
-    assert (step.component_id, step.match_status) == (published_tool.id, StepMatchStatus.SUGGESTED)
+    asyncio.run(workflows_service.update_step_component(parent.steps[0].id, other.id, OWNER))
 
-    links = WorkflowStepLinkBuilder(OWNER_USER)._filter_links(step)
-    assert "update" not in links and "confirm" not in links
-
+    assert parent.steps[0].component_id == other.id
+    links = WorkflowStepLinkBuilder(OWNER_USER)._filter_links(parent.steps[0])
+    assert "update" in links and "confirm" in links
 
 def test_a_new_step_cannot_run_a_deprecated_version() -> None:
     parent = workflow("outer", tool("a"), step_status=StepMatchStatus.UNMATCHED)

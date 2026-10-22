@@ -21,6 +21,8 @@ interface ConfirmPublishDialogProps {
   supersedes: SupersededVersionDto[];
   /** the publish impact is still loading - nothing to confirm yet */
   isLoadingImpact: boolean;
+  /** how long it can still be unpublished after this publish - unknown while loading */
+  unpublishWindowSeconds?: number;
   /** workflows only: the draft components its steps run */
   draftComponents?: ComponentSummaryDto[];
   blockedByOthers?: ComponentSummaryDto[];
@@ -32,6 +34,11 @@ interface ConfirmPublishDialogProps {
 
 function plural(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? '' : 's'}`;
+}
+
+/** The unpublish window in words - "24 hours", "30 minutes". */
+function windowInWords(seconds: number): string {
+  return seconds % 3600 === 0 ? plural(seconds / 3600, 'hour') : plural(Math.round(seconds / 60), 'minute');
 }
 
 /** The primary button says exactly what it will do - including what it deprecates. */
@@ -65,6 +72,7 @@ export function ConfirmPublishDialog({
   component,
   supersedes,
   isLoadingImpact,
+  unpublishWindowSeconds,
   draftComponents = [],
   blockedByOthers = [],
   deprecatedComponents = [],
@@ -157,10 +165,22 @@ export function ConfirmPublishDialog({
               <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
               <span>
                 A deprecated version stays readable and keeps running wherever it already runs, but it is no longer
-                listed and can't be used in new workflows. To undo, unpublish v{component.version} - you can then
+                listed and can&apos;t be used in new workflows. To undo, deprecate v{component.version} - you can then
                 undeprecate the older version again.
               </span>
             </div>
+          </div>
+        )}
+
+        {!isBlocked && unpublishWindowSeconds !== undefined && (
+          // publishing is nearly for good - say so before, not after
+          <div className="flex items-start gap-2 rounded-md bg-jmu-blue-50 px-3 py-2 text-xs text-jmu-blue-900">
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+            <span>
+              You can unpublish {hasDrafts ? 'it' : `v${component.version}`} within{' '}
+              {windowInWords(unpublishWindowSeconds)}. After that it stays public for good - others may already use
+              or cite it - and can only be deprecated, not removed.
+            </span>
           </div>
         )}
 

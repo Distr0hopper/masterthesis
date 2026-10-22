@@ -6,6 +6,7 @@ from app.api.util.http_method import HttpMethod
 from app.application.commands.commands import ComponentCommandType, ToolCommandType
 from app.application.service.components_service import COMPONENT_COMMANDS
 from app.application.service.tools_service import TOOL_COMMANDS
+from app.domain.composite import lifecycle
 from app.domain.models.component import Component
 
 
@@ -46,20 +47,23 @@ class ComponentLinkBuilder(BaseLinkBuilder[Component, ComponentPermissionValidat
 
     def _is_link_allowed(self, rel: str, entity: Component) -> bool:
         if (command := _COMPONENT_COMMAND_BY_REL.get(rel)) is not None:
-            return self._validator.can_execute(entity, command)
+            # offered only where it applies now - who may run it is the validator's question
+            return self._validator.can_execute(entity, command) and COMPONENT_COMMANDS[command].available(entity)
         if (tool_command := _TOOL_COMMAND_BY_REL.get(rel)) is not None:
             return self._validator.can_execute_tool(entity, tool_command)
         match rel:
             case "self" | "download":
                 return self._validator.can_read(entity)
             case "delete":
-                return self._validator.can_delete(entity)
+                # only drafts - a public version may be referenced by others, it is deprecated instead
+                return self._validator.can_delete(entity) and lifecycle.is_draft(entity)
             case "impact":
                 # read before an unpublish or a delete - both are the owner's
                 return self._validator.can_update(entity)
             case "publishImpact":
                 # read before a publish - offered wherever the publish itself is
-                return self._validator.can_execute(entity, ComponentCommandType.PUBLISH)
+                publish = ComponentCommandType.PUBLISH
+                return self._validator.can_execute(entity, publish) and COMPONENT_COMMANDS[publish].available(entity)
             case "addVersion":
                 return self._validator.can_add_uploaded_version(entity)
             case _:

@@ -2386,7 +2386,7 @@
             }
           },
           "409": {
-            "description": "The workflow was ever published, the step runs an inline definition, the component is deprecated, or it would make the workflow contain itself",
+            "description": "The workflow is public, the step runs an inline definition, the component is deprecated, or it would make the workflow contain itself",
             "content": {
               "application/json": {
                 "schema": {
@@ -2494,7 +2494,7 @@
             }
           },
           "409": {
-            "description": "The workflow was ever published - its steps only change in a new version",
+            "description": "The workflow is public - its steps only change in a new version",
             "content": {
               "application/json": {
                 "schema": {
@@ -3270,6 +3270,11 @@
                 "type": "null"
               }
             ]
+          },
+          "unpublishable": {
+            "type": "boolean",
+            "title": "Unpublishable",
+            "default": false
           }
         },
         "type": "object",
@@ -4861,11 +4866,16 @@
             },
             "type": "array",
             "title": "Supersedes"
+          },
+          "unpublishWindowSeconds": {
+            "type": "integer",
+            "title": "Unpublishwindowseconds"
           }
         },
         "type": "object",
         "required": [
-          "supersedes"
+          "supersedes",
+          "unpublishWindowSeconds"
         ],
         "title": "PublishImpactDto",
         "description": "What publishing this version would deprecate - read by the publish dialog beforehand.\nIncludes the older versions of draft components a workflow publishes along with it."
@@ -5258,6 +5268,18 @@
               }
             ],
             "title": "Firstpublishedat"
+          },
+          "unpublishableUntil": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unpublishableuntil"
           },
           "supersededBy": {
             "anyOf": [
@@ -5935,6 +5957,18 @@
               }
             ],
             "title": "Firstpublishedat"
+          },
+          "unpublishableUntil": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unpublishableuntil"
           },
           "supersededBy": {
             "anyOf": [

@@ -105,10 +105,9 @@ function draftChildren(model: ComponentDetailDisplayModel): ComponentSummaryDto[
     );
 }
 
-function builderSaveHint(head: { version: number; status: ComponentStatus; isTakenBack: boolean } | undefined): string {
+function builderSaveHint(head: { version: number; status: ComponentStatus } | undefined): string {
   if (!head) return 'Open the canvas this workflow was saved from';
-  // a version that was ever public stays as it was - even taken back to a draft
-  if (head.status === ComponentStatus.DRAFT && !head.isTakenBack) {
+  if (head.status === ComponentStatus.DRAFT) {
     return `Saving in the builder updates the draft v${head.version}`;
   }
   return `Saving in the builder creates v${head.version + 1} as a draft - v${head.version} stays unchanged`;
@@ -212,25 +211,7 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
       </Link>
       {model.status === ComponentStatus.DRAFT && (
         <div className="mt-4 rounded-md border border-jmu-blue-200 bg-jmu-blue-50 px-4 py-3 text-sm text-jmu-blue-900">
-          {model.isTakenBack && !model.supersededBy ? (
-            // taken back after it was public - hidden again, but its content is frozen for good
-            <>
-              This version was published and has been taken back - only you see it now. What others saw as v
-              {model.version} doesn&apos;t change anymore: publish it again, or put changes into{' '}
-              {builderDraftId ? (
-                <Link to={ROUTES.builderWorkflow(builderDraftId)} className="font-medium underline">
-                  a new version from the Workflow Builder
-                </Link>
-              ) : canCreateVersion ? (
-                <Link to={newVersionRoute} className="font-medium underline">
-                  a new version
-                </Link>
-              ) : (
-                'a new version'
-              )}
-              .
-            </>
-          ) : model.supersededBy ? (
+          {model.supersededBy ? (
             // no Publish button here - a newer version is published, so this one is superseded
             <>
               This version is a draft and only visible to you.{' '}
@@ -289,7 +270,13 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
                 ) : (
                   <span className="text-sm text-slate-400">v{model.version}</span>
                 )}
-                <StatusBadge status={model.status} label={model.statusDisplay} hint={model.statusHint} />
+                <StatusBadge status={model.status} />
+                {model.unpublishableUntilDisplay && (
+                  // the one chance to take an accidental publish back - say when it ends
+                  <span className="text-xs text-slate-500">
+                    Can be unpublished until {model.unpublishableUntilDisplay} - after that only deprecated
+                  </span>
+                )}
               </div>
             </div>
 
@@ -484,6 +471,7 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
           component={model}
           supersedes={supersedes}
           isLoadingImpact={isLoadingPublishImpact}
+          unpublishWindowSeconds={publishImpact?.unpublishWindowSeconds}
           draftComponents={drafts}
           blockedByOthers={blockedByOthers}
           deprecatedComponents={deprecated}

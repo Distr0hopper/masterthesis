@@ -5,6 +5,7 @@ import { getCreatorDisplay } from '@/api/transformer';
 import {
   ComponentStatus,
   ownDeprecatedAncestors,
+  ownLockedAncestors,
   ownPublishedAncestors,
   type ComponentAncestorDto,
   type ComponentImpactDto,
@@ -39,7 +40,8 @@ export function PublicAncestors({ impact, verb }: { impact: ComponentImpactDto; 
   const foreign = impact.foreignPublicAncestors;
   const ownDeprecated = ownDeprecatedAncestors(impact);
   const ownPublished = ownPublishedAncestors(impact);
-  const blocked = foreign.length > 0 || ownDeprecated.length > 0;
+  const ownLocked = ownLockedAncestors(impact);
+  const blocked = foreign.length > 0 || ownDeprecated.length > 0 || ownLocked.length > 0;
 
   return (
     <>
@@ -56,6 +58,15 @@ export function PublicAncestors({ impact, verb }: { impact: ComponentImpactDto; 
           Used by {plural(ownDeprecated.length, 'deprecated workflow')} of yours. A deprecated workflow can't become a
           draft - undeprecate {ownDeprecated.length === 1 ? 'it' : 'them'} first, or deprecate this version instead.
           <AncestorList ancestors={ownDeprecated} withOwner={false} />
+        </Notice>
+      )}
+
+      {ownLocked.length > 0 && (
+        <Notice tone="blocked">
+          Used by {plural(ownLocked.length, 'workflow')} of yours that {ownLocked.length === 1 ? 'was' : 'were'}{' '}
+          published too long ago to be unpublished - {ownLocked.length === 1 ? 'it' : 'they'} can&apos;t become a draft
+          anymore. Deprecate this version instead.
+          <AncestorList ancestors={ownLocked} withOwner={false} />
         </Notice>
       )}
 

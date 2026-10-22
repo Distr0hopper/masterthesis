@@ -2,13 +2,14 @@
 the same answer, whatever the kind."""
 
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from app.api.link.component import ComponentLinkBuilder
 from app.api.permission.component_permission_validator import ComponentPermissionValidator
 from app.application.commands.commands import ComponentCommandType, ToolCommandType
-from app.domain.models.component import Component, ComponentKind, ComponentSource
+from app.domain.models.component import Component, ComponentKind, ComponentSource, ComponentStatus
 from app.domain.models.tool import Tool
 from app.domain.models.user import User
 from app.domain.models.workflow import Workflow
@@ -23,7 +24,17 @@ OTHER_RELS = {"self", "download", "delete", "impact", "publishImpact", "addVersi
 
 
 def component(kind: ComponentKind, source: ComponentSource = ComponentSource.MANUAL_UPLOAD) -> Component:
-    c = Component(id=uuid.uuid4(), kind=kind, name="c", cwl_content="", created_by_id=OWNER.id, source=source)
+    """Published just now - still within its unpublish window, so every command applies."""
+    c = Component(
+        id=uuid.uuid4(),
+        kind=kind,
+        name="c",
+        cwl_content="",
+        created_by_id=OWNER.id,
+        source=source,
+        status=ComponentStatus.PUBLISHED,
+        first_published_at=datetime.now(UTC),
+    )
     if kind == ComponentKind.TOOL:
         c.tool = Tool()
     else:
@@ -101,6 +112,26 @@ def test_the_publish_impact_is_offered_wherever_publish_is() -> None:
     assert "publishImpact" not in rels(STRANGER, c)
     c.__dict__.update(superseded_by_id=uuid.uuid4(), superseded_by_version=2)
     assert "publishImpact" not in rels(OWNER, c)
+
+
+def test_unpublish_is_offered_only_within_the_window() -> None:
+    c = component(ComponentKind.TOOL)
+    assert "unpublish" in ComponentLinkBuilder(OWNER)._filter_links(c)
+    c.first_published_at = datetime.now(UTC) - timedelta(days=2)
+    # past it the version is only ever deprecated
+    assert "unpublish" not in ComponentLinkBuilder(OWNER)._filter_links(c)
+    assert "deprecate" in ComponentLinkBuilder(OWNER)._filter_links(c)
+
+
+@pytest.mark.parametrize(
+    ("status", "offered"),
+    [(ComponentStatus.DRAFT, True), (ComponentStatus.PUBLISHED, False), (ComponentStatus.DEPRECATED, False)],
+)
+def test_delete_is_offered_only_on_drafts(status: ComponentStatus, offered: bool) -> None:
+    c = component(ComponentKind.TOOL)
+    c.status = status
+    assert ("delete" in ComponentLinkBuilder(OWNER)._filter_links(c)) is offered
+    assert "delete" not in ComponentLinkBuilder(STRANGER)._filter_links(c)
 
 
 def test_command_links_point_at_the_commands_endpoint_of_the_kind() -> None:

@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     otp_max_attempts: int = 5
     otp_request_cooldown: int = 60
 
+    # how long after its first publish a version may still be unpublished (and then
+    # deleted) - an accidental publish is undone, anything older only ever deprecated.
+    # 86400 = 24h
+    unpublish_window_seconds: int = 86400
+
     # SOS File Format Service - resolves CWL `format` identifiers to labels
     format_service_url: str = "http://localhost:8001/api/v1"
     format_service_timeout: float = 30.0

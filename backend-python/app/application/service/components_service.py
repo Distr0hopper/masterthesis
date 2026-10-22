@@ -1,5 +1,6 @@
 import uuid
 from dataclasses import dataclass, field, replace
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import Depends
@@ -9,18 +10,23 @@ from app.application.commands.registry import (
     CommandSpec,
     is_logged_in,
     is_owner,
-    is_owner_of_unsuperseded,
+    is_not_superseded,
+    unpublish_window,
+    within_unpublish_window_now,
     is_readable_by,
 )
 from app.application.exception.component_exceptions import (
     ComponentHasDeprecatedParentsError,
+    ComponentHasLockedParentsError,
     ComponentHasPublicParentsError,
     ComponentNameAlreadyExistsError,
     ComponentNotFoundError,
     ComponentUsedByOthersError,
     InvalidCwlError,
     MissingCommandPayloadError,
+    OnlyDraftsCanBeDeletedError,
     SupersededVersionError,
+    UnpublishWindowClosedError,
 )
 from app.application.exception.workflow_exceptions import (
     ConflictingAuxiliaryFileError,
@@ -93,8 +99,11 @@ class ComponentImpact:
     drafts are private, so those are just counted. Public workflows are visible to everyone,
     so the ones above it are named with their owner."""
 
-    #: the actor's public workflows running it at any depth - they become drafts with it
+    #: the actor's public workflows running it at any depth - published ones within their
+    #: unpublish window become drafts with it; deprecated ones and those past it block it
     own_public_ancestors: list[Component] = field(default_factory=list)
+    #: those of own_public_ancestors still within their unpublish window
+    unpublishable_ancestor_ids: set[uuid.UUID] = field(default_factory=set)
     #: other users' public workflows running it at any depth - they block it
     foreign_public_ancestors: list[Component] = field(default_factory=list)
     #: the workflows whose steps use exactly this version - what a delete unmatches
@@ -406,6 +415,9 @@ class ComponentsService:
             return component
         if not lifecycle.can_transition(component, ComponentStatus.DRAFT):
             raise lifecycle.IllegalStatusTransitionError(component, ComponentStatus.DRAFT)
+        # past its window others may run, nest or cite it - it can only be deprecated now
+        if not lifecycle.within_unpublish_window(component, datetime.now(UTC), unpublish_window()):
+            raise UnpublishWindowClosedError(_label(component))
         own_parents = await self._require_retractable(component, current_user_id, unpublish_parents)
         lifecycle.mark_draft([component, *own_parents])
         await self.uow.components.add_all([component, *own_parents])
@@ -421,11 +433,15 @@ class ComponentsService:
         when opted into - the impact endpoint shows them beforehand, so the refusal here is
         for races. Returns those own workflows.
         """
-        impact = lifecycle.retract_impact(await self.uow.components.find_ancestors(component.id), actor_id)
+        impact = lifecycle.retract_impact(
+            await self.uow.components.find_ancestors(component.id), actor_id, datetime.now(UTC), unpublish_window()
+        )
         if impact.foreign:
             raise ComponentUsedByOthersError([f"{_label(w)} by {_owner_name(w)}" for w in impact.foreign])
         if impact.own_deprecated:
             raise ComponentHasDeprecatedParentsError([_label(w) for w in impact.own_deprecated])
+        if impact.own_locked:
+            raise ComponentHasLockedParentsError([_label(w) for w in impact.own_locked])
         if impact.own and not unpublish_parents:
             raise ComponentHasPublicParentsError([_label(w) for w in impact.own])
         return impact.own
@@ -516,8 +532,19 @@ class ComponentsService:
         The same answer serves both: the public workflows above it decide whether it may be
         taken out of public view at all (see _require_retractable), and the direct usages
         are what a delete additionally unmatches."""
-        retract = lifecycle.retract_impact(await self.uow.components.find_ancestors(component.id), current_user.id)
-        impact = ComponentImpact(own_public_ancestors=retract.own, foreign_public_ancestors=retract.foreign)
+        retract = lifecycle.retract_impact(
+            await self.uow.components.find_ancestors(component.id),
+            current_user.id,
+            datetime.now(UTC),
+            unpublish_window(),
+        )
+        impact = ComponentImpact(
+            own_public_ancestors=sorted(
+                [*retract.own, *retract.own_deprecated, *retract.own_locked], key=lambda a: (a.name, a.version)
+            ),
+            unpublishable_ancestor_ids={a.id for a in retract.own},
+            foreign_public_ancestors=retract.foreign,
+        )
 
         parents: dict[uuid.UUID, Component] = {}
         for step in await self.uow.workflows.find_steps_by_component_id(component.id):
@@ -597,6 +624,9 @@ class ComponentsService:
         delete_linked_draft: bool = False,
         unpublish_parents: bool = False,
     ) -> bool:
+        # a public version may be referenced by others - it is only ever deprecated
+        if not lifecycle.is_draft(component):
+            raise OnlyDraftsCanBeDeletedError(_label(component))
         versions = await self.get_versions(component)
         # read before the row goes away - the FK is ON DELETE SET NULL on the workflow side,
         # so nothing else recovers which draft this came from
@@ -623,14 +653,15 @@ class ComponentsService:
         return True
 
     async def remove_synced_from_draft(self, draft_id: uuid.UUID, owner_id: uuid.UUID) -> int:
-        """Delete every workflow version synced from this builder draft that the user owns.
-        Returns how many were removed. Runs inside the caller's unit of work.
+        """Delete every draft workflow version synced from this builder draft that the user
+        owns. Returns how many were removed. Runs inside the caller's unit of work.
 
-        Never takes public workflows above them down - a version still nested in one makes
-        the whole call fail (see _require_retractable), and is deleted from its own page."""
+        Public versions stay - only drafts are ever deleted; they just lose the link to the
+        canvas. Never takes public workflows above them down - a version still nested in one
+        makes the whole call fail (see _require_retractable)."""
         removed = 0
         for workflow in await self.uow.workflows.find_all_synced_from_draft(draft_id):
-            if workflow.created_by_id == owner_id:
+            if workflow.created_by_id == owner_id and lifecycle.is_draft(workflow):
                 await self._remove(workflow, owner_id)
                 removed += 1
         return removed
@@ -673,10 +704,16 @@ COMPONENT_COMMANDS: dict[ComponentCommandType, CommandSpec[ComponentsService, Co
         rel="unfavorite", allowed=is_logged_in, run=lambda s, c, cmd, user: s.remove_favorite(c, user)
     ),
     ComponentCommandType.PUBLISH: CommandSpec(
-        rel="publish", allowed=is_owner_of_unsuperseded, run=lambda s, c, cmd, user: s.publish(c, user, cmd.publish_components)
+        rel="publish",
+        allowed=is_owner,
+        available=is_not_superseded,
+        run=lambda s, c, cmd, user: s.publish(c, user, cmd.publish_components),
     ),
     ComponentCommandType.UNPUBLISH: CommandSpec(
-        rel="unpublish", allowed=is_owner, run=lambda s, c, cmd, user: s.unpublish(c, user, cmd.unpublish_parents)
+        rel="unpublish",
+        allowed=is_owner,
+        available=within_unpublish_window_now,
+        run=lambda s, c, cmd, user: s.unpublish(c, user, cmd.unpublish_parents),
     ),
     ComponentCommandType.UPDATE_DESCRIPTION: CommandSpec(
         rel="updateDescription", allowed=is_owner, run=lambda s, c, cmd, user: s.update_description(c, cmd.description)
@@ -688,6 +725,9 @@ COMPONENT_COMMANDS: dict[ComponentCommandType, CommandSpec[ComponentsService, Co
         rel="deprecate", allowed=is_owner, run=lambda s, c, cmd, user: s.deprecate(c, cmd.deprecation_note)
     ),
     ComponentCommandType.UNDEPRECATE: CommandSpec(
-        rel="undeprecate", allowed=is_owner_of_unsuperseded, run=lambda s, c, cmd, user: s.undeprecate(c)
+        rel="undeprecate",
+        allowed=is_owner,
+        available=is_not_superseded,
+        run=lambda s, c, cmd, user: s.undeprecate(c),
     ),
 }

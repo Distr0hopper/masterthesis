@@ -33,7 +33,7 @@ from app.application.service.components_service import ComponentsService
 from app.application.service.tools_service import ToolsService
 from app.application.unit_of_work import UnitOfWork
 from app.domain.composite import lifecycle
-from app.domain.composite.tree import would_create_cycle
+from app.domain.composite.tree import inherited_domains, would_create_cycle
 from app.domain.models.component import Component, ComponentKind, ComponentSource, ComponentStatus
 from app.domain.models.component_domain import ComponentDomain
 from app.domain.models.component_file import ComponentFile
@@ -775,10 +775,12 @@ class WorkflowsService:
         latest = await self.uow.workflows.find_latest_by_draft_id(draft_id)
         if latest is None or latest.created_by_id != created_by_id:
             await self.components_service.require_name_available(name)
+            # the canvas asks for no domains - the steps' components lend theirs
+            children = await self.uow.components.find_by_ids([b.component_id for b in bindings])
             return await self._create_workflow(
                 name=name,
                 description=None,
-                domains=[],
+                domains=inherited_domains(children),
                 created_by_id=created_by_id,
                 pipeline_content=pipeline_content,
                 steps=steps,

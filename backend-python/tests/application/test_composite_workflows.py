@@ -26,6 +26,7 @@ from app.application.exception.component_exceptions import (
     ComponentHasDeprecatedParentsError,
     ComponentHasLockedParentsError,
     ComponentHasPublicParentsError,
+    ComponentsWithoutDomainsError,
     ComponentNotFoundError,
     ComponentUsedByOthersError,
     InvalidCwlError,
@@ -50,6 +51,7 @@ from app.application.service.components_service import ComponentsService
 from app.application.service.tools_service import ToolsService
 from app.application.service.workflows_service import ComponentConfig, StepBinding, WorkflowsService
 from app.domain.models.component import Component, ComponentKind, ComponentSource, ComponentStatus
+from app.domain.models.component_domain import ComponentDomain
 from app.domain.models.parameter import ParameterDirection
 from app.domain.models.tool import Tool
 from app.domain.models.workflow import Workflow
@@ -197,6 +199,8 @@ def tool(name: str, status: ComponentStatus = ComponentStatus.PUBLISHED, owner: 
         status=status, created_by_id=owner,
         # a public one was published just now - still within its unpublish window
         first_published_at=None if status == ComponentStatus.DRAFT else datetime.now(UTC),
+        # every public component has one - see lifecycle.without_domains
+        domains=[ComponentDomain(domain="other")],
     )
     component.tool = Tool(component_id=component.id)
     return component
@@ -215,6 +219,7 @@ def workflow(
         id=uuid.uuid4(), kind=ComponentKind.WORKFLOW, name=name, version=version, cwl_content=PIPELINE,
         status=status, created_by_id=owner,
         first_published_at=None if status == ComponentStatus.DRAFT else datetime.now(UTC),
+        domains=[ComponentDomain(domain="other")],
     )
     component.workflow = Workflow(
         component_id=component.id,
@@ -363,6 +368,29 @@ def test_drafts_published_along_with_a_workflow_supersede_their_older_versions()
     publish(components_service, root, publish_components=True)
 
     assert old.status == ComponentStatus.DEPRECATED
+
+
+def test_nothing_goes_public_without_a_domain() -> None:
+    leaf = tool("t", ComponentStatus.DRAFT)
+    leaf.domains = []
+    components_service, _, _ = services(leaf)
+
+    with pytest.raises(ComponentsWithoutDomainsError) as err:
+        publish(components_service, leaf)
+    assert err.value.labels == ["t v1"]
+    assert leaf.status == ComponentStatus.DRAFT
+
+
+def test_a_draft_published_along_needs_a_domain_too() -> None:
+    child = tool("child", ComponentStatus.DRAFT)
+    child.domains = []
+    root = workflow("w", child)
+    components_service, _, _ = services(root, child)
+
+    with pytest.raises(ComponentsWithoutDomainsError) as err:
+        publish(components_service, root, publish_components=True)
+    assert err.value.labels == ["child v1"]
+    assert root.status == child.status == ComponentStatus.DRAFT
 
 
 def test_a_workflow_with_unconfirmed_steps_cannot_be_published() -> None:
@@ -623,6 +651,19 @@ def test_first_sync_creates_version_one_with_confirmed_steps_and_ports() -> None
     assert (created.kind, created.version, created.status) == (ComponentKind.WORKFLOW, 1, ComponentStatus.DRAFT)
     assert [(s.component_id, s.match_status) for s in created.steps] == [(a.id, StepMatchStatus.CONFIRMED)]
     assert sorted((p.name, p.direction.value) for p in created.parameters) == [("data", "input"), ("result", "output")]
+
+
+def test_the_first_sync_takes_the_domains_of_its_steps_components() -> None:
+    # the canvas asks for no domains - a workflow of its tools serves what they serve
+    a, b, c = tool("a"), tool("b"), tool("c")
+    a.domains = [ComponentDomain(domain="animal_behavior")]
+    b.domains = [ComponentDomain(domain="earth_observation"), ComponentDomain(domain="animal_behavior")]
+    c.domains = [ComponentDomain(domain="earth_observation")]
+    _, workflows_service, _ = services(a, b, c)
+
+    workflow_v1 = sync(workflows_service, uuid.uuid4(), a, b, c)
+
+    assert [d.domain for d in workflow_v1.domains] == ["animal_behavior", "earth_observation"]
 
 
 def test_resyncing_a_draft_version_updates_it_in_place() -> None:

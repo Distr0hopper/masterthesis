@@ -467,6 +467,11 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
           supersedes={supersedes}
           isLoadingImpact={isLoadingPublishImpact}
           unpublishWindowSeconds={publishImpact?.unpublishWindowSeconds}
+          withoutDomains={model.domains.length === 0}
+          onEditDetails={() => {
+            setPublishDialogOpen(false);
+            setEditDialogOpen(true);
+          }}
           draftComponents={drafts}
           blockedByOthers={blockedByOthers}
           deprecatedComponents={deprecated}

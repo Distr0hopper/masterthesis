@@ -213,6 +213,12 @@ class PublishCheck:
     deprecated_children: list[Component] = field(default_factory=list)
 
 
+def without_domains(components: Iterable[Component]) -> list[Component]:
+    """Those that can't go public: every public component has at least one domain - it is
+    how others find and filter it."""
+    return [c for c in components if not c.domains]
+
+
 def can_publish(root: Component, actor_id: uuid.UUID) -> PublishCheck:
     """`root` with its whole tree loaded (see ComponentsRepository.load_tree). A public
     workflow is visible to everyone, so everything below it has to be public too - at any

@@ -107,6 +107,14 @@ class ComponentHasPublicParentsError(Exception):
         )
 
 
+class ComponentsWithoutDomainsError(Exception):
+    """A version going public needs at least one domain - it is how others find it."""
+
+    def __init__(self, labels: list[str]) -> None:
+        self.labels = labels
+        super().__init__(f"Set at least one domain before publishing: {', '.join(labels)}")
+
+
 class UnpublishWindowClosedError(Exception):
     """The version went public too long ago to become a draft again - others may already run,
     nest or cite it. It can only be deprecated now."""

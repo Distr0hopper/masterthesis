@@ -30,6 +30,10 @@ interface ConfirmPublishDialogProps {
   deprecatedComponents?: ComponentSummaryDto[];
   onConfirm: (publishComponents: boolean) => void;
   isPending: boolean;
+  /** it has no domain yet - nothing goes public without one */
+  withoutDomains?: boolean;
+  /** opens the dialog where the domains are set - offered when they're missing */
+  onEditDetails?: () => void;
 }
 
 function plural(count: number, noun: string): string {
@@ -78,13 +82,15 @@ export function ConfirmPublishDialog({
   deprecatedComponents = [],
   onConfirm,
   isPending,
+  withoutDomains = false,
+  onEditDetails,
 }: ConfirmPublishDialogProps) {
   const kind = component.kindDisplay.toLowerCase();
   const hasDrafts = draftComponents.length > 0;
   const runsDeprecated = deprecatedComponents.length > 0;
   // a draft owned by someone else, or a deprecated component, cannot be resolved here at
   // all - only replacing the step does
-  const isBlocked = blockedByOthers.length > 0 || runsDeprecated;
+  const isBlocked = withoutDomains || blockedByOthers.length > 0 || runsDeprecated;
   const deprecates = !isBlocked && supersedes.length > 0;
 
   return (
@@ -95,15 +101,17 @@ export function ConfirmPublishDialog({
             {isBlocked ? `This ${kind} cannot be published yet` : `Publish ${component.name} v${component.version}?`}
           </DialogTitle>
           <DialogDescription>
-            {runsDeprecated
-              ? 'It runs deprecated components. They keep working where they already run, but a newly published workflow must not depend on them - replace these steps with newer versions first.'
-              : isBlocked
-                ? 'It uses draft components owned by someone else. Only their creator can publish them, so ask them to before publishing this workflow.'
-                : hasDrafts
-                  ? 'A published workflow must not point at draft components - nobody else can see those. Publishing these along with it makes the whole workflow usable.'
-                  : deprecates
-                    ? 'It becomes visible to everyone and replaces the older version in the catalogue and the Workflow Builder.'
-                    : `This ${kind} will become visible to everyone.`}
+            {withoutDomains
+              ? 'It has no domain yet - others find and filter components by their domains, so nothing goes public without one. Set at least one, then publish.'
+              : runsDeprecated
+                ? 'It runs deprecated components. They keep working where they already run, but a newly published workflow must not depend on them - replace these steps with newer versions first.'
+                : isBlocked
+                  ? 'It uses draft components owned by someone else. Only their creator can publish them, so ask them to before publishing this workflow.'
+                  : hasDrafts
+                    ? 'A published workflow must not point at draft components - nobody else can see those. Publishing these along with it makes the whole workflow usable.'
+                    : deprecates
+                      ? 'It becomes visible to everyone and replaces the older version in the catalogue and the Workflow Builder.'
+                      : `This ${kind} will become visible to everyone.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -188,6 +196,11 @@ export function ConfirmPublishDialog({
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
             {isBlocked ? 'Close' : 'Cancel'}
           </Button>
+          {withoutDomains && onEditDetails && (
+            <Button type="button" onClick={onEditDetails} className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90">
+              Set domains
+            </Button>
+          )}
           {!isBlocked && (
             <Button
               type="button"

@@ -56,7 +56,7 @@ The diagram shows which transitions exist. Most of them have further conditions.
 
 | Transition | Also refused when … | Side effect |
 |---|---|---|
-| **publish** | a newer version of the lineage is already published. For a workflow, also when a step isn't confirmed, a step runs another user's draft, or a direct step runs a deprecated version. | Older published versions of the lineage become **deprecated** ("Superseded by vN"). The owner's own draft components below a workflow are published along, if opted into (`publishComponents`). |
+| **publish** | the version (or a draft published along with it) has no domain. A newer version of the lineage is already published. For a workflow, also when a step isn't confirmed, a step runs another user's draft, or a direct step runs a deprecated version. | Older published versions of the lineage become **deprecated** ("Superseded by vN"). The owner's own draft components below a workflow are published along, if opted into (`publishComponents`). |
 | **unpublish** | the window has closed. Other users' public workflows run the version. The owner's own public workflows run it and are deprecated, or past their own window. | `first_published_at` is cleared: the version counts as never published, its steps are editable again, and its next publish starts a new window. The owner's own public workflows above it, still within their window, become drafts along with it, if opted into (`unpublishParents`). |
 | **deprecate** | – | Optional note, shown to everyone who opens or runs the version. |
 | **undeprecate** | a newer version of the lineage is published. | – |

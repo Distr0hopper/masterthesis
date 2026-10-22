@@ -19,6 +19,7 @@ from app.application.exception.component_exceptions import (
     ComponentHasDeprecatedParentsError,
     ComponentHasLockedParentsError,
     ComponentHasPublicParentsError,
+    ComponentsWithoutDomainsError,
     ComponentNameAlreadyExistsError,
     ComponentNotFoundError,
     ComponentUsedByOthersError,
@@ -357,6 +358,8 @@ class ComponentsService:
             raise UnpublishableWorkflowComponentsError(check.foreign_drafts)
         if check.own_drafts and not publish_components:
             raise WorkflowHasUnpublishedComponentsError(sorted({c.name for c in check.own_drafts}))
+        if missing := lifecycle.without_domains([component, *check.own_drafts]):
+            raise ComponentsWithoutDomainsError([_label(c) for c in missing])
 
         published = [*check.own_drafts, component]
         for c in published:

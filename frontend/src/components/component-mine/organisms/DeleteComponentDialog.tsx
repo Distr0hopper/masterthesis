@@ -5,7 +5,6 @@ import { toast } from 'sonner';
 import { ConfirmDeleteDialog } from '@/components/common/ConfirmDeleteDialog';
 import { PublicAncestors } from '@/components/common/PublicAncestors';
 import {
-  ComponentSource,
   ComponentStatus,
   isRetractBlocked,
   ownPublishedAncestors,
@@ -16,6 +15,7 @@ import {
 } from '@/api/components';
 import { canDeprecate, getLink } from '@/api/permissions';
 import { draftKeys } from '@/api/workflow-drafts';
+import { editableBuilderDraftId } from '@/lib/builderDraft';
 import { getErrorMessage } from '@/lib/errors';
 import { ROUTES } from '@/lib/routes';
 
@@ -110,12 +110,8 @@ export function DeleteComponentDialog({
   const ownParents = impact ? ownPublishedAncestors(impact).length : 0;
 
   // only offer the cascade when there is something on the other side to delete: the
-  // workflow came from the builder and its draft still exists (draftId is ON DELETE SET
-  // NULL, so a draft already deleted from the builder leaves this null)
-  const hasLinkedDraft =
-    component.kind === 'workflow' &&
-    component.source === ComponentSource.WORKFLOW_BUILDER &&
-    component.draftId !== null;
+  // workflow's builder canvas still exists - the same check as every way into the builder
+  const hasLinkedDraft = editableBuilderDraftId(component) !== null;
 
   const handleDelete = (deleteLinkedDraft: boolean) => {
     mutate(

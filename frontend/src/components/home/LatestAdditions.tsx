@@ -1,12 +1,8 @@
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card.tsx';
-import { Badge } from '@/components/ui/badge.tsx';
+import { DomainBadges } from '@/components/common/DomainBadges';
+import { KindBadge } from '@/components/common/KindBadge';
 import type { LatestAdditionItem } from './latestAdditionItem';
-
-const BADGE_CLASSNAME: Record<LatestAdditionItem['kind'], string> = {
-  tool: 'border-emerald-300 text-emerald-700',
-  workflow: 'border-jmu-blue-300 text-jmu-blue-700',
-};
 
 interface LatestAdditionsProps {
   items: LatestAdditionItem[];
@@ -28,15 +24,16 @@ export function LatestAdditions({ items, isLoading }: LatestAdditionsProps) {
               <Link
                 key={item.id}
                 to={item.href}
-                className="flex items-center justify-between px-6 py-4 hover:bg-slate-50"
+                className="flex items-center justify-between gap-4 px-6 py-4 hover:bg-slate-50"
               >
-                <div>
+                <div className="min-w-0">
                   <p className="font-mono font-semibold text-slate-900">{item.name}</p>
-                  <p className="mt-0.5 text-sm text-slate-500">{item.subtitle}</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <DomainBadges domains={item.domains} />
+                    <span className="text-sm text-slate-500">{item.createdAtDisplay}</span>
+                  </div>
                 </div>
-                <Badge variant="outline" className={BADGE_CLASSNAME[item.kind]}>
-                  {item.badgeLabel}
-                </Badge>
+                <KindBadge kind={item.kind} className="shrink-0" />
               </Link>
             ))
           )}

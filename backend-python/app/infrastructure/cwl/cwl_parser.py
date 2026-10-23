@@ -148,9 +148,11 @@ def _extract_parameter_group(
 ) -> list[Parameter]:
     parameters = []
     for name, definition in group.items():
-        # Is the definition a dict, or flat string? e.g. input_rds: type: File is valid and no dict!
+        # a mapping (`tracks: {type: File}`), or the `name: Type` shorthand, where the value
+        # is the type itself (`tracks: File`, `ids: string[]`, `x: [null, int]`)
         is_mapping = isinstance(definition, dict)
-        cwl_type = _stringify_type(definition.get("type", "string") if is_mapping else "string").rstrip("?")
+        declared_type = definition.get("type", "string") if is_mapping else definition
+        cwl_type = _stringify_type(declared_type if declared_type else "string").rstrip("?")
         default_value = None
         description = None
         format_ = None

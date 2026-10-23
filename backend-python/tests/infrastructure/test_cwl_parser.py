@@ -66,3 +66,29 @@ def test_text_that_isnt_yaml_is_compared_as_text() -> None:
     broken = "class: [unclosed"
     assert same_cwl_document(broken, broken)
     assert not same_cwl_document(broken, broken + " ")
+
+
+def test_the_name_type_shorthand_keeps_its_type() -> None:
+    from app.infrastructure.cwl.cwl_parser import extract_parameters
+
+    cwl = """\
+cwlVersion: v1.2
+class: CommandLineTool
+inputs:
+  tracks: File
+  maybe: File?
+  ids: string[]
+  speed: {type: double, default: 20}
+  bare:
+outputs:
+  cleaned: File
+"""
+    types = {(p.name, p.direction): p.cwl_type for p in extract_parameters(cwl)}
+    assert types == {
+        ("tracks", ParameterDirection.INPUT): "File",
+        ("maybe", ParameterDirection.INPUT): "File",
+        ("ids", ParameterDirection.INPUT): "string[]",
+        ("speed", ParameterDirection.INPUT): "double",
+        ("bare", ParameterDirection.INPUT): "string",
+        ("cleaned", ParameterDirection.OUTPUT): "File",
+    }

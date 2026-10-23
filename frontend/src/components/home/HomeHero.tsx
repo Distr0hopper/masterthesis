@@ -23,10 +23,10 @@ export function HomeHero() {
         <GlobalSearch size="large" className="mt-8 max-w-2xl" />
 
         <div className="mt-4 flex flex-wrap gap-3">
-          <Button asChild className="bg-white text-jmu-blue-600 hover:bg-jmu-blue-50">
+          <Button asChild variant="inverse">
             <Link to={browseRoute({ kind: 'tool' })}>Browse Tools</Link>
           </Button>
-          <Button asChild variant="outline" className="border-white bg-transparent text-white hover:bg-white/10">
+          <Button asChild variant="inverseOutline">
             <Link to={browseRoute({ kind: 'workflow' })}>Browse Workflows</Link>
           </Button>
         </div>

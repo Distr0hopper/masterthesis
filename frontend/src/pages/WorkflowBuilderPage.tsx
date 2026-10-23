@@ -18,6 +18,7 @@ import { UnsavedChangesDialog } from '@/components/workflow-builder/UnsavedChang
 import { WorkflowInspector } from '@/components/workflow-builder/WorkflowInspector';
 import { WorkflowSidebar } from '@/components/workflow-builder/WorkflowSidebar';
 import { WorkflowTopBar } from '@/components/workflow-builder/WorkflowTopBar';
+import { BuilderNeedsDesktop } from '@/components/workflow-builder/BuilderNeedsDesktop';
 import {
   checkConnection,
   connectionKey,
@@ -36,6 +37,7 @@ import {
   type ValidationError,
 } from '@/components/workflow-builder/lib/canvasValidation';
 import { downloadBlob } from '@/lib/download';
+import { useMediaQuery } from '@/lib/useMediaQuery';
 import {
   useCreateDraft,
   useExportDraft,
@@ -49,6 +51,13 @@ import { getErrorMessage } from '@/lib/errors';
 import { ROUTES } from '@/lib/routes';
 
 export default function WorkflowBuilderPage() {
+  // Tailwind's md breakpoint - below it the builder isn't mounted at all, so neither its
+  // queries nor its unsaved-changes blocker run for a page that can't be used
+  const isWideEnough = useMediaQuery('(min-width: 768px)');
+  return isWideEnough ? <WorkflowBuilder /> : <BuilderNeedsDesktop />;
+}
+
+function WorkflowBuilder() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 

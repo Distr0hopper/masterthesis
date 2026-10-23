@@ -10,9 +10,11 @@ import { CodeBlock } from '@/components/common/CodeBlock';
 import { ParameterTable } from '@/components/component-detail/common/ParameterTable';
 import { ToolOverview } from './ToolOverview';
 
-const TABS_LIST_CLASSNAME = 'w-full justify-start gap-6 rounded-none border-b bg-transparent p-0';
+// four tabs don't fit a phone - the row scrolls sideways instead of widening the page
+const TABS_LIST_CLASSNAME =
+  'w-full justify-start gap-4 overflow-x-auto overflow-y-hidden rounded-none border-b bg-transparent p-0 sm:gap-6';
 const TAB_TRIGGER_CLASSNAME =
-  'gap-1.5 rounded-none border-b-2 border-transparent px-1 pb-3 data-[state=active]:border-jmu-blue-800 data-[state=active]:bg-transparent data-[state=active]:shadow-none';
+  'shrink-0 gap-1.5 rounded-none border-b-2 border-transparent px-1 pb-3 data-[state=active]:border-jmu-blue-800 data-[state=active]:bg-transparent data-[state=active]:shadow-none';
 
 interface TabConfig {
   value: string;

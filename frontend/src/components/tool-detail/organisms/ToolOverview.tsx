@@ -27,7 +27,7 @@ interface ToolOverviewProps {
 
 export function ToolOverview({ model }: ToolOverviewProps) {
   const stats: StatCardProps[] = [
-    { label: 'CWL Type', value: model.cwlType ?? '—', valueClassName: 'font-mono' },
+    { label: 'CWL Type', value: model.cwlType ?? '—', valueClassName: 'font-mono break-words' },
     { label: 'Parameters', value: model.parameters.length, valueClassName: 'text-xl' },
     { label: 'Inputs', value: model.inputs.length, valueClassName: 'text-xl' },
     { label: 'Outputs', value: model.outputs.length, valueClassName: 'text-xl' },

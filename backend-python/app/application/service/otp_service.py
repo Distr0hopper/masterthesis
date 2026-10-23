@@ -51,6 +51,9 @@ class OtpService:
         )
         # committed before sending, so the cooldown holds even when the email fails
         async with self.uow:
+            # a new code replaces the earlier ones - only the latest is ever checked, so
+            # they'd only pile up
+            await self.uow.login_codes.delete_by_email(email)
             await self.uow.login_codes.add(login_code)
             await self.uow.commit()
         await self.email_sender.send_otp_email(email, code)
@@ -58,7 +61,8 @@ class OtpService:
 
     async def verify_code(self, email: str, code: str) -> tuple[str, int]:
         login_code = await self.uow.login_codes.find_latest_by_email(email)
-        if login_code is None or login_code.consumed_at is not None:
+        # none at all, or already used - a code is deleted once it logged someone in
+        if login_code is None:
             raise InvalidOtpCodeError()
         if login_code.attempts >= settings.otp_max_attempts:
             raise OtpAttemptsExceededError()
@@ -74,8 +78,8 @@ class OtpService:
             raise InvalidOtpCodeError()
 
         async with self.uow:
-            login_code.consumed_at = datetime.now(timezone.utc)
-            await self.uow.login_codes.add(login_code)
+            # used up - deleted so it can't log in a second time
+            await self.uow.login_codes.delete_by_email(email)
             user = await self.uow.users.find_by_email(email)
             if user is None:
                 user = await self.uow.users.add(User(email=email))

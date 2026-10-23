@@ -1,3 +1,4 @@
+from sqlalchemy import delete
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -19,3 +20,7 @@ class LoginCodesRepository:
         self.db.add(login_code)
         await self.db.flush()
         return login_code
+
+    async def delete_by_email(self, email: str) -> None:
+        require_unit_of_work(self.db)
+        await self.db.exec(delete(LoginCode).where(LoginCode.email == email))

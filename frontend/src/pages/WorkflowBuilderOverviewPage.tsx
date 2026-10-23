@@ -60,20 +60,7 @@ export default function WorkflowBuilderOverviewPage() {
       ) : (
         <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {(drafts ?? []).map((draft) => (
-            <Card
-              key={draft.id}
-              role="button"
-              tabIndex={0}
-              onClick={() => navigate(ROUTES.builderWorkflow(draft.id))}
-              onKeyDown={(e) => {
-                if (e.target !== e.currentTarget) return;
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  navigate(ROUTES.builderWorkflow(draft.id));
-                }
-              }}
-              className="cursor-pointer transition-colors hover:border-jmu-blue-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
+            <Card key={draft.id}>
               <CardContent className="flex flex-col gap-3 pt-6">
                 <h3 className="break-all font-mono text-lg font-semibold text-slate-900">
                   {draft.name}
@@ -84,7 +71,11 @@ export default function WorkflowBuilderOverviewPage() {
                   Saved {formatRelativeTime(draft.updatedAt)}
                 </p>
 
-                <div className="flex items-center gap-2 border-t pt-3">
+                <Button asChild className="w-full bg-jmu-blue-800 hover:bg-jmu-blue-800/90">
+                  <Link to={ROUTES.builderWorkflow(draft.id)}>Open in Builder</Link>
+                </Button>
+
+                <div className="flex items-center gap-2">
                   <DraftCardActions draft={draft} />
                 </div>
               </CardContent>

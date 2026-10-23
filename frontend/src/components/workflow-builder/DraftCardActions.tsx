@@ -15,7 +15,7 @@ export function DraftCardActions({ draft }: DraftCardActionsProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   return (
-    <div className="contents" onClick={(e) => e.stopPropagation()}>
+    <>
       {draft.linkedWorkflow && (
         <Button asChild variant="outline" size="sm" title="Its page in My Components - publish it, set its details, see its versions">
           <Link
@@ -36,6 +36,6 @@ export function DraftCardActions({ draft }: DraftCardActionsProps) {
       </Button>
 
       <DeleteDraftDialog draft={draft} open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen} />
-    </div>
+    </>
   );
 }

@@ -28,6 +28,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession  # noqa: E402
 
 from app.config import get_settings  # noqa: E402
 from app.infrastructure.email.email_sender import EmailSender  # noqa: E402
+from app.infrastructure.format_service.format_service_client import FormatServiceClient  # noqa: E402
 
 SessionFactory = Callable[[], AsyncSession]
 
@@ -40,6 +41,18 @@ class FakeEmailSender(EmailSender):
 
     async def send_otp_email(self, to: str, code: str) -> None:
         self.sent.append((to, code))
+
+
+class OfflineFormatService:
+    """The SOS File Format Service when it cannot answer - labels stay unresolved and
+    format questions unverified, which every caller handles. Keeps the tests off the
+    network; a test about the answers overrides it with its own fake."""
+
+    async def resolve_labels(self, identifiers: set[str], schema_url: str) -> dict[str, str | None]:
+        return {identifier: None for identifier in identifiers}
+
+    async def check_compatibility(self, expected_format: str, actual_format: str, ontology_url: str) -> bool | None:
+        return None
 
 
 async def _recreate_database() -> None:
@@ -118,6 +131,7 @@ async def client(sessions: SessionFactory, emails: FakeEmailSender) -> AsyncGene
 
     app.dependency_overrides[get_db] = test_db
     app.dependency_overrides[EmailSender.get_sender] = lambda: emails
+    app.dependency_overrides[FormatServiceClient.get_client] = OfflineFormatService
     # ASGITransport runs no lifespan - the app's startup migrations stay out of it
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         yield client

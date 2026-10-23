@@ -12,6 +12,7 @@ from app.application.exception.workflow_draft_exceptions import (
 from app.application.service.components_service import ComponentsService
 from app.application.service.workflows_service import StepBinding, WorkflowsService
 from app.application.unit_of_work import UnitOfWork
+from app.domain.composite import lifecycle
 from app.domain.composite.tree import ConflictingTreeFileError, auxiliary_files, step_files
 from app.domain.models.component import Component
 from app.domain.models.parameter import ParameterDirection
@@ -136,11 +137,18 @@ class WorkflowDraftService:
     async def missing_component_ids(self, draft: WorkflowDraft) -> list[str]:
         """The componentIds on the draft's canvas that no longer resolve - lets the builder
         flag deleted components as soon as a draft is opened, not only on export."""
-        _found, missing = await self._resolve_components(canvas_component_ids(draft.canvas_state))
+        _found, missing = await self._resolve_components(draft, canvas_component_ids(draft.canvas_state))
         return missing
 
-    async def _resolve_components(self, component_ids: list[str]) -> tuple[dict[str, Component], list[str]]:
-        """({component_id: Component}, [unresolvable ids]) for the ids on a canvas."""
+    async def _resolve_components(
+        self, draft: WorkflowDraft, component_ids: list[str]
+    ) -> tuple[dict[str, Component], list[str]]:
+        """({component_id: Component}, [unresolvable ids]) for the ids on a canvas.
+
+        Only what the canvas's owner may read resolves - a canvas is client-written JSON, so
+        an id of someone else's draft on it must not export that draft's CWL or bind a step
+        to it. Such an id is missing like a deleted one (the readability rule of
+        registry.is_readable_by, compared by id: the draft's creator may not be loaded)."""
         components: dict[str, Component] = {}
         missing: list[str] = []
 
@@ -151,19 +159,22 @@ class WorkflowDraftService:
                 missing.append(str(raw_id))
                 continue
             component = await self.uow.components.find_by_id(component_id)
-            if component is None:
+            readable = component is not None and (
+                lifecycle.is_public(component) or component.created_by_id == draft.created_by_id
+            )
+            if not readable:
                 missing.append(str(raw_id))
             else:
                 components[raw_id] = component
         return components, missing
 
-    async def _fetch_components(self, component_ids: list[str]) -> dict[str, Component]:
+    async def _fetch_components(self, draft: WorkflowDraft, component_ids: list[str]) -> dict[str, Component]:
         """{component_id: Component} for every id on the canvas.
 
         Raises ExportValidationError naming the ids that no longer resolve - a component
         deleted since the draft was saved must fail loudly, not export a broken archive.
         """
-        components, missing = await self._resolve_components(component_ids)
+        components, missing = await self._resolve_components(draft, component_ids)
         if missing:
             raise ExportValidationError(
                 f"{len(missing)} component(s) on the canvas no longer exist in the repository"
@@ -249,7 +260,7 @@ class WorkflowDraftService:
         if not all(component_ids):
             raise ExportValidationError("One or more nodes have no linked component")
 
-        components = await self._fetch_components([cid for cid in component_ids if cid is not None])
+        components = await self._fetch_components(draft, [cid for cid in component_ids if cid is not None])
         for component in components.values():
             await self.components_service.load_tree(component)
         ports = {cid: self._to_port_spec(component) for cid, component in components.items()}

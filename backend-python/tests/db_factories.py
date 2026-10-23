@@ -9,6 +9,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.domain.models.component import Component, ComponentKind, ComponentSource, ComponentStatus
 from app.domain.models.component_domain import ComponentDomain
+from app.domain.models.parameter import Parameter, ParameterDirection
 from app.domain.models.tool import Tool
 from app.domain.models.user import User
 from app.domain.models.workflow import Workflow
@@ -18,6 +19,8 @@ from app.infrastructure.security.security import create_access_token
 SessionFactory = Callable[[], AsyncSession]
 
 TOOL_CWL = "cwlVersion: v1.2\nclass: CommandLineTool\nbaseCommand: [echo]\ninputs: {}\noutputs: {}\n"
+EO = "https://dfg-sos.github.io/ontologies/eo-formats.owl"
+EO_FORMAT = "https://dfg-sos.github.io/ontologies/eo-formats#"
 WORKFLOW_CWL = "cwlVersion: v1.2\nclass: Workflow\ninputs: {}\noutputs: {}\nsteps: {}\n"
 
 
@@ -52,15 +55,27 @@ def _component(
     return component
 
 
+def port(
+    name: str, direction: ParameterDirection, format: str | None = None, cwl_type: str = "File"
+) -> Parameter:
+    """A port; `format` is an EO formats class name (`GeoJSON`), or None for none."""
+    return Parameter(
+        name=name, cwl_type=cwl_type, direction=direction, format=EO_FORMAT + format if format else None
+    )
+
+
 def tool(
     name: str,
     owner: User | None,
     status: ComponentStatus = ComponentStatus.PUBLISHED,
     version: int = 1,
     domains: tuple[str, ...] = ("animal_behavior",),
+    ports: tuple[Parameter, ...] = (),
 ) -> Component:
     component = _component(ComponentKind.TOOL, name, owner, status, version, domains, TOOL_CWL)
     component.tool = Tool(component_id=component.id)
+    component.parameters = list(ports)
+    component.ontology_url = EO if any(p.format for p in ports) else None
     return component
 
 

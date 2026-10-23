@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sqlalchemy import delete
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -24,3 +26,9 @@ class LoginCodesRepository:
     async def delete_by_email(self, email: str) -> None:
         require_unit_of_work(self.db)
         await self.db.exec(delete(LoginCode).where(LoginCode.email == email))
+
+    async def delete_expired(self, now: datetime) -> int:
+        """Delete every code that expired before `now`; returns how many."""
+        require_unit_of_work(self.db)
+        result = await self.db.exec(delete(LoginCode).where(LoginCode.expires_at < now))
+        return result.rowcount

@@ -1,5 +1,5 @@
 """Login codes: at most one per email, a failed attempt counts even though the request
-fails, and a code logs in only once."""
+fails, a code logs in only once, and expired codes are purged."""
 
 import asyncio
 from datetime import UTC, datetime, timedelta
@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from app.application.exception.otp_exceptions import OtpRequestRateLimitedError
+from app.application.service.login_code_retention_service import LoginCodeRetentionService
 from app.application.service.otp_service import OtpService
 from app.domain.exception.login_code_exceptions import InvalidOtpCodeError
 from app.domain.models.login_code import LoginCode
@@ -36,6 +37,11 @@ class FakeLoginCodesRepository:
 
     async def delete_by_email(self, email: str) -> None:
         self.codes = [c for c in self.codes if c.email != email]
+
+    async def delete_expired(self, now: datetime) -> int:
+        kept = [c for c in self.codes if c.expires_at >= now]
+        deleted, self.codes = len(self.codes) - len(kept), kept
+        return deleted
 
 
 class FakeUsersRepository:
@@ -117,3 +123,24 @@ def test_a_code_logs_in_only_once() -> None:
     assert uow.login_codes.codes == []
     with pytest.raises(InvalidOtpCodeError):
         asyncio.run(service.verify_code(EMAIL, "123456"))
+
+
+def test_the_purge_deletes_only_expired_codes() -> None:
+    # expired 10 minutes ago (created 20 ago), and one still valid for another 5
+    expired = login_code(email="gone@b.c", age=timedelta(minutes=20))
+    valid = login_code(age=timedelta(minutes=5))
+    uow = FakeUnitOfWork(login_codes=FakeLoginCodesRepository(expired, valid))
+
+    deleted = asyncio.run(LoginCodeRetentionService(uow).purge_expired())  # type: ignore[arg-type]
+
+    assert deleted == 1
+    assert uow.login_codes.codes == [valid]
+    assert uow.commits == 1
+
+
+def test_purging_again_deletes_nothing() -> None:
+    uow = FakeUnitOfWork(login_codes=FakeLoginCodesRepository(login_code(age=timedelta(minutes=20))))
+    service = LoginCodeRetentionService(uow)  # type: ignore[arg-type]
+
+    assert asyncio.run(service.purge_expired()) == 1
+    assert asyncio.run(service.purge_expired()) == 0

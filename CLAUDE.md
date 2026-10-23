@@ -51,6 +51,7 @@ Kotlin/Spring-style layers with strict inward dependencies: `api` → `applicati
 - **domain/**: SQLModel entities (`models/`), repositories (`repository/`), domain-invariant exceptions, `composite/` (tree operations, `lifecycle.py`), `compatibility/` (port matching).
 - **application/**: use-case services, application exceptions, `commands/` (command registry), `unit_of_work.py`.
 - **api/**: DTOs (camelCase via `CamelModel`), transformers (explicit domain ↔ DTO functions, no `model_validate(orm_obj)`), routers, `permission/` validators, `link/` (HATEOAS link builders), exception handlers.
+- **jobs/**: scheduled entry points (`python -m app.jobs.<name>`), the scheduler's counterpart to a router: one call into an application service, exit code 0/1. `purge_login_codes` runs hourly via the `login-code-purge` compose service (see `docs/deployment.md`).
 
 Conventions:
 

@@ -66,6 +66,7 @@ flowchart LR
         mailhog["mailhog<br/>SMTP :1025 · UI :8025"]
         packaging["packaging-service<br/>:8000"]
         format["format-service<br/>:8000"]
+        purge["login-code-purge<br/>Job, stündlich"]
     end
 
     ontology["dfg-sos.github.io<br/>eo-formats.owl"]
@@ -76,6 +77,7 @@ flowchart LR
     backend --> mailhog
     backend --> packaging
     backend --> format
+    purge -- "löscht abgelaufene Codes" --> postgres
     format -. "lädt Ontologie" .-> ontology
     browser -. "localhost:8025<br/>Login-Codes lesen" .-> mailhog
 ```
@@ -83,11 +85,12 @@ flowchart LR
 | Service | Port außen:innen | Image | Aufgabe |
 |---|---|---|---|
 | `frontend` | 8080:80 | gebaut aus `frontend/` | Nginx: liefert die React-App aus, reicht `/api/` ans Backend weiter |
-| `backend` | 8000:8000 | gebaut aus `backend-python/` | FastAPI, migriert beim Start die DB, Swagger unter `/docs` |
+| `backend` | 8000:8000 | gebaut aus `backend-python/`, benannt `component-repository-backend` | FastAPI, migriert beim Start die DB, Swagger unter `/docs` |
 | `postgres` | 5433:5432 | `postgres:16` | Datenbank |
 | `mailhog` | 1025, 8025 | `mailhog/mailhog` | fängt Login-Mails ab, Web-UI auf 8025 |
 | `packaging-service` | 8002:8000 | gebaut aus `automated-packaging/` | verpackt MoveApps-Repos als CWL-Tools |
 | `format-service` | 8001:8000 | `ghcr.io/dfg-sos/file-format-service` | Format-Labels und Port-Kompatibilität |
+| `login-code-purge` | – | dasselbe Image wie `backend` | geplanter Job: löscht stündlich abgelaufene Login-Codes (Abschnitt 10) |
 
 ---
 
@@ -215,6 +218,14 @@ Die Kurzform setzt den **Build-Kontext**: den Ordner, den Docker beim Bauen an d
 - Außerhalb des Kontexts kann man nichts kopieren (`COPY ../openapi.json` geht nicht).
 - `.dockerignore` filtert den Kontext. Was dort steht, kommt bei Docker gar nicht an.
 - Dockerfile-Ort und Kontext sind zwei verschiedene Dinge. Mit `context: .` und `dockerfile: backend-python/Dockerfile` würden alle `COPY`-Pfade beim Repo-Root beginnen.
+
+**`build:` und `image:`:** `build:` sagt Compose, dass es aus einem Ordner ein Image bauen soll. Dafür führt es das Dockerfile aus. `image:` gibt den Namen an:
+
+| im Service steht | Bedeutung |
+|---|---|
+| `build:` und `image:` | Bauen und das Ergebnis so nennen. So macht es der `backend`-Service: `component-repository-backend`. |
+| nur `image:` | Nichts bauen, das Image mit diesem Namen nehmen und es herunterladen, falls es lokal fehlt. So machen es `postgres`, `mailhog`, `format-service`, und mit `pull_policy: never` (nie herunterladen) auch `login-code-purge`. |
+| nur `build:` | Bauen, Compose vergibt den Namen `<Projekt>-<Service>` selbst. So macht es `frontend`. |
 
 ### 5.2 Zeile für Zeile
 
@@ -545,3 +556,145 @@ Backend und Frontend erreichen die Infrastruktur dabei über die freigegebenen P
 Der Backend-Container belegt ebenfalls Port 8000. Vor `make run` muss er gestoppt sein (`docker compose stop backend` oder `make docker-down` und dann `make docker-infra`).
 
 Hot Reload im Container wäre auch möglich (Quellcode per Volume einhängen, `uvicorn --reload` bzw. Vite-Dev-Server im Container, typischerweise in einer eigenen `docker-compose.dev.yml`). Gegenüber dem Ablauf oben bringt das kaum etwas und ist auf dem Mac eher langsamer.
+
+---
+
+## 10. Geplante Jobs: abgelaufene Login-Codes löschen
+
+### 10.1 Was ein Cronjob ist
+
+Ein **Cronjob** ist eine Aufgabe, die nicht durch einen Nutzer ausgelöst wird, sondern **nach einem Zeitplan**: „jede Stunde“, „jeden Tag um 3 Uhr“. Der Name kommt von `cron`, dem Unix-Programm, das seit den 70ern genau das tut. Es liest eine Tabelle (`crontab`) mit Zeilen wie
+
+```
+0 * * * *   python -m app.jobs.purge_login_codes
+```
+
+und startet den Befehl zur angegebenen Zeit. Die fünf Felder sind Minute, Stunde, Tag, Monat und Wochentag. `0 * * * *` heißt „in Minute 0 jeder Stunde“, also stündlich. `0 3 * * *` hieße „täglich um 3:00“.
+
+Ein Cronjob besteht immer aus zwei getrennten Teilen:
+- **der Aufgabe selbst:** ein Programm, das startet, seine Arbeit tut und sich beendet. Mit dem Exit-Code meldet es, ob es geklappt hat: 0 heißt Erfolg, alles andere Fehler.
+- **dem Scheduler:** wer das Programm wann startet. Das kann `cron` auf einem Server sein, ein Kubernetes-`CronJob`, ein Cloud-Dienst oder lokal eine einfache Schleife.
+
+Die Aufgabe weiß nichts vom Zeitplan, und der Scheduler weiß nichts vom Inhalt der Aufgabe. Deshalb kann man den Scheduler je nach Umgebung austauschen, ohne die Aufgabe zu ändern.
+
+### 10.2 Warum es den Job gibt
+
+Login-Codes werden in `login_codes` gespeichert. `OtpService` hält dort **höchstens einen Code pro E-Mail**: Ein neuer Code löscht die vorherigen, ein benutzter wird gelöscht. Übrig bleibt der letzte Code jeder E-Mail, die einen Code angefordert, sich aber nie eingeloggt hat (Tippfehler, abgebrochener Login). Diese Zeilen sind nach Ablauf (`OTP_EXPIRES_IN`, 10 Minuten) wertlos, enthalten aber eine E-Mail-Adresse. Der Job löscht sie regelmäßig.
+
+Zwei Arten von Regeln stecken hier drin, und sie gehören an verschiedene Stellen:
+
+| Regel | Art | Ort |
+|---|---|---|
+| „höchstens ein gültiger Code pro E-Mail“, „ein Code loggt nur einmal ein“ | **Invariante**: muss in dem Moment gelten, in dem ein Code angelegt oder benutzt wird | im Request-Pfad, `OtpService` |
+| „abgelaufene Codes werden nach spätestens einer Stunde gelöscht“ | **Aufbewahrungsfrist**: zeitgesteuert, unabhängig von Anfragen | im geplanten Job |
+
+Die Aufbewahrungsfrist hat auch einen Datenschutz-Bezug: Das Prinzip der Speicherbegrenzung (Art. 5 Abs. 1 lit. e DSGVO) verlangt, personenbezogene Daten nicht länger als nötig zu speichern. Ein Job mit festem Intervall macht die Frist zusagbar.
+
+### 10.3 Der Code
+
+```
+app/
+├── jobs/
+│   └── purge_login_codes.py                      ← Einstiegspunkt, gestartet vom Scheduler
+├── application/service/
+│   └── login_code_retention_service.py           ← der Use Case: purge_expired()
+└── domain/repository/
+    └── login_codes_repository.py                 ← delete_expired(now)
+```
+
+Ein Job ist in der Schichtenarchitektur ein weiterer **Einstiegspunkt**, wie ein Router. Ein Router übersetzt eine HTTP-Anfrage in einen Aufruf eines Application Service, der Job übersetzt einen Zeitpunkt in einen solchen Aufruf. Die Logik liegt im Service und im Repository und wird dort getestet (`tests/application/test_otp.py`). Der Job selbst enthält keine.
+
+**`LoginCodeRetentionService.purge_expired()`** öffnet eine Unit of Work, löscht alle Codes mit `expires_at < jetzt`, committet und gibt die Anzahl zurück.
+
+**`app/jobs/purge_login_codes.py`** macht nur Folgendes:
+1. Logging einrichten.
+2. Eine Datenbank-Session öffnen, Unit of Work und Service bauen, `purge_expired()` aufrufen.
+3. „Deleted N expired login code(s)“ loggen und mit Exit-Code 0 enden.
+4. Bei einer Ausnahme (z. B. Datenbank nicht erreichbar) den Fehler loggen und mit Exit-Code 1 enden.
+
+Gestartet wird er mit:
+
+```bash
+python -m app.jobs.purge_login_codes
+```
+
+`-m` führt ein Python-Modul als Programm aus. Weil der Job im Backend-Image liegt, hat er dieselben Bibliotheken und, über `env_file`, dieselbe Konfiguration wie die API.
+
+### 10.4 Wer den Job startet: lokal
+
+In der Compose-Datei gibt es keinen eingebauten Zeitplan. Der Service `login-code-purge` übernimmt deshalb selbst die Rolle des Schedulers:
+
+```yaml
+  login-code-purge:
+    image: component-repository-backend   # dasselbe Image wie die API, gebaut vom backend-Service
+    pull_policy: never                    # nie herunterladen - es entsteht lokal
+    env_file: ./backend-python/.env
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+    command:
+      - sh
+      - -c
+      - while true; do python -m app.jobs.purge_login_codes; sleep "$${LOGIN_CODE_PURGE_INTERVAL_SECONDS:-3600}"; done
+```
+
+- **Ein Image, zwei Container:** Der `backend`-Service baut das Image (`build:`) und gibt ihm einen festen Namen (`image: component-repository-backend`). Der Job hat kein `build:`, sondern nur `image:` mit demselben Namen. Er nutzt also genau das Image, das der Backend-Service gebaut hat. API und Job laufen dadurch immer auf demselben Code-Stand, wie in Produktion, wo Deployment und CronJob auf dasselbe Image in der Registry verweisen. `pull_policy: never` verhindert, dass Compose versucht, das Image aus dem Internet zu laden. Deshalb den Job über `make docker-up` starten, das das Backend-Image mitbaut.
+- **`command`** ersetzt das `CMD` aus dem Dockerfile. Statt uvicorn läuft eine Shell-Schleife: Job ausführen, eine Stunde schlafen, wieder von vorn.
+- **Das Intervall** kommt aus `backend-python/.env` (`LOGIN_CODE_PURGE_INTERVAL_SECONDS`, in Sekunden). Es gelangt über `env_file` als Umgebungsvariable in den Container. `${LOGIN_CODE_PURGE_INTERVAL_SECONDS:-3600}` ist Shell-Syntax für „der Wert der Variable, oder 3600, falls sie nicht gesetzt ist“. Nach einer Änderung in der `.env` den Container neu starten (`make docker-up`), weil Umgebungsvariablen nur beim Start übergeben werden.
+- **`$$`:** Compose würde `${…}` selbst ersetzen, und zwar mit Werten von *deinem* Rechner bzw. der Root-`.env`. `$$` reicht ein einfaches `$` an die Shell im Container weiter, die die Variable dann aus der Umgebung des Containers einsetzt.
+- Scheitert ein Lauf, endet nur dieser eine Aufruf mit Fehler. Die Schleife läuft weiter, und der nächste Versuch kommt eine Stunde später.
+- Der erste Lauf passiert direkt beim Start. Danach im Abstand von einer Stunde ab dem Start, nicht zu festen Uhrzeiten.
+
+Den Job von Hand einmalig ausführen:
+
+```bash
+docker compose run --rm login-code-purge python -m app.jobs.purge_login_codes
+```
+
+`docker compose run` startet einen neuen Container dieses Services mit einem anderen Befehl, `--rm` löscht ihn danach wieder.
+
+Die Schleife ist ein Ersatz für einen echten Scheduler und für lokal ausreichend. Sie läuft immer im Abstand ab dem Start, nicht zu Uhrzeiten, und ein fehlgeschlagener Lauf fällt nur in den Logs auf (`make docker-logs s=login-code-purge`).
+
+### 10.5 Wer den Job startet: in Produktion
+
+Auf einer Plattform übernimmt deren Scheduler den Zeitplan. Der Job selbst bleibt unverändert, nur der Auslöser wechselt. In Kubernetes wäre das ein `CronJob`-Objekt:
+
+```yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: login-code-purge
+spec:
+  schedule: "0 * * * *"            # stündlich, Cron-Syntax wie in 10.1
+  concurrencyPolicy: Forbid        # kein zweiter Lauf, solange einer noch läuft
+  jobTemplate:
+    spec:
+      backoffLimit: 2              # bei Exit-Code ≠ 0 bis zu zwei Wiederholungen
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: purge
+              image: <registry>/component-repository-backend:<version>   # dasselbe Image wie die API
+              command: ["python", "-m", "app.jobs.purge_login_codes"]
+              envFrom:
+                - secretRef:
+                    name: backend-env   # dieselbe Konfiguration wie die API
+```
+
+Zu jedem Zeitpunkt startet Kubernetes einen neuen Container, führt den Befehl aus und wertet den Exit-Code aus. Bei 0 ist der Lauf erledigt und der Container wird beendet. Bei einem anderen Wert wiederholt Kubernetes den Lauf und markiert ihn als fehlgeschlagen. Daran lassen sich Alarme knüpfen. Andere Plattformen bieten dasselbe Prinzip, z. B. Cloud Run Jobs mit Cloud Scheduler oder ECS Scheduled Tasks, oder klassisch `cron` auf einem Server mit `docker compose run --rm login-code-purge python -m app.jobs.purge_login_codes`.
+
+### 10.6 Warum der Job ein eigener Prozess ist
+
+Möglich wären auch ein Scheduler **im API-Prozess** oder ein Job **in der Datenbank** (`pg_cron`).
+
+| Ort | Bewertung |
+|---|---|
+| im API-Prozess (z. B. APScheduler im `lifespan`) | Mit *n* API-Instanzen läuft der Job *n*-mal, man bräuchte Locking. Neustarts und Deployments der API unterbrechen ihn. Hintergrundarbeit konkurriert mit Requests um Ressourcen. |
+| in der Datenbank (`pg_cron`) | Läuft genau einmal, aber die Regel liegt als SQL in der Datenbank statt im getesteten Anwendungscode und hängt an einer Postgres-Erweiterung. |
+| **eigener Prozess aus dem Backend-Image** (gewählt) | Läuft genau einmal pro Zeitpunkt, unabhängig von der Zahl der API-Instanzen. API und Job skalieren getrennt. Jeder Lauf ist mit Exit-Code und Logs einzeln sichtbar und wiederholbar. Nutzt denselben Code und dieselbe Konfiguration wie die API. |
+
+Das entspricht dem Prinzip „Admin Processes“ der *Twelve-Factor App*: Verwaltungsaufgaben laufen als eigene, einmalige Prozesse aus derselben Codebasis und Konfiguration wie die Anwendung.
+
+**Idempotenz:** `DELETE … WHERE expires_at < now()` darf beliebig oft laufen. Ein zweiter Lauf direkt danach löscht einfach nichts mehr (siehe `test_purging_again_deletes_nothing`). Scheduler garantieren oft nur, dass ein Job *mindestens* einmal läuft, also möglicherweise auch doppelt, etwa nach einer Wiederholung. Ein idempotenter Job verträgt das ohne Weiteres.
+

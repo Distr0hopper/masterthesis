@@ -16,6 +16,8 @@ services:
 
   backend:
     build: ./backend-python
+    # named, so login-code-purge can run the very same image instead of building its own
+    image: component-repository-backend
     ports:
       - "8000:8000" # Swagger UI at http://localhost:8000/docs
     # secrets and settings (JWT_SECRET, ...) - copy backend-python/.env.example to .env
@@ -44,6 +46,28 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+    restart: unless-stopped
+
+  login-code-purge:
+    # scheduled job: deletes expired login codes (backend-python/app/jobs/purge_login_codes.py).
+    # The backend image, but instead of the API it runs the job once per interval - the
+    # local stand-in for a scheduler like a Kubernetes CronJob, see docs/deployment.md
+    image: component-repository-backend
+    # built by the backend service above, never pulled - so start it via `make docker-up`
+    # (or after the backend has been built once), not on its own on a fresh machine
+    pull_policy: never
+    env_file: ./backend-python/.env
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+    # how often: LOGIN_CODE_PURGE_INTERVAL_SECONDS from backend-python/.env, 3600 (hourly) if unset
+    command:
+      - sh
+      - -c
+      - while true; do python -m app.jobs.purge_login_codes; sleep "$${LOGIN_CODE_PURGE_INTERVAL_SECONDS:-3600}"; done
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
   postgres:

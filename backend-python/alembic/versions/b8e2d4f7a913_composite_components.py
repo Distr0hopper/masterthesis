@@ -146,7 +146,7 @@ def _backfill_workflow_ports() -> None:
     that needs the format service, which a migration must not depend on."""
     # imported here, not at module level: alembic loads every revision file, and only this
     # data step needs the app
-    from app.infrastructure.cwl.cwl_parser import extract_parameters, extract_schema_url
+    from app.infrastructure.cwl.cwl_parser import extract_parameters, extract_schema_urls
     from app.infrastructure.format_service.ontology import resolve_ontology_url
 
     connection = op.get_bind()
@@ -188,7 +188,7 @@ def _backfill_workflow_ports() -> None:
             )
         connection.execute(
             sa.text('UPDATE components SET ontology_url = :url WHERE id = :id'),
-            {'url': resolve_ontology_url(extract_schema_url(cwl_content)), 'id': component_id},
+            {'url': resolve_ontology_url(extract_schema_urls(cwl_content)), 'id': component_id},
         )
 
 

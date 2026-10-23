@@ -4,7 +4,7 @@ import { AlertTriangle, Info, Loader2 } from 'lucide-react';
 interface UploadSourceStepProps {
   /** where the upload comes from - a FileDropzone, or the GitHub repo-URL field */
   source: ReactNode;
-  /** info box under the source - defaults to the ontology/EDAM explanation */
+  /** info box under the source - defaults to the ontology explanation */
   hint?: ReactNode;
   /** problems found while reading the source that block continuing */
   issues?: ReactNode[];
@@ -19,10 +19,14 @@ interface UploadSourceStepProps {
 const ONTOLOGY_HINT = (
   <>
     Parameter formats are resolved against the ontology referenced in the CWL&apos;s{' '}
-    <code className="text-xs">$schemas</code>. Currently only the <strong>EDAM</strong> ontology (
-    <code className="text-xs">http://edamontology.org/</code>) is supported. The workflow builder can only verify that
-    two components fit together when both declare an EDAM format - ports without a format, or with a format from another
-    ontology, are kept but not labelled and show up as unverified connections.
+    <code className="text-xs">$schemas</code>. Use the <strong>SOS EO formats</strong> ontology: list{' '}
+    <code className="text-xs">https://dfg-sos.github.io/ontologies/eo-formats.owl</code> in{' '}
+    <code className="text-xs">$schemas</code>, declare{' '}
+    <code className="text-xs">eo: https://dfg-sos.github.io/ontologies/eo-formats#</code> in{' '}
+    <code className="text-xs">$namespaces</code> and write formats like{' '}
+    <code className="text-xs">format: eo:GeoTIFF</code>. The workflow builder can only verify that two components fit
+    together when both declare a format from the same ontology - ports without a format are kept but not labelled and
+    show up as unverified connections.
   </>
 );
 

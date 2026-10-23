@@ -49,7 +49,7 @@ describe('formatNoteFor', () => {
   });
 
   it('explains an ontology format whose name is missing', () => {
-    const raster = port({ format: 'http://edamontology.org/format_4125', formatLabelSource: FormatLabelSource.UNRESOLVED });
+    const raster = port({ format: 'https://dfg-sos.github.io/ontologies/eo-formats#Raster', formatLabelSource: FormatLabelSource.UNRESOLVED });
     expect(formatNoteFor(raster)).toContain('name could not be looked up');
   });
 

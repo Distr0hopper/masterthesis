@@ -28,8 +28,8 @@ export function isManualFormatLabel(port: LabelablePort): boolean {
 
 /**
  * Whether a port has an ontology format whose name couldn't be looked up - the format
- * service was unreachable on upload, or the ontology has no label for it (e.g. EDAM's
- * format_4125 "raster"). The format is still real and still checked; only its name is missing.
+ * service was unreachable on upload, or the ontology has no label for it. The format is
+ * still real and still checked; only its name is missing.
  */
 export function isUnresolvedFormatLabel(port: LabelablePort): boolean {
   return port.formatLabelSource === FormatLabelSource.UNRESOLVED;

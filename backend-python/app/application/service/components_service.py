@@ -48,7 +48,7 @@ from app.domain.models.user import User
 from app.domain.pagination.pagination import PaginatedList
 from app.domain.repository.components_repository import ComponentListFilter
 from app.infrastructure.cwl.canvas_graph import canvas_component_ids
-from app.infrastructure.cwl.cwl_parser import extract_parameters, extract_schema_url, inject_description
+from app.infrastructure.cwl.cwl_parser import extract_parameters, extract_schema_urls, inject_description
 from app.infrastructure.cwl.workflow_generator import assemble_cwl_zip
 from app.infrastructure.db.unit_of_work import SqlUnitOfWork
 from app.infrastructure.format_service.format_service_client import FormatServiceClient
@@ -302,7 +302,7 @@ class ComponentsService:
     @staticmethod
     def ontology_url_for(cwl_content: str) -> str | None:
         """The ontology a document's formats belong to - see Component.ontology_url."""
-        return resolve_ontology_url(extract_schema_url(cwl_content))
+        return resolve_ontology_url(extract_schema_urls(cwl_content))
 
     async def resolve_format_labels(self, ontology_url: str | None, parameters: list[Parameter]) -> None:
         """Fills format_label in place - shared by create and the parse previews, so what

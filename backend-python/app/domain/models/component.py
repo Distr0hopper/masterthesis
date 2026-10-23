@@ -91,9 +91,9 @@ class Component(SQLModel, table=True):
     # the raw CWL document - a CommandLineTool/ExpressionTool for a tool, the pipeline
     # (class: Workflow) for a workflow
     cwl_content: str = Field(sa_column=Column(Text, nullable=False))
-    # derived from cwl_content: the ontology its parameters' `format`s belong to - the
-    # `$schemas` URL, normalized so every EDAM release maps to one configured ontology
-    # (see format_service.ontology.resolve_ontology_url). Two ports are only comparable via
+    # derived from cwl_content: the ontology its parameters' `format`s belong to - picked
+    # from `$schemas` and normalized so every alias of the SOS EO formats ontology maps to
+    # its one public URL (see format_service.ontology.resolve_ontology_url). Two ports are only comparable via
     # the format service when both components share it; None when the CWL declares no $schemas.
     ontology_url: str | None = None
     # explicit String column: SQLModel would otherwise infer a native Postgres

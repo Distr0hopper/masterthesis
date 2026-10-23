@@ -12,7 +12,7 @@ class Port:
     name: str
     cwl_type: str
     direction: ParameterDirection
-    #: ontology format URI (http://edamontology.org/format_4106), a bare token, or None
+    #: ontology format URI (https://dfg-sos.github.io/ontologies/eo-formats#GeoJSON), a bare token, or None
     format: str | None = None
     format_label: str | None = None
     #: the owning component's ontology - formats are only comparable within one

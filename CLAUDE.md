@@ -15,8 +15,8 @@ Each sub-project has its own README with more detail; `backend-python/docs/` hol
 ## Running locally
 
 ```bash
-# repo root: packaging service on :8002 (optional GITHUB_TOKEN in ./.env)
-docker compose up -d packaging-service
+# repo root: packaging service on :8002 (optional GITHUB_TOKEN in ./.env), format service on :8001
+docker compose up -d packaging-service format-service
 
 # backend-python: Postgres on :5433, Mailhog on :1025 / UI :8025 (login codes land there)
 cd backend-python
@@ -27,7 +27,7 @@ make install && make migrate && make run      # API on :8000, docs at /docs
 cd frontend && npm install && npm run dev     # needs VITE_API_BASE_URL=http://localhost:8000 in .env
 ```
 
-The backend also calls the external SOS file-format service on `:8001` (`FORMAT_SERVICE_URL`) to resolve parameter format labels. Packaging returns 503 if the packaging service is down.
+The backend calls the SOS File Format Service on `:8001` (`FORMAT_SERVICE_URL`) to resolve parameter format labels and check port compatibility. Formats come from the SOS EO formats ontology (`$schemas: https://dfg-sos.github.io/ontologies/eo-formats.owl`, `eo: https://dfg-sos.github.io/ontologies/eo-formats#`), which the service fetches itself. Packaging returns 503 if the packaging service is down.
 
 ## Commands
 

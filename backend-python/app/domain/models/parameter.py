@@ -23,7 +23,7 @@ class Parameter(SQLModel, table=True):
     default_value: str | None = None
     description: str | None = None
     format: str | None = None
-    # resolved human-readable name for `format` (an ontology identifier, e.g. EDAM) -
+    # resolved human-readable name for `format` (an ontology identifier, e.g. eo:GeoTIFF) -
     # looked up in the SOS File Format Service against the component's ontology_url on
     # parse and create (see ComponentsService.resolve_format_labels); None if that lookup failed
     format_label: str | None = None

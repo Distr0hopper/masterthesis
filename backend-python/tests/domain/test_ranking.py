@@ -2,7 +2,7 @@ import uuid
 
 from app.domain.compatibility.port_check import ConnectionStatus
 from app.domain.compatibility.ranking import NO_DATA_INPUTS_SCORE, Match, OutputFrame, match_component, rank_key
-from tests.domain.conftest import EDAM, GEOJSON, GEOPACKAGE, OTHER, SHAPEFILE, VECTOR, input_, output
+from tests.domain.conftest import EO, GEOJSON, GEOPACKAGE, OTHER, SHAPEFILE, VECTOR, input_, output
 
 NEWER, OLDER = uuid.uuid4(), uuid.uuid4()
 
@@ -41,8 +41,8 @@ def test_nothing_matching_scores_zero() -> None:
 
 
 def test_verified_match_outranks_unverified_in_the_same_frame(service) -> None:
-    frames = [OutputFrame(component_id=OLDER, component_name="load", outputs=[output(format=GEOJSON, ontology_url=EDAM)])]
-    verified = match_component([input_(format=VECTOR, ontology_url=EDAM)], frames, service)
+    frames = [OutputFrame(component_id=OLDER, component_name="load", outputs=[output(format=GEOJSON, ontology_url=EO)])]
+    verified = match_component([input_(format=VECTOR, ontology_url=EO)], frames, service)
     unverified = match_component([input_(format=VECTOR, ontology_url=OTHER)], frames, service)
     assert (verified.score, verified.status) == (2, ConnectionStatus.COMPATIBLE)
     assert (unverified.score, unverified.status) == (1, ConnectionStatus.UNVERIFIED)
@@ -50,10 +50,10 @@ def test_verified_match_outranks_unverified_in_the_same_frame(service) -> None:
 
 def test_frame_rejected_by_the_service_is_skipped(service) -> None:
     frames = [
-        OutputFrame(component_id=NEWER, component_name="newest", outputs=[output(format=GEOPACKAGE, ontology_url=EDAM)]),
-        OutputFrame(component_id=OLDER, component_name="oldest", outputs=[output(format=SHAPEFILE, ontology_url=EDAM)]),
+        OutputFrame(component_id=NEWER, component_name="newest", outputs=[output(format=GEOPACKAGE, ontology_url=EO)]),
+        OutputFrame(component_id=OLDER, component_name="oldest", outputs=[output(format=SHAPEFILE, ontology_url=EO)]),
     ]
-    match = match_component([input_(format=SHAPEFILE, ontology_url=EDAM)], frames, service)
+    match = match_component([input_(format=SHAPEFILE, ontology_url=EO)], frames, service)
     assert match.frame is not None and match.frame.component_name == "oldest"
 
 

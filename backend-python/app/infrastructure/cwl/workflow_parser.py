@@ -188,7 +188,7 @@ def extract_inline_components(cwl_content: str) -> list[ExtractedComponent]:
 
         # $namespaces/$schemas are only allowed on the top-level document, so an inline tool
         # relies on its parent's - carry them over, or the standalone tool's `format`
-        # prefixes (edam:format_2572) no longer expand and can't be resolved to a label
+        # prefixes (eo:GeoTIFF) no longer expand and can't be resolved to a label
         for key in _DOCUMENT_LEVEL_KEYS:
             if key in doc and key not in run_value:
                 run_value = {**run_value, key: doc[key]}

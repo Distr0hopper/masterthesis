@@ -35,7 +35,7 @@ sequenceDiagram
     DB-->>S: components with parameters
     Note over S: _ports_for - look up both ports.<br/>Unknown component or port is incompatible, done.
     S->>R: format_pair_for(source, target)
-    R-->>S: FormatPair(GeoTIFF to raster, EDAM) or None
+    R-->>S: FormatPair(GeoTIFF to Raster, EO formats) or None
     Note over S: _questions_for - the set of distinct questions
     loop _answer - each distinct question, one at a time
         alt answer in _cache
@@ -88,7 +88,7 @@ flowchart TD
 
 A port without a format means **unknown**, not "accepts anything". A MoveApps input that expects an `.rds` file has no ontology format, so a GeoJSON output only *might* fit it.
 
-Ontology URLs are normalized when a component is saved (`infrastructure/format_service/ontology.py`). Every `edamontology.org` URL in `$schemas` maps to the one configured EDAM ontology (`FORMAT_SERVICE_EDAM_URL`), so components that name different EDAM releases can still be compared.
+Ontology URLs are normalized when a component is saved (`infrastructure/format_service/ontology.py`). The SOS EO formats ontology ([github.com/dfg-sos/ontologies](https://github.com/dfg-sos/ontologies)) can be named by its schema URL `https://dfg-sos.github.io/ontologies/eo-formats.owl`, its IRI, or a pinned release such as `…/releases/eo-formats/1.0.0/eo-formats.owl`. All of them are stored as the schema URL, so two components that name it differently can still be compared: a release declares the same format IRIs as the current version. Any other `$schemas` URL is stored as declared. The format service fetches the ontology from that URL itself.
 
 ## Ranking the palette
 

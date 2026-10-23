@@ -3,12 +3,12 @@ import pytest
 from app.domain.compatibility.port import FormatLookup, FormatPair, Port
 from app.domain.models.parameter import ParameterDirection
 
-EDAM = "http://ontology/edam_eo.owl"
+EO = "https://dfg-sos.github.io/ontologies/eo-formats.owl"
 OTHER = "http://other.org/o.owl"
-GEOJSON = "http://edamontology.org/format_4106"
-GEOPACKAGE = "http://edamontology.org/format_4107"
-VECTOR = "http://edamontology.org/format_4126"
-SHAPEFILE = "http://edamontology.org/format_4119"
+GEOJSON = "https://dfg-sos.github.io/ontologies/eo-formats#GeoJSON"
+GEOPACKAGE = "https://dfg-sos.github.io/ontologies/eo-formats#GeoPackage"
+VECTOR = "https://dfg-sos.github.io/ontologies/eo-formats#Vector"
+SHAPEFILE = "https://dfg-sos.github.io/ontologies/eo-formats#Shapefile"
 
 
 def input_(cwl_type: str = "File", name: str = "in", **kwargs) -> Port:

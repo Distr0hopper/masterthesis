@@ -201,22 +201,23 @@ def extract_cwl_type(cwl_content: str) -> str | None:
     return doc.get("class") if isinstance(doc, dict) else None
 
 
-def extract_schema_url(cwl_content: str) -> str | None:
-    """The ontology the document's `format` identifiers belong to - the first `$schemas`
-    entry, e.g. http://edamontology.org/EDAM_1.18.owl. `$schemas` is a list per the CWL
+def extract_schema_urls(cwl_content: str) -> list[str]:
+    """Every `$schemas` entry, in document order - e.g. the EO formats ontology next to the
+    SOS CWL extensions (cwl.owl). Which one the `format`s belong to is the caller's call
+    (see format_service.ontology.resolve_ontology_url). `$schemas` is a list per the CWL
     spec; a bare string is accepted too."""
     try:
         doc: Any = load_cwl(cwl_content)
     except YAMLError:
-        return None
+        return []
     if not isinstance(doc, dict):
-        return None
+        return []
     schemas = doc.get("$schemas")
     if isinstance(schemas, str):
-        return schemas
+        return [schemas]
     if isinstance(schemas, list):
-        return next((s for s in schemas if isinstance(s, str)), None)
-    return None
+        return [s for s in schemas if isinstance(s, str)]
+    return []
 
 
 def extract_dockerfile_content(cwl_content: str) -> str | None:
@@ -240,8 +241,8 @@ def extract_docker_pull(cwl_content: str) -> str | None:
 
 
 def _resolve_format(format_value: Any, namespaces: dict[str, str]) -> str | None:
-    # format is a (possibly namespaced) ontology identifier, e.g. "edam:format_2572"
-    # with $namespaces: {edam: "http://edamontology.org/"} - expand to the full,
+    # format is a (possibly namespaced) ontology identifier, e.g. "eo:GeoTIFF"
+    # with $namespaces: {eo: "https://dfg-sos.github.io/ontologies/eo-formats#"} - expand to the full,
     # unambiguous identifier by prefixing with the namespace URL. Unprefixed values
     # (no matching $namespaces entry) are stored as-is.
     if not isinstance(format_value, str):

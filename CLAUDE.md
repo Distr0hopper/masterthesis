@@ -14,18 +14,25 @@ Each sub-project has its own README with more detail; `backend-python/docs/` hol
 
 ## Running locally
 
+One `docker-compose.yml` in the repo root holds every container. The backend reads its settings from `backend-python/.env` (copy `.env.example`, set `JWT_SECRET`).
+
 ```bash
-# repo root: packaging service on :8002 (optional GITHUB_TOKEN in ./.env), format service on :8001
-docker compose up -d packaging-service format-service
-
-# backend-python: Postgres on :5433, Mailhog on :1025 / UI :8025 (login codes land there)
-cd backend-python
-docker compose up -d
-make install && make migrate && make run      # API on :8000, docs at /docs
-
-# frontend: Vite dev server on :5173
-cd frontend && npm install && npm run dev     # needs VITE_API_BASE_URL=http://localhost:8000 in .env
+# the whole app: http://localhost:8080 (nginx serves the SPA and proxies /api/ to the backend)
+make docker-up        # docker compose up -d --build; `make docker-down` stops it, `make docker-logs s=backend` follows logs
 ```
+
+For development with hot reload, start only the infrastructure and run backend and frontend locally:
+
+```bash
+# repo root: Postgres :5433, Mailhog :1025 / UI :8025 (login codes land there),
+# format service :8001, packaging service :8002 (optional GITHUB_TOKEN in ./.env)
+make docker-infra     # docker compose up -d postgres mailhog packaging-service format-service
+
+cd backend-python && make install && make migrate && make run   # API on :8000, docs at /docs
+cd frontend && npm install && npm run dev                       # :5173, needs VITE_API_BASE_URL=http://localhost:8000 in .env
+```
+
+The `backend` container also binds `:8000`, so stop it (`docker compose stop backend`) before `make run`.
 
 The backend calls the SOS File Format Service on `:8001` (`FORMAT_SERVICE_URL`) to resolve parameter format labels and check port compatibility. Formats come from the SOS EO formats ontology (`$schemas: https://dfg-sos.github.io/ontologies/eo-formats.owl`, `eo: https://dfg-sos.github.io/ontologies/eo-formats#`), which the service fetches itself. Packaging returns 503 if the packaging service is down.
 

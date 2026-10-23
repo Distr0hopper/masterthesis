@@ -21,8 +21,8 @@ app/
 
 ```bash
 cp .env.example .env   # fill in JWT_SECRET (see comment in .env.example)
-docker compose up -d   # postgres + mailhog
-(cd .. && docker compose up -d packaging-service)   # packaging service on :8002
+# repo root: postgres, mailhog, format service (:8001), packaging service (:8002)
+(cd .. && docker compose up -d postgres mailhog packaging-service format-service)
 uv run alembic upgrade head
 uv run uvicorn app.main:app --reload --port 8000
 ```
@@ -63,7 +63,7 @@ guesses (default 5) before being locked out, and are rate-limited to one request
 `OTP_REQUEST_COOLDOWN` seconds (default 60) per email — all configurable in `.env`.
 
 **Local dev**: `EMAIL_PROVIDER=smtp` (the `.env.example` default) sends mail via Mailhog,
-started by `docker compose up -d`. Read the codes at http://localhost:8025 — no real inbox
+started from the repo-root `docker-compose.yml`. Read the codes at http://localhost:8025 — no real inbox
 needed.
 
 **Production**: set `EMAIL_PROVIDER=resend` plus `RESEND_API_KEY`/`RESEND_FROM_EMAIL` to send

@@ -9,6 +9,13 @@ if TYPE_CHECKING:
     from app.domain.models.component import Component
 
 
+def normalize_email(email: str) -> str:
+    """The one spelling an address is stored and looked up by. Mail providers treat the
+    whole address case-insensitively, so `Jane@Example.org` and `jane@example.org` are the
+    same person - and must reach the same account and the same login code."""
+    return email.strip().lower()
+
+
 class User(SQLModel, table=True):
     __tablename__ = "users"
     # fetch the server-generated timestamps via RETURNING on flush - otherwise they stay

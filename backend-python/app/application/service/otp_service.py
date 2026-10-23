@@ -13,7 +13,7 @@ from app.domain.exception.login_code_exceptions import (
     OtpCodeExpiredError,
 )
 from app.domain.models.login_code import LoginCode
-from app.domain.models.user import User
+from app.domain.models.user import User, normalize_email
 from app.infrastructure.db.unit_of_work import SqlUnitOfWork
 from app.infrastructure.email.email_sender import EmailSender
 from app.infrastructure.security.security import hash_secret, verify_secret
@@ -37,6 +37,7 @@ class OtpService:
         return OtpService(uow, email_sender, auth_service)
 
     async def request_code(self, email: str) -> int:
+        email = normalize_email(email)
         now = datetime.now(timezone.utc)
         latest = await self.uow.login_codes.find_latest_by_email(email)
         if latest is not None and (now - latest.created_at) < timedelta(seconds=settings.otp_request_cooldown):
@@ -60,6 +61,7 @@ class OtpService:
         return settings.otp_request_cooldown
 
     async def verify_code(self, email: str, code: str) -> tuple[str, int]:
+        email = normalize_email(email)
         login_code = await self.uow.login_codes.find_latest_by_email(email)
         # none at all, or already used - a code is deleted once it logged someone in
         if login_code is None:

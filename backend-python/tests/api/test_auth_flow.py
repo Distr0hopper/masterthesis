@@ -60,15 +60,22 @@ async def test_logging_in_again_reuses_the_account(
     assert len(await users_with(sessions, EMAIL)) == 1
 
 
-@pytest.mark.xfail(reason="emails are stored as typed - a differently cased address is another account", strict=True)
 async def test_the_case_of_an_email_does_not_make_another_account(
     client: httpx.AsyncClient, emails: FakeEmailSender, sessions: SessionFactory
 ) -> None:
-    await save(sessions, user(EMAIL))
-    token = await log_in(client, emails, "Someone@example.com")
+    existing = user(EMAIL)
+    await save(sessions, existing)
 
-    response = await client.get("/users/me", headers={"Authorization": f"Bearer {token}"})
-    assert response.json()["email"] == EMAIL
+    await client.post("/auth/otp/request", json={"email": "Someone@Example.com"})
+    to, code = emails.sent[-1]
+    assert to == EMAIL
+    # the code reaches the account however the address is spelled at the second step
+    response = await client.post("/auth/otp/verify", json={"email": "SOMEONE@example.com", "code": code})
+    assert response.status_code == 200
+
+    me = await client.get("/users/me", headers={"Authorization": f"Bearer {response.json()['accessToken']}"})
+    assert me.json()["id"] == str(existing.id)
+    assert len(await users_with(sessions, EMAIL)) == 1
 
 
 async def test_a_second_request_within_the_cooldown_is_429_with_retry_after(

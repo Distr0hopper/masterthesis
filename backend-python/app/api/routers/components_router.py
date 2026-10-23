@@ -244,7 +244,7 @@ async def get_impact(
     """What unpublishing or deleting exactly this version touches - read by both dialogs
     beforehand: the public workflows above it (other users' ones block either action), and
     the workflows and builder drafts a delete unmatches."""
-    component = await components_service.get_component(component_id)
+    component = await components_service.get_visible_component(component_id, current_user)
     if not ComponentPermissionValidator(current_user).can_update(component):
         raise ForbiddenException("Insufficient permission to unpublish or delete this component")
 
@@ -269,7 +269,7 @@ async def get_publish_impact(
     """What publishing this version would deprecate - the older published versions of its
     lineage, and of the drafts a workflow publishes along with it. Read by the publish
     dialog beforehand, like /impact before an unpublish or delete."""
-    component = await components_service.get_component(component_id)
+    component = await components_service.get_visible_component(component_id, current_user)
     if not ComponentPermissionValidator(current_user).can_update(component):
         raise ForbiddenException("Insufficient permission to publish this component")
 
@@ -367,7 +367,7 @@ async def remove(
     # also unpublish your own public workflows that run this version, at any depth
     unpublish_parents: Annotated[bool, Query(alias="unpublishParents")] = False,
 ) -> None:
-    component = await components_service.get_component(component_id)
+    component = await components_service.get_visible_component(component_id, current_user)
 
     validator = ComponentPermissionValidator(current_user)
     if not validator.can_delete(component):

@@ -2661,18 +2661,8 @@
               }
             }
           },
-          "403": {
-            "description": "Not the owner of this draft",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
           "404": {
-            "description": "Draft does not exist",
+            "description": "Draft does not exist, or is not yours",
             "content": {
               "application/json": {
                 "schema": {
@@ -2747,18 +2737,8 @@
               }
             }
           },
-          "403": {
-            "description": "Not the owner of this draft",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
           "404": {
-            "description": "Draft does not exist",
+            "description": "Draft does not exist, or is not yours",
             "content": {
               "application/json": {
                 "schema": {
@@ -2826,18 +2806,8 @@
               }
             }
           },
-          "403": {
-            "description": "Not the owner of this draft",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
           "404": {
-            "description": "Draft does not exist",
+            "description": "Draft does not exist, or is not yours",
             "content": {
               "application/json": {
                 "schema": {
@@ -2900,18 +2870,8 @@
               }
             }
           },
-          "403": {
-            "description": "Not the owner of this draft",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
           "404": {
-            "description": "Draft does not exist",
+            "description": "Draft does not exist, or is not yours",
             "content": {
               "application/json": {
                 "schema": {
@@ -2985,18 +2945,8 @@
               }
             }
           },
-          "403": {
-            "description": "Not the owner of this draft",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
           "404": {
-            "description": "Draft does not exist",
+            "description": "Draft does not exist, or is not yours",
             "content": {
               "application/json": {
                 "schema": {
@@ -3074,18 +3024,8 @@
               }
             }
           },
-          "403": {
-            "description": "Not the owner of this draft",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
           "404": {
-            "description": "Draft does not exist",
+            "description": "Draft does not exist, or is not yours",
             "content": {
               "application/json": {
                 "schema": {

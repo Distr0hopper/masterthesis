@@ -25,10 +25,11 @@ from app.api.permission.component_permission_validator import ComponentPermissio
 from app.api.transformer.component_transformer import ComponentTransformer
 from app.api.transformer.parameter_transformer import ParameterTransformer
 from app.api.transformer.workflow_transformer import WorkflowTransformer
+from app.application.exception.workflow_exceptions import WorkflowStepNotFoundError
 from app.application.service.auth_service import AuthService
 from app.application.service.components_service import ComponentsService
 from app.application.service.workflows_service import ComponentConfig, WorkflowsService
-from app.domain.models.component import ComponentKind
+from app.domain.models.component import Component, ComponentKind
 from app.domain.models.user import User
 
 router = APIRouter(prefix="/workflows", tags=["workflows"])
@@ -50,6 +51,13 @@ def _configs_by_step(configs: list[ComponentConfigDto]) -> dict[str, ComponentCo
         )
         for c in configs
     }
+
+
+def _hide_unreadable_step(step_id: uuid.UUID, workflow: Component, user: User) -> None:
+    """A step of a workflow the caller may not read does not exist for them - a 404 like
+    the workflow's own, never a 403 that would confirm someone's draft is there."""
+    if not ComponentPermissionValidator(user).can_read(workflow):
+        raise WorkflowStepNotFoundError(step_id)
 
 
 def _require_size(content: bytes) -> None:
@@ -125,7 +133,7 @@ async def parse_workflow(
 
     parent = None
     if dto.parent_id is not None:
-        parent = await components_service.get_component(dto.parent_id, ComponentKind.WORKFLOW)
+        parent = await components_service.get_visible_component(dto.parent_id, current_user, ComponentKind.WORKFLOW)
         if not ComponentPermissionValidator(current_user).can_update(parent):
             raise ForbiddenException("Insufficient permission to add a version to this workflow")
 
@@ -177,7 +185,7 @@ async def add_version(
     """An uploaded workflow as the next version of this one - like POST /workflows, with the
     lineage's name and domains. Its steps can also become the next version of the caller's
     tools (componentConfigs[].newVersionOfId)."""
-    parent = await components_service.get_component(workflow_id, ComponentKind.WORKFLOW)
+    parent = await components_service.get_visible_component(workflow_id, current_user, ComponentKind.WORKFLOW)
     if not ComponentPermissionValidator(current_user).can_update(parent):
         logger.warning(f"User {current_user.id} not permitted to add a version to workflow {workflow_id}")
         raise ForbiddenException("Insufficient permission to add a version to this workflow")
@@ -215,6 +223,7 @@ async def update_step(
 ) -> WorkflowStepDto:
     """Bind a step to a component - a tool, or another workflow to nest."""
     _step, workflow = await workflows_service.get_step_with_workflow(step_id)
+    _hide_unreadable_step(step_id, workflow, current_user)
 
     if not ComponentPermissionValidator(current_user).can_update(workflow):
         logger.warning(f"User {current_user.id} not permitted to update step {step_id}")
@@ -244,6 +253,7 @@ async def execute_step_command(
     workflows_service: Annotated[WorkflowsService, Depends(WorkflowsService.get_service)],
 ) -> WorkflowStepDto:
     step, workflow = await workflows_service.get_step_with_workflow(step_id)
+    _hide_unreadable_step(step_id, workflow, current_user)
     command = WorkflowTransformer.to_domain_step_command(dto)
 
     # ownership only - a published workflow's locked steps are the service's 409, not a 403

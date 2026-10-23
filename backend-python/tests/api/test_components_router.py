@@ -170,7 +170,9 @@ async def test_only_the_owner_deletes_and_only_a_draft(client: httpx.AsyncClient
     await save(sessions, owner, stranger, draft, deprecated)
 
     assert (await client.delete(f"/components/{draft.id}")).status_code == 401
-    assert (await client.delete(f"/components/{draft.id}", headers=bearer(stranger))).status_code in (403, 404)
+    # someone else's draft does not exist for a stranger - their public version is just not theirs
+    assert (await client.delete(f"/components/{draft.id}", headers=bearer(stranger))).status_code == 404
+    assert (await client.delete(f"/components/{deprecated.id}", headers=bearer(stranger))).status_code == 403
     assert (await client.delete(f"/components/{deprecated.id}", headers=bearer(owner))).status_code == 409
     assert await status_of(sessions, draft.id) == ComponentStatus.DRAFT
 
@@ -181,12 +183,42 @@ async def test_only_the_owner_deletes_and_only_a_draft(client: httpx.AsyncClient
 async def test_impact_previews_are_the_owners(client: httpx.AsyncClient, sessions: SessionFactory) -> None:
     owner, stranger = user(), user()
     published = tool("public", owner)
-    await save(sessions, owner, stranger, published)
+    draft = tool("draft", owner, ComponentStatus.DRAFT)
+    await save(sessions, owner, stranger, published, draft)
 
-    for path in (f"/components/{published.id}/impact", f"/components/{published.id}/publish-impact"):
-        assert (await client.get(path, headers=bearer(owner))).status_code == 200, path
-        assert (await client.get(path, headers=bearer(stranger))).status_code == 403, path
-        assert (await client.get(path)).status_code == 401, path
+    for preview in ("impact", "publish-impact"):
+        public_path, draft_path = f"/components/{published.id}/{preview}", f"/components/{draft.id}/{preview}"
+        assert (await client.get(public_path, headers=bearer(owner))).status_code == 200, preview
+        assert (await client.get(draft_path, headers=bearer(owner))).status_code == 200, preview
+        assert (await client.get(public_path, headers=bearer(stranger))).status_code == 403, preview
+        assert (await client.get(draft_path, headers=bearer(stranger))).status_code == 404, preview
+        assert (await client.get(public_path)).status_code == 401, preview
+
+
+async def test_a_strangers_draft_takes_no_uploaded_version_and_shows_no_steps(
+    client: httpx.AsyncClient, sessions: SessionFactory
+) -> None:
+    owner, stranger = user(), user()
+    draft_tool = tool("draft-tool", owner, ComponentStatus.DRAFT)
+    public_tool = tool("public-tool", owner)
+    draft_flow = workflow("draft-flow", owner, public_tool, status=ComponentStatus.DRAFT)
+    public_flow = workflow("public-flow", owner, public_tool)
+    await save(sessions, owner, stranger, draft_tool, public_tool, draft_flow, public_flow)
+    cwl = {"cwlFile": ("t.cwl", b"cwlVersion: v1.2\nclass: CommandLineTool\ninputs: {}\noutputs: {}\n")}
+
+    async def upload(component_id: uuid.UUID) -> int:
+        return (await client.post(f"/tools/{component_id}/versions", files=cwl, headers=bearer(stranger))).status_code
+
+    assert await upload(draft_tool.id) == 404
+    assert await upload(public_tool.id) == 403
+
+    async def confirm(flow: object) -> int:
+        [step] = flow.workflow.steps  # type: ignore[attr-defined]
+        body = {"command": "CONFIRM"}
+        return (await client.post(f"/workflows/steps/{step.id}/commands", json=body, headers=bearer(stranger))).status_code
+
+    assert await confirm(draft_flow) == 404
+    assert await confirm(public_flow) == 403
 
 
 async def test_my_components_are_split_by_status_and_hold_nobody_elses(

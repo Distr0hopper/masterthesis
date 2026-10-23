@@ -83,12 +83,13 @@ async def test_search_is_a_case_insensitive_substring_of_the_name(sessions: Sess
     assert (await page(sessions, ComponentListFilter(search="nothing")))[0] == []
 
 
-@pytest.mark.xfail(reason="search is passed to ILIKE unescaped - `_` and `%` act as wildcards", strict=True)
 async def test_search_takes_wildcard_characters_literally(sessions: SessionFactory) -> None:
     owner = user()
-    await save(sessions, owner, tool("speed_filter", owner), tool("speed-filter", owner))
+    await save(sessions, owner, tool("speed_filter", owner), tool("speed-filter", owner), tool("100%-cover", owner))
 
     assert (await page(sessions, ComponentListFilter(search="_")))[0] == [("speed_filter", 1)]
+    assert (await page(sessions, ComponentListFilter(search="%")))[0] == [("100%-cover", 1)]
+    assert (await page(sessions, ComponentListFilter(search="\\")))[0] == []
 
 
 async def test_favorites_filter_and_favorites_first(sessions: SessionFactory) -> None:

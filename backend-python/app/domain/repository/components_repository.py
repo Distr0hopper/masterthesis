@@ -81,7 +81,10 @@ class ComponentsRepository:
                 and_(Favorite.component_name == Component.name, Favorite.user_id == filter.favorited_by),
             )
         if filter.search is not None:
-            query = query.where(Component.name.ilike(f"%{filter.search}%"))
+            # a substring match on what was typed - `%` and `_` are characters of a name,
+            # not wildcards
+            literal = filter.search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            query = query.where(Component.name.ilike(f"%{literal}%", escape="\\"))
         return query
 
     async def find_all(

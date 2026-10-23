@@ -212,7 +212,7 @@ async def add_version(
     tools_service: Annotated[ToolsService, Depends(ToolsService.get_service)],
     components_service: Annotated[ComponentsService, Depends(ComponentsService.get_service)],
 ) -> ToolDetailDto:
-    parent = await components_service.get_component(tool_id, ComponentKind.TOOL)
+    parent = await components_service.get_visible_component(tool_id, current_user, ComponentKind.TOOL)
 
     if not ComponentPermissionValidator(current_user).can_update(parent):
         logger.warning(f"User {current_user.id} not permitted to add version to tool {tool_id}")

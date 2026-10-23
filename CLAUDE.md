@@ -41,7 +41,7 @@ The backend calls the SOS File Format Service on `:8001` (`FORMAT_SERVICE_URL`) 
 | Where                  | Test                                | Other                                                       |
 | ---------------------- | ----------------------------------- | ----------------------------------------------------------- |
 | `backend-python/`      | `make test` (`uv run pytest`); the DB tests need `make docker-infra`, recreate their own `component_repository_test` DB and are skipped without Postgres | `make openapi` — regenerate `../openapi.json`; run after changing any DTO or route |
-| `frontend/`            | `npm test` (vitest)                 | `npm run lint` (oxlint), `npm run build` (`tsc -b` + vite)  |
+| `frontend/`            | `npm test` (vitest); `npm run e2e` (Playwright, needs `make docker-infra`: starts its own backend :8100 on a fresh `component_repository_e2e` DB and Vite :5180) | `npm run lint` (oxlint), `npm run build` (`tsc -b` + vite)  |
 | `automated-packaging/` | `pip install -e ".[service,dev]" && pytest` | `bash build-sdk.sh` builds the shared R wrapper image |
 
 ## Backend architecture (`backend-python/app/`)

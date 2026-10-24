@@ -21,9 +21,9 @@ def _file(content: bytes) -> dict:
 def _responses(**overrides: object) -> dict[str, object]:
     responses: dict[str, object] = {
         REPO: {"default_branch": "master"},
-        f"{REPO}/contents/appspec.json": _file(json.dumps({"settings": [{"id": "maxspeed"}]}).encode()),
-        f"{REPO}/contents/app-configuration.json": _file(b'{"maxspeed": 20}'),
-        f"{REPO}/contents/README.md": _file(README),
+        f"{REPO}/contents/appspec.json?ref=abc123": _file(json.dumps({"settings": [{"id": "maxspeed"}]}).encode()),
+        f"{REPO}/contents/app-configuration.json?ref=abc123": _file(b'{"maxspeed": 20}'),
+        f"{REPO}/contents/README.md?ref=abc123": _file(README),
         f"{API}/users/movestore": {"name": "MoveApps Team"},
         f"{REPO}/branches/master": {"commit": {"sha": "abc123"}},
     }
@@ -72,7 +72,7 @@ def test_a_repo_is_read_with_its_commit_description_and_author(github) -> None:
 
 def test_a_missing_readme_or_owner_profile_only_loses_the_extras(github) -> None:
     responses, _ = github
-    responses.update(_responses(**{f"{REPO}/contents/README.md": 404, f"{API}/users/movestore": 500}))
+    responses.update(_responses(**{f"{REPO}/contents/README.md?ref=abc123": 404, f"{API}/users/movestore": 500}))
 
     contents = GitHubClient().fetch_repo("movestore", "RemoveOutliers")
 
@@ -81,7 +81,7 @@ def test_a_missing_readme_or_owner_profile_only_loses_the_extras(github) -> None
 
 def test_a_repo_without_appspec_settings_is_no_moveapps_app(github) -> None:
     responses, _ = github
-    responses.update(_responses(**{f"{REPO}/contents/appspec.json": _file(b'{"name": "x"}')}))
+    responses.update(_responses(**{f"{REPO}/contents/appspec.json?ref=abc123": _file(b'{"name": "x"}')}))
 
     with pytest.raises(ValueError, match="no 'settings' key"):
         GitHubClient().fetch_repo("movestore", "RemoveOutliers")
@@ -89,7 +89,7 @@ def test_a_repo_without_appspec_settings_is_no_moveapps_app(github) -> None:
 
 def test_a_missing_required_file_or_repo_raises_the_http_error(github) -> None:
     responses, _ = github
-    responses.update(_responses(**{f"{REPO}/contents/app-configuration.json": 404}))
+    responses.update(_responses(**{f"{REPO}/contents/app-configuration.json?ref=abc123": 404}))
     with pytest.raises(requests.HTTPError):
         GitHubClient().fetch_repo("movestore", "RemoveOutliers")
 

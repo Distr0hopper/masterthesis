@@ -47,5 +47,7 @@ RUN chmod -R o+rX /home/moveapps
 COPY --chown=moveapps:staff cwl-wrapper.sh /home/moveapps/co-pilot-r/cwl-wrapper.sh
 RUN chmod 755 /home/moveapps/co-pilot-r/cwl-wrapper.sh
 USER moveapps
+# last, so changing it does not invalidate the cached renv::restore() layer
+LABEL org.opencontainers.image.source="https://github.com/Distr0hopper/masterthesis"
 ENTRYPOINT []
 CMD ["/bin/bash", "/home/moveapps/co-pilot-r/cwl-wrapper.sh"]

@@ -49,6 +49,7 @@ def test_package_returns_cwl_and_metadata(client, monkeypatch):
     assert body["commitSha"] == "abc123"
     assert body["author"] == "MoveApps"
     assert "cwlVersion: v1.2" in body["cwl"]
+    assert "movestore/RemoveOutliers/abc123/RFunction.R" in body["cwl"]
     assert "maxspeed" in body["inputsYaml"]
 
 
@@ -96,3 +97,10 @@ def test_connection_error_is_502(client, monkeypatch):
 
 def test_health(client):
     assert client.get("/health").json() == {"status": "ok"}
+
+
+def test_an_empty_wrapper_image_falls_back_to_the_pinned_default(monkeypatch):
+    # compose passes an unset WRAPPER_IMAGE through as ""
+    monkeypatch.setenv("WRAPPER_IMAGE", "")
+
+    assert service.Settings().wrapper_image == service.DEFAULT_WRAPPER_IMAGE

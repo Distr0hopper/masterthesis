@@ -45,8 +45,8 @@ class GitHubClient:
         if tok:
             self._session.headers["Authorization"] = f"Bearer {tok}"
 
-    def _fetch_file(self, owner: str, repo: str, path: str) -> RepoFile:
-        url = f"{_API_BASE}/{owner}/{repo}/contents/{path}"
+    def _fetch_file(self, owner: str, repo: str, path: str, ref: str) -> RepoFile:
+        url = f"{_API_BASE}/{owner}/{repo}/contents/{path}?ref={ref}"
         resp = self._session.get(url, timeout=30)
         resp.raise_for_status()
         data = resp.json()
@@ -62,7 +62,14 @@ class GitHubClient:
         repo_meta.raise_for_status()
         default_branch = repo_meta.json().get("default_branch", "main")
 
-        appspec_file = self._fetch_file(owner, repo, "appspec.json")
+        # Every file is read at one commit, so the settings match the RFunction.R the CWL pins
+        branch_resp = self._session.get(
+            f"{_API_BASE}/{owner}/{repo}/branches/{default_branch}", timeout=30
+        )
+        branch_resp.raise_for_status()
+        commit_sha = branch_resp.json()["commit"]["sha"]
+
+        appspec_file = self._fetch_file(owner, repo, "appspec.json", commit_sha)
         appspec = json.loads(appspec_file.content)
 
         if "settings" not in appspec:
@@ -71,10 +78,10 @@ class GitHubClient:
                 "Is this a valid MoveApps R app repository?"
             )
 
-        app_config = self._fetch_file(owner, repo, "app-configuration.json")
+        app_config = self._fetch_file(owner, repo, "app-configuration.json", commit_sha)
 
         try:
-            readme = self._fetch_file(owner, repo, "README.md")
+            readme = self._fetch_file(owner, repo, "README.md", commit_sha)
             description = extract_readme_description(readme.content)
         except Exception:
             description = ""
@@ -86,11 +93,6 @@ class GitHubClient:
         except Exception:
             author = owner
 
-        branch_resp = self._session.get(
-            f"{_API_BASE}/{owner}/{repo}/branches/{default_branch}", timeout=30
-        )
-        branch_resp.raise_for_status()
-        commit_sha = branch_resp.json()["commit"]["sha"]
 
         return RepoContents(
             appspec=appspec,

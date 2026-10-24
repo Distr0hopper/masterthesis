@@ -20,7 +20,8 @@ from .packager import (
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    # empty values count as unset, so compose can pass an unset WRAPPER_IMAGE through as ""
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", env_ignore_empty=True)
 
     github_token: str | None = None
     wrapper_image: str = DEFAULT_WRAPPER_IMAGE

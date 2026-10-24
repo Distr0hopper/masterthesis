@@ -15,7 +15,10 @@ from .generators import (
 )
 from .github import GitHubClient
 
-DEFAULT_WRAPPER_IMAGE = "moveapps-r-wrapper:latest"
+# Public on ghcr.io under a version tag, so a generated CWL builds anywhere and always on the same base.
+# A published tag is never re-pushed: a change to Dockerfile.sdk, cwl-wrapper.sh or the template
+# renv.lock gets a new tag (build-sdk.sh --push), and then this is bumped.
+DEFAULT_WRAPPER_IMAGE = "ghcr.io/distr0hopper/moveapps-r-wrapper:r4.5.1-1"
 
 
 class PackagingError(Exception):
@@ -87,7 +90,8 @@ def package_repo(
         raise NotAMoveAppsRepoError(f"{owner}/{repo_name} is not a valid MoveApps R app: {exc}") from exc
 
     appspec_settings = contents.appspec.get("settings", [])
-    raw_base_url = f"https://raw.githubusercontent.com/{owner}/{repo_name}/{contents.default_branch}"
+    # pinned to the commit, not the branch: a published version must not pick up later pushes
+    raw_base_url = f"https://raw.githubusercontent.com/{owner}/{repo_name}/{contents.commit_sha}"
 
     dockerfile_content = generate_dockerfile_content(wrapper_image, raw_base_url, r_packages or None)
     cwl_text = generate_cwl(repo_name_to_image(repo_name), appspec_settings, dockerfile_content)

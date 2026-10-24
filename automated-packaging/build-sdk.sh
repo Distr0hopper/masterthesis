@@ -7,6 +7,9 @@
 #
 # Defaults:
 #   --tag  moveapps-r-wrapper:latest
+#
+# Publishing a new version - always a new tag, never re-push one (then bump DEFAULT_WRAPPER_IMAGE in packager.py):
+#   bash build-sdk.sh --tag ghcr.io/distr0hopper/moveapps-r-wrapper:<next-tag> --push
 set -e
 
 WRAPPER_TAG="moveapps-r-wrapper:latest"

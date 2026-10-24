@@ -101,7 +101,8 @@ services:
     environment:
       # Optional GitHub PAT to avoid API rate limits - set it in ./.env
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
-      WRAPPER_IMAGE: ${WRAPPER_IMAGE:-moveapps-r-wrapper:latest}
+      # Optional override; empty uses DEFAULT_WRAPPER_IMAGE in packager.py
+      WRAPPER_IMAGE: ${WRAPPER_IMAGE:-}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s

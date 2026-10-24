@@ -17,12 +17,14 @@ One input file for testing can be found in `/input-files/` — copy this to app 
 This framework automates producing all three. The core idea is a two-layer Docker setup:
 
 ```
-moveapps-r-wrapper:latest          ← shared base, built once with build-sdk.sh
+ghcr.io/distr0hopper/moveapps-r-wrapper:r4.5.1-1   ← shared base, built with build-sdk.sh, public on ghcr.io
        │
-       └── <app-name>:latest       ← per-app image, built with the generated build.sh
+       └── <app-name>:latest                        ← per-app image, built from the CWL's dockerFile
 ```
 
 The shared wrapper image contains everything that is identical across all apps (R packages, SDK runtime files, the CWL entry point script). The per-app image just adds the two files that differ between apps: `RFunction.R` and `app-configuration.json`.
+
+Generated CWL files are portable and reproducible: the base image is public and referenced by a version tag that is never re-pushed (`DEFAULT_WRAPPER_IMAGE` in `packager.py`), and the app files are fetched from the packaged commit SHA, not the branch. A machine with Docker and cwltool needs nothing else. Only the per-app R packages from `appspec.json` are still installed from current CRAN at build time.
 
 ---
 
@@ -32,7 +34,7 @@ The shared wrapper image contains everything that is identical across all apps (
 
 | File                     | Purpose                                             |
 | ------------------------ | --------------------------------------------------- |
-| `build-sdk.sh`           | Builds the shared `moveapps-r-wrapper:latest` image |
+| `build-sdk.sh`           | Builds (and with `--push` publishes) the shared wrapper image |
 | `Dockerfile.sdk`         | Defines that image                                  |
 | `cwl-wrapper.sh`         | Runtime entry point baked into the wrapper image    |
 | `moveapps_cwl_packager/` | Python CLI + HTTP service that generate per-app artifacts |
@@ -108,21 +110,17 @@ cd automated-packaging
 pip install -e .
 ```
 
-### 2. Build the shared wrapper image (once)
+### 2. The shared wrapper image
+
+Packaging needs no local build: the default base image is published on ghcr.io (currently `r4.5.1-1`).
+
+Rebuild only if the template `renv.lock`, `Dockerfile.sdk` or `cwl-wrapper.sh` changes. `build-sdk.sh` fetches the template R environment from `movestore/Template_R_Function_App` and builds the image; this takes a long time due to `renv::restore()` (much longer on Apple Silicon, where amd64 is emulated). To publish a new version, push it under a new tag and bump `DEFAULT_WRAPPER_IMAGE`. Never re-push an existing tag: CWL files that were already published reference it, and their content must not change.
 
 ```bash
-bash build-sdk.sh
+bash build-sdk.sh --tag ghcr.io/distr0hopper/moveapps-r-wrapper:r4.5.1-2 --push
 ```
 
-This fetches the template R environment from `movestore/Template_R_Function_App` on GitHub and builds `moveapps-r-wrapper:latest`. Takes several minutes due to `renv::restore()`.
-
-Re-run only if the template `renv.lock` or `cwl-wrapper.sh` changes.
-
-**Options:**
-
-```bash
-bash build-sdk.sh --tag my-wrapper:v1 --push
-```
+For a local experiment, `bash build-sdk.sh` builds `moveapps-r-wrapper:latest`; pass it with `--wrapper-image`.
 
 ---
 
@@ -137,7 +135,7 @@ moveapps-cwl-package <github-repo-url> [options]
 | Flag                         | Default                     | Description                                                        |
 | ---------------------------- | --------------------------- | ------------------------------------------------------------------ |
 | `--output-dir PATH`          | `./<repo-name>/`            | Where to write generated files                                     |
-| `--wrapper-image IMAGE`      | `moveapps-r-wrapper:latest` | Base image to extend                                               |
+| `--wrapper-image IMAGE`      | versioned ghcr.io image     | Base image to extend                                               |
 | `--dry-run`                  | —                           | Print generated files without writing anything                     |
 | `--github-token TOKEN`       | `$GITHUB_TOKEN`             | GitHub PAT (also read from env)                                    |
 
@@ -180,7 +178,7 @@ Response `200`:
 | `422`  | Not a GitHub repo URL, repo not found, or not a valid MoveApps R app      |
 | `502`  | GitHub unreachable or refused the request (e.g. rate limit — set a token) |
 
-Errors are `{"detail": "<reason>"}`. Environment: `GITHUB_TOKEN`, `WRAPPER_IMAGE` (default `moveapps-r-wrapper:latest`).
+Errors are `{"detail": "<reason>"}`. Environment: `GITHUB_TOKEN`, `WRAPPER_IMAGE` (empty = `DEFAULT_WRAPPER_IMAGE`).
 
 Run locally without Docker: `pip install -e ".[service]"` then `uvicorn moveapps_cwl_packager.service:app --port 8002`. Tests: `pip install -e ".[service,dev]" && pytest`.
 

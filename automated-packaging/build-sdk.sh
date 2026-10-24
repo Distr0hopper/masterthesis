@@ -8,7 +8,8 @@
 # Defaults:
 #   --tag  moveapps-r-wrapper:latest
 #
-# Publishing a new version - always a new tag, never re-push one (then bump DEFAULT_WRAPPER_IMAGE in packager.py):
+# Publishing a new version - always a new tag, never re-push one (--push refuses an existing tag;
+# then bump DEFAULT_WRAPPER_IMAGE in packager.py):
 #   bash build-sdk.sh --tag ghcr.io/distr0hopper/moveapps-r-wrapper:<next-tag> --push
 set -e
 
@@ -25,6 +26,23 @@ while [[ $# -gt 0 ]]; do
 done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PACKAGER_PY="$SCRIPT_DIR/moveapps_cwl_packager/packager.py"
+
+# Published CWL files reference the tag, so a pushed tag must never change. Checked before the
+# long build; anything other than "not found" (network, auth) aborts rather than risk an overwrite.
+if $PUSH; then
+    echo "==> Checking that ${WRAPPER_TAG} is not published yet..."
+    if lookup="$(docker buildx imagetools inspect "$WRAPPER_TAG" 2>&1)"; then
+        echo "ERROR: ${WRAPPER_TAG} already exists in the registry. Published tags are never re-pushed;"
+        echo "       use a new tag (e.g. bump the -N suffix)."
+        exit 1
+    elif ! grep -q "not found" <<<"$lookup"; then
+        echo "ERROR: could not check whether ${WRAPPER_TAG} exists:"
+        echo "$lookup"
+        exit 1
+    fi
+fi
+
 BUILD_CTX="$(mktemp -d)"
 trap 'rm -rf "$BUILD_CTX"' EXIT
 
@@ -72,5 +90,16 @@ echo ""
 echo "Done."
 echo "  Wrapper image : $WRAPPER_TAG"
 echo ""
-echo "Now package apps with:"
-echo "  moveapps-cwl-package <url> --wrapper-image $WRAPPER_TAG"
+if $PUSH; then
+    current="$(sed -n 's/^DEFAULT_WRAPPER_IMAGE = "\(.*\)"$/\1/p' "$PACKAGER_PY")"
+    echo "Next: make it the default for newly packaged tools. In"
+    echo "  moveapps_cwl_packager/packager.py"
+    echo "set"
+    echo "  DEFAULT_WRAPPER_IMAGE = \"$WRAPPER_TAG\""
+    echo "(currently: ${current:-not found}), rebuild the packaging service"
+    echo "(docker compose up -d --build packaging-service) and commit."
+    echo "Already published tools keep the tag they were packaged with."
+else
+    echo "Now package apps with:"
+    echo "  moveapps-cwl-package <url> --wrapper-image $WRAPPER_TAG"
+fi

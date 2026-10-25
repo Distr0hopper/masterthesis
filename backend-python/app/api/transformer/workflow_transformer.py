@@ -85,6 +85,9 @@ class WorkflowTransformer:
             name_conflict=WorkflowTransformer.to_step_component_match(preview.name_conflict),
             suggested_match=WorkflowTransformer.to_step_component_match(preview.suggested_match),
             previous=WorkflowTransformer.to_previous_step_component(preview.previous),
+            kind=preview.kind,
+            parent_step_id=preview.parent_step_id,
+            used_by=preview.used_by,
         )
 
     @staticmethod

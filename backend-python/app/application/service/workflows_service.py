@@ -1,3 +1,4 @@
+import posixpath
 import uuid
 import zipfile
 from dataclasses import dataclass, field
@@ -33,7 +34,7 @@ from app.application.service.components_service import ComponentsService
 from app.application.service.tools_service import ToolsService
 from app.application.unit_of_work import UnitOfWork
 from app.domain.composite import lifecycle
-from app.domain.composite.tree import would_create_cycle
+from app.domain.composite.tree import contains_lineage, would_create_cycle
 from app.domain.models.component import Component, ComponentKind, ComponentSource, ComponentStatus
 from app.domain.models.component_domain import ComponentDomain
 from app.domain.models.component_file import ComponentFile
@@ -53,13 +54,19 @@ from app.infrastructure.cwl.cwl_parser import (
 )
 from app.infrastructure.cwl.workflow_generator import cwl_filename_for
 from app.infrastructure.cwl.workflow_parser import (
+    ArchiveStep,
+    ExtractedComponent,
     externalize_inline_steps,
     extract_inline_components,
     extract_step_definitions,
-    find_workflow_file,
+    find_root_workflow,
     is_self_contained,
+    is_workflow_cwl,
+    match_archive_path,
     read_workflow_overview,
+    resolve_run_reference,
     strip_cwl_extension,
+    walk_archive_steps,
 )
 from app.infrastructure.db.unit_of_work import SqlUnitOfWork
 
@@ -109,6 +116,13 @@ class ComponentPreview:
     suggested_match: ComponentMatch | None
     #: uploading a new version only - what the same step runs in the newest version
     previous: "PreviousStepComponent | None" = None
+    #: a tool, or a nested workflow from the archive - configured the same way
+    kind: ComponentKind = ComponentKind.TOOL
+    #: the step_id of the nested workflow whose step first runs it - None at the top level
+    parent_step_id: str | None = None
+    #: every step path running it, step_id first - an archive file is one component however
+    #: often it runs
+    used_by: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -168,6 +182,8 @@ class WorkflowUploadPreview:
     auxiliary_files: list[str]
     #: referenced but absent from the archive; blocks the save, like missing_external_refs
     missing_imports: list[str]
+    #: workflow files in the archive the root never runs - left out of the upload
+    unused_workflow_files: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -176,9 +192,9 @@ class WorkflowUploadContent:
     create_from_upload - files is None for a bare .cwl upload (nothing to cross-check
     external refs against).
 
-    NOTE: files holds the archive's full {filename: content} map, not just its keys -
-    an external-ref step's own .cwl text is what gets previewed and, when the user opts
-    to create rather than reuse, persisted as that step's Component.
+    NOTE: files holds the archive's full {path: content} map of .cwl documents, not just
+    its keys - an external-ref step's own .cwl text is what gets previewed and, when the
+    user opts to create rather than reuse, persisted as that step's Component.
     """
 
     is_zip: bool
@@ -186,13 +202,87 @@ class WorkflowUploadContent:
     pipeline_filename: str | None
     files: dict[str, str] | None
     #: the archive's non-.cwl text files, keyed by their path relative to the archive root
-    #: rather than flattened like `files` - a $import writes a path, and that exact path
-    #: has to resolve in the archive handed back on download
+    #: - a $import writes a path, and that exact path has to resolve in the archive handed
+    #: back on download
     aux_files: dict[str, str] = field(default_factory=dict)
+    unused_workflows: list[str] = field(default_factory=list)
 
     @property
-    def available_files(self) -> set[str] | None:
-        return None if self.files is None else set(self.files)
+    def root_filename(self) -> str:
+        return self.pipeline_filename or "workflow.cwl"
+
+    @property
+    def documents(self) -> dict[str, str]:
+        """Every .cwl document by path - a bare upload is an archive of just itself."""
+        return self.files if self.files is not None else {self.root_filename: self.cwl_content}
+
+
+@dataclass
+class UploadUnit:
+    """One component an upload needs a decision for. Steps running the same archive file
+    share one - a file becomes one component however often it runs - and so do the runs of
+    an inline tool in a nested workflow that runs twice."""
+
+    #: the config key: the path of the first step running it (see ArchiveStep.path) - the
+    #: plain step_id at the top level
+    key: str
+    kind: ComponentKind
+    origin: str
+    #: archive origin only
+    file: str | None
+    #: what it is persisted with - an inline tool with its document's cwlVersion injected
+    cwl_content: str
+    #: inline origin only
+    inline: ExtractedComponent | None
+    #: every step path running it, `key` first
+    usages: list[str]
+    #: the unit of the nested workflow whose step first runs it - None at the top level
+    parent_key: str | None
+
+
+@dataclass(frozen=True)
+class DocumentStep:
+    """A step of one workflow document, with the unit it runs - None for an inline-only step
+    or a filename the archive does not hold."""
+
+    step_id: str
+    definition: dict
+    unit_key: str | None
+
+
+@dataclass
+class UploadPlan:
+    """An upload's whole tree, read once: what has to be configured, and what the steps of
+    the root and of every nested workflow run."""
+
+    root: str
+    steps: list[ArchiveStep]
+    units: dict[str, UploadUnit]
+    #: {archive path of a workflow document: its steps} - the root and each nested workflow
+    documents: dict[str, list[DocumentStep]]
+    #: {step path: the unit it runs}
+    unit_of: dict[str, str]
+    #: `run:` filenames the archive does not hold
+    missing_refs: list[str]
+
+    def active_units(self, configs: dict[str, "ComponentConfig"]) -> list[UploadUnit]:
+        """The units the upload creates or binds. Everything below a nested workflow that
+        reuses an existing component instead comes along with that one - unless it also
+        runs somewhere else."""
+        inactive: set[str] = set()
+        active: set[str] = set()
+        for step in self.steps:
+            parent = step.parent_path
+            if parent is not None and (parent in inactive or self._reused(parent, configs)):
+                inactive.add(step.path)
+                continue
+            if step.path in self.unit_of:
+                active.add(self.unit_of[step.path])
+        return [unit for key, unit in self.units.items() if key in active]
+
+    def _reused(self, path: str, configs: dict[str, "ComponentConfig"]) -> bool:
+        config = configs.get(self.unit_of.get(path, ""))
+        return config is not None and config.is_reuse
 
 
 @dataclass(frozen=True)
@@ -255,105 +345,210 @@ class WorkflowsService:
             raise InvalidWorkflowCwlError(str(err)) from err
 
         self_contained = is_self_contained(upload.cwl_content)
-
-        missing_external_refs = (
-            sorted(ref for ref in set(overview.external_refs) if ref not in upload.available_files)
-            if upload.available_files is not None
-            else []
-        )
+        plan = self._plan_upload(upload)
 
         # every document the upload will persist can pull in type definitions, so scan the
-        # pipeline and each step file, not just the pipeline
-        documents = [upload.cwl_content, *(upload.files or {}).values()]
-        auxiliary, missing_imports = self._resolve_imports(documents, upload.aux_files)
+        # pipeline, each nested workflow and each step file, not just the pipeline
+        auxiliary, missing_imports = self._resolve_imports(self._plan_documents(plan, upload), upload.aux_files)
 
         return WorkflowUploadPreview(
             is_zip=upload.is_zip,
             is_self_contained=self_contained,
             workflow_name=overview.name
-            or (strip_cwl_extension(upload.pipeline_filename) if upload.pipeline_filename else None),
+            or (
+                strip_cwl_extension(posixpath.basename(upload.pipeline_filename))
+                if upload.pipeline_filename
+                else None
+            ),
             description=extract_description(upload.cwl_content),
             step_count=overview.step_count,
             component_previews=await self._build_component_previews(
-                upload, overview.cwl_version, await self._previous_step_components(parent), actor_id
+                plan, await self._previous_step_components(parent), actor_id
             ),
             external_refs=overview.external_refs,
             inline_only_steps=overview.inline_only_steps,
-            missing_external_refs=missing_external_refs,
-            auxiliary_files=sorted(auxiliary),
+            # a bare .cwl has nothing to cross-check against - its refs are refused outright
+            missing_external_refs=plan.missing_refs if upload.is_zip else [],
+            # the archive files - documents in different folders spell one import differently
+            auxiliary_files=sorted({match_archive_path(target, upload.aux_files) or target for target in auxiliary}),
             missing_imports=missing_imports,
+            unused_workflow_files=upload.unused_workflows,
         )
 
+    def _plan_upload(self, upload: WorkflowUploadContent) -> UploadPlan:
+        """Reads the upload's tree - the root, and every workflow its steps run, at any depth
+        - into the units to configure. Raises InvalidWorkflowCwlError for a nested document
+        that is not a readable workflow, or workflows running each other in a cycle."""
+        files = upload.documents
+        try:
+            steps = walk_archive_steps(upload.root_filename, files)
+        except ValueError as err:
+            raise InvalidWorkflowCwlError(str(err)) from err
+
+        inline_by_document: dict[str, dict[str, ExtractedComponent]] = {}
+
+        def inline_of(document: str) -> dict[str, ExtractedComponent]:
+            if document not in inline_by_document:
+                inline_by_document[document] = {c.step_id: c for c in extract_inline_components(files[document])}
+            return inline_by_document[document]
+
+        units: dict[str, UploadUnit] = {}
+        key_of: dict[tuple[str, ...], str] = {}
+        unit_of: dict[str, str] = {}
+        missing: set[str] = set()
+        for step in steps:
+            run_value = step.definition["run"]
+            unit: UploadUnit | None = None
+            if isinstance(run_value, str):
+                if step.target is None:
+                    missing.add(run_value)
+                    continue
+                identity: tuple[str, ...] = ("file", step.target)
+                if identity not in key_of:
+                    content = files[step.target]
+                    unit = UploadUnit(
+                        key=step.path,
+                        kind=ComponentKind.WORKFLOW if is_workflow_cwl(content) else ComponentKind.TOOL,
+                        origin=COMPONENT_ORIGIN_ARCHIVE,
+                        file=step.target,
+                        cwl_content=content,
+                        inline=None,
+                        usages=[],
+                        parent_key=None,
+                    )
+            else:
+                inline = inline_of(step.document).get(step.step_id)
+                if inline is None:
+                    # an inline run: that isn't a CommandLineTool stays embedded - see
+                    # read_workflow_overview's inline_only_steps
+                    continue
+                identity = ("inline", step.document, step.step_id)
+                if identity not in key_of:
+                    unit = UploadUnit(
+                        key=step.path,
+                        kind=ComponentKind.TOOL,
+                        origin=COMPONENT_ORIGIN_INLINE,
+                        file=None,
+                        # what is persisted: inline tools carry no cwlVersion of their own,
+                        # so the document's is injected
+                        cwl_content=inject_cwl_version(inline.cwl_content, self._cwl_version(files[step.document])),
+                        inline=inline,
+                        usages=[],
+                        parent_key=None,
+                    )
+            if unit is not None:
+                unit.parent_key = unit_of.get(step.parent_path) if step.parent_path else None
+                units[unit.key] = unit
+                key_of[identity] = unit.key
+            key = key_of[identity]
+            units[key].usages.append(step.path)
+            unit_of[step.path] = key
+
+        documents: dict[str, list[DocumentStep]] = {}
+        workflow_files = [u.file for u in units.values() if u.kind == ComponentKind.WORKFLOW and u.file]
+        for document in [upload.root_filename, *workflow_files]:
+            document_steps: list[DocumentStep] = []
+            for step_id, definition in extract_step_definitions(files[document]):
+                run_value = definition["run"]
+                if isinstance(run_value, str):
+                    target = resolve_run_reference(run_value, document, files)
+                    identity = ("file", target) if target is not None else ()
+                else:
+                    identity = ("inline", document, step_id)
+                document_steps.append(DocumentStep(step_id, definition, key_of.get(identity)))
+            documents[document] = document_steps
+
+        return UploadPlan(
+            root=upload.root_filename,
+            steps=steps,
+            units=units,
+            documents=documents,
+            unit_of=unit_of,
+            missing_refs=sorted(missing),
+        )
+
+    @staticmethod
+    def _cwl_version(cwl_content: str) -> str | None:
+        try:
+            return read_workflow_overview(cwl_content).cwl_version
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _plan_documents(plan: UploadPlan, upload: WorkflowUploadContent) -> list[str]:
+        """The CWL of every document the upload would persist - an unused workflow file in
+        the archive is not one of them."""
+        return [upload.cwl_content, *(u.cwl_content for u in plan.units.values() if u.file is not None)]
+
     async def _previous_step_components(self, parent: Component | None) -> dict[str, Component]:
-        """{step_id: component} of the newest version of `parent`'s lineage - {} without one."""
+        """{step path: component} of the newest version of `parent`'s lineage, nested
+        workflows' steps included - {} without one."""
         if parent is None:
             return {}
         head = (await self.uow.components.find_versions_by_name(parent.name))[-1]
-        # one composite level loaded - the steps and the components they run
         head = await self.uow.components.find_by_id(head.id) or head
-        return {step.step_id: step.component for step in head.steps if step.component is not None}
+        await self.components_service.load_tree(head)
+
+        result: dict[str, Component] = {}
+
+        def visit(component: Component, prefix: str) -> None:
+            for step in component.steps:
+                if step.component is None:
+                    continue
+                path = f"{prefix}{step.step_id}"
+                result[path] = step.component
+                if step.component.is_workflow:
+                    visit(step.component, f"{path}/")
+
+        visit(head, "")
+        return result
 
     async def _build_component_previews(
         self,
-        upload: WorkflowUploadContent,
-        cwl_version: str | None,
-        previous_by_step_id: dict[str, Component] | None = None,
+        plan: UploadPlan,
+        previous_by_path: dict[str, Component] | None = None,
         actor_id: uuid.UUID | None = None,
     ) -> list[ComponentPreview]:
-        """Every step of the upload rendered as the Component it would become.
+        """Every unit of the upload rendered as the Component it would become - inline
+        CommandLineTools, the archive's step files and its nested workflows, in tree order.
 
-        Covers both origins: inline CommandLineTools, and the archive's own step files -
-        the latter used to be existence-checked and then discarded, which is why a zip's
-        steps could never be previewed or imported. Steps that cannot be resolved to any
-        CWL text (an external ref on a bare .cwl upload, or one missing from the archive)
-        are skipped; read_workflow_overview's external_refs/missing_external_refs already
-        report those, and create_from_upload rejects them outright.
+        Steps that cannot be resolved to any CWL text (an external ref on a bare .cwl
+        upload, or one missing from the archive) are skipped; missing_external_refs
+        reports those, and create_from_upload rejects them outright.
         """
-        inline_by_step_id = {c.step_id: c for c in extract_inline_components(upload.cwl_content)}
-
-        # one query, reused for every archive step's fuzzy match - the latest listed version
-        # of every tool lineage, since an archive's step files are tools. Listed only: a
-        # deprecated version takes no new dependents, so it is never suggested
-        all_components = await self.uow.components.find_all(lifecycle.LISTED_STATUSES, ComponentKind.TOOL)
-        candidates = [(c.id, c.name) for c in all_components]
-        by_id = {c.id: c for c in all_components}
+        # one query per kind, reused for every archive file's fuzzy match - the latest listed
+        # version of every lineage. Listed only: a deprecated version takes no new
+        # dependents, so it is never suggested
+        candidates: dict[ComponentKind, list[Component]] = {
+            kind: await self.uow.components.find_all(lifecycle.LISTED_STATUSES, kind)
+            for kind in (ComponentKind.TOOL, ComponentKind.WORKFLOW)
+        }
+        by_id = {c.id: c for components in candidates.values() for c in components}
 
         previews: list[ComponentPreview] = []
-        for step_id, definition in extract_step_definitions(upload.cwl_content):
-            run_value = definition.get("run")
+        for unit in plan.units.values():
             suggested_match: ComponentMatch | None = None
-
-            if isinstance(run_value, str):
-                if upload.files is None or run_value not in upload.files:
-                    continue
-                cwl_content = upload.files[run_value]
-                origin, run_reference = COMPONENT_ORIGIN_ARCHIVE, run_value
-                suggested_name = strip_cwl_extension(run_value)
-                match = best_match(run_value, candidates)
+            if unit.file is not None:
+                run_filename = posixpath.basename(unit.file)
+                suggested_name = strip_cwl_extension(run_filename)
+                match = best_match(run_filename, [(c.id, c.name) for c in candidates[unit.kind]])
                 if match is not None:
                     matched_id, _name, score = match
                     suggested_match = self._to_component_match(by_id[matched_id], score)
             else:
-                inline = inline_by_step_id.get(step_id)
-                if inline is None:
-                    # an inline run: that isn't a CommandLineTool - reported separately as
-                    # inline_only_steps and rejected on create, never previewed
-                    continue
-                # preview exactly what would be persisted: inline tools carry no
-                # cwlVersion of their own, so the parent workflow's is injected here too
-                cwl_content = inject_cwl_version(inline.cwl_content, cwl_version)
-                origin, run_reference = COMPONENT_ORIGIN_INLINE, None
-                suggested_name = inline.suggested_name
+                assert unit.inline is not None
+                suggested_name = unit.inline.suggested_name
 
+            cwl_content = unit.cwl_content
             existing = await self.uow.components.find_latest_by_name(suggested_name)
             parameters = self._safe_extract_parameters(cwl_content)
             ontology_url = self.components_service.ontology_url_for(cwl_content)
             await self.components_service.resolve_format_labels(ontology_url, parameters)
             previews.append(
                 ComponentPreview(
-                    step_id=step_id,
-                    origin=origin,
-                    run_reference=run_reference,
+                    step_id=unit.key,
+                    origin=unit.origin,
+                    run_reference=unit.file,
                     suggested_name=suggested_name,
                     description=extract_description(cwl_content),
                     cwl_content=cwl_content,
@@ -365,8 +560,11 @@ class WorkflowsService:
                     name_conflict=self._to_component_match(existing, None) if existing is not None else None,
                     suggested_match=suggested_match,
                     previous=self._previous_step_component(
-                        (previous_by_step_id or {}).get(step_id), cwl_content, actor_id
+                        (previous_by_path or {}).get(unit.key), cwl_content, actor_id
                     ),
+                    kind=unit.kind,
+                    parent_step_id=unit.parent_key,
+                    used_by=list(unit.usages),
                 )
             )
         return previews
@@ -415,15 +613,16 @@ class WorkflowsService:
         if zipfile.is_zipfile(BytesIO(content)):
             files = self._extract_zip_files(content)
             try:
-                pipeline_filename, cwl_content = find_workflow_file(files)
+                root = find_root_workflow(files)
             except ValueError as err:
                 raise InvalidWorkflowArchiveError(str(err)) from err
             return WorkflowUploadContent(
                 is_zip=True,
-                cwl_content=cwl_content,
-                pipeline_filename=pipeline_filename,
+                cwl_content=root.content,
+                pipeline_filename=root.filename,
                 files=files,
                 aux_files=self._extract_zip_aux_files(content),
+                unused_workflows=root.unused_workflows,
             )
 
         try:
@@ -435,24 +634,35 @@ class WorkflowsService:
         )
 
     async def _validate_component_configs(
-        self, step_definitions: list[tuple[str, dict]], configs: dict[str, ComponentConfig], actor_id: uuid.UUID
+        self,
+        units: list[UploadUnit],
+        configs: dict[str, ComponentConfig],
+        actor_id: uuid.UUID,
+        workflow_name: str,
     ) -> None:
-        """Validates every step's configuration before any Component is created.
+        """Validates every unit's configuration before any Component is created.
 
-        Reuse configs need a target the actor may bind (see _require_bindable). Create configs get the full
-        treatment: a domain, a non-blank name, no duplicate name within this upload, and
-        no collision with the catalogue (the user is offered the reuse branch instead).
+        Reuse configs need a target the actor may bind (see _require_bindable) that does not
+        already contain the uploaded workflow. Create configs get the full treatment: a
+        domain, a non-blank name, no duplicate name within this upload - the workflow's own
+        included - and no collision with the catalogue (the user is offered the reuse branch
+        instead). Only a tool can take the step's CWL as its next version.
 
         Not needed for atomicity - the whole upload is one transaction - but it reports
         every configuration problem as the specific error the upload form understands,
         before any CWL is processed.
         """
-        seen: set[str] = set()
+        seen: set[str] = {workflow_name}
         versioned: set[str] = set()
-        for step_id, _definition in step_definitions:
+        for unit in units:
+            step_id = unit.key
             config = configs[step_id]
 
             if config.is_new_version:
+                if unit.kind == ComponentKind.WORKFLOW:
+                    raise InvalidComponentConfigError(
+                        step_id, "a nested workflow is reused or created - only a tool gets a new version here"
+                    )
                 assert config.new_version_of_id is not None
                 target = await self.uow.components.find_by_id(config.new_version_of_id)
                 if target is None:
@@ -470,11 +680,15 @@ class WorkflowsService:
                 continue
 
             if config.is_reuse:
-                if config.reuse_component_id is not None:
-                    component = await self.uow.components.find_by_id(config.reuse_component_id)
-                    if component is None:
-                        raise ComponentNotFoundError(config.reuse_component_id)
-                    self._require_bindable(component, actor_id)
+                assert config.reuse_component_id is not None
+                component = await self.uow.components.find_by_id(config.reuse_component_id)
+                if component is None:
+                    raise ComponentNotFoundError(config.reuse_component_id)
+                self._require_bindable(component, actor_id)
+                if component.is_workflow:
+                    await self.components_service.load_tree(component)
+                    if contains_lineage(component, workflow_name):
+                        raise WorkflowCycleError(workflow_name, component.name)
                 continue
 
             if config.name is None or not config.name.strip():
@@ -485,8 +699,8 @@ class WorkflowsService:
                 raise DuplicateExtractedComponentNameError(config.name)
             seen.add(config.name)
 
-        for step_id, _definition in step_definitions:
-            config = configs[step_id]
+        for unit in units:
+            config = configs[unit.key]
             if config.is_reuse or config.is_new_version or config.name is None:
                 continue
             # names are one key across both kinds, so a workflow's name collides too
@@ -554,14 +768,16 @@ class WorkflowsService:
     ) -> Component:
         """An upload as workflow `name` v`version`.
 
-        Every step must carry a ComponentConfig (keyed by step_id, as previewed by
-        parse_workflow_upload): reuse_component_id, binding the step to an existing
-        catalogue Component; new_version_of_id, adding the step's CWL as the next version of
-        one of the actor's tools; or a name/domain/description to create a new one from it.
-        Nothing is auto-created behind the user's back and nothing is left to post-save
-        fuzzy triage - an unconfigured step is an error, not a guess.
+        Every unit must carry a ComponentConfig (keyed by the step_id parse_workflow_upload
+        previewed it under): reuse_component_id, binding its steps to an existing catalogue
+        Component; new_version_of_id, adding its CWL as the next version of one of the
+        actor's tools; or a name/domain/description to create a new one from it. Nothing is
+        auto-created behind the user's back and nothing is left to post-save fuzzy triage -
+        an unconfigured step is an error, not a guess.
 
-        One transaction: the new tools and the workflow are created together or not at all.
+        A nested workflow from the archive is a unit like any tool: created from its file -
+        its own steps configured the same way, below it - or bound to an existing workflow,
+        which then brings its steps along.
         """
         upload = self._load_upload_content(content, filename)
 
@@ -574,170 +790,162 @@ class WorkflowsService:
             raise InvalidWorkflowCwlError(
                 "A bare .cwl upload cannot reference external step files - upload a .zip archive instead"
             )
-        if upload.available_files is not None:
-            missing = sorted(ref for ref in set(overview.external_refs) if ref not in upload.available_files)
-            if missing:
-                raise InvalidWorkflowArchiveError(
-                    f"Referenced step file(s) not found in archive: {', '.join(missing)}"
-                )
+        plan = self._plan_upload(upload)
+        if plan.missing_refs:
+            raise InvalidWorkflowArchiveError(
+                f"Referenced step file(s) not found in archive: {', '.join(plan.missing_refs)}"
+            )
 
         # a bare .cwl has no archive to resolve against, so any import is unsatisfiable
-        pipeline_imports = collect_import_targets(upload.cwl_content)
-        if not upload.is_zip and pipeline_imports:
+        if not upload.is_zip and collect_import_targets(upload.cwl_content):
             raise InvalidWorkflowCwlError(
                 "A bare .cwl upload cannot import other files - upload a .zip archive containing them instead"
             )
-        documents = [upload.cwl_content, *(upload.files or {}).values()]
-        auxiliary, missing_imports = self._resolve_imports(documents, upload.aux_files)
+        auxiliary, missing_imports = self._resolve_imports(self._plan_documents(plan, upload), upload.aux_files)
         if missing_imports:
             raise MissingImportedFileError(missing_imports)
 
-        step_definitions = extract_step_definitions(upload.cwl_content)
-        # inline-only steps (ExpressionTool / nested Workflow) stay embedded in the
-        # pipeline and never become Components, so there is nothing to configure for them
-        inline_only = set(overview.inline_only_steps)
-        unconfigured = [
-            step_id
-            for step_id, _ in step_definitions
-            if step_id not in component_configs and step_id not in inline_only
-        ]
+        # inline-only steps (ExpressionTool / inline Workflow) stay embedded in their
+        # document and never become Components, so there is nothing to configure for them -
+        # nor for anything below a nested workflow that reuses an existing one
+        units = plan.active_units(component_configs)
+        unconfigured = [unit.key for unit in units if unit.key not in component_configs]
         if unconfigured:
             raise UnconfiguredWorkflowStepError(unconfigured)
-
-        configurable_steps = [(sid, d) for sid, d in step_definitions if sid not in inline_only]
-        await self._validate_component_configs(configurable_steps, component_configs, created_by_id)
-
-        extracted_by_step_id = {c.step_id: c for c in extract_inline_components(upload.cwl_content)}
+        await self._validate_component_configs(units, component_configs, created_by_id, name)
 
         # existence already guaranteed by _validate_component_configs above
-        reused_components = {
-            step_id: await self.uow.components.find_by_id(config.reuse_component_id)
-            for step_id, config in component_configs.items()
-            if config.reuse_component_id is not None
-        }
-        versioned_tools = {
-            step_id: await self.uow.components.find_by_id(config.new_version_of_id)
-            for step_id, config in component_configs.items()
-            if config.new_version_of_id is not None
-        }
+        reused: dict[str, Component] = {}
+        versioned_tools: dict[str, Component] = {}
+        for unit in units:
+            config = component_configs[unit.key]
+            if config.reuse_component_id is not None:
+                reused[unit.key] = await self.uow.components.find_by_id(config.reuse_component_id)  # type: ignore[assignment]
+            if config.new_version_of_id is not None:
+                versioned_tools[unit.key] = await self.uow.components.find_by_id(config.new_version_of_id)  # type: ignore[assignment]
 
-        def lineage_name(step_id: str) -> str | None:
-            """The name the step's component goes by - an existing lineage's, or the new one's."""
-            config = component_configs[step_id]
-            if config.is_reuse:
-                return reused_components[step_id].name  # type: ignore[union-attr]
-            if config.is_new_version:
-                return versioned_tools[step_id].name  # type: ignore[union-attr]
-            return config.name
+        def lineage_name(key: str) -> str | None:
+            """The name the unit's component goes by - an existing lineage's, or the new one's."""
+            if key in reused:
+                return reused[key].name
+            if key in versioned_tools:
+                return versioned_tools[key].name
+            return component_configs[key].name
 
-        # every inline step gets its run: rewritten to a filename, including one bound to
-        # an existing component (named after that component) - otherwise the stored
-        # pipeline would keep an inline tool body that no longer describes the step. An
-        # archive step is left alone: it already points at a real file that still carries
-        # that name inside the zip, so renaming its Component must not rename the reference.
-        run_references = {step_id: cwl_filename_for(lineage_name(step_id)) for step_id in extracted_by_step_id}
-        pipeline_content = externalize_inline_steps(upload.cwl_content, run_references)
+        created: dict[str, Component] = {}
 
-        steps: list[WorkflowStep] = []
-        #: (step, component, its labels, whether it is an existing tool's next version)
-        pending_components: list[tuple[WorkflowStep, Component, list[ManualFormatLabel], bool]] = []
-        for order, (step_id, definition) in enumerate(step_definitions):
-            run_value = definition["run"]
-            is_inline = not isinstance(run_value, str)
-
-            if step_id in inline_only:
-                # left exactly as the author wrote it: externalize_inline_steps skipped
-                # this step (it isn't in run_references), so the pipeline still carries
-                # the definition inline. run_reference is NOT NULL and there is no file
-                # to point at, so it records what the step actually is - the parentheses
-                # keep it from ever being mistaken for a filename.
-                inline_class = run_value.get("class") if isinstance(run_value, dict) else None
-                steps.append(
-                    WorkflowStep(
-                        step_id=step_id,
-                        run_reference=f"(inline {inline_class or 'definition'})",
-                        step_order=order,
-                        match_status=StepMatchStatus.INLINE,
-                        match_score=None,
-                    )
+        async def component_for(key: str) -> Component:
+            """The component a unit becomes - created once, however many steps run it."""
+            if key in reused:
+                return reused[key]
+            if key in created:
+                return created[key]
+            unit, config = plan.units[key], component_configs[key]
+            if unit.kind == ComponentKind.WORKFLOW:
+                assert unit.file is not None and config.name is not None
+                component = await persist_document(
+                    unit.file,
+                    config.name,
+                    config.description or extract_description(unit.cwl_content),
+                    config.domains or [],
                 )
-                continue
+            else:
+                target = versioned_tools.get(key)
+                tool = Component(
+                    kind=ComponentKind.TOOL,
+                    # a next version keeps its lineage's name, domains and credits
+                    name=target.name if target is not None else config.name,
+                    domains=[
+                        ComponentDomain(domain=d)
+                        for d in ([d.domain for d in target.domains] if target is not None else (config.domains or []))
+                    ],
+                    author_name=target.author_name if target is not None else None,
+                    cwl_content=unit.cwl_content,
+                    source=ComponentSource.MANUAL_UPLOAD,
+                    created_by_id=created_by_id,
+                    description=config.description
+                    or (unit.inline.description if unit.inline is not None else extract_description(unit.cwl_content)),
+                    # a component stands alone in the catalogue, so it carries its own imports
+                    # rather than relying on the workflow it arrived with still being around
+                    files=self._files_for(unit.cwl_content, auxiliary),
+                )
+                component = (
+                    await self.tools_service.add_uploaded_version_in_transaction(tool, config.format_labels)
+                    if target is not None
+                    else await self.tools_service.create_tool(tool, format_labels=config.format_labels)
+                )
+            created[key] = component
+            return component
 
-            config = component_configs[step_id]
-            reference = run_references[step_id] if is_inline else run_value
+        async def persist_document(
+            document: str, workflow_name: str, workflow_description: str | None, workflow_domains: list[str], at_version: int = 1
+        ) -> Component:
+            """One workflow document of the tree as a workflow - what its steps run first."""
+            steps: list[WorkflowStep] = []
+            # every inline step gets its run: rewritten to a filename, including one bound
+            # to an existing component (named after that component) - otherwise the stored
+            # pipeline would keep an inline tool body that no longer describes the step. An
+            # archive step is left alone: it already points at a real file that still
+            # carries that name inside the zip, so renaming its Component must not rename
+            # the reference.
+            run_references: dict[str, str] = {}
+            for order, document_step in enumerate(plan.documents[document]):
+                run_value = document_step.definition["run"]
+                if document_step.unit_key is None:
+                    # left exactly as the author wrote it - run_reference is NOT NULL and
+                    # there is no file to point at, so it records what the step actually
+                    # is; the parentheses keep it from ever being mistaken for a filename
+                    inline_class = run_value.get("class") if isinstance(run_value, dict) else None
+                    steps.append(
+                        WorkflowStep(
+                            step_id=document_step.step_id,
+                            run_reference=f"(inline {inline_class or 'definition'})",
+                            step_order=order,
+                            match_status=StepMatchStatus.INLINE,
+                            match_score=None,
+                        )
+                    )
+                    continue
 
-            if config.is_reuse:
+                unit = plan.units[document_step.unit_key]
+                if unit.origin == COMPONENT_ORIGIN_INLINE:
+                    reference = cwl_filename_for(lineage_name(unit.key))  # type: ignore[arg-type]
+                    run_references[document_step.step_id] = reference
+                else:
+                    reference = run_value
+                child = await component_for(unit.key)
                 steps.append(
                     WorkflowStep(
-                        step_id=step_id,
+                        step_id=document_step.step_id,
                         run_reference=reference,
                         step_order=order,
-                        component_id=config.reuse_component_id,
-                        # the user picked this explicitly during configuration - there is
+                        component_id=child.id,
+                        component=child,
+                        # the user decided every step during configuration - there is
                         # nothing left to triage on the detail page, and no score to report
                         match_status=StepMatchStatus.CONFIRMED,
                         match_score=None,
                     )
                 )
-                continue
 
-            if is_inline:
-                extracted = extracted_by_step_id[step_id]
-                cwl_content = inject_cwl_version(extracted.cwl_content, overview.cwl_version)
-                fallback_description = extracted.description
-            else:
-                cwl_content = upload.files[run_value]
-                fallback_description = extract_description(cwl_content)
-
-            target = versioned_tools.get(step_id)
-            component = Component(
-                kind=ComponentKind.TOOL,
-                # a next version keeps its lineage's name, domains and credits
-                name=target.name if target is not None else config.name,
-                domains=[
-                    ComponentDomain(domain=d)
-                    for d in ([d.domain for d in target.domains] if target is not None else (config.domains or []))
-                ],
-                author_name=target.author_name if target is not None else None,
-                cwl_content=cwl_content,
-                source=ComponentSource.MANUAL_UPLOAD,
-                created_by_id=created_by_id,
-                description=config.description or fallback_description,
-                # a component stands alone in the catalogue, so it carries its own imports
-                # rather than relying on the workflow it arrived with still being around
-                files=self._files_for(cwl_content, auxiliary),
-            )
-            step = WorkflowStep(
-                step_id=step_id,
-                run_reference=reference,
-                step_order=order,
-                match_status=StepMatchStatus.CONFIRMED,
-                match_score=None,
-            )
-            pending_components.append((step, component, config.format_labels, target is not None))
-            steps.append(step)
-
-        async with self.uow:
-            for step, component, format_labels, is_next_version in pending_components:
-                created = (
-                    await self.tools_service.add_uploaded_version_in_transaction(component, format_labels)
-                    if is_next_version
-                    else await self.tools_service.create_tool(component, format_labels=format_labels)
-                )
-                step.component_id = created.id
-                step.component = created
-
-            workflow = await self._create_workflow(
-                name=name,
-                description=description,
-                domains=domains,
+            source = upload.documents[document]
+            pipeline_content = externalize_inline_steps(source, run_references) if run_references else source
+            return await self._create_workflow(
+                name=workflow_name,
+                description=workflow_description,
+                domains=workflow_domains,
                 created_by_id=created_by_id,
                 pipeline_content=pipeline_content,
                 steps=steps,
                 source=ComponentSource.MANUAL_UPLOAD,
                 files=self._files_for(pipeline_content, auxiliary),
-                version=version,
+                version=at_version,
             )
+
+        # one transaction: the new tools, the nested workflows and the workflow are created
+        # together or not at all
+        async with self.uow:
+            workflow = await persist_document(plan.root, name, description, domains, version)
             await self.uow.commit()
         return await self.components_service.reload(workflow)
 
@@ -998,20 +1206,6 @@ class WorkflowsService:
             return ""
         return f"{tops.pop()}/"
 
-    @staticmethod
-    def _match_archive_path(target: str, files: dict[str, str]) -> str | None:
-        """The archive entry a $import target refers to, tolerating layout differences."""
-        if target in files:
-            return target
-        suffix = "/" + target
-        matches = [path for path in files if path.endswith(suffix)]
-        if len(matches) == 1:
-            return matches[0]
-        # last resort: the import writes a path the archive flattened (or vice versa)
-        base = target.rsplit("/", 1)[-1]
-        matches = [path for path in files if path.rsplit("/", 1)[-1] == base]
-        return matches[0] if len(matches) == 1 else None
-
     def _resolve_imports(
         self, documents: list[str], aux_files: dict[str, str]
     ) -> tuple[dict[str, str], list[str]]:
@@ -1029,7 +1223,7 @@ class WorkflowsService:
             target = pending.pop()
             if target in resolved or target in missing:
                 continue
-            match = self._match_archive_path(target, aux_files)
+            match = match_archive_path(target, aux_files)
             if match is None:
                 missing.add(target)
                 continue
@@ -1040,27 +1234,35 @@ class WorkflowsService:
         return resolved, sorted(missing)
 
     def _extract_zip_files(self, zip_bytes: bytes) -> dict[str, str]:
+        """The archive's .cwl documents, keyed by path relative to the archive root - a
+        `run:` resolves relative to the document that writes it, so `cwl/inner.cwl` running
+        `tool.cwl` needs to know it means `cwl/tool.cwl`. A single wrapper folder (what
+        Finder adds when you zip a directory) is stripped, as in _extract_zip_aux_files."""
         try:
             with zipfile.ZipFile(BytesIO(zip_bytes)) as zf:
                 bad_file = zf.testzip()
                 if bad_file is not None:
                     raise InvalidWorkflowArchiveError(f"Corrupt file in archive: {bad_file}")
+                # skip macOS AppleDouble sidecar files (e.g. "._pipeline.cwl") and the
+                # __MACOSX/ dir Finder adds automatically when zipping - these mirror real
+                # filenames but hold binary resource-fork data, not CWL content
+                names = [
+                    info.filename
+                    for info in zf.infolist()
+                    if not info.is_dir()
+                    and not info.filename.startswith("__MACOSX/")
+                    and not info.filename.rsplit("/", 1)[-1].startswith("._")
+                ]
+                prefix = self._common_wrapper_folder(names)
                 result: dict[str, str] = {}
-                for info in zf.infolist():
-                    if info.is_dir() or not info.filename.lower().endswith(".cwl"):
+                for name in names:
+                    if not name.lower().endswith(".cwl"):
                         continue
-                    # flatten to basename - CWL run: references are filenames, not paths;
-                    # tolerate a zip that wraps everything in a single top-level folder
-                    basename = info.filename.rsplit("/", 1)[-1]
-                    # skip macOS AppleDouble sidecar files (e.g. "._pipeline.cwl") and the
-                    # __MACOSX/ dir Finder adds automatically when zipping - these mirror
-                    # real filenames but hold binary resource-fork data, not CWL content
-                    if basename.startswith("._") or info.filename.startswith("__MACOSX/"):
-                        continue
+                    path = name[len(prefix) :] if prefix and name.startswith(prefix) else name
                     try:
-                        result[basename] = zf.read(info).decode("utf-8")
+                        result[path] = zf.read(name).decode("utf-8")
                     except UnicodeDecodeError as err:
-                        raise InvalidWorkflowArchiveError(f"'{basename}' is not valid UTF-8 text") from err
+                        raise InvalidWorkflowArchiveError(f"'{path}' is not valid UTF-8 text") from err
                 if not result:
                     raise InvalidWorkflowArchiveError("Archive contains no .cwl files")
                 return result

@@ -1,9 +1,9 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { ComponentConfigDto, WorkflowStepPreviewDto } from '@/api/workflows';
 import {
+  ComponentKind,
   ComponentStatus,
   toFormatLabelDtos,
-  type ComponentKind,
   type ExistingComponentDto,
   type FormatLabelDraft,
 } from '@/api/components';
@@ -51,6 +51,33 @@ function fromPrevious(preview: WorkflowStepPreviewDto): Partial<ComponentConfigS
     reuseName: previous.name,
     reuseVersion: previous.version,
   };
+}
+
+/** Whether a preview is a nested workflow from the archive rather than a tool. */
+export function isNestedWorkflow(preview: WorkflowStepPreviewDto): boolean {
+  return preview.kind === ComponentKind.WORKFLOW;
+}
+
+/**
+ * The previews that still need a decision: everything below a nested workflow that reuses
+ * an existing one comes along with it - unless it also runs somewhere else. Mirrors the
+ * backend's UploadPlan.active_units.
+ */
+export function activePreviews(
+  previews: WorkflowStepPreviewDto[],
+  configs: Record<string, ComponentConfigState>,
+): WorkflowStepPreviewDto[] {
+  const previewOf = new Map<string, string>();
+  for (const preview of previews) {
+    for (const path of preview.usedBy ?? [preview.stepId]) previewOf.set(path, preview.stepId);
+  }
+  const isReused = (path: string) => configs[previewOf.get(path) ?? '']?.mode === 'reuse';
+  // a step path is `outer/inner/step` - each prefix is the nested workflow step above it
+  const runs = (path: string) => {
+    const parts = path.split('/');
+    return parts.slice(1).every((_, i) => !isReused(parts.slice(0, i + 1).join('/')));
+  };
+  return previews.filter((preview) => (preview.usedBy ?? [preview.stepId]).some(runs));
 }
 
 /** Where a freshly previewed step's configuration starts. */
@@ -148,17 +175,19 @@ export function useComponentConfigs(previews: WorkflowStepPreviewDto[]) {
     setNameConflicts((prev) => (prev[stepId] === existing ? prev : { ...prev, [stepId]: existing }));
   }, []);
 
+  const active = useMemo(() => activePreviews(previews, configs), [previews, configs]);
+
   const errors = useMemo(() => {
     const result: Record<string, string> = {};
     const nameCounts = new Map<string, number>();
-    for (const preview of previews) {
+    for (const preview of active) {
       const config = configs[preview.stepId];
       if (!config || config.mode !== 'create') continue;
       const name = config.name.trim();
       if (name) nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
     }
 
-    for (const preview of previews) {
+    for (const preview of active) {
       const config = configs[preview.stepId];
       if (!config) {
         result[preview.stepId] = 'This step is not configured yet.';
@@ -169,7 +198,9 @@ export function useComponentConfigs(previews: WorkflowStepPreviewDto[]) {
         continue;
       }
       if (config.mode === 'version') {
-        if (!preview.previous?.canAddVersion) result[preview.stepId] = 'This step has no tool to add a version to.';
+        if (isNestedWorkflow(preview) || !preview.previous?.canAddVersion) {
+          result[preview.stepId] = 'This step has no tool to add a version to.';
+        }
         continue;
       }
       const name = config.name.trim();
@@ -185,14 +216,14 @@ export function useComponentConfigs(previews: WorkflowStepPreviewDto[]) {
       }
     }
     return result;
-  }, [previews, configs, nameConflicts]);
+  }, [active, configs, nameConflicts]);
 
-  const isComplete = previews.length > 0 && Object.keys(errors).length === 0;
+  const isComplete = active.length > 0 && Object.keys(errors).length === 0;
 
   const toDtos = useCallback(
-    (): ComponentConfigDto[] => previews.map((preview) => toConfigDto(preview, configs[preview.stepId])),
-    [previews, configs],
+    (): ComponentConfigDto[] => active.map((preview) => toConfigDto(preview, configs[preview.stepId])),
+    [active, configs],
   );
 
-  return { configs, errors, isComplete, reset, update, applyDomainsToAll, setNameConflict, toDtos };
+  return { configs, active, errors, isComplete, reset, update, applyDomainsToAll, setNameConflict, toDtos };
 }

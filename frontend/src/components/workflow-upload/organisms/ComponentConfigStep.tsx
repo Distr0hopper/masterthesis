@@ -11,7 +11,10 @@ import { ParsedWorkflowOverview } from './ParsedWorkflowOverview';
 interface ComponentConfigStepProps {
   parsed: ParseWorkflowResponseDto;
   workflowNameNotice?: ReactNode;
+  /** the previews still needing a decision - see activePreviews */
   previews: WorkflowStepPreviewDto[];
+  /** steps that come along with a reused nested workflow, so need no decision */
+  hiddenCount?: number;
   configs: Record<string, ComponentConfigState>;
   errors: Record<string, string>;
   onChange: (stepId: string, patch: Partial<ComponentConfigState>) => void;
@@ -24,6 +27,7 @@ export function ComponentConfigStep({
   parsed,
   workflowNameNotice,
   previews,
+  hiddenCount = 0,
   configs,
   errors,
   onChange,
@@ -61,6 +65,7 @@ export function ComponentConfigStep({
               {creating} of {previews.length} step(s) will create a new component
               {versioning > 0 && `, ${versioning} will add a new version to a tool`}. The rest reuse components already in
               the repository.
+              {hiddenCount > 0 && ` ${hiddenCount} more come along with the nested workflows you reuse.`}
             </p>
           </div>
           <DomainMultiSelect
@@ -77,15 +82,22 @@ export function ComponentConfigStep({
       {previews.map((preview) => {
         const config = configs[preview.stepId];
         if (!config) return null;
+        // a nested workflow's steps follow it, indented below it
+        const depth = preview.stepId.split('/').length - 1;
         return (
-          <ComponentConfigCard
+          <div
             key={preview.stepId}
-            preview={preview}
-            config={config}
-            error={errors[preview.stepId]}
-            onChange={(patch) => onChange(preview.stepId, patch)}
-            onNameConflictChange={(existing) => onNameConflictChange(preview.stepId, existing)}
-          />
+            className={depth > 0 ? 'border-l-2 border-slate-200 pl-4' : undefined}
+            style={depth > 0 ? { marginLeft: (depth - 1) * 20 } : undefined}
+          >
+            <ComponentConfigCard
+              preview={preview}
+              config={config}
+              error={errors[preview.stepId]}
+              onChange={(patch) => onChange(preview.stepId, patch)}
+              onNameConflictChange={(existing) => onNameConflictChange(preview.stepId, existing)}
+            />
+          </div>
         );
       })}
     </div>

@@ -228,7 +228,8 @@ export function WorkflowUploadWizard({ parent }: WorkflowUploadWizardProps) {
           <ComponentConfigStep
             parsed={parsed}
             workflowNameNotice={nameNotice}
-            previews={previews}
+            previews={configs.active}
+            hiddenCount={previews.length - configs.active.length}
             configs={configs.configs}
             errors={configs.errors}
             onChange={configs.update}

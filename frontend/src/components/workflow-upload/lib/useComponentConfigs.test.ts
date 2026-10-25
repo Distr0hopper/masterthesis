@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ComponentStatus, ParameterDirection, type PreviewParameterDto } from '@/api/components';
 import { ComponentOrigin, type PreviousStepComponentDto, type WorkflowStepPreviewDto } from '@/api/workflows';
-import { initialConfigState, toConfigDto } from './useComponentConfigs';
+import { activePreviews, initialConfigState, toConfigDto } from './useComponentConfigs';
 
 function filePort(name: string, direction: ParameterDirection): PreviewParameterDto {
   return {
@@ -109,5 +109,26 @@ describe('toConfigDto - a versioning step', () => {
     const dto = toConfigDto(preview, initialConfigState(preview));
     expect(dto).not.toHaveProperty('name');
     expect(dto).not.toHaveProperty('domains');
+  });
+});
+
+describe('activePreviews - a reused nested workflow brings its steps along', () => {
+  // inner is a nested workflow running a.cwl and b.cwl; the top level runs a.cwl itself too
+  const previews = [
+    step({ stepId: 'inner', kind: 'workflow', usedBy: ['inner'] }),
+    step({ stepId: 'inner/a', parentStepId: 'inner', usedBy: ['inner/a', 'a'] }),
+    step({ stepId: 'inner/b', parentStepId: 'inner', usedBy: ['inner/b'] }),
+  ];
+  const ids = (configs: Parameters<typeof activePreviews>[1]) => activePreviews(previews, configs).map((p) => p.stepId);
+
+  it('asks about every step while the nested workflow is created', () => {
+    const configs = Object.fromEntries(previews.map((p) => [p.stepId, initialConfigState(p)]));
+    expect(ids(configs)).toEqual(['inner', 'inner/a', 'inner/b']);
+  });
+
+  it('drops the steps only the reused workflow runs, and keeps one that also runs elsewhere', () => {
+    const configs = Object.fromEntries(previews.map((p) => [p.stepId, initialConfigState(p)]));
+    configs.inner = { ...configs.inner, mode: 'reuse', reuseComponentId: 'existing' };
+    expect(ids(configs)).toEqual(['inner', 'inner/a']);
   });
 });

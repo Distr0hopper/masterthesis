@@ -1,3 +1,4 @@
+import posixpath
 import re
 from dataclasses import dataclass
 from typing import Any
@@ -15,18 +16,134 @@ def is_workflow_cwl(cwl_content: str) -> bool:
     return isinstance(doc, dict) and doc.get("class") == "Workflow"
 
 
-def find_workflow_file(files: dict[str, str]) -> tuple[str, str]:
-    """Given {filename: content} extracted from the uploaded zip, returns the (filename,
-    content) of the one file whose `class` is `Workflow`. The main pipeline is identified
-    by content, not filename, since the user may name it anything. Raises ValueError if
-    zero or more than one such file is found."""
-    matches = [(name, content) for name, content in files.items() if is_workflow_cwl(content)]
-    if len(matches) == 0:
+def match_archive_path(target: str, files: dict[str, str]) -> str | None:
+    """The archive entry `target` refers to, tolerating layout differences: exactly, else
+    the one entry ending in it, else the one entry with its file name."""
+    if target in files:
+        return target
+    suffix = "/" + target
+    matches = [path for path in files if path.endswith(suffix)]
+    if len(matches) == 1:
+        return matches[0]
+    # last resort: the reference writes a path the archive flattened (or vice versa)
+    base = target.rsplit("/", 1)[-1]
+    matches = [path for path in files if path.rsplit("/", 1)[-1] == base]
+    return matches[0] if len(matches) == 1 else None
+
+
+def resolve_run_reference(reference: str, document: str, files: dict[str, str]) -> str | None:
+    """The archive file a `run:` in `document` points at. CWL resolves it relative to the
+    referencing document - `cwl/a.cwl` running `b.cwl` means `cwl/b.cwl`."""
+    resolved = posixpath.normpath(posixpath.join(posixpath.dirname(document), reference))
+    if resolved in files:
+        return resolved
+    return match_archive_path(reference, files)
+
+
+def _string_runs(cwl_content: str) -> list[str]:
+    """The `run:` filenames of a Workflow document - [] for anything else or unreadable."""
+    try:
+        doc: Any = load_cwl(cwl_content)
+        steps = normalize_steps(doc.get("steps")) if isinstance(doc, dict) else []
+    except (YAMLError, ValueError):
+        return []
+    return [d["run"] for _, d in steps if isinstance(d, dict) and isinstance(d.get("run"), str)]
+
+
+@dataclass(frozen=True)
+class ArchiveRoot:
+    filename: str
+    content: str
+    #: Workflow files the root never runs, at any depth - left out of the upload
+    unused_workflows: list[str]
+
+
+def find_root_workflow(files: dict[str, str]) -> ArchiveRoot:
+    """The archive's main pipeline: the `class: Workflow` file no other workflow runs.
+
+    Identified by content, not filename, since the user may name it anything. Nested
+    workflows are the ones some `run:` points at. Should several be run by nobody, the one
+    nearest the archive's top wins if that is unambiguous - the others are reported as
+    unused. Raises ValueError for no workflow, or no unambiguous root.
+    """
+    workflows = sorted(name for name, content in files.items() if is_workflow_cwl(content))
+    if not workflows:
         raise ValueError("No CWL file with class: Workflow found in the archive")
-    if len(matches) > 1:
-        names = ", ".join(name for name, _ in matches)
-        raise ValueError(f"Multiple CWL files with class: Workflow found ({names}); expected exactly one")
-    return matches[0]
+
+    referenced = {
+        resolve_run_reference(run, name, files) for name in workflows for run in _string_runs(files[name])
+    }
+    roots = [name for name in workflows if name not in referenced]
+    if not roots:
+        raise ValueError(f"The workflows in the archive all run each other ({', '.join(workflows)}); none is the root")
+    shallowest = min(name.count("/") for name in roots)
+    top = [name for name in roots if name.count("/") == shallowest]
+    if len(top) > 1:
+        raise ValueError(
+            f"Multiple CWL files with class: Workflow that no other workflow runs ({', '.join(top)}); "
+            "expected exactly one root workflow"
+        )
+
+    root = top[0]
+    reachable = {root} | {step.target for step in walk_archive_steps(root, files) if step.target is not None}
+    return ArchiveRoot(
+        filename=root,
+        content=files[root],
+        unused_workflows=[name for name in workflows if name not in reachable],
+    )
+
+
+@dataclass(frozen=True)
+class ArchiveStep:
+    """One step of an uploaded workflow tree, as it occurs - a sub-workflow run by two steps
+    contributes its steps twice, under two paths."""
+
+    #: step ids from the root down - `graph_generation/generate_graph`
+    path: str
+    #: the archive file declaring the step
+    document: str
+    step_id: str
+    definition: dict
+    #: the archive file a `run:` filename resolves to - None for an inline `run:`, or a
+    #: filename the archive does not hold
+    target: str | None
+
+    @property
+    def parent_path(self) -> str | None:
+        return self.path.rpartition("/")[0] or None
+
+
+def walk_archive_steps(root: str, files: dict[str, str]) -> list[ArchiveStep]:
+    """Every step of the tree below the `root` file, depth-first, a parent before the steps
+    of the workflow it runs. Raises ValueError for a document without readable steps, or for
+    workflows that run each other in a cycle."""
+    result: list[ArchiveStep] = []
+
+    def visit(document: str, prefix: str, stack: tuple[str, ...]) -> None:
+        try:
+            doc: Any = load_cwl(files[document])
+        except YAMLError as err:
+            raise ValueError(f"{document}: YAML parse error: {err}") from err
+        try:
+            steps = normalize_steps(doc.get("steps") if isinstance(doc, dict) else None)
+        except ValueError as err:
+            raise ValueError(f"{document}: {err}") from err
+
+        for step_id, definition in steps:
+            run_value = definition.get("run") if isinstance(definition, dict) else None
+            if run_value is None:
+                raise ValueError(f"{document}: step '{step_id}' is missing a 'run:' reference")
+            target = resolve_run_reference(run_value, document, files) if isinstance(run_value, str) else None
+            step = ArchiveStep(f"{prefix}{step_id}", document, step_id, definition, target)
+            result.append(step)
+            if target is None or not is_workflow_cwl(files[target]):
+                continue
+            if target in stack:
+                raise ValueError(f"Workflows run each other in a cycle: {' -> '.join((*stack, target))}")
+            visit(target, f"{step.path}/", (*stack, target))
+
+    visit(root, "", (root,))
+    return result
 
 
 def normalize_steps(steps: Any) -> list[tuple[str, dict]]:

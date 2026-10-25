@@ -152,6 +152,7 @@ async def parse_workflow(
         missing_external_refs=preview.missing_external_refs,
         auxiliary_files=preview.auxiliary_files,
         missing_imports=preview.missing_imports,
+        unused_workflow_files=preview.unused_workflow_files,
     )
 
 

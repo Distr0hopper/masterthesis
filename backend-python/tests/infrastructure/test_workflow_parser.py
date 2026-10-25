@@ -12,11 +12,13 @@ from app.infrastructure.cwl.workflow_parser import (
     externalize_inline_steps,
     extract_inline_components,
     extract_step_definitions,
-    find_workflow_file,
+    find_root_workflow,
     is_self_contained,
     is_workflow_cwl,
     normalize_steps,
     read_workflow_overview,
+    resolve_run_reference,
+    walk_archive_steps,
 )
 
 TOOL = "cwlVersion: v1.2\nclass: CommandLineTool\nbaseCommand: [echo]\ninputs: {}\noutputs: {}\n"
@@ -76,17 +78,74 @@ steps:
 
 def test_the_pipeline_is_found_by_its_class_not_its_filename() -> None:
     files = {"a.cwl": TOOL, "anything-goes.cwl": EXTERNAL, "notes.txt": "not: [yaml"}
-    assert find_workflow_file(files) == ("anything-goes.cwl", EXTERNAL)
+    root = find_root_workflow(files)
+    assert (root.filename, root.content, root.unused_workflows) == ("anything-goes.cwl", EXTERNAL, [])
 
 
 def test_an_archive_without_a_workflow_is_refused() -> None:
     with pytest.raises(ValueError, match="No CWL file"):
-        find_workflow_file({"a.cwl": TOOL})
+        find_root_workflow({"a.cwl": TOOL})
 
 
-def test_an_archive_with_two_workflows_names_both() -> None:
+def test_an_archive_with_two_unrelated_workflows_names_both() -> None:
     with pytest.raises(ValueError, match="one.cwl, two.cwl"):
-        find_workflow_file({"one.cwl": EXTERNAL, "two.cwl": EXTERNAL})
+        find_root_workflow({"one.cwl": EXTERNAL, "two.cwl": EXTERNAL})
+
+
+def workflow_running(*runs: str) -> str:
+    steps = "".join(f"  s{i}:\n    run: {run}\n    in: {{}}\n    out: []\n" for i, run in enumerate(runs))
+    return f"cwlVersion: v1.2\nclass: Workflow\ninputs: {{}}\noutputs: {{}}\nsteps:\n{steps}"
+
+
+#: the shape of the Africapolis archive: the root runs `cwl/...`, the nested workflows run
+#: their siblings relative to themselves, and one nested workflow is run by nobody
+NESTED_ARCHIVE = {
+    "Root.cwl": workflow_running("cwl/Inner.cwl", "cwl/tool.cwl"),
+    "cwl/Inner.cwl": workflow_running("tool.cwl", "Deeper.cwl"),
+    "cwl/Deeper.cwl": workflow_running("tool.cwl"),
+    "cwl/Orphan.cwl": workflow_running("tool.cwl"),
+    "cwl/tool.cwl": TOOL,
+}
+
+
+def test_the_root_is_the_workflow_no_other_one_runs_the_top_most_if_several() -> None:
+    root = find_root_workflow(NESTED_ARCHIVE)
+    assert (root.filename, root.unused_workflows) == ("Root.cwl", ["cwl/Orphan.cwl"])
+
+
+def test_workflows_running_each_other_have_no_root() -> None:
+    with pytest.raises(ValueError, match="none is the root"):
+        find_root_workflow({"a.cwl": workflow_running("b.cwl"), "b.cwl": workflow_running("a.cwl")})
+
+
+def test_a_run_reference_resolves_relative_to_its_document() -> None:
+    assert resolve_run_reference("tool.cwl", "cwl/Inner.cwl", NESTED_ARCHIVE) == "cwl/tool.cwl"
+    assert resolve_run_reference("cwl/tool.cwl", "Root.cwl", NESTED_ARCHIVE) == "cwl/tool.cwl"
+    # tolerated: a flattened reference to the one file of that name
+    assert resolve_run_reference("Deeper.cwl", "Root.cwl", NESTED_ARCHIVE) == "cwl/Deeper.cwl"
+    assert resolve_run_reference("missing.cwl", "Root.cwl", NESTED_ARCHIVE) is None
+
+
+def test_the_walk_visits_every_step_occurrence_parents_first() -> None:
+    steps = walk_archive_steps("Root.cwl", NESTED_ARCHIVE)
+    assert [(s.path, s.target) for s in steps] == [
+        ("s0", "cwl/Inner.cwl"),
+        ("s0/s0", "cwl/tool.cwl"),
+        ("s0/s1", "cwl/Deeper.cwl"),
+        ("s0/s1/s0", "cwl/tool.cwl"),
+        ("s1", "cwl/tool.cwl"),
+    ]
+    assert steps[3].parent_path == "s0/s1"
+
+
+def test_the_walk_refuses_a_cycle_below_the_root() -> None:
+    files = {
+        "root.cwl": workflow_running("a.cwl"),
+        "a.cwl": workflow_running("b.cwl"),
+        "b.cwl": workflow_running("a.cwl"),
+    }
+    with pytest.raises(ValueError, match="cycle"):
+        walk_archive_steps("root.cwl", files)
 
 
 def test_unreadable_yaml_is_simply_not_a_workflow() -> None:

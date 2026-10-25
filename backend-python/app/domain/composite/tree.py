@@ -6,6 +6,7 @@ tree has to be loaded first (see ComponentsRepository.load_tree). Each one walks
 structure the same way a caller would want it treated - uniformly, whatever the kind.
 """
 
+import posixpath
 from collections.abc import Iterator
 
 from app.domain.models.component import Component
@@ -62,40 +63,63 @@ def would_create_cycle(parent: Component, child: Component) -> bool:
     return contains_lineage(child, parent.name)
 
 
+def _placements(root: Component) -> Iterator[tuple[Component, str, list[tuple[str, Component]]]]:
+    """(component, its folder, [(file path, child) per step]) for every place a component
+    of the tree sits in an archive, `root` at the top ("").
+
+    A step's `run_reference` resolves relative to the document that runs it, as in CWL - so
+    a pipeline running `cwl/inner.cwl` puts that workflow, and whatever it runs, in `cwl/`.
+    """
+    seen: set = set()
+    pending = [(root, "")]
+    while pending:
+        component, folder = pending.pop()
+        if (component.id, folder) in seen:
+            continue
+        seen.add((component.id, folder))
+        children = [
+            (posixpath.normpath(posixpath.join(folder, step.run_reference)), step.component)
+            for step in component.steps
+            if step.component is not None
+        ]
+        yield component, folder, children
+        pending.extend((child, posixpath.dirname(path)) for path, child in reversed(children))
+
+
 def step_files(root: Component) -> list[tuple[str, str]]:
-    """(file name, CWL) for every step document the tree needs, recursively.
+    """(file path, CWL) for every step document the tree needs, recursively.
 
     Each step is written under its stored `run_reference` - that is what the referencing
-    pipeline's `run:` points at - and a nested workflow contributes its own step files too,
-    since its `run:` references resolve next to it. Raises ConflictingTreeFileError when
-    two different documents claim one file name.
+    pipeline's `run:` points at - resolved against the folder of that pipeline, and a nested
+    workflow contributes its own step files too, next to it. Raises ConflictingTreeFileError
+    when two different documents claim one path.
     """
     files: dict[str, str] = {}
-    for component in walk(root):
-        for step in component.steps:
-            if step.component is None:
-                continue
-            existing = files.get(step.run_reference)
-            if existing is not None and existing != step.component.cwl_content:
-                raise ConflictingTreeFileError(step.run_reference)
-            files[step.run_reference] = step.component.cwl_content
+    for _component, _folder, children in _placements(root):
+        for path, child in children:
+            existing = files.get(path)
+            if existing is not None and existing != child.cwl_content:
+                raise ConflictingTreeFileError(path)
+            files[path] = child.cwl_content
     return sorted(files.items())
 
 
 def auxiliary_files(root: Component) -> list[tuple[str, str]]:
-    """(path, content) of every $import/$include target any component in the tree needs.
+    """(path, content) of every $import/$include target any component in the tree needs,
+    relative to the folder that component sits in.
 
     The same type file legitimately arrives from several components - identical content,
     so de-duplication is right. Genuinely different content under one path has no correct
     answer, so it raises ConflictingTreeFileError rather than picking a winner.
     """
     merged: dict[str, str] = {}
-    for component in walk(root):
+    for component, folder, _children in _placements(root):
         for file in component.files:
-            existing = merged.get(file.path)
+            path = posixpath.normpath(posixpath.join(folder, file.path))
+            existing = merged.get(path)
             if existing is not None and existing != file.content:
-                raise ConflictingTreeFileError(file.path)
-            merged[file.path] = file.content
+                raise ConflictingTreeFileError(path)
+            merged[path] = file.content
     return sorted(merged.items())
 
 

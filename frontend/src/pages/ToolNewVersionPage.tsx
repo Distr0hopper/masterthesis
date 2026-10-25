@@ -52,7 +52,7 @@ export default function ToolNewVersionPage() {
 
       <div className="mt-6">
         {repoUrl ? (
-          <PackageFromGitHubWizard initialRepoUrl={repoUrl} lockRepoUrl />
+          <PackageFromGitHubWizard fixedRepoUrl={repoUrl} />
         ) : fromUpload ? (
           <ManualUploadWizard parent={head} />
         ) : (

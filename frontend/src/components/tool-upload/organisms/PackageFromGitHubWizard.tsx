@@ -48,10 +48,8 @@ const PACKAGING_HINT = (
 );
 
 interface PackageFromGitHubWizardProps {
-  /** a repo to start from - fetched right away, e.g. a packaged tool's own for its next version */
-  initialRepoUrl?: string;
-  /** keep the repo URL fixed - the new-version page packages exactly that tool's repo */
-  lockRepoUrl?: boolean;
+  /** the repo of the tool this packages a new version of - read right away and not editable */
+  fixedRepoUrl?: string;
 }
 
 /**
@@ -64,11 +62,11 @@ interface PackageFromGitHubWizardProps {
  * a new preview mounts it fresh with its initial state taken from it, so no effect has to
  * copy the result over.
  */
-export function PackageFromGitHubWizard({ initialRepoUrl, lockRepoUrl = false }: PackageFromGitHubWizardProps = {}) {
-  const [repoUrl, setRepoUrl] = useState(initialRepoUrl ?? '');
+export function PackageFromGitHubWizard({ fixedRepoUrl }: PackageFromGitHubWizardProps = {}) {
+  const [repoUrl, setRepoUrl] = useState(fixedRepoUrl ?? '');
   const [repoUrlError, setRepoUrlError] = useState<string>();
-  // the URL the preview is loaded for - set by Fetch, and from the start for a given repo
-  const [submittedUrl, setSubmittedUrl] = useState<string | null>(initialRepoUrl ?? null);
+  // the URL the preview is loaded for - set by the source step's button, and from the start for a given repo
+  const [submittedUrl, setSubmittedUrl] = useState<string | null>(fixedRepoUrl ?? null);
   const previewQuery = usePackagePreview(submittedUrl);
   const preview = previewQuery.data;
 
@@ -89,31 +87,22 @@ export function PackageFromGitHubWizard({ initialRepoUrl, lockRepoUrl = false }:
     setSubmittedUrl(null);
   };
 
-  const repoSource = (
+  // Enter submits like the step's one button - which knows whether that means reading or going on
+  const repoSource = (onSubmit: () => void) => (
     <FormField htmlFor="package-repo-url" label="Repository URL" error={repoUrlError}>
-      <div className="flex gap-2">
-        <Input
-          id="package-repo-url"
-          value={repoUrl}
-          onChange={(e) => handleRepoUrlChange(e.target.value)}
-          readOnly={lockRepoUrl}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              fetchPreview();
-            }
-          }}
-          placeholder="https://github.com/movestore/Remove_Outliers"
-        />
-        <Button
-          type="button"
-          variant="outline"
-          onClick={fetchPreview}
-          disabled={previewQuery.isFetching || !repoUrl.trim()}
-        >
-          {previewQuery.isFetching ? 'Packaging...' : preview ? 'Fetch again' : 'Fetch'}
-        </Button>
-      </div>
+      <Input
+        id="package-repo-url"
+        value={repoUrl}
+        onChange={(e) => handleRepoUrlChange(e.target.value)}
+        readOnly={fixedRepoUrl !== undefined}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            onSubmit();
+          }
+        }}
+        placeholder="https://github.com/movestore/Remove_Outliers"
+      />
     </FormField>
   );
 
@@ -124,8 +113,11 @@ export function PackageFromGitHubWizard({ initialRepoUrl, lockRepoUrl = false }:
       preview={preview}
       repoSource={repoSource}
       isReading={previewQuery.isFetching}
+      // hidden while reading again, so a retry that fails the same way still shows as a fresh result
       readError={
-        previewQuery.error ? getErrorMessage(previewQuery.error, 'Could not package this repository.') : undefined
+        previewQuery.error && !previewQuery.isFetching
+          ? getErrorMessage(previewQuery.error, 'Could not package this repository.')
+          : undefined
       }
       canFetch={!!repoUrl.trim()}
       onFetch={fetchPreview}
@@ -135,7 +127,7 @@ export function PackageFromGitHubWizard({ initialRepoUrl, lockRepoUrl = false }:
 
 interface PackageWizardStepsProps {
   preview: PackagePreviewDto | undefined;
-  repoSource: ReactNode;
+  repoSource: (onSubmit: () => void) => ReactNode;
   isReading: boolean;
   readError: string | undefined;
   canFetch: boolean;
@@ -173,11 +165,19 @@ function PackageWizardSteps({ preview, repoSource, isReading, readError, canFetc
   const { data: availability } = useComponentNameAvailability(debouncedName);
   const taken = !isNewVersion && availability?.available === false;
 
-  // back on the source step without changing it - or retrying a fetch that failed
-  const handleContinue = () => {
+  // the source step's one button: read the repo - first time, after a failure, or after a push
+  // that may have cleared an issue - or, back on it with a reviewable preview, simply go on
+  const handlePrimary = () => {
     if (reviewable) setStep(2);
-    else if (!preview) onFetch();
+    else onFetch();
   };
+  const primaryLabel = isReading
+    ? 'Packaging...'
+    : readError
+      ? 'Try again'
+      : sourceIssues.length > 0
+        ? 'Check again'
+        : 'Continue';
 
   const handleCreate = (values: UploadMetadataFormData) => {
     if (!preview || !reviewable || taken) return;
@@ -263,7 +263,7 @@ function PackageWizardSteps({ preview, repoSource, isReading, readError, canFetc
           <Card className="mt-6">
             <CardContent className="pt-6">
               <UploadSourceStep
-                source={repoSource}
+                source={repoSource(handlePrimary)}
                 hint={PACKAGING_HINT}
                 isReading={isReading}
                 readingLabel="Packaging the repository - this takes a few seconds..."
@@ -306,11 +306,11 @@ function PackageWizardSteps({ preview, repoSource, isReading, readError, canFetc
           )}
           {step === 1 && (
             <Button
-              onClick={handleContinue}
-              disabled={isReading || !canFetch || sourceIssues.length > 0}
+              onClick={handlePrimary}
+              disabled={isReading || !canFetch}
               className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90"
             >
-              {isReading ? 'Packaging...' : 'Continue'}
+              {primaryLabel}
             </Button>
           )}
           {step === 2 && (

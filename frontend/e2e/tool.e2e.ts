@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { BACKEND_URL } from '../playwright.config.ts';
 import { signUp, TOOL_CWL } from './support.ts';
 
 test('a tool uploaded through the wizard stays private until it is published', async ({ page, browser }) => {
@@ -78,4 +79,34 @@ test('a file that is not CWL is refused on the first step', async ({ page }) => 
 
   await expect(page.getByText(/invalid|could not|yaml/i).first()).toBeVisible();
   await expect(page.getByRole('button', { name: 'Create Tool' })).toHaveCount(0);
+});
+
+test('packaging from GitHub has one button, and a failed read can visibly be tried again', async ({ page }) => {
+  await signUp(page);
+  // the packaging service is GitHub's to answer - stand in for it with a repo it rejects
+  let reads = 0;
+  await page.route(`${BACKEND_URL}/tools/package/preview`, async (route) => {
+    reads += 1;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await route.fulfill({ status: 400, json: { detail: 'octocat/Hello-World is not a valid MoveApps R app' } });
+  });
+
+  await page.goto('/tools/upload');
+  await page.getByRole('tab', { name: 'Package from GitHub' }).click();
+  // no separate Fetch next to the field - Continue reads the repo
+  await expect(page.getByRole('button', { name: /^Fetch/ })).toHaveCount(0);
+  await page.getByLabel('Repository URL').fill('https://github.com/octocat/Hello-World');
+  await page.getByLabel('Repository URL').press('Enter');
+
+  const error = page.getByText('is not a valid MoveApps R app');
+  await expect(error).toBeVisible();
+  const retry = page.getByRole('button', { name: 'Try again' });
+  await expect(retry).toBeEnabled();
+
+  // the retry shows as one: the old error goes while the repo is read again
+  await retry.click();
+  await expect(page.getByText('Packaging the repository')).toBeVisible();
+  await expect(error).toBeHidden();
+  await expect(error).toBeVisible();
+  expect(reads).toBe(2);
 });

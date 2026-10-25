@@ -2,6 +2,7 @@ import yaml
 
 from app.domain.models.parameter import Parameter, ParameterDirection
 from app.infrastructure.cwl.cwl_parser import (
+    extract_parameters,
     generate_inputs_yaml,
     inject_cwl_version,
     inject_description,
@@ -39,6 +40,51 @@ def test_inputs_yaml_keeps_umlauts_in_string_defaults() -> None:
     )
     inputs = generate_inputs_yaml([parameter], "tool", 1)
     assert "label: Grüße" in inputs
+
+
+def test_defaults_are_stored_the_way_the_builder_reads_them() -> None:
+    tool = TOOL.replace(
+        "inputs: {}",
+        "inputs:\n"
+        "  keep: {type: boolean, default: true}\n"
+        "  speed: {type: double, default: 20.5}\n"
+        "  ids: {type: 'string[]', default: [a, b]}\n"
+        "  unit: {type: string, default: m}",
+    )
+    defaults = {p.name: p.default_value for p in extract_parameters(tool)}
+    # JSON for anything that isn't text - `true`, never Python's `True`
+    assert defaults == {"keep": "true", "speed": "20.5", "ids": '["a", "b"]', "unit": "m"}
+
+
+def _input(name: str, cwl_type: str, default: str | None = None) -> Parameter:
+    return Parameter(name=name, cwl_type=cwl_type, default_value=default, direction=ParameterDirection.INPUT)
+
+
+def test_inputs_yaml_lists_only_inputs() -> None:
+    output = Parameter(name="output_rds", cwl_type="File", direction=ParameterDirection.OUTPUT)
+    job = yaml.safe_load(generate_inputs_yaml([_input("input_rds", "File"), output], "tool", 1))
+    # outputs are cwltool's to write - a placeholder for them would only mislead
+    assert job == {"input_rds": {"class": "File", "path": "/path/to/input"}}
+
+
+def test_inputs_yaml_takes_each_default_typed() -> None:
+    parameters = [
+        _input("keep", "boolean", "true"),
+        # stored before the parser wrote JSON - still read as the boolean it is
+        _input("legacy", "boolean", "True"),
+        _input("window", "int", "5"),
+        _input("speed", "double", "20.5"),
+        _input("ids", "string[]", '["a", "b"]'),
+    ]
+    job = yaml.safe_load(generate_inputs_yaml(parameters, "tool", 1))
+    assert job == {"keep": True, "legacy": True, "window": 5, "speed": 20.5, "ids": ["a", "b"]}
+
+
+def test_an_input_without_a_default_is_left_null_and_says_so() -> None:
+    inputs = generate_inputs_yaml([_input("maxspeed", "double"), _input("strict", "boolean")], "tool", 1)
+    # no made-up 0 or false that would run silently with the wrong configuration
+    assert yaml.safe_load(inputs) == {"maxspeed": None, "strict": None}
+    assert "maxspeed: null  # double, no default - set a value" in inputs
 
 
 # --- comparing two CWL texts ------------------------------------------------------------

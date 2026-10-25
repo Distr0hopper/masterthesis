@@ -63,7 +63,6 @@ class FakePackagingService:
         return PackagingResult(
             repo_name="remove-outliers",
             cwl=TOOL_CWL,
-            inputs_yaml="tracks: {class: File, path: in.rds}\n",
             commit_sha=self.commit,
             description="Removes outliers",
             author="MoveApps",

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import dataclass
 
@@ -75,7 +74,6 @@ def package_repo(
     client = GitHubClient(token=github_token)
     try:
         contents = client.fetch_repo(owner, repo_name)
-        app_config_dict = json.loads(contents.app_config.content)
         r_packages = [d["name"] for d in contents.appspec.get("dependencies", {}).get("R", [])]
     except requests.HTTPError as exc:
         if exc.response is not None and exc.response.status_code == 404:
@@ -95,7 +93,7 @@ def package_repo(
 
     dockerfile_content = generate_dockerfile_content(wrapper_image, raw_base_url, r_packages or None)
     cwl_text = generate_cwl(repo_name_to_image(repo_name), appspec_settings, dockerfile_content)
-    inputs_yaml = generate_inputs_yaml(appspec_settings, app_config_dict)
+    inputs_yaml = generate_inputs_yaml(appspec_settings)
 
     return PackageResult(
         repo_name=repo_name,

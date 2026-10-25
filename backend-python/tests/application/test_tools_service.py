@@ -59,7 +59,6 @@ class FakePackagingClient:
         return PackagingResult(
             repo_name="thin-data",
             cwl=self.cwl or TOOL_CWL.replace("doc: {doc}\n", ""),
-            inputs_yaml="",
             commit_sha=self.commit_sha,
             description=self.description,
             author="MoveApps",

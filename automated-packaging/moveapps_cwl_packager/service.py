@@ -43,7 +43,6 @@ class PackageRequest(CamelModel):
 class PackageResponse(CamelModel):
     repo_name: str
     cwl: str
-    inputs_yaml: str
     commit_sha: str
     description: str
     author: str
@@ -76,7 +75,6 @@ def package(body: PackageRequest) -> PackageResponse:
     return PackageResponse(
         repo_name=result.repo_name,
         cwl=result.cwl,
-        inputs_yaml=result.inputs_yaml,
         commit_sha=result.commit_sha,
         description=result.description,
         author=result.author,

@@ -21,7 +21,6 @@ def test_package_maps_response_to_result():
             json={
                 "repoName": "RemoveOutliers",
                 "cwl": "cwlVersion: v1.2",
-                "inputsYaml": "maxspeed: 20.0",
                 "commitSha": "abc123",
                 "description": "Removes outliers",
                 "author": "MoveApps",

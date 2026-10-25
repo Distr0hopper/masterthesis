@@ -13,7 +13,6 @@ logger = logging.getLogger("app.infrastructure.packaging.packaging_service_clien
 class PackagingResult:
     repo_name: str
     cwl: str
-    inputs_yaml: str
     commit_sha: str
     description: str | None
     author: str | None
@@ -56,7 +55,6 @@ class PackagingServiceClient:
         return PackagingResult(
             repo_name=body["repoName"],
             cwl=body["cwl"],
-            inputs_yaml=body["inputsYaml"],
             commit_sha=body["commitSha"],
             description=body.get("description"),
             author=body.get("author"),

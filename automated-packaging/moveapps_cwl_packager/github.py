@@ -19,7 +19,6 @@ class RepoFile:
 @dataclass
 class RepoContents:
     appspec: dict
-    app_config: RepoFile
     default_branch: str
     description: str
     author: str
@@ -78,8 +77,6 @@ class GitHubClient:
                 "Is this a valid MoveApps R app repository?"
             )
 
-        app_config = self._fetch_file(owner, repo, "app-configuration.json", commit_sha)
-
         try:
             readme = self._fetch_file(owner, repo, "README.md", commit_sha)
             description = extract_readme_description(readme.content)
@@ -96,7 +93,6 @@ class GitHubClient:
 
         return RepoContents(
             appspec=appspec,
-            app_config=app_config,
             default_branch=default_branch,
             description=description,
             author=author,

@@ -3,7 +3,7 @@ import requests
 from fastapi.testclient import TestClient
 
 from moveapps_cwl_packager import service
-from moveapps_cwl_packager.github import GitHubClient, RepoContents, RepoFile
+from moveapps_cwl_packager.github import GitHubClient, RepoContents
 
 REPO_URL = "https://github.com/movestore/RemoveOutliers"
 
@@ -16,7 +16,6 @@ def client():
 def _contents() -> RepoContents:
     return RepoContents(
         appspec={"settings": [{"id": "maxspeed", "type": "DOUBLE", "defaultValue": 20.0}]},
-        app_config=RepoFile(path="app-configuration.json", content=b'{"maxspeed": 20.0}'),
         default_branch="master",
         description="Removes outliers",
         author="MoveApps",
@@ -50,7 +49,6 @@ def test_package_returns_cwl_and_metadata(client, monkeypatch):
     assert body["author"] == "MoveApps"
     assert "cwlVersion: v1.2" in body["cwl"]
     assert "movestore/RemoveOutliers/abc123/RFunction.R" in body["cwl"]
-    assert "maxspeed" in body["inputsYaml"]
 
 
 def test_invalid_url_is_422(client):

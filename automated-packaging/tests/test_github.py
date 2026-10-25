@@ -22,7 +22,6 @@ def _responses(**overrides: object) -> dict[str, object]:
     responses: dict[str, object] = {
         REPO: {"default_branch": "master"},
         f"{REPO}/contents/appspec.json?ref=abc123": _file(json.dumps({"settings": [{"id": "maxspeed"}]}).encode()),
-        f"{REPO}/contents/app-configuration.json?ref=abc123": _file(b'{"maxspeed": 20}'),
         f"{REPO}/contents/README.md?ref=abc123": _file(README),
         f"{API}/users/movestore": {"name": "MoveApps Team"},
         f"{REPO}/branches/master": {"commit": {"sha": "abc123"}},
@@ -64,7 +63,6 @@ def test_a_repo_is_read_with_its_commit_description_and_author(github) -> None:
     contents = GitHubClient().fetch_repo("movestore", "RemoveOutliers")
 
     assert contents.appspec == {"settings": [{"id": "maxspeed"}]}
-    assert contents.app_config.content == b'{"maxspeed": 20}'
     assert (contents.default_branch, contents.commit_sha) == ("master", "abc123")
     assert contents.description == "Drops fixes faster than a bird can fly."
     assert contents.author == "MoveApps Team"
@@ -87,9 +85,19 @@ def test_a_repo_without_appspec_settings_is_no_moveapps_app(github) -> None:
         GitHubClient().fetch_repo("movestore", "RemoveOutliers")
 
 
+def test_app_configuration_json_is_not_needed(github) -> None:
+    responses, _ = github
+    responses.update(_responses())
+
+    GitHubClient().fetch_repo("movestore", "RemoveOutliers")
+
+    # optional in a MoveApps repo - the appspec alone describes the settings
+    assert not any("app-configuration.json" in url for url in responses)
+
+
 def test_a_missing_required_file_or_repo_raises_the_http_error(github) -> None:
     responses, _ = github
-    responses.update(_responses(**{f"{REPO}/contents/app-configuration.json?ref=abc123": 404}))
+    responses.update(_responses(**{f"{REPO}/contents/appspec.json?ref=abc123": 404}))
     with pytest.raises(requests.HTTPError):
         GitHubClient().fetch_repo("movestore", "RemoveOutliers")
 

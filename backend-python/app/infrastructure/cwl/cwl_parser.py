@@ -1,8 +1,10 @@
+import json
 from typing import Any
 
 import yaml  # dump only - reads go through load_cwl (PyYAML rejects valid CWL v1.2 flow scalars)
 
 from app.domain.models.parameter import Parameter, ParameterDirection
+from app.infrastructure.cwl.workflow_generator import coerce_default
 from app.infrastructure.cwl.yaml_io import YAMLError, load_cwl
 
 
@@ -158,7 +160,7 @@ def _extract_parameter_group(
         format_ = None
         if is_mapping:
             if definition.get("default") is not None:
-                default_value = str(definition["default"])
+                default_value = _stringify_default(definition["default"])
             description = definition.get("doc")
             format_ = _resolve_format(definition.get("format"), namespaces)
 
@@ -255,6 +257,12 @@ def _resolve_format(format_value: Any, namespaces: dict[str, str]) -> str | None
     return format_value
 
 
+def _stringify_default(value: Any) -> str:
+    """A default as the string the parameter stores: text as-is, anything else as JSON -
+    `true`, not Python's `True`, which is what the builder and generate_inputs_yaml read."""
+    return value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+
+
 def _stringify_type(value: Any) -> str:
     if isinstance(value, list):
         return ",".join(str(v) for v in value)
@@ -264,12 +272,15 @@ def _stringify_type(value: Any) -> str:
 
 
 def generate_inputs_yaml(parameters: list[Parameter], name: str, version: int) -> str:
+    """A job file for the tool: one entry per input - outputs are cwltool's to write. A
+    parameter without a default is left null and says so, rather than given a made-up
+    value (0, false, '') that would run silently with the wrong configuration."""
     lines = [
         f"# CWL inputs for {name} v{version}",
         f"# Usage: cwltool {name}-v{version}.cwl inputs.yaml",
     ]
     for p in parameters:
-        if not p.name:
+        if not p.name or p.direction != ParameterDirection.INPUT:
             continue
         cwl_type = (p.cwl_type or "string").lower()
         lines.extend(_format_input(p.name, cwl_type, p.default_value))
@@ -281,13 +292,16 @@ def _format_input(name: str, cwl_type: str, default_value: str | None) -> list[s
         return [f"{name}:", "  class: File", "  path: /path/to/input"]
     if cwl_type == "directory":
         return [f"{name}:", "  class: Directory", "  location: /path/to/dir"]
-    if cwl_type in ("double", "float"):
-        num = float(default_value) if default_value is not None else 0.0
-        return [f"{name}: {num:.1f}" if num.is_integer() else f"{name}: {num}"]
-    if cwl_type in ("int", "long"):
-        num = int(default_value) if default_value is not None else 0
-        return [f"{name}: {num}"]
-    if cwl_type == "boolean":
-        value = default_value == "true" if default_value is not None else False
-        return [f"{name}: {str(value).lower()}"]
-    return [f"{name}: {yaml.dump(default_value or '', allow_unicode=True).strip()}"]
+    if default_value is None or default_value == "":
+        return [f"{name}: null  # {cwl_type}, no default - set a value"]
+    return [yaml.dump({name: _typed_default(default_value, cwl_type)}, allow_unicode=True, width=120).rstrip("\n")]
+
+
+def _typed_default(default_value: str, cwl_type: str) -> Any:
+    if cwl_type.endswith("[]"):
+        # arrays are stored as JSON (see _stringify_default)
+        try:
+            return json.loads(default_value)
+        except ValueError:
+            return default_value
+    return coerce_default(default_value, cwl_type)

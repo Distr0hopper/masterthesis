@@ -22,7 +22,9 @@ ghcr.io/distr0hopper/moveapps-r-wrapper:r4.5.1-1   ← shared base, built with b
        └── <app-name>:latest                        ← per-app image, built from the CWL's dockerFile
 ```
 
-The shared wrapper image contains everything that is identical across all apps (R packages, SDK runtime files, the CWL entry point script). The per-app image just adds the two files that differ between apps: `RFunction.R` and `app-configuration.json`.
+The shared wrapper image contains everything that is identical across all apps (R packages, SDK runtime files, the CWL entry point script). The per-app image just adds the one file that differs between apps: `RFunction.R`.
+
+Settings and their defaults come from `appspec.json` only. `app-configuration.json` is optional in a MoveApps repo and is not read: at runtime the CWL writes the app's configuration from the job's inputs. A setting without a `defaultValue` gets no CWL `default`, and `inputs.yaml` leaves it `null` with a comment saying so, instead of a made-up value.
 
 Generated CWL files are portable and reproducible: the base image is public and referenced by a version tag that is never re-pushed (`DEFAULT_WRAPPER_IMAGE` in `packager.py`), and the app files are fetched from the packaged commit SHA, not the branch. A machine with Docker and cwltool needs nothing else. Only the per-app R packages from `appspec.json` are still installed from current CRAN at build time.
 
@@ -47,9 +49,8 @@ Generated CWL files are portable and reproducible: the base image is public and 
 | `Dockerfile`             | Extends the wrapper image with this app's files                          |
 | `build.sh`               | Runs `docker build` for this app                                         |
 | `<app>.cwl`              | CWL CommandLineTool descriptor                                           |
-| `inputs.yaml`            | Parameter values for one run — **edit this before running**              |
+| `inputs.yaml`            | Parameter values for one run, from the appspec defaults — **edit this before running**; settings without a default are `null` |
 | `RFunction.R`            | The app's R code, fetched from GitHub                                    |
-| `app-configuration.json` | App parameter config, fetched from GitHub (baked into image as fallback) |
 
 ---
 
@@ -69,7 +70,7 @@ Because Docker caches layers, only changing `cwl-wrapper.sh` re-executes just st
 
 This script runs inside the container each time cwltool invokes the tool. It:
 
-1. Reads `app-configuration.json` from the CWL working directory (written by the CWL's JS expression from `inputs.yaml`) — falls back to the image's baked-in copy if not found
+1. Reads `app-configuration.json` from the CWL working directory (written by the CWL's JS expression from `inputs.yaml`). Its fallback to a copy inside the image never applies under CWL, and per-app images no longer contain one
 2. Symlinks `RFunction.R` and `start-process.sh` from their fixed locations inside the image into the writable working directory
 3. Patches `sdk.R` with `sed` to strip the `remotes::install_github()` call — this call is unnecessary (the package is already installed via `renv`) and fails because cwltool runs containers with `--net=none`
 4. Writes a `.env` file pointing to all input/output paths
@@ -169,7 +170,7 @@ curl -X POST localhost:8002/api/v1/package \
 Response `200`:
 
 ```json
-{ "repoName": "RemoveOutliers", "cwl": "...", "inputsYaml": "...",
+{ "repoName": "RemoveOutliers", "cwl": "...",
   "commitSha": "…", "description": "…", "author": "…" }
 ```
 
@@ -192,7 +193,7 @@ cd RemoveOutliers
 bash build.sh
 
 # 2. Edit inputs.yaml — update the input_rds path to your actual file
-#    All other parameters are pre-filled from app-configuration.json
+#    and set every parameter left null (no default in appspec.json)
 
 # 3. Run
 cwltool RemoveOutliers.cwl inputs.yaml

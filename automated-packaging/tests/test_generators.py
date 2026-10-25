@@ -89,19 +89,25 @@ def test_the_dockerfile_installs_only_the_r_packages_the_app_needs() -> None:
     assert plain.startswith("FROM --platform=linux/amd64 wrapper:1")
     assert "install.packages" not in plain
     assert "https://raw.example/o/r/main/RFunction.R" in plain
+    # optional in a MoveApps repo, and CWL writes the configuration from the inputs anyway
+    assert "app-configuration.json" not in plain
 
     with_packages = generate_dockerfile_content("wrapper:1", "https://raw.example/o/r/main", ["sf", "move2"])
     assert 'c("sf", "move2")' in with_packages
 
 
-def test_the_job_file_takes_the_apps_configuration_over_the_defaults() -> None:
-    job = yaml.safe_load(generate_inputs_yaml(SETTINGS, {"maxspeed": 50, "strict": True}))
+def test_the_job_file_takes_the_appspec_defaults_typed() -> None:
+    job = yaml.safe_load(generate_inputs_yaml(SETTINGS))
     assert job["input_rds"] == {"class": "File", "path": "/path/to/your/input.rds"}
-    assert job["maxspeed"] == 50.0
-    assert job["strict"] is True
-    # not configured: the appspec default, typed - or nothing at all
-    assert job["window"] == 5
-    assert job["label"] is None
+    assert (job["maxspeed"], job["window"], job["strict"], job["keep"]) == (20.5, 5, False, True)
+
+
+def test_a_setting_without_a_default_is_left_null_and_says_so() -> None:
+    text = generate_inputs_yaml(SETTINGS)
+    job = yaml.safe_load(text)
+    # an empty defaultValue counts as none - no made-up value that would run silently
+    assert job["label"] is None and job["start"] is None
+    assert "label: null  # string, no default in appspec.json - set a value" in text
 
 
 def test_github_urls_are_read_in_their_usual_spellings() -> None:

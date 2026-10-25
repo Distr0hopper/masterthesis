@@ -75,8 +75,7 @@ def generate_dockerfile_content(wrapper_image: str, raw_base_url: str, r_package
         lines += [install_cmd, ""]
     lines += [
         f"ADD --chown=moveapps:staff {raw_base_url}/RFunction.R /home/moveapps/co-pilot-r/RFunction.R",
-        f"ADD --chown=moveapps:staff {raw_base_url}/app-configuration.json /home/moveapps/co-pilot-r/app-configuration.json",
-        "RUN chmod o+r /home/moveapps/co-pilot-r/RFunction.R /home/moveapps/co-pilot-r/app-configuration.json",
+        "RUN chmod o+r /home/moveapps/co-pilot-r/RFunction.R",
         "",
     ]
     return "\n".join(lines)
@@ -118,14 +117,13 @@ def generate_cwl(
     for setting in settings:
         sid = setting["id"]
         raw_type = setting.get("type", "STRING")
-        default_val = setting.get("defaultValue")
-        has_default = default_val is not None and default_val != ""
+        default_val = _appspec_default(setting)
 
         entry: dict[str, Any] = {
             "type": _cwl_type(raw_type, optional=True),
             "doc": setting.get("description", ""),
         }
-        if has_default:
+        if default_val is not None:
             entry["default"] = _coerce_default(default_val, raw_type)
 
         inputs[sid] = entry
@@ -177,6 +175,13 @@ def generate_cwl(
     )
 
 
+def _appspec_default(setting: dict) -> Any:
+    """The setting's defaultValue from appspec.json - the only source of defaults, since
+    app-configuration.json is optional in a MoveApps repo. None when it declares none."""
+    value = setting.get("defaultValue")
+    return None if value is None or value == "" else value
+
+
 def _coerce_default(value: Any, appspec_type: str) -> Any:
     """Return value in the appropriate Python type for the given appspec type."""
     t = appspec_type.upper()
@@ -200,26 +205,23 @@ def _coerce_default(value: Any, appspec_type: str) -> Any:
     return str(value)
 
 
-def generate_inputs_yaml(settings: list[dict], app_config: dict) -> str:
-    """Return a CWL inputs YAML pre-filled with values from app-configuration.json."""
-    inputs: dict[str, Any] = {
-        "input_rds": {
-            "class": "File",
-            "path": "/path/to/your/input.rds",
-        }
-    }
+def generate_inputs_yaml(settings: list[dict]) -> str:
+    """Return a CWL inputs YAML pre-filled with the appspec.json defaults. A setting without
+    one is left null and says so, rather than given a made-up value that would run silently."""
+    lines = ["input_rds:", "  class: File", "  path: /path/to/your/input.rds"]
     for setting in settings:
         sid = setting["id"]
         raw_type = setting.get("type", "STRING")
-        value = app_config.get(sid, setting.get("defaultValue"))
-        inputs[sid] = _coerce_default(value, raw_type) if value is not None else None
-
-    Dumper = _make_dumper()
-    return yaml.dump(
-        inputs,
-        Dumper=Dumper,
-        default_flow_style=False,
-        allow_unicode=True,
-        sort_keys=False,
-        width=120,
-    )
+        default_val = _appspec_default(setting)
+        if default_val is None:
+            lines.append(f"{sid}: null  # {_cwl_type(raw_type, optional=False)}, no default in appspec.json - set a value")
+            continue
+        value = yaml.dump(
+            {sid: _coerce_default(default_val, raw_type)},
+            default_flow_style=False,
+            allow_unicode=True,
+            sort_keys=False,
+            width=120,
+        )
+        lines.append(value.rstrip("\n"))
+    return "\n".join(lines) + "\n"

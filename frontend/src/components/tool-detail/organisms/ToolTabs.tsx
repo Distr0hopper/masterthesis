@@ -3,8 +3,11 @@ import { Container, Eye, FileCode, SlidersHorizontal, type LucideProps } from 'l
 import { Badge } from '@/components/ui/badge.tsx';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs.tsx';
-import { componentsService } from '@/api/components';
+import { toast } from 'sonner';
+import { useDownloadComponent } from '@/api/components';
 import type { ToolDetailDisplayModel } from '@/api/tools';
+import { downloadBlob } from '@/lib/download';
+import { getErrorMessage } from '@/lib/errors';
 import { cn } from '@/lib/utils';
 import { CodeBlock } from '@/components/common/CodeBlock';
 import { ParameterTable } from '@/components/component-detail/common/ParameterTable';
@@ -35,6 +38,13 @@ interface ToolTabsProps {
 
 /** What only a tool shows: its CWL, its container and its ports. */
 export function ToolTabs({ model, isPreview = false }: ToolTabsProps) {
+  const { mutate: downloadComponent } = useDownloadComponent();
+  const handleCwlDownload = () =>
+    downloadComponent(model.id, {
+      onSuccess: ({ blob, filename }) => downloadBlob(filename, blob),
+      onError: (error) => toast.error(getErrorMessage(error)),
+    });
+
   const tabs: TabConfig[] = [
     { value: 'overview', label: 'Overview', icon: Eye },
     { value: 'cwl', label: 'CWL Definition', icon: FileCode },
@@ -65,7 +75,7 @@ export function ToolTabs({ model, isPreview = false }: ToolTabsProps) {
               content={model.cwlContent}
               {...(isPreview
                 ? { downloadFilename: `${model.name}.cwl` }
-                : { downloadUrl: componentsService.getDownloadUrl(model.id) })}
+                : { onDownload: handleCwlDownload })}
             />
           </TabsContent>
 

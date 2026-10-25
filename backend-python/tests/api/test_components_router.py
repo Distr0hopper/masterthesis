@@ -7,6 +7,7 @@ import uuid
 import httpx
 import pytest
 
+from app.config import get_settings
 from app.domain.models.component import ComponentStatus
 from app.domain.repository.components_repository import ComponentsRepository
 from tests.conftest import SessionFactory
@@ -52,11 +53,33 @@ async def test_a_draft_is_readable_by_its_owner_only(client: httpx.AsyncClient, 
     draft = tool("draft", owner, ComponentStatus.DRAFT)
     await save(sessions, owner, stranger, draft)
 
-    for path in (f"/components/{draft.id}", f"/components/{draft.id}/versions", f"/components/{draft.id}/download"):
+    for path in (
+        f"/components/{draft.id}",
+        f"/components/{draft.id}/versions",
+        f"/components/{draft.id}/download",
+        f"/tools/{draft.id}/bundle",
+    ):
         assert (await client.get(path, headers=bearer(owner))).status_code == 200, path
         # 404, not 403 - a stranger must not learn that the draft exists
         assert (await client.get(path, headers=bearer(stranger))).status_code == 404, path
         assert (await client.get(path)).status_code == 404, path
+
+
+async def test_a_download_names_its_file_for_the_cross_origin_spa(
+    client: httpx.AsyncClient, sessions: SessionFactory
+) -> None:
+    owner = user()
+    draft = tool("remove-outliers", owner, ComponentStatus.DRAFT)
+    await save(sessions, owner, draft)
+    # the SPA runs on another origin than the API, and the browser hides Content-Disposition
+    # from its fetch unless the response exposes it - the file would fall back to a generic name
+    origin = {"Origin": get_settings().cors_origin}
+
+    response = await client.get(f"/tools/{draft.id}/bundle", headers=bearer(owner) | origin)
+
+    assert response.status_code == 200
+    assert response.headers["content-disposition"] == 'attachment; filename="remove-outliers-v1.zip"'
+    assert "Content-Disposition" in response.headers["access-control-expose-headers"]
 
 
 async def test_a_deprecated_version_stays_readable_by_everyone(

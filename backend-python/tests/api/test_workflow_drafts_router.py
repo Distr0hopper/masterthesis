@@ -109,7 +109,6 @@ async def test_a_canvas_exports_as_a_runnable_archive(client: httpx.AsyncClient,
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/zip"
-    assert "Content-Disposition" in response.headers["access-control-expose-headers"]
     archive = zipfile.ZipFile(io.BytesIO(response.content))
     names = set(archive.namelist())
     assert {"read-tracks.cwl", "clean-tracks.cwl"} <= names

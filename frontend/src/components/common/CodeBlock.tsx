@@ -1,22 +1,22 @@
 import { Copy, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button.tsx';
 import { copyToClipboard } from '@/lib/clipboard';
-import { downloadFile, downloadTextFile } from '@/lib/download';
+import { downloadTextFile } from '@/lib/download';
 
 interface CodeBlockProps {
   title: string;
   content: string;
-  // exactly one is expected to be set by the caller: downloadUrl for content backed by a
-  // real backend file endpoint, downloadFilename to save the already-fetched `content` as
-  // a client-side blob when no such endpoint exists
-  downloadUrl?: string;
+  // exactly one is expected to be set by the caller: onDownload to fetch the file from the
+  // backend (through apiClient, so a draft's owner is authorized), downloadFilename to save
+  // the already-fetched `content` as a client-side blob when no such endpoint exists
+  onDownload?: () => void;
   downloadFilename?: string;
 }
 
-export function CodeBlock({ title, content, downloadUrl, downloadFilename }: CodeBlockProps) {
+export function CodeBlock({ title, content, onDownload, downloadFilename }: CodeBlockProps) {
   const handleDownload = () => {
-    if (downloadUrl) {
-      downloadFile(downloadUrl);
+    if (onDownload) {
+      onDownload();
     } else if (downloadFilename) {
       downloadTextFile(downloadFilename, content);
     }

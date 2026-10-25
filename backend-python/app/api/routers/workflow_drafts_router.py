@@ -159,12 +159,7 @@ async def export_draft(
     return Response(
         content=zip_bytes,
         media_type="application/zip",
-        headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
-            # the browser fetch reads the filename off this header, which is not exposed
-            # cross-origin by default (the SPA runs on a different port than the API)
-            "Access-Control-Expose-Headers": "Content-Disposition",
-        },
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
@@ -191,10 +186,7 @@ async def export_draft_inputs(
     return Response(
         content=inputs_yaml,
         media_type="application/yaml",
-        headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
-            "Access-Control-Expose-Headers": "Content-Disposition",
-        },
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

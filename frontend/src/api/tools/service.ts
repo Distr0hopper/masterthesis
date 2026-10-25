@@ -14,8 +14,9 @@ const ENDPOINT = '/tools';
 
 /** What only a tool has - listing, reading and the shared commands go through componentsService. */
 export const toolsService = {
-  getBundleUrl(id: string): string {
-    return `${apiClient.baseURL}${ENDPOINT}/${id}/bundle`;
+  // getBlob, not a plain link: a draft is only downloadable with the Authorization header
+  downloadBundle(id: string): Promise<{ blob: Blob; filename: string }> {
+    return apiClient.getBlob(`${ENDPOINT}/${id}/bundle`, 'bundle.zip');
   },
 
   upload(file: File, dto: CreateToolDto): Promise<ToolDetailDto> {

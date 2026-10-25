@@ -13,6 +13,10 @@ export const useParseTool = () => {
   return useMutation({ mutationFn: (file: File) => toolsService.parse(file) });
 };
 
+export const useDownloadToolBundle = () => {
+  return useMutation({ mutationFn: (id: string) => toolsService.downloadBundle(id) });
+};
+
 export const toolKeys = {
   packagePreviews: ['tools', 'package-preview'] as const,
   packagePreview: (repoUrl: string) => [...toolKeys.packagePreviews, repoUrl] as const,

@@ -39,6 +39,9 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
+    # downloads go through apiClient.getBlob, which names the file from this header - a
+    # cross-origin response hides it from JS unless it is exposed
+    expose_headers=["Content-Disposition"],
     max_age=3600,
 )
 

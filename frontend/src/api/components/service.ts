@@ -68,10 +68,6 @@ export const componentsService = {
     return apiClient.get(`${ENDPOINT}/${id}/usages`);
   },
 
-  getDownloadUrl(id: string): string {
-    return `${apiClient.baseURL}${ENDPOINT}/${id}/download`;
-  },
-
   // getBlob, not a plain link: a draft is only downloadable with the Authorization header
   download(id: string): Promise<{ blob: Blob; filename: string }> {
     return apiClient.getBlob(`${ENDPOINT}/${id}/download`, 'component');

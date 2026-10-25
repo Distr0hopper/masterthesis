@@ -37,7 +37,7 @@ import {
   useUndeprecateComponent,
   type ComponentDetailDisplayModel,
 } from '@/api/components';
-import { toolsService } from '@/api/tools';
+import { useDownloadToolBundle } from '@/api/tools';
 import { StepMatchStatus, type ComponentSummaryDto } from '@/api/workflows';
 import {
   canAddVersion,
@@ -128,7 +128,9 @@ function publishBlockedHint(allStepsSettled: boolean, editedInBuilder: boolean):
 
 export function ComponentHeader({ model, backTo, backLabel, onDeleted }: ComponentHeaderProps) {
   const { mutate: publishComponent, isPending: isPublishing } = usePublishComponent();
-  const { mutate: downloadComponent, isPending: isDownloading } = useDownloadComponent();
+  const { mutate: downloadComponent, isPending: isDownloadingComponent } = useDownloadComponent();
+  const { mutate: downloadToolBundle, isPending: isDownloadingBundle } = useDownloadToolBundle();
+  const isDownloading = isDownloadingComponent || isDownloadingBundle;
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
@@ -198,8 +200,11 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
     });
   };
 
+  // a tool downloads as its run bundle, a workflow as its whole tree - both through apiClient,
+  // so the owner of a draft is authorized
   const handleDownload = () => {
-    downloadComponent(model.id, {
+    const download = model.kind === 'tool' ? downloadToolBundle : downloadComponent;
+    download(model.id, {
       onSuccess: ({ blob, filename }) => downloadBlob(filename, blob),
       onError: (error) => toast.error(getErrorMessage(error)),
     });
@@ -321,19 +326,11 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
               </Button>
             )}
 
-            {model.kind === 'tool' ? (
-              <Button asChild variant="outline" size="sm">
-                <a href={toolsService.getBundleUrl(model.id)}>
-                  <Download className="mr-1 h-4 w-4" /> Download
-                </a>
-              </Button>
-            ) : (
-              // the whole tree: the pipeline, every step document below it - nested
-              // workflows included - and everything they import
-              <Button variant="outline" size="sm" onClick={handleDownload} disabled={isDownloading}>
-                <Download className="mr-1 h-4 w-4" /> Download
-              </Button>
-            )}
+            {/* a tool: its .cwl, an inputs.yaml template and its imports; a workflow: the whole
+                tree - every step document below it, nested workflows included */}
+            <Button variant="outline" size="sm" onClick={handleDownload} disabled={isDownloading}>
+              <Download className="mr-1 h-4 w-4" /> Download
+            </Button>
 
             {/* modal={false}: an item opens a dialog, and a modal menu would steal its focus back */}
             {(canEdit || canUndeprecate || canCreateVersion || builderDraftId) && (

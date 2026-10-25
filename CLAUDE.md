@@ -62,7 +62,7 @@ Conventions:
 - **Exceptions:** business rules raise custom domain/application exceptions, and `api/exception/handlers.py` maps them to HTTP. Don't raise `HTTPException` from services. Infrastructure code raises stdlib exceptions. Unexpected failures are left uncaught so they surface as a 500.
 - **FastAPI parameters:** always use `Annotated[T, Depends()/Query()/Form()]`. Multipart endpoints take one DTO: `Annotated[Dto, Form(media_type="multipart/form-data")]`, never one parameter per field.
 - **DI:** each repository/service has its own `get_*` staticmethod factory. There is no central `dependencies.py`.
-- **Migrations** are hand-written, never `--autogenerate`. The dev DB contains real data, so never drop tables. Take a `pg_dump` to `backend-python/tmp/db-snapshots/` before touching the schema.
+- **Migrations** are hand-written, never `--autogenerate`. The dev DB contains real data, so never drop tables. Take a `pg_dump` to `backend-python/tmp/db-snapshots/` before touching the schema. Create the file with `uv run alembic revision -m "..."`, so it gets the date-prefixed name (`YYYY_MM_DD_HHMM-<rev>_<slug>.py`, `file_template` in `alembic.ini`) that lists the versions in the order they run.
 
 ### Domain model
 

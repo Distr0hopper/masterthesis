@@ -217,4 +217,4 @@ Every relationship is `lazy="selectin"`. SQLAlchemy stops eager loading where a 
 - **`find_by_id`** loads one level: the steps and the components they run.
 - **`load_tree`** loads the whole tree below a component, one level per query. Use it for anything that recurses: publishing, downloading, cycle checks.
 
-Code: `app/domain/models/`, `app/domain/composite/tree.py`, migration `alembic/versions/b8e2d4f7a913_composite_components.py`.
+Code: `app/domain/models/`, `app/domain/composite/tree.py`, migration `alembic/versions/2026_10_02_0000-b8e2d4f7a913_composite_components.py`.

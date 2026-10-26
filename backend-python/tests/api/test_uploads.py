@@ -298,3 +298,27 @@ async def test_a_new_workflow_version_cannot_nest_its_own_lineage(
     # v2 running v1 would make the lineage contain itself
     assert response.status_code == 409, response.text
     assert len((await client.get(f"/components/{v1.id}/versions", headers=bearer(owner))).json()) == 1
+
+
+async def test_an_archive_unpacking_to_more_than_the_limit_is_refused(
+    client: httpx.AsyncClient, sessions: SessionFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.application.service.workflows_service import WorkflowsService
+
+    owner = user()
+    await save(sessions, owner)
+    monkeypatch.setattr(WorkflowsService, "MAX_UNPACKED_SIZE", 64 * 1024)
+    # a few hundred bytes packed, far more unpacked - a zip bomb in miniature
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("pipeline.cwl", PIPELINE)
+        zf.writestr("clean-tracks.cwl", TOOL_CWL + "#" * (128 * 1024))
+    bomb = buffer.getvalue()
+    assert len(bomb) < 4 * 1024
+    config = [{"stepId": "step_clean", "name": "clean-tracks", "domains": ["animal_behavior"]}]
+
+    preview = await client.post("/workflows/parse", files={"file": ("pipeline.zip", bomb)}, headers=bearer(owner))
+    created = await create_workflow(client, bearer(owner), bomb, config)
+
+    assert preview.status_code == 400 and "unpacks to" in preview.json()["detail"]
+    assert created.status_code == 400

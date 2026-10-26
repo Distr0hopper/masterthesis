@@ -953,6 +953,10 @@ class WorkflowsService:
             await self.uow.commit()
         return step
 
+    #: how much an uploaded archive may unpack to - the upload limit only caps the packed
+    #: bytes, and a few KB of zip can unpack to gigabytes
+    MAX_UNPACKED_SIZE = 50 * 1024 * 1024
+
     #: plausible $import/$include targets - all text, so an unrelated binary in the archive
     #: never has to be decoded just to be ignored
     _AUX_EXTENSIONS = (".yml", ".yaml", ".json")
@@ -984,6 +988,8 @@ class WorkflowsService:
 
         A single wrapper folder (what Finder adds when you zip a directory) is stripped,
         so `SpatialClustering/types/spatial.yml` still resolves as `types/spatial.yml`.
+
+        Only ever runs after _extract_zip_files, which bounds what the archive unpacks to.
         """
         try:
             with zipfile.ZipFile(BytesIO(zip_bytes)) as zf:
@@ -1061,6 +1067,13 @@ class WorkflowsService:
     def _extract_zip_files(self, zip_bytes: bytes) -> dict[str, str]:
         try:
             with zipfile.ZipFile(BytesIO(zip_bytes)) as zf:
+                # before anything is read: a member never yields more than its declared size,
+                # so the declared sizes bound what unpacking can cost
+                unpacked = sum(info.file_size for info in zf.infolist())
+                if unpacked > self.MAX_UNPACKED_SIZE:
+                    raise InvalidWorkflowArchiveError(
+                        f"Archive unpacks to {unpacked} bytes - at most {self.MAX_UNPACKED_SIZE} are allowed"
+                    )
                 bad_file = zf.testzip()
                 if bad_file is not None:
                     raise InvalidWorkflowArchiveError(f"Corrupt file in archive: {bad_file}")

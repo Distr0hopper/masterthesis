@@ -647,8 +647,11 @@ def sync(workflows_service: WorkflowsService, draft_id: uuid.UUID, *children: Co
     ]
 
     async def in_unit_of_work() -> Component:
+        # like sync_to_my_components: the ports are read before the unit opens
+        components_service = workflows_service.components_service
+        ports = await components_service.read_ports(PIPELINE, "Workflow", ComponentSource.WORKFLOW_BUILDER)
         async with workflows_service.uow:
-            workflow = await workflows_service.upsert_from_draft(PIPELINE, bindings, name, draft_id, OWNER)
+            workflow = await workflows_service.upsert_from_draft(PIPELINE, ports, bindings, name, draft_id, OWNER)
             await workflows_service.uow.commit()
         return workflow
 
@@ -970,22 +973,23 @@ def test_an_upload_cannot_reuse_a_deprecated_version() -> None:
     assert workflows_service.uow.commits == 0  # type: ignore[attr-defined]
 
 
-def test_a_failing_step_rolls_back_the_tools_created_before_it() -> None:
+def test_a_broken_step_saves_none_of_the_tools_before_it() -> None:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as zf:
         zf.writestr("pipeline.cwl", UPLOAD_PIPELINE)
         zf.writestr("a.cwl", UPLOAD_TOOL)
-        # only found while creating b - after a is already created
         zf.writestr("b.cwl", UPLOAD_TOOL.replace("CommandLineTool", "Operation"))
     configs = {sid: ComponentConfig(step_id=sid, name=f"tool-{sid}", domains=["general"]) for sid in ("a", "b")}
-    _, workflows_service, _ = services()
+    _, workflows_service, repository = services()
 
     with pytest.raises(InvalidCwlError):
         asyncio.run(
             workflows_service.create_from_upload(buffer.getvalue(), "x.zip", "wf", None, ["general"], configs, OWNER)
         )
 
-    assert (workflows_service.uow.commits, workflows_service.uow.rollbacks) == (0, 1)  # type: ignore[attr-defined]
+    # every step is read before the transaction opens - b is refused before a is written
+    assert workflows_service.uow.commits == 0  # type: ignore[attr-defined]
+    assert [c.name for c in repository.by_id.values()] == []
 
 
 def upload_zip(a_tool: str = UPLOAD_TOOL, b_tool: str = UPLOAD_TOOL) -> bytes:
@@ -1215,12 +1219,11 @@ def test_a_step_versioning_a_tool_keeps_its_hand_labels(
     assert labels == expected
 
 
-def test_a_failing_step_rolls_back_the_tool_version_added_before_it() -> None:
+def test_a_broken_step_adds_no_tool_version_before_it() -> None:
     v1, tool_a, tool_b = uploaded_v1()
-    _, workflows_service, _ = services(v1, tool_a, tool_b)
+    _, workflows_service, repository = services(v1, tool_a, tool_b)
     configs = {
         "a": ComponentConfig(step_id="a", new_version_of_id=tool_a.id),
-        # only found while creating b - after tool-a's next version is already added
         "b": ComponentConfig(step_id="b", name="tool-b-new", domains=["other"]),
     }
     broken_b = UPLOAD_TOOL.replace("CommandLineTool", "Operation")
@@ -1232,7 +1235,9 @@ def test_a_failing_step_rolls_back_the_tool_version_added_before_it() -> None:
             )
         )
 
-    assert (workflows_service.uow.commits, workflows_service.uow.rollbacks) == (0, 1)  # type: ignore[attr-defined]
+    # every step is read before the transaction opens - b is refused before a's version is added
+    assert workflows_service.uow.commits == 0  # type: ignore[attr-defined]
+    assert [c.version for c in repository.by_id.values() if c.name == tool_a.name] == [tool_a.version]
 
 
 def test_a_step_that_ran_a_workflow_or_nothing_before_cannot_be_versioned() -> None:

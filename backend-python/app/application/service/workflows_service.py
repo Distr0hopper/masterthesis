@@ -30,7 +30,7 @@ from app.application.exception.workflow_exceptions import (
     WorkflowStepNotFoundError,
     WorkflowStepNotMatchedError,
 )
-from app.application.service.components_service import ComponentsService
+from app.application.service.components_service import ComponentsService, Ports
 from app.application.service.tools_service import ToolsService
 from app.application.unit_of_work import UnitOfWork
 from app.domain.composite import lifecycle
@@ -735,6 +735,11 @@ class WorkflowsService:
             pending_components.append((step, component, config.format_labels, target is not None))
             steps.append(step)
 
+        # read before the transaction opens - both ask the format service for port labels
+        for _step, component, _labels, _is_next_version in pending_components:
+            await self.tools_service.prepare(component, "Uploaded")
+        ports = await self.components_service.read_ports(pipeline_content, "Workflow", ComponentSource.MANUAL_UPLOAD)
+
         async with self.uow:
             for step, component, format_labels, is_next_version in pending_components:
                 created = (
@@ -753,6 +758,7 @@ class WorkflowsService:
                 pipeline_content=pipeline_content,
                 steps=steps,
                 source=ComponentSource.MANUAL_UPLOAD,
+                ports=ports,
                 files=self._files_for(pipeline_content, auxiliary),
                 version=version,
             )
@@ -762,6 +768,7 @@ class WorkflowsService:
     async def upsert_from_draft(
         self,
         pipeline_content: str,
+        ports: Ports,
         bindings: list[StepBinding],
         name: str,
         draft_id: uuid.UUID,
@@ -776,7 +783,8 @@ class WorkflowsService:
         caller owns it; anything else falls through to a fresh one.
 
         Runs inside the caller's unit of work and returns the workflow unreloaded - reload
-        it after the commit.
+        it after the commit. `ports` are the pipeline's, read before that unit opened (see
+        ComponentsService.read_ports).
         """
         steps = [
             WorkflowStep(
@@ -802,6 +810,7 @@ class WorkflowsService:
                 pipeline_content=pipeline_content,
                 steps=steps,
                 source=ComponentSource.WORKFLOW_BUILDER,
+                ports=ports,
                 draft_id=draft_id,
             )
 
@@ -822,7 +831,7 @@ class WorkflowsService:
             # cascade="all, delete-orphan" on Workflow.steps / Component.parameters deletes
             # the replaced rows
             latest.workflow.steps = steps
-            await self.components_service.assign_ports(latest, "Workflow")
+            self.components_service.assign_ports(latest, ports)
             return await self.uow.components.add(latest)
 
         versions = await self.uow.components.find_versions_by_name(latest.name)
@@ -834,6 +843,7 @@ class WorkflowsService:
             pipeline_content=pipeline_content,
             steps=steps,
             source=ComponentSource.WORKFLOW_BUILDER,
+            ports=ports,
             draft_id=draft_id,
             version=versions[-1].version + 1,
         )
@@ -847,6 +857,7 @@ class WorkflowsService:
         pipeline_content: str,
         steps: list[WorkflowStep],
         source: ComponentSource,
+        ports: Ports,
         files: list[ComponentFile] | None = None,
         draft_id: uuid.UUID | None = None,
         version: int = 1,
@@ -864,7 +875,7 @@ class WorkflowsService:
             workflow=Workflow(steps=steps, draft_id=draft_id),
         )
         # a workflow's ports are its own inputs/outputs - what a parent sees when nesting it
-        await self.components_service.assign_ports(workflow, "Workflow")
+        self.components_service.assign_ports(workflow, ports)
         return await self.uow.components.add(workflow)
 
     async def _require_acyclic(self, parent: Component, child_ids: list[uuid.UUID]) -> None:

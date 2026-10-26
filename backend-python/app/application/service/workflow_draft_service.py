@@ -15,7 +15,7 @@ from app.application.service.workflows_service import StepBinding, WorkflowsServ
 from app.application.unit_of_work import UnitOfWork
 from app.domain.composite import lifecycle
 from app.domain.composite.tree import ArchiveLayout, ConflictingTreeFileError
-from app.domain.models.component import Component
+from app.domain.models.component import Component, ComponentSource
 from app.domain.models.parameter import ParameterDirection
 from app.domain.models.workflow_draft import WorkflowDraft
 from app.infrastructure.cwl.canvas_graph import (
@@ -311,9 +311,13 @@ class WorkflowDraftService:
             for node in generated.ordered_nodes
         ]
 
+        pipeline_content = render_workflow_cwl(generated.document)
+        # before the transaction opens - it asks the format service for port labels
+        ports = await self.components_service.read_ports(pipeline_content, "Workflow", ComponentSource.WORKFLOW_BUILDER)
         async with self.uow:
             workflow = await self.workflows_service.upsert_from_draft(
-                pipeline_content=render_workflow_cwl(generated.document),
+                pipeline_content=pipeline_content,
+                ports=ports,
                 bindings=bindings,
                 name=draft.name,
                 # the link the UI follows back into the builder, and the key this upsert is on

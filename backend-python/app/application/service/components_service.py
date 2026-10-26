@@ -141,6 +141,14 @@ def _owner_name(component: Component) -> str:
 
 
 @dataclass(frozen=True)
+class Ports:
+    """A document's ports, format labels resolved - see ComponentsService.read_ports."""
+
+    parameters: list[Parameter]
+    ontology_url: str | None
+
+
+@dataclass(frozen=True)
 class Download:
     filename: str
     content: bytes | str
@@ -326,11 +334,21 @@ class ComponentsService:
             if parameter.format:
                 parameter.format_label = labels.get(parameter.format)
 
-    async def assign_ports(self, component: Component, context: str) -> None:
-        """Parse `component`'s ports and ontology from its CWL and resolve their format labels."""
-        component.parameters = self.parse_ports(component.cwl_content, context, component.source)
-        component.ontology_url = self.ontology_url_for(component.cwl_content)
-        await self.resolve_format_labels(component.ontology_url, component.parameters)
+    async def read_ports(self, cwl_content: str, context: str, source: ComponentSource) -> Ports:
+        """A document's ports and ontology, their format labels resolved. Asks the format
+        service, so a use case calls it before opening its unit of work - a transaction
+        must never wait on HTTP. Then assign_ports, inside it."""
+        parameters = self.parse_ports(cwl_content, context, source)
+        ontology_url = self.ontology_url_for(cwl_content)
+        await self.resolve_format_labels(ontology_url, parameters)
+        return Ports(parameters=parameters, ontology_url=ontology_url)
+
+    @staticmethod
+    def assign_ports(component: Component, ports: Ports) -> None:
+        """Give `component` the ports read_ports read from its CWL - one component per read,
+        since the parameters become its rows."""
+        component.parameters = ports.parameters
+        component.ontology_url = ports.ontology_url
 
     @staticmethod
     def truncate_description(description: str | None) -> str | None:

@@ -55,7 +55,7 @@ Kotlin/Spring-style layers with strict inward dependencies: `api` → `applicati
 
 Conventions:
 
-- **Unit of Work:** repositories never commit. Only router-facing service methods open `async with self.uow:` and commit once. Nesting units, writing outside a unit, or exiting a unit with uncommitted writes all raise. A shared writer that another service calls gets a public name; `_` prefixes are for helpers used inside one class only.
+- **Unit of Work:** repositories never commit. Only router-facing service methods open `async with self.uow:` and commit once. Nesting units, writing outside a unit, or exiting a unit with uncommitted writes all raise. A shared writer that another service calls gets a public name; `_` prefixes are for helpers used inside one class only. No HTTP call inside a unit: format labels are fetched before it opens (`ToolsService.prepare`, `ComponentsService.read_ports`).
 - **Authorization is in the router.** The router fetches the entity, checks the permission validator, then passes the already-fetched entity to the service. Services take no `user_id` for auth.
 - **Commands + HATEOAS:** state-changing actions (publish, deprecate, repackage, …) are declared once in a command registry. Dispatch, permission checks and the response `links` all loop over that registry, so adding a command means one enum member plus one registry entry. The frontend decides which actions to show by looking at the link rels.
   - `allowed` answers *who* may run a command (refused: 403). `available` answers whether it applies to the component's current state (e.g. unpublish window, superseded); it only hides the link, and the service refuses with its own 409 that says why.

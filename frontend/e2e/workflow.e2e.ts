@@ -33,13 +33,11 @@ test('an uploaded workflow brings its new tool along and publishes it with it', 
   const toolStep = `clean_tracks_${stamp}`;
 
   await page.goto('/workflows/upload');
-  await page
-    .locator('input[type="file"]')
-    .setInputFiles({
-      name: 'pipeline.cwl',
-      mimeType: 'application/octet-stream',
-      buffer: Buffer.from(PIPELINE(toolStep)),
-    });
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'pipeline.cwl',
+    mimeType: 'application/octet-stream',
+    buffer: Buffer.from(PIPELINE(toolStep)),
+  });
 
   // read as soon as it is chosen: the inline tool is offered as a new component, named after its step
   await expect(page.getByLabel('Name', { exact: true })).toHaveValue(`clean-tracks-${stamp}`);

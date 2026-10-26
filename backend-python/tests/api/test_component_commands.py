@@ -17,14 +17,17 @@ from app.domain.models.workflow import Workflow
 OWNER = User(id=uuid.uuid4(), email="owner@example.com")
 STRANGER = User(id=uuid.uuid4(), email="stranger@example.com")
 
-OWNER_COMMAND_RELS = {"updateDescription", "updateDomain", "publish", "unpublish", "deprecate", "undeprecate"}
+#: what the owner of a version published just now is offered - publish and undeprecate
+#: don't apply to it (see test_lifecycle_commands_are_offered_only_where_they_apply)
+OWNER_COMMAND_RELS = {"updateDescription", "updateDomain", "unpublish", "deprecate"}
+LIFECYCLE_RELS = {"publish", "unpublish", "deprecate", "undeprecate"}
 LOGGED_IN_COMMAND_RELS = {"favorite", "unfavorite"}
 TOOL_COMMAND_RELS = {"updateFormatLabels", "repackage"}
 OTHER_RELS = {"self", "download", "delete", "impact", "publishImpact", "addVersion", "builderDraft"}
 
 
 def component(kind: ComponentKind, source: ComponentSource = ComponentSource.MANUAL_UPLOAD) -> Component:
-    """Published just now - still within its unpublish window, so every command applies."""
+    """Published just now - still within its unpublish window."""
     c = Component(
         id=uuid.uuid4(),
         kind=kind,
@@ -93,14 +96,29 @@ def test_an_anonymous_viewer_is_offered_no_command(kind: ComponentKind) -> None:
     assert command_rels(None, component(kind)) == set()
 
 
-@pytest.mark.parametrize("kind", list(ComponentKind))
-def test_a_superseded_version_is_offered_neither_publish_nor_undeprecate(kind: ComponentKind) -> None:
-    c = component(kind)
+@pytest.mark.parametrize(
+    ("status", "offered"),
+    [
+        (ComponentStatus.DRAFT, {"publish"}),
+        (ComponentStatus.PUBLISHED, {"unpublish", "deprecate"}),
+        (ComponentStatus.DEPRECATED, {"undeprecate"}),
+    ],
+)
+def test_lifecycle_commands_are_offered_only_where_they_apply(status: ComponentStatus, offered: set[str]) -> None:
+    # the frontend shows exactly the links it gets - a link the transition table refuses
+    # would be a button that only ever answers 409
+    c = component(ComponentKind.WORKFLOW)
+    c.status = status
+    assert command_rels(OWNER, c) & LIFECYCLE_RELS == offered
+
+
+@pytest.mark.parametrize("status", [ComponentStatus.DRAFT, ComponentStatus.DEPRECATED])
+def test_a_superseded_version_is_offered_neither_publish_nor_undeprecate(status: ComponentStatus) -> None:
+    c = component(ComponentKind.WORKFLOW)
+    c.status = status
     # what the row is loaded with when a newer version of the lineage is published
     c.__dict__.update(superseded_by_id=uuid.uuid4(), superseded_by_version=2)
-    assert command_rels(OWNER, c) == OWNER_COMMAND_RELS - {"publish", "undeprecate"} | LOGGED_IN_COMMAND_RELS | (
-        TOOL_COMMAND_RELS - {"repackage"} if kind == ComponentKind.TOOL else set()
-    )
+    assert command_rels(OWNER, c) & LIFECYCLE_RELS == set()
 
 
 def test_the_publish_impact_is_offered_wherever_publish_is() -> None:
@@ -108,6 +126,8 @@ def test_the_publish_impact_is_offered_wherever_publish_is() -> None:
         return set(ComponentLinkBuilder(user)._filter_links(c))
 
     c = component(ComponentKind.TOOL)
+    assert "publishImpact" not in rels(OWNER, c)
+    c.status = ComponentStatus.DRAFT
     assert "publishImpact" in rels(OWNER, c)
     assert "publishImpact" not in rels(STRANGER, c)
     c.__dict__.update(superseded_by_id=uuid.uuid4(), superseded_by_version=2)
@@ -155,7 +175,7 @@ def test_no_builder_canvas_is_offered_once_it_is_deleted_or_for_an_upload() -> N
 def test_command_links_point_at_the_commands_endpoint_of_the_kind() -> None:
     tool = component(ComponentKind.TOOL, ComponentSource.AUTOMATED_PACKAGING)
     links = ComponentLinkBuilder(OWNER)._filter_links(tool)
-    assert links["publish"].href == f"/components/{tool.id}/commands"
+    assert links["deprecate"].href == f"/components/{tool.id}/commands"
     assert links["repackage"].href == f"/tools/{tool.id}/commands"
     assert all(links[rel].method == "POST" for rel in OWNER_COMMAND_RELS | TOOL_COMMAND_RELS)
 

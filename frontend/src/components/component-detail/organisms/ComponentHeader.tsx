@@ -159,15 +159,15 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
     model.steps.every(
       (step) => step.matchStatus === StepMatchStatus.CONFIRMED || step.matchStatus === StepMatchStatus.INLINE,
     );
-  const canPublish = hasPublishLink(model._links) && model.status === ComponentStatus.DRAFT;
+  const canPublish = hasPublishLink(model._links);
   const { data: publishImpact, isLoading: isLoadingPublishImpact } = usePublishImpact(
     getLink(model._links, 'publishImpact'),
     canPublish && publishDialogOpen,
   );
   const supersedes = publishImpact?.supersedes ?? [];
-  const canUnpublish = hasUnpublishLink(model._links) && model.status === ComponentStatus.PUBLISHED;
-  const canDeprecate = hasDeprecateLink(model._links) && model.status === ComponentStatus.PUBLISHED;
-  const canUndeprecate = hasUndeprecateLink(model._links) && model.status === ComponentStatus.DEPRECATED;
+  const canUnpublish = hasUnpublishLink(model._links);
+  const canDeprecate = hasDeprecateLink(model._links);
+  const canUndeprecate = hasUndeprecateLink(model._links);
   const deprecated = deprecatedChildren(model);
 
   const drafts = draftChildren(model);

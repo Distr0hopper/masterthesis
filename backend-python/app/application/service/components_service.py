@@ -8,9 +8,11 @@ from fastapi import Depends
 from app.application.commands.commands import ComponentCommand, ComponentCommandType
 from app.application.commands.registry import (
     CommandSpec,
+    is_deprecatable,
     is_logged_in,
     is_owner,
-    is_not_superseded,
+    is_publishable,
+    is_undeprecatable,
     unpublish_window,
     within_unpublish_window_now,
     is_readable_by,
@@ -712,7 +714,7 @@ COMPONENT_COMMANDS: dict[ComponentCommandType, CommandSpec[ComponentsService, Co
     ComponentCommandType.PUBLISH: CommandSpec(
         rel="publish",
         allowed=is_owner,
-        available=is_not_superseded,
+        available=is_publishable,
         run=lambda s, c, cmd, user: s.publish(c, user, cmd.publish_components),
     ),
     ComponentCommandType.UNPUBLISH: CommandSpec(
@@ -728,12 +730,15 @@ COMPONENT_COMMANDS: dict[ComponentCommandType, CommandSpec[ComponentsService, Co
         rel="updateDomain", allowed=is_owner, run=lambda s, c, cmd, user: s.update_domains(c, cmd.domains)
     ),
     ComponentCommandType.DEPRECATE: CommandSpec(
-        rel="deprecate", allowed=is_owner, run=lambda s, c, cmd, user: s.deprecate(c, cmd.deprecation_note)
+        rel="deprecate",
+        allowed=is_owner,
+        available=is_deprecatable,
+        run=lambda s, c, cmd, user: s.deprecate(c, cmd.deprecation_note),
     ),
     ComponentCommandType.UNDEPRECATE: CommandSpec(
         rel="undeprecate",
         allowed=is_owner,
-        available=is_not_superseded,
+        available=is_undeprecatable,
         run=lambda s, c, cmd, user: s.undeprecate(c),
     ),
 }

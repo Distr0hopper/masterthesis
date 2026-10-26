@@ -162,7 +162,7 @@ export function DeleteComponentDialog({
       isPending={isPending || isLoadingImpact}
       blocked={blocked}
       blockedAlternative={
-        canDeprecate(component._links) && component.status === ComponentStatus.PUBLISHED
+        canDeprecate(component._links)
           ? { label: 'Deprecate instead', onSelect: onDeprecateInstead }
           : undefined
       }

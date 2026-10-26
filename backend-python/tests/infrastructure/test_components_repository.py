@@ -64,7 +64,9 @@ async def test_drafts_are_listed_only_for_their_owner(sessions: SessionFactory) 
 async def test_kind_creator_and_exclusion_filters(sessions: SessionFactory) -> None:
     owner, stranger = user(), user()
     leaf = tool("leaf", owner)
-    await save(sessions, owner, stranger, leaf, workflow("flow", owner, leaf), tool("foreign", stranger), tool("orphan", None))
+    await save(
+        sessions, owner, stranger, leaf, workflow("flow", owner, leaf), tool("foreign", stranger), tool("orphan", None)
+    )
 
     assert (await page(sessions, ComponentListFilter(kind=ComponentKind.WORKFLOW)))[0] == [("flow", 1)]
     assert (await page(sessions, ComponentListFilter(created_by=owner.id)))[0] == [("flow", 1), ("leaf", 1)]

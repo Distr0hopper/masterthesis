@@ -55,13 +55,9 @@ def _component(
     return component
 
 
-def port(
-    name: str, direction: ParameterDirection, format: str | None = None, cwl_type: str = "File"
-) -> Parameter:
+def port(name: str, direction: ParameterDirection, format: str | None = None, cwl_type: str = "File") -> Parameter:
     """A port; `format` is an EO formats class name (`GeoJSON`), or None for none."""
-    return Parameter(
-        name=name, cwl_type=cwl_type, direction=direction, format=EO_FORMAT + format if format else None
-    )
+    return Parameter(name=name, cwl_type=cwl_type, direction=direction, format=EO_FORMAT + format if format else None)
 
 
 def tool(

@@ -55,7 +55,6 @@ class WorkflowDraftWriteRequestDto(CamelModel):
 
 
 class SyncedWorkflowDto(CamelModel):
-
     workflow_id: uuid.UUID
     name: str
     step_count: int

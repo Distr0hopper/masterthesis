@@ -18,6 +18,4 @@ class Favorite(SQLModel, table=True):
     # ComponentsService before every write and orphans are swept when a lineage's last
     # version is deleted
     component_name: str = Field(primary_key=True)
-    created_at: datetime = Field(
-        sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    )
+    created_at: datetime = Field(sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False))

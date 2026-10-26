@@ -159,7 +159,9 @@ class ToolsService:
             commit_sha=result.commit_sha,
             author=result.author,
             existing=latest,
-            already_packaged=latest is not None and bool(result.commit_sha) and latest.repo_commit_sha == result.commit_sha,
+            already_packaged=latest is not None
+            and bool(result.commit_sha)
+            and latest.repo_commit_sha == result.commit_sha,
         )
 
     async def read_tool_details(
@@ -232,7 +234,9 @@ class ToolsService:
         format_labels: list[ManualFormatLabel] | None = None,
     ) -> Component:
         """create_manual without the transaction - runs inside the caller's unit of work."""
-        await self.components_service.require_name_available(tool.name, "add a new version instead of creating a new component")
+        await self.components_service.require_name_available(
+            tool.name, "add a new version instead of creating a new component"
+        )
         await self._prepare(tool, context)
         self._apply_manual_format_labels(tool, format_labels or [])
         return await self.uow.components.add(tool)
@@ -337,9 +341,7 @@ class ToolsService:
         return await self.add_manual_version(tool, format_labels)
 
     @staticmethod
-    def _next_packaged_version(
-        head: Component, result: PackagingResult, description_override: str | None
-    ) -> Component:
+    def _next_packaged_version(head: Component, result: PackagingResult, description_override: str | None) -> Component:
         """The next version of a packaged lineage, from its newest version `head` - the
         lineage's current truth for who made it, where it lives and which domains it serves -
         and what packaging the repo returned. add_manual_version numbers it and carries the

@@ -122,7 +122,9 @@ async def test_commands_are_refused_by_who_is_asking(client: httpx.AsyncClient, 
     forbidden = await client.post(f"/components/{published.id}/commands", json=deprecate, headers=bearer(stranger))
     assert forbidden.status_code == 403
     # someone else's draft does not exist for a stranger
-    hidden = await client.post(f"/components/{draft.id}/commands", json={"command": "PUBLISH"}, headers=bearer(stranger))
+    hidden = await client.post(
+        f"/components/{draft.id}/commands", json={"command": "PUBLISH"}, headers=bearer(stranger)
+    )
     assert hidden.status_code == 404
     assert await status_of(sessions, published.id) == ComponentStatus.PUBLISHED
     assert await status_of(sessions, draft.id) == ComponentStatus.DRAFT
@@ -180,7 +182,9 @@ async def test_unpublishing_what_another_users_workflow_runs_is_409(
     leaf = tool("leaf", owner)
     await save(sessions, owner, stranger, leaf, workflow("theirs", stranger, leaf))
 
-    response = await client.post(f"/components/{leaf.id}/commands", json={"command": "UNPUBLISH"}, headers=bearer(owner))
+    response = await client.post(
+        f"/components/{leaf.id}/commands", json={"command": "UNPUBLISH"}, headers=bearer(owner)
+    )
 
     assert response.status_code == 409
     assert await status_of(sessions, leaf.id) == ComponentStatus.PUBLISHED
@@ -238,7 +242,9 @@ async def test_a_strangers_draft_takes_no_uploaded_version_and_shows_no_steps(
     async def confirm(flow: object) -> int:
         [step] = flow.workflow.steps  # type: ignore[attr-defined]
         body = {"command": "CONFIRM"}
-        return (await client.post(f"/workflows/steps/{step.id}/commands", json=body, headers=bearer(stranger))).status_code
+        return (
+            await client.post(f"/workflows/steps/{step.id}/commands", json=body, headers=bearer(stranger))
+        ).status_code
 
     assert await confirm(draft_flow) == 404
     assert await confirm(public_flow) == 403
@@ -261,7 +267,9 @@ async def test_my_components_are_split_by_status_and_hold_nobody_elses(
     response = await client.get("/components/mine", headers=bearer(owner))
     assert response.status_code == 200
     body = response.json()
-    assert {bucket: [i["name"] for i in body[bucket]["content"]] for bucket in ("published", "unpublished", "deprecated")} == {
+    assert {
+        bucket: [i["name"] for i in body[bucket]["content"]] for bucket in ("published", "unpublished", "deprecated")
+    } == {
         "published": ["public"],
         "unpublished": ["draft"],
         "deprecated": ["old"],

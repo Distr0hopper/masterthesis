@@ -53,7 +53,9 @@ def form(**fields: object) -> dict[str, str]:
     return {k: json.dumps(v) if isinstance(v, list | dict) else str(v) for k, v in fields.items()}
 
 
-async def create_tool(client: httpx.AsyncClient, headers: dict, cwl: str = TOOL_CWL, **fields: object) -> httpx.Response:
+async def create_tool(
+    client: httpx.AsyncClient, headers: dict, cwl: str = TOOL_CWL, **fields: object
+) -> httpx.Response:
     data = {"name": "clean-tracks", "domains": "animal_behavior", **fields}
     return await client.post("/tools", data=data, files={"cwlFile": ("tool.cwl", cwl.encode())}, headers=headers)
 
@@ -86,7 +88,9 @@ async def test_the_preview_of_a_tool_saves_nothing(client: httpx.AsyncClient, se
     owner = user()
     await save(sessions, owner)
 
-    response = await client.post("/tools/parse", files={"cwlFile": ("tool.cwl", TOOL_CWL.encode())}, headers=bearer(owner))
+    response = await client.post(
+        "/tools/parse", files={"cwlFile": ("tool.cwl", TOOL_CWL.encode())}, headers=bearer(owner)
+    )
 
     assert response.status_code == 200
     assert (await client.get("/components/mine", headers=bearer(owner))).json()["unpublished"]["content"] == []
@@ -105,7 +109,6 @@ async def test_bad_tool_uploads_are_refused(client: httpx.AsyncClient, sessions:
     assert no_file.status_code == 422
     too_big = TOOL_CWL + "#" * (11 * 1024 * 1024)
     assert (await create_tool(client, bearer(owner), cwl=too_big, name="big")).status_code == 400
-
 
     not_text = await client.post(
         "/tools",
@@ -273,7 +276,6 @@ async def test_the_preview_never_names_someone_elses_draft_as_a_name_conflict(
     assert conflict(await client.post("/workflows/parse", files=files, headers=bearer(owner)))["version"] == 1
     # its owner sees their own draft
     assert conflict(await client.post("/workflows/parse", files=files, headers=bearer(author)))["version"] == 2
-
 
 
 async def test_a_new_workflow_version_cannot_nest_its_own_lineage(

@@ -56,7 +56,9 @@ async def test_someone_elses_canvas_is_404_on_every_route(client: httpx.AsyncCli
     ):
         response = await client.request(method, route, json=json, headers=bearer(stranger))
         # the same answer as for an id nobody has - nothing tells the two apart
-        unknown = await client.request(method, route.replace(str(draft.id), str(uuid.uuid4())), json=json, headers=bearer(stranger))
+        unknown = await client.request(
+            method, route.replace(str(draft.id), str(uuid.uuid4())), json=json, headers=bearer(stranger)
+        )
         assert response.status_code == unknown.status_code == 404, f"{method} {route}"
         assert (await client.request(method, route, json=json)).status_code == 401, f"{method} {route}"
 
@@ -95,7 +97,9 @@ def canvas(*components: object, wired: bool = True) -> str:
 
 def pipeline_tools(owner: object) -> tuple[object, object]:
     source = tool("read-tracks", owner, ports=(port("out", ParameterDirection.OUTPUT),))
-    sink = tool("clean-tracks", owner, ports=(port("in", ParameterDirection.INPUT), port("cleaned", ParameterDirection.OUTPUT)))
+    sink = tool(
+        "clean-tracks", owner, ports=(port("in", ParameterDirection.INPUT), port("cleaned", ParameterDirection.OUTPUT))
+    )
     return source, sink
 
 

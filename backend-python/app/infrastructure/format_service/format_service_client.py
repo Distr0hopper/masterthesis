@@ -63,7 +63,11 @@ class FormatServiceClient:
                 compatible = response.json().get("compatible")
         except (httpx.HTTPError, ValueError) as err:
             logger.warning(
-                "Could not check compatibility %s -> %s (schema %s): %s", actual_format, expected_format, ontology_url, err
+                "Could not check compatibility %s -> %s (schema %s): %s",
+                actual_format,
+                expected_format,
+                ontology_url,
+                err,
             )
             return None
         return compatible if isinstance(compatible, bool) else None

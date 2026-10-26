@@ -27,7 +27,5 @@ class BaseLinkBuilder[TEntity, TValidator](ABC):
 
     def _filter_links(self, entity: TEntity) -> dict[str, Link]:
         return {
-            rel: link
-            for rel, link in self._get_available_links(entity).items()
-            if self._is_link_allowed(rel, entity)
+            rel: link for rel, link in self._get_available_links(entity).items() if self._is_link_allowed(rel, entity)
         }

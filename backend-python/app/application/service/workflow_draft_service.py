@@ -176,9 +176,7 @@ class WorkflowDraftService:
         """
         components, missing = await self._resolve_components(draft, component_ids)
         if missing:
-            raise ExportValidationError(
-                f"{len(missing)} component(s) on the canvas no longer exist in the repository"
-            )
+            raise ExportValidationError(f"{len(missing)} component(s) on the canvas no longer exist in the repository")
         return components
 
     @staticmethod

@@ -159,6 +159,4 @@ class ComponentDeprecatedError(Exception):
     """A deprecated version keeps working where it already runs, but takes no new dependents."""
 
     def __init__(self, label: str, note: str | None) -> None:
-        super().__init__(
-            f"{label} is deprecated{f' ({note})' if note else ''} - pick a newer version instead"
-        )
+        super().__init__(f"{label} is deprecated{f' ({note})' if note else ''} - pick a newer version instead")

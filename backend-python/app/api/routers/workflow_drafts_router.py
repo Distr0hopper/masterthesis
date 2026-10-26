@@ -130,10 +130,7 @@ async def delete_draft(
         raise ForbiddenException("Insufficient permission to delete this workflow draft")
 
     await service.delete_draft(draft, delete_linked_workflow)
-    logger.info(
-        f"Deleted workflow draft {draft_id}"
-        f"{' and its linked workflow' if delete_linked_workflow else ''}"
-    )
+    logger.info(f"Deleted workflow draft {draft_id}{' and its linked workflow' if delete_linked_workflow else ''}")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

@@ -52,9 +52,7 @@ class MissingImportedFileError(Exception):
 
     def __init__(self, paths: list[str]) -> None:
         self.paths = paths
-        super().__init__(
-            f"Imported file(s) not found in archive: {', '.join(paths)} - add them and try again"
-        )
+        super().__init__(f"Imported file(s) not found in archive: {', '.join(paths)} - add them and try again")
 
 
 class WorkflowHasUnpublishedComponentsError(Exception):
@@ -143,13 +141,14 @@ class InvalidExtractedComponentNameError(Exception):
 
 class DuplicateExtractedComponentNameError(Exception):
     def __init__(self, name: str) -> None:
-        super().__init__(f"Multiple extracted components would be named '{name}' - names must be unique within one upload")
+        super().__init__(
+            f"Multiple extracted components would be named '{name}' - names must be unique within one upload"
+        )
 
 
 class ExtractedComponentNameCollisionError(Exception):
     def __init__(self, name: str) -> None:
         super().__init__(f"A component named '{name}' already exists - rename it before creating this workflow")
-
 
 
 class InlineStepNotBindableError(Exception):
@@ -166,6 +165,5 @@ class WorkflowRunsDeprecatedComponentsError(Exception):
     def __init__(self, components: list[str]) -> None:
         self.components = components
         super().__init__(
-            f"Runs deprecated component(s) {', '.join(components)} - replace them with newer versions "
-            "before publishing"
+            f"Runs deprecated component(s) {', '.join(components)} - replace them with newer versions before publishing"
         )

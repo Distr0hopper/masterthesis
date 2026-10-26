@@ -67,7 +67,9 @@ class FakeEmailSender:
 
 def login_code(code: str = "123456", email: str = EMAIL, age: timedelta = timedelta(0)) -> LoginCode:
     created = datetime.now(UTC) - age
-    return LoginCode(email=email, code_hash=hash_secret(code), expires_at=created + timedelta(minutes=10), created_at=created)
+    return LoginCode(
+        email=email, code_hash=hash_secret(code), expires_at=created + timedelta(minutes=10), created_at=created
+    )
 
 
 def service_with(*codes: LoginCode) -> tuple[OtpService, FakeUnitOfWork, FakeEmailSender]:

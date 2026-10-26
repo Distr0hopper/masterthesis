@@ -76,11 +76,17 @@ async def _packaged_commit_changed_handler(request: Request, exc: PackagedCommit
     return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
-async def _packaging_service_unavailable_handler(request: Request, exc: PackagingServiceUnavailableError) -> JSONResponse:
-    return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content=ErrorResponse(detail=str(exc)).model_dump())
+async def _packaging_service_unavailable_handler(
+    request: Request, exc: PackagingServiceUnavailableError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content=ErrorResponse(detail=str(exc)).model_dump()
+    )
 
 
-async def _manual_upload_cannot_be_repackaged_handler(request: Request, exc: ManualUploadCannotBeRepackagedError) -> JSONResponse:
+async def _manual_upload_cannot_be_repackaged_handler(
+    request: Request, exc: ManualUploadCannotBeRepackagedError
+) -> JSONResponse:
     return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
@@ -98,7 +104,9 @@ async def _already_packaged_handler(request: Request, exc: AlreadyPackagedError)
     return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
-async def _component_name_already_exists_handler(request: Request, exc: ComponentNameAlreadyExistsError) -> JSONResponse:
+async def _component_name_already_exists_handler(
+    request: Request, exc: ComponentNameAlreadyExistsError
+) -> JSONResponse:
     return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
@@ -192,9 +200,7 @@ async def _missing_command_payload_handler(request: Request, exc: MissingCommand
     return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
-async def _conflicting_auxiliary_file_handler(
-    request: Request, exc: ConflictingAuxiliaryFileError
-) -> JSONResponse:
+async def _conflicting_auxiliary_file_handler(request: Request, exc: ConflictingAuxiliaryFileError) -> JSONResponse:
     return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
@@ -226,15 +232,21 @@ async def _invalid_component_config_handler(request: Request, exc: InvalidCompon
     return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
-async def _invalid_extracted_component_name_handler(request: Request, exc: InvalidExtractedComponentNameError) -> JSONResponse:
+async def _invalid_extracted_component_name_handler(
+    request: Request, exc: InvalidExtractedComponentNameError
+) -> JSONResponse:
     return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
-async def _duplicate_extracted_component_name_handler(request: Request, exc: DuplicateExtractedComponentNameError) -> JSONResponse:
+async def _duplicate_extracted_component_name_handler(
+    request: Request, exc: DuplicateExtractedComponentNameError
+) -> JSONResponse:
     return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
-async def _extracted_component_name_collision_handler(request: Request, exc: ExtractedComponentNameCollisionError) -> JSONResponse:
+async def _extracted_component_name_collision_handler(
+    request: Request, exc: ExtractedComponentNameCollisionError
+) -> JSONResponse:
     return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=ErrorResponse(detail=str(exc)).model_dump())
 
 
@@ -287,9 +299,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(ConflictingAuxiliaryFileError, _conflicting_auxiliary_file_handler)
     app.add_exception_handler(ConflictingStepFileError, _conflicting_step_file_handler)
     app.add_exception_handler(MissingImportedFileError, _missing_imported_file_handler)
-    app.add_exception_handler(
-        WorkflowHasUnpublishedComponentsError, _workflow_has_unpublished_components_handler
-    )
+    app.add_exception_handler(WorkflowHasUnpublishedComponentsError, _workflow_has_unpublished_components_handler)
     app.add_exception_handler(UnpublishableWorkflowComponentsError, _unpublishable_workflow_components_handler)
     app.add_exception_handler(UnconfiguredWorkflowStepError, _unconfigured_workflow_step_handler)
     app.add_exception_handler(InvalidComponentConfigError, _invalid_component_config_handler)

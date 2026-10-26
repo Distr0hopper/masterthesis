@@ -30,7 +30,11 @@ def tool(name: str, cwl: str | None = None, files: dict[str, str] | None = None)
 
 def workflow(name: str, *children: Component | None, version: int = 1) -> Component:
     component = Component(
-        id=uuid.uuid4(), kind=ComponentKind.WORKFLOW, name=name, version=version, cwl_content=f"class: Workflow # {name}"
+        id=uuid.uuid4(),
+        kind=ComponentKind.WORKFLOW,
+        name=name,
+        version=version,
+        cwl_content=f"class: Workflow # {name}",
     )
     component.workflow = Workflow(
         steps=[

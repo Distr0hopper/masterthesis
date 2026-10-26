@@ -145,9 +145,7 @@ class FakeComponentsRepository:
         frontier = {component_id}
         while frontier:
             parents = [
-                c
-                for c in self.by_id.values()
-                if c.id not in found and any(s.component_id in frontier for s in c.steps)
+                c for c in self.by_id.values() if c.id not in found and any(s.component_id in frontier for s in c.steps)
             ]
             found.update((p.id, p) for p in parents)
             frontier = {p.id for p in parents}
@@ -164,14 +162,14 @@ class FakeWorkflowsRepository:
         self.components = components
 
     async def find_all_synced_from_draft(self, draft_id: uuid.UUID) -> list[Component]:
-        synced = [c for c in self.components.by_id.values() if c.workflow is not None and c.workflow.draft_id == draft_id]
+        synced = [
+            c for c in self.components.by_id.values() if c.workflow is not None and c.workflow.draft_id == draft_id
+        ]
         return sorted(synced, key=lambda c: c.version)
 
     async def find_latest_by_draft_id(self, draft_id: uuid.UUID) -> Component | None:
         synced = [
-            c
-            for c in self.components.by_id.values()
-            if c.workflow is not None and c.workflow.draft_id == draft_id
+            c for c in self.components.by_id.values() if c.workflow is not None and c.workflow.draft_id == draft_id
         ]
         return max(synced, key=lambda c: c.version, default=None)
 
@@ -195,8 +193,12 @@ class FakeWorkflowsRepository:
 
 def tool(name: str, status: ComponentStatus = ComponentStatus.PUBLISHED, owner: uuid.UUID = OWNER) -> Component:
     component = Component(
-        id=uuid.uuid4(), kind=ComponentKind.TOOL, name=name, cwl_content="class: CommandLineTool",
-        status=status, created_by_id=owner,
+        id=uuid.uuid4(),
+        kind=ComponentKind.TOOL,
+        name=name,
+        cwl_content="class: CommandLineTool",
+        status=status,
+        created_by_id=owner,
         # a public one was published just now - still within its unpublish window
         first_published_at=None if status == ComponentStatus.DRAFT else datetime.now(UTC),
         # every public component has one - see lifecycle.without_domains
@@ -216,8 +218,13 @@ def workflow(
     draft_id: uuid.UUID | None = None,
 ) -> Component:
     component = Component(
-        id=uuid.uuid4(), kind=ComponentKind.WORKFLOW, name=name, version=version, cwl_content=PIPELINE,
-        status=status, created_by_id=owner,
+        id=uuid.uuid4(),
+        kind=ComponentKind.WORKFLOW,
+        name=name,
+        version=version,
+        cwl_content=PIPELINE,
+        status=status,
+        created_by_id=owner,
         first_published_at=None if status == ComponentStatus.DRAFT else datetime.now(UTC),
         domains=[ComponentDomain(domain="other")],
     )
@@ -260,7 +267,9 @@ def publish(components_service: ComponentsService, component: Component, publish
     return asyncio.run(components_service.execute_command(component, command, OWNER))
 
 
-def unpublish(components_service: ComponentsService, component: Component, unpublish_parents: bool = False) -> Component:
+def unpublish(
+    components_service: ComponentsService, component: Component, unpublish_parents: bool = False
+) -> Component:
     command = ComponentCommand(type=ComponentCommandType.UNPUBLISH, unpublish_parents=unpublish_parents)
     return asyncio.run(components_service.execute_command(component, command, OWNER))
 
@@ -460,6 +469,7 @@ def test_a_public_version_is_never_deleted() -> None:
         assert public.id in repository.by_id
     assert components_service.uow.commits == 0  # type: ignore[attr-defined]
 
+
 def test_unpublishing_takes_own_public_ancestors_along_only_when_opted_into() -> None:
     leaf = tool("t")
     parent = workflow("parent", leaf, status=ComponentStatus.PUBLISHED)
@@ -631,7 +641,9 @@ def test_an_unpublished_workflow_cannot_be_republished_over_a_since_deprecated_c
 
 
 def sync(workflows_service: WorkflowsService, draft_id: uuid.UUID, *children: Component, name: str = "pipeline"):
-    bindings = [StepBinding(step_id=f"step_{c.name}", run_reference=f"{c.name}.cwl", component_id=c.id) for c in children]
+    bindings = [
+        StepBinding(step_id=f"step_{c.name}", run_reference=f"{c.name}.cwl", component_id=c.id) for c in children
+    ]
 
     async def in_unit_of_work() -> Component:
         async with workflows_service.uow:
@@ -720,6 +732,7 @@ def test_deleting_a_canvas_with_its_workflows_keeps_the_public_versions() -> Non
     assert asyncio.run(in_unit_of_work()) == 1
     assert public.id in repository.by_id and fresh.id not in repository.by_id
 
+
 def test_renaming_the_canvas_renames_the_whole_lineage() -> None:
     a = tool("a")
     _, workflows_service, repository = services(a)
@@ -772,7 +785,9 @@ def test_steps_of_a_published_workflow_are_locked() -> None:
         asyncio.run(workflows_service.update_step_component(parent.steps[0].id, None, OWNER))
     with pytest.raises(PublishedWorkflowStepsLockedError):
         asyncio.run(
-            workflows_service.execute_step_command(parent.steps[0], WorkflowStepCommand(type=WorkflowStepCommandType.CONFIRM))
+            workflows_service.execute_step_command(
+                parent.steps[0], WorkflowStepCommand(type=WorkflowStepCommandType.CONFIRM)
+            )
         )
 
 
@@ -786,7 +801,9 @@ def test_a_builder_workflows_steps_change_on_its_canvas_only() -> None:
     with pytest.raises(StepsEditedInBuilderError):
         asyncio.run(workflows_service.update_step_component(step.id, replacement.id, OWNER))
     with pytest.raises(StepsEditedInBuilderError):
-        asyncio.run(workflows_service.execute_step_command(step, WorkflowStepCommand(type=WorkflowStepCommandType.CONFIRM)))
+        asyncio.run(
+            workflows_service.execute_step_command(step, WorkflowStepCommand(type=WorkflowStepCommandType.CONFIRM))
+        )
     assert step.match_status == StepMatchStatus.UNMATCHED
 
     links = WorkflowStepLinkBuilder(OWNER_USER)._filter_links(step)
@@ -817,6 +834,7 @@ def test_after_an_early_unpublish_its_steps_are_editable_again() -> None:
     assert parent.steps[0].component_id == other.id
     links = WorkflowStepLinkBuilder(OWNER_USER)._filter_links(parent.steps[0])
     assert "update" in links and "confirm" in links
+
 
 def test_a_new_step_cannot_run_a_deprecated_version() -> None:
     parent = workflow("outer", tool("a"), step_status=StepMatchStatus.UNMATCHED)
@@ -931,9 +949,7 @@ def test_a_failing_step_rolls_back_the_tools_created_before_it() -> None:
         zf.writestr("a.cwl", UPLOAD_TOOL)
         # only found while creating b - after a is already created
         zf.writestr("b.cwl", UPLOAD_TOOL.replace("CommandLineTool", "Operation"))
-    configs = {
-        sid: ComponentConfig(step_id=sid, name=f"tool-{sid}", domains=["general"]) for sid in ("a", "b")
-    }
+    configs = {sid: ComponentConfig(step_id=sid, name=f"tool-{sid}", domains=["general"]) for sid in ("a", "b")}
     _, workflows_service, _ = services()
 
     with pytest.raises(InvalidCwlError):
@@ -1046,9 +1062,7 @@ def test_an_upload_creates_its_tools_and_the_workflow_as_version_one() -> None:
     configs = {sid: ComponentConfig(step_id=sid, name=f"tool-{sid}", domains=["other"]) for sid in ("a", "b")}
     _, workflows_service, _ = services()
 
-    wf = asyncio.run(
-        workflows_service.create_from_upload(upload_zip(), "x.zip", "wf", None, ["other"], configs, OWNER)
-    )
+    wf = asyncio.run(workflows_service.create_from_upload(upload_zip(), "x.zip", "wf", None, ["other"], configs, OWNER))
 
     assert (wf.name, wf.version, wf.status) == ("wf", 1, ComponentStatus.DRAFT)
     assert [(s.step_id, s.component.name, s.component.version) for s in wf.steps] == [
@@ -1094,9 +1108,7 @@ def test_an_inline_step_versioning_a_tool_runs_a_file_named_after_that_tool() ->
     configs = {"a": ComponentConfig(step_id="a", new_version_of_id=tool_a.id)}
 
     v2 = asyncio.run(
-        workflows_service.add_version_from_upload(
-            v1, INLINE_PIPELINE.encode(), "wf.cwl", None, configs, OWNER
-        )
+        workflows_service.add_version_from_upload(v1, INLINE_PIPELINE.encode(), "wf.cwl", None, configs, OWNER)
     )
 
     (step,) = v2.steps

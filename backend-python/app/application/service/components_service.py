@@ -43,7 +43,13 @@ from app.application.exception.workflow_exceptions import (
 from app.application.unit_of_work import UnitOfWork
 from app.domain.composite import lifecycle
 from app.domain.composite.tree import ConflictingTreeFileError, auxiliary_files, step_files
-from app.domain.models.component import MAX_DESCRIPTION_LENGTH, Component, ComponentKind, ComponentSource, ComponentStatus
+from app.domain.models.component import (
+    MAX_DESCRIPTION_LENGTH,
+    Component,
+    ComponentKind,
+    ComponentSource,
+    ComponentStatus,
+)
 from app.domain.models.component_domain import ComponentDomain
 from app.domain.models.parameter import Parameter
 from app.domain.models.user import User

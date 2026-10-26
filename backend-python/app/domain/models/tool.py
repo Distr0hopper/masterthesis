@@ -17,9 +17,7 @@ class Tool(SQLModel, table=True):
 
     __tablename__ = "tools"
 
-    component_id: uuid.UUID = Field(
-        sa_column=Column(ForeignKey("components.id", ondelete="CASCADE"), primary_key=True)
-    )
+    component_id: uuid.UUID = Field(sa_column=Column(ForeignKey("components.id", ondelete="CASCADE"), primary_key=True))
     # the CWL `class` (CommandLineTool or ExpressionTool) - derived from the component's
     # cwl_content at write time (see cwl_parser.extract_cwl_type)
     cwl_type: str | None = None

@@ -345,10 +345,8 @@ class WorkflowsService:
                 origin, run_reference = COMPONENT_ORIGIN_INLINE, None
                 suggested_name = inline.suggested_name
 
-            existing = self._newest_visible(
-                await self.uow.components.find_versions_by_name(suggested_name), actor_id
-            )
-            parameters =self._safe_extract_parameters(cwl_content)
+            existing = self._newest_visible(await self.uow.components.find_versions_by_name(suggested_name), actor_id)
+            parameters = self._safe_extract_parameters(cwl_content)
             ontology_url = self.components_service.ontology_url_for(cwl_content)
             await self.components_service.resolve_format_labels(ontology_url, parameters)
             previews.append(
@@ -377,7 +375,9 @@ class WorkflowsService:
     def _newest_visible(versions: list[Component], actor_id: uuid.UUID | None) -> Component | None:
         """The newest of `versions` the actor may read - someone else's draft is private, so
         a name conflict never reveals it (the name is still taken; the save says so)."""
-        visible = [v for v in versions if lifecycle.is_public(v) or (actor_id is not None and v.created_by_id == actor_id)]
+        visible = [
+            v for v in versions if lifecycle.is_public(v) or (actor_id is not None and v.created_by_id == actor_id)
+        ]
         return max(visible, key=lambda v: v.version, default=None)
 
     @staticmethod
@@ -439,9 +439,7 @@ class WorkflowsService:
             cwl_content = content.decode("utf-8")
         except UnicodeDecodeError as err:
             raise InvalidWorkflowCwlError("File is not valid UTF-8 text") from err
-        return WorkflowUploadContent(
-            is_zip=False, cwl_content=cwl_content, pipeline_filename=filename, files=None
-        )
+        return WorkflowUploadContent(is_zip=False, cwl_content=cwl_content, pipeline_filename=filename, files=None)
 
     async def _validate_component_configs(
         self,
@@ -598,9 +596,7 @@ class WorkflowsService:
         if upload.available_files is not None:
             missing = sorted(ref for ref in set(overview.external_refs) if ref not in upload.available_files)
             if missing:
-                raise InvalidWorkflowArchiveError(
-                    f"Referenced step file(s) not found in archive: {', '.join(missing)}"
-                )
+                raise InvalidWorkflowArchiveError(f"Referenced step file(s) not found in archive: {', '.join(missing)}")
 
         # a bare .cwl has no archive to resolve against, so any import is unsatisfiable
         pipeline_imports = collect_import_targets(upload.cwl_content)
@@ -626,9 +622,7 @@ class WorkflowsService:
             raise UnconfiguredWorkflowStepError(unconfigured)
 
         configurable_steps = [(sid, d) for sid, d in step_definitions if sid not in inline_only]
-        await self._validate_component_configs(
-            configurable_steps, component_configs, created_by_id, name
-        )
+        await self._validate_component_configs(configurable_steps, component_configs, created_by_id, name)
 
         extracted_by_step_id = {c.step_id: c for c in extract_inline_components(upload.cwl_content)}
 
@@ -1035,9 +1029,7 @@ class WorkflowsService:
         matches = [path for path in files if path.rsplit("/", 1)[-1] == base]
         return matches[0] if len(matches) == 1 else None
 
-    def _resolve_imports(
-        self, documents: list[str], aux_files: dict[str, str]
-    ) -> tuple[dict[str, str], list[str]]:
+    def _resolve_imports(self, documents: list[str], aux_files: dict[str, str]) -> tuple[dict[str, str], list[str]]:
         """({path: content} to preserve, sorted paths that could not be found).
 
         Follows imports transitively - an imported types file may import another - and

@@ -88,9 +88,7 @@ class ComponentConfigDto(CamelModel):
                 raise ValueError(f"step '{self.step_id}': {branch} cannot be combined with name/domains")
             return self
         if not self.name:
-            raise ValueError(
-                f"step '{self.step_id}': either reuseComponentId, newVersionOfId or a name is required"
-            )
+            raise ValueError(f"step '{self.step_id}': either reuseComponentId, newVersionOfId or a name is required")
         if not self.domains:
             raise ValueError(f"step '{self.step_id}': at least one domain is required to create a new component")
         invalid = [d for d in self.domains if d not in VALID_DOMAINS]

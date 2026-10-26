@@ -62,9 +62,7 @@ async def run_migrations() -> None:
                 error_msg = str(e)
 
                 if "Can't locate revision identified by" in error_msg:
-                    logger.warning(
-                        "Database appears to be uninitialized. Creating initial migration may be needed."
-                    )
+                    logger.warning("Database appears to be uninitialized. Creating initial migration may be needed.")
                     return
 
                 logger.warning(f"Migration attempt {retry_count + 1} failed: {error_msg}")
@@ -74,9 +72,7 @@ async def run_migrations() -> None:
 
         logger.error("Failed to run database migrations after multiple attempts")
         if not settings.is_prod:
-            logger.warning(
-                "Continuing startup despite migration failures (non-production environment)"
-            )
+            logger.warning("Continuing startup despite migration failures (non-production environment)")
         else:
             raise RuntimeError("Database migrations failed in production environment")
     except Exception as e:

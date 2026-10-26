@@ -50,6 +50,7 @@ from app.application.exception.workflow_exceptions import (
     UnconfiguredWorkflowStepError,
     UnpublishableWorkflowComponentsError,
     WorkflowCycleError,
+    LineageNameLockedError,
     WorkflowHasUnpublishedComponentsError,
     WorkflowNotReadyToPublishError,
     WorkflowRunsDeprecatedComponentsError,
@@ -320,5 +321,6 @@ def register_exception_handlers(app: FastAPI) -> None:
         InlineStepNotBindableError,
         IllegalStatusTransitionError,
         IllegalStepTransitionError,
+        LineageNameLockedError,
     ):
         app.add_exception_handler(lifecycle_error, _conflict_handler)

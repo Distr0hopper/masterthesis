@@ -137,6 +137,14 @@ class ComponentsRepository:
         result = await self.db.exec(query)
         return list(result.all())
 
+    async def find_names_with_status(self, names: list[str], statuses: frozenset[ComponentStatus]) -> set[str]:
+        """Those of these lineages with at least one version in one of `statuses` - one query
+        for a whole list of rows."""
+        if not names:
+            return set()
+        query = select(Component.name).where(Component.name.in_(names), Component.status.in_(statuses)).distinct()
+        return set((await self.db.exec(query)).all())
+
     async def find_by_ids(self, ids: list[uuid.UUID]) -> list[Component]:
         if not ids:
             return []

@@ -284,6 +284,16 @@ def retract_impact(
     )
 
 
+# --- names -----------------------------------------------------------------------------
+
+
+def name_locked(versions: Iterable[Component]) -> bool:
+    """Whether a lineage's name is fixed: once any version is public, others saw, nested or
+    cited it under that name - renaming would change a public version without a new one.
+    A version unpublished within its window counts as never published, so it unlocks."""
+    return any(is_public(v) for v in versions)
+
+
 # --- steps -----------------------------------------------------------------------------
 
 

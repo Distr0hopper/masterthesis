@@ -187,6 +187,25 @@ async def test_renaming_a_lineage_renames_every_version_and_its_favorites(sessio
         assert (await page(sessions, ComponentListFilter(favorited_by=owner.id)))[0] == [("new", 2)]
 
 
+async def test_names_with_a_status_are_found_per_lineage(sessions: SessionFactory) -> None:
+    from app.domain.composite.lifecycle import PUBLIC_STATUSES
+
+    owner = user()
+    await save(
+        sessions,
+        owner,
+        tool("public-v1", owner),
+        tool("public-v1", owner, ComponentStatus.DRAFT, version=2),
+        tool("deprecated", owner, ComponentStatus.DEPRECATED),
+        tool("drafts-only", owner, ComponentStatus.DRAFT),
+    )
+
+    async with sessions() as session:
+        names = ["public-v1", "deprecated", "drafts-only", "unknown"]
+        found = await ComponentsRepository(session).find_names_with_status(names, PUBLIC_STATUSES)
+    assert found == {"public-v1", "deprecated"}
+
+
 async def test_stats_count_lineages_and_contributors_of_listed_components(sessions: SessionFactory) -> None:
     owner, stranger = user(), user()
     await save(

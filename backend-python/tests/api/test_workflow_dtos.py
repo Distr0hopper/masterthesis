@@ -51,3 +51,6 @@ def test_a_draft_names_the_version_its_next_save_works_on() -> None:
     linked = WorkflowDraftTransformer.to_list_item(draft, v2).linked_workflow
     assert linked is not None and (linked.id, linked.version, linked.status) == (v2.id, 2, ComponentStatus.PUBLISHED)
     assert WorkflowDraftTransformer.to_list_item(draft).linked_workflow is None
+    assert linked.name_locked is False
+    locked = WorkflowDraftTransformer.to_list_item(draft, v2, {"pipeline"}).linked_workflow
+    assert locked is not None and locked.name_locked is True

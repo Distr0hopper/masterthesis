@@ -183,6 +183,37 @@ async def test_syncing_saves_one_draft_workflow_and_resyncs_it_in_place(
     assert [w["name"] for w in mine["unpublished"]["content"]] == ["Track pipeline"]
 
 
+async def test_a_published_workflow_keeps_its_name_when_the_canvas_is_renamed(
+    client: httpx.AsyncClient, sessions: SessionFactory
+) -> None:
+    owner = user()
+    source, sink = pipeline_tools(owner)
+    draft = WorkflowDraft(name="Track pipeline", canvas_state=canvas(source, sink), created_by_id=owner.id)
+    await save(sessions, owner, source, sink, draft)
+    path = f"/workflow-drafts/{draft.id}"
+
+    synced = (await client.post(f"{path}/sync", headers=bearer(owner))).json()
+    assert (await client.get(path, headers=bearer(owner))).json()["linkedWorkflow"]["nameLocked"] is False
+    workflow_id = synced["workflowId"]
+    await client.post(
+        f"/components/{workflow_id}/commands",
+        json={"command": "UPDATE_DOMAIN", "domains": ["animal_behavior"]},
+        headers=bearer(owner),
+    )
+    published = await client.post(
+        f"/components/{workflow_id}/commands", json={"command": "PUBLISH"}, headers=bearer(owner)
+    )
+    assert published.status_code == 200, published.text
+    assert (await client.get(path, headers=bearer(owner))).json()["linkedWorkflow"]["nameLocked"] is True
+
+    body = {"name": "Renamed pipeline", "canvasState": draft.canvas_state, "nodeCount": 2}
+    assert (await client.put(path, json=body, headers=bearer(owner))).status_code == 200
+    refused = await client.post(f"{path}/sync", headers=bearer(owner))
+
+    assert refused.status_code == 409, refused.text
+    assert (await client.get(f"/components/{workflow_id}", headers=bearer(owner))).json()["name"] == "Track pipeline"
+
+
 async def test_someone_elses_draft_on_a_canvas_counts_as_missing(
     client: httpx.AsyncClient, sessions: SessionFactory
 ) -> None:

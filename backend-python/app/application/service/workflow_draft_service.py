@@ -1,5 +1,6 @@
 import logging
 import uuid
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Annotated, Any
 
@@ -82,6 +83,12 @@ class WorkflowDraftService:
     async def linked_workflows(self, draft_ids: set[uuid.UUID]) -> dict[uuid.UUID, Component]:
         """{draft_id: newest workflow version} for the drafts synced to a My Components entry."""
         return await self.workflows_service.linked_workflows(draft_ids)
+
+    async def locked_names(self, workflows: Iterable[Component]) -> set[str]:
+        """The lineages among `workflows` whose name is fixed - see lifecycle.name_locked: a
+        version of them is public, so the builder must not offer to rename the canvas."""
+        names = sorted({w.name for w in workflows})
+        return await self.uow.components.find_names_with_status(names, lifecycle.PUBLIC_STATUSES)
 
     async def get_draft(self, draft_id: uuid.UUID) -> WorkflowDraft:
         """Fetch one draft - who may open it is the router's check (WorkflowDraftPermissionValidator)."""

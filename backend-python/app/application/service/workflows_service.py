@@ -21,6 +21,7 @@ from app.application.exception.workflow_exceptions import (
     InvalidWorkflowArchiveError,
     InlineStepNotBindableError,
     InvalidWorkflowCwlError,
+    LineageNameLockedError,
     MissingImportedFileError,
     PublishedWorkflowStepsLockedError,
     StepsEditedInBuilderError,
@@ -805,7 +806,10 @@ class WorkflowsService:
             )
 
         if latest.name != name:
-            # the name is the lineage key, so a renamed canvas renames every version
+            if lifecycle.name_locked(await self.uow.components.find_versions_by_name(latest.name)):
+                raise LineageNameLockedError(latest.name, name)
+            # the name is the lineage key, so a renamed canvas renames every version - only
+            # while all of them are drafts
             await self.components_service.require_name_available(name, exclude_id=latest.id)
             await self.uow.components.rename_lineage(latest.name, name)
             # the bulk UPDATE bypassed the identity map - repopulate what it changed

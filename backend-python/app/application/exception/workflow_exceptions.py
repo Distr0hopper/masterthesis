@@ -94,6 +94,17 @@ class NestedWorkflowsNotReadyError(Exception):
         )
 
 
+class LineageNameLockedError(Exception):
+    """A lineage's name is fixed once a version of it went public - others saw, nested or
+    cited it under that name."""
+
+    def __init__(self, name: str, new_name: str) -> None:
+        super().__init__(
+            f"'{name}' cannot be renamed to '{new_name}' - a version of it is public, so its name is fixed. "
+            "Keep the name, or start a new workflow under the new one"
+        )
+
+
 class WorkflowCycleError(Exception):
     """A step may run another workflow, but never one that (eventually) runs this one."""
 

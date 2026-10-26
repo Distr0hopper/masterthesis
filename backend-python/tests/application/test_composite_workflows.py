@@ -42,6 +42,7 @@ from app.application.exception.workflow_exceptions import (
     PublishedWorkflowStepsLockedError,
     StepsEditedInBuilderError,
     UnpublishableWorkflowComponentsError,
+    LineageNameLockedError,
     WorkflowCycleError,
     WorkflowHasUnpublishedComponentsError,
     WorkflowNotReadyToPublishError,
@@ -743,6 +744,33 @@ def test_renaming_the_canvas_renames_the_whole_lineage() -> None:
 
     assert repository.renamed == [("old", "new")]
     assert renamed.name == "new"
+
+
+@pytest.mark.parametrize("status", [ComponentStatus.PUBLISHED, ComponentStatus.DEPRECATED])
+def test_a_lineage_with_a_public_version_keeps_its_name(status: ComponentStatus) -> None:
+    a = tool("a")
+    _, workflows_service, repository = services(a)
+    draft_id = uuid.uuid4()
+    first = sync(workflows_service, draft_id, a, name="old")
+    first.status = status
+
+    # others saw, nested or cited it under that name
+    with pytest.raises(LineageNameLockedError):
+        sync(workflows_service, draft_id, a, name="new")
+    assert repository.renamed == [] and first.name == "old"
+
+
+def test_an_early_unpublish_frees_the_name_again() -> None:
+    a = tool("a")
+    _, workflows_service, repository = services(a)
+    draft_id = uuid.uuid4()
+    first = sync(workflows_service, draft_id, a, name="old")
+    lifecycle.mark_published([first])
+    lifecycle.mark_draft([first])
+
+    sync(workflows_service, draft_id, a, name="new")
+
+    assert repository.renamed == [("old", "new")]
 
 
 def test_a_canvas_cannot_nest_a_workflow_that_contains_itself() -> None:

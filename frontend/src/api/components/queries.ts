@@ -194,13 +194,17 @@ export const usePublishComponent = () =>
   );
 
 export const useUnpublishComponent = () =>
-  useCommandMutation(componentKeys.all, ({ link, unpublishParents }: { link: HateoasLink; unpublishParents: boolean }) =>
-    componentsService.executeCommand(link, { command: ComponentCommand.UNPUBLISH, unpublishParents }),
+  useCommandMutation(
+    componentKeys.all,
+    ({ link, unpublishParents }: { link: HateoasLink; unpublishParents: boolean }) =>
+      componentsService.executeCommand(link, { command: ComponentCommand.UNPUBLISH, unpublishParents }),
   );
 
 export const useDeprecateComponent = () =>
-  useCommandMutation(componentKeys.all, ({ link, deprecationNote }: { link: HateoasLink; deprecationNote: string | null }) =>
-    componentsService.executeCommand(link, { command: ComponentCommand.DEPRECATE, deprecationNote }),
+  useCommandMutation(
+    componentKeys.all,
+    ({ link, deprecationNote }: { link: HateoasLink; deprecationNote: string | null }) =>
+      componentsService.executeCommand(link, { command: ComponentCommand.DEPRECATE, deprecationNote }),
   );
 
 export const useUndeprecateComponent = () =>

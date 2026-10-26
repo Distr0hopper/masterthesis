@@ -37,8 +37,7 @@ export function checkConnection(queryClient: QueryClient, connection: Connection
  */
 export function useConnectionChecks(connections: ConnectionDto[]): Map<string, ConnectionCheckDto> {
   const queryClient = useQueryClient();
-  const cached = (c: ConnectionDto) =>
-    queryClient.getQueryData<ConnectionCheckDto>(compatibilityKeys.connection(c));
+  const cached = (c: ConnectionDto) => queryClient.getQueryData<ConnectionCheckDto>(compatibilityKeys.connection(c));
 
   const missing = connections.filter((c) => cached(c) === undefined);
   // changes exactly when verdicts arrive (or edges change) - not dataUpdatedAt, which drops

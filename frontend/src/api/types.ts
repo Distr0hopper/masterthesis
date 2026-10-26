@@ -7,15 +7,7 @@ export interface HateoasLink {
 
 export type HateoasLinks = Record<string, HateoasLink>;
 
-export type StandardAction =
-  | 'self'
-  | 'update'
-  | 'delete'
-  | 'create'
-  | 'list'
-  | 'validate'
-  | 'approve'
-  | 'reject';
+export type StandardAction = 'self' | 'update' | 'delete' | 'create' | 'list' | 'validate' | 'approve' | 'reject';
 
 export interface WithHateoasLinks {
   _links?: HateoasLinks;

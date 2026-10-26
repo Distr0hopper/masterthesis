@@ -14,9 +14,9 @@ export function HomeHero() {
           A repository for reusable, CWL-wrapped research components
         </h1>
         <p className="mt-4 max-w-2xl text-jmu-blue-100">
-          Researchers in Movement Ecology and Earth Observation upload analysis steps once, wrap them as Common
-          Workflow Language CommandLineTools, and chain them into reusable Workflows — instead of re-implementing
-          scripts or hand-packaging MoveApps repositories.
+          Researchers in Movement Ecology and Earth Observation upload analysis steps once, wrap them as Common Workflow
+          Language CommandLineTools, and chain them into reusable Workflows — instead of re-implementing scripts or
+          hand-packaging MoveApps repositories.
         </p>
         {/* the same search as in the navbar, as the page's first action - the two list
             buttons below stay as the way in for browsing without a term */}

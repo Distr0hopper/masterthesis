@@ -36,9 +36,7 @@ export default function WorkflowBuilderOverviewPage() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Workflows</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Build and manage CWL workflow compositions
-          </p>
+          <p className="mt-1 text-sm text-slate-500">Build and manage CWL workflow compositions</p>
         </div>
 
         <Button onClick={handleNew} className="bg-jmu-blue-800 hover:bg-jmu-blue-800/90">
@@ -62,13 +60,11 @@ export default function WorkflowBuilderOverviewPage() {
           {(drafts ?? []).map((draft) => (
             <Card key={draft.id}>
               <CardContent className="flex flex-col gap-3 pt-6">
-                <h3 className="break-all font-mono text-lg font-semibold text-slate-900">
-                  {draft.name}
-                </h3>
+                <h3 className="break-all font-mono text-lg font-semibold text-slate-900">{draft.name}</h3>
 
                 <p className="text-sm text-slate-500">
-                  {draft.nodeCount} {draft.nodeCount === 1 ? 'component' : 'components'} &middot;{' '}
-                  Saved {formatRelativeTime(draft.updatedAt)}
+                  {draft.nodeCount} {draft.nodeCount === 1 ? 'component' : 'components'} &middot; Saved{' '}
+                  {formatRelativeTime(draft.updatedAt)}
                 </p>
 
                 <Button asChild className="w-full bg-jmu-blue-800 hover:bg-jmu-blue-800/90">

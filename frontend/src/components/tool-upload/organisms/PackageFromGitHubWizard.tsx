@@ -22,13 +22,7 @@ import {
   withFormatLabels,
   type FormatLabelDraft,
 } from '@/api/components';
-import {
-  repoUrlSchema,
-  toolTransformer,
-  usePackagePreview,
-  usePackageTool,
-  type PackagePreviewDto,
-} from '@/api/tools';
+import { repoUrlSchema, toolTransformer, usePackagePreview, usePackageTool, type PackagePreviewDto } from '@/api/tools';
 import type { UploadMetadataFormData } from '@/api/schema';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { getErrorMessage } from '@/lib/errors';
@@ -109,7 +103,11 @@ export function PackageFromGitHubWizard({ fixedRepoUrl }: PackageFromGitHubWizar
   return (
     <PackageWizardSteps
       // the same repo at the same commit keeps what was typed; anything else starts over
-      key={preview ? `${preview.repoUrl}@${preview.commitSha}#${preview.existing?.id ?? ''}:${preview.alreadyPackaged}` : 'none'}
+      key={
+        preview
+          ? `${preview.repoUrl}@${preview.commitSha}#${preview.existing?.id ?? ''}:${preview.alreadyPackaged}`
+          : 'none'
+      }
       preview={preview}
       repoSource={repoSource}
       isReading={previewQuery.isFetching}

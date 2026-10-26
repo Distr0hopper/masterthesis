@@ -48,8 +48,7 @@ function UsageWarning({ impact }: { impact: ComponentImpactDto }) {
       {workflowCount > 0 && (
         <div>
           <p>
-            Used by {plural(workflowCount, 'workflow')}. Their steps will be unmatched until a new component is
-            picked.
+            Used by {plural(workflowCount, 'workflow')}. Their steps will be unmatched until a new component is picked.
           </p>
           <ul className="mt-1 list-disc space-y-0.5 pl-5">
             {impact.workflows.map((workflow) => (
@@ -162,9 +161,7 @@ export function DeleteComponentDialog({
       isPending={isPending || isLoadingImpact}
       blocked={blocked}
       blockedAlternative={
-        canDeprecate(component._links)
-          ? { label: 'Deprecate instead', onSelect: onDeprecateInstead }
-          : undefined
+        canDeprecate(component._links) ? { label: 'Deprecate instead', onSelect: onDeprecateInstead } : undefined
       }
       confirmLabel={ownParents > 0 ? `Delete and unpublish ${ownParents}` : 'Delete'}
     >

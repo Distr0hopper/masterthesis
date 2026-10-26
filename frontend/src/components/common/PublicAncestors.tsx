@@ -47,8 +47,8 @@ export function PublicAncestors({ impact, verb }: { impact: ComponentImpactDto; 
     <>
       {foreign.length > 0 && (
         <Notice tone="blocked">
-          Used by {plural(foreign.length, 'public workflow')} of another user. {verb} it would break their workflow,
-          so it isn't possible.
+          Used by {plural(foreign.length, 'public workflow')} of another user. {verb} it would break their workflow, so
+          it isn't possible.
           <AncestorList ancestors={foreign} withOwner />
         </Notice>
       )}
@@ -72,15 +72,16 @@ export function PublicAncestors({ impact, verb }: { impact: ComponentImpactDto; 
 
       {blocked && (
         <p className="text-sm text-slate-600">
-          To retract this version without breaking anything, deprecate it: workflows using it keep working, but it
-          is no longer offered for new ones. Or contact the workflow owners, or publish a fixed version.
+          To retract this version without breaking anything, deprecate it: workflows using it keep working, but it is no
+          longer offered for new ones. Or contact the workflow owners, or publish a fixed version.
         </p>
       )}
 
       {!blocked && ownPublished.length > 0 && (
         <Notice tone="warning">
           Used by {ownPublished.length} of your published {ownPublished.length === 1 ? 'workflow' : 'workflows'}.{' '}
-          {ownPublished.length === 1 ? 'It' : 'They'} will also become {ownPublished.length === 1 ? 'a draft' : 'drafts'}.
+          {ownPublished.length === 1 ? 'It' : 'They'} will also become{' '}
+          {ownPublished.length === 1 ? 'a draft' : 'drafts'}.
           <AncestorList ancestors={ownPublished} withOwner={false} />
         </Notice>
       )}

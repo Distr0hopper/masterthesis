@@ -75,4 +75,3 @@ describe('findPort', () => {
     expect(findPort(parameters, undefined)).toBeUndefined();
   });
 });
-

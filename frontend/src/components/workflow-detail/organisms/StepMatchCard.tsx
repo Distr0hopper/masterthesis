@@ -99,60 +99,71 @@ export function StepMatchCard({ step, builderDraftId = null }: StepMatchCardProp
             This step's definition is embedded in the workflow itself, so it needs no component.
           </p>
         ) : (
-        <div className="flex flex-col gap-2">
-          <Label>Matched Component</Label>
-          {step.component ? (
-            <div className="flex items-center justify-between gap-2 rounded-md border border-input px-3 py-2">
-              <ComponentLink
-                componentId={step.component.id}
-                kind={step.component.kind}
-                name={step.component.name}
-                version={step.component.version}
-              />
-              {step.component.kind === 'workflow' && (
-                <Badge variant="outline" title="This step runs a whole workflow">
-                  Nested workflow
-                </Badge>
-              )}
-              {step.component.status === ComponentStatus.DEPRECATED && (
-                <StatusBadge
-                  status={step.component.status}
-                  hint={`Keeps working here, but can't be used in new workflows${
-                    step.component.deprecationNote ? ` - ${step.component.deprecationNote}` : ''
-                  }`}
+          <div className="flex flex-col gap-2">
+            <Label>Matched Component</Label>
+            {step.component ? (
+              <div className="flex items-center justify-between gap-2 rounded-md border border-input px-3 py-2">
+                <ComponentLink
+                  componentId={step.component.id}
+                  kind={step.component.kind}
+                  name={step.component.name}
+                  version={step.component.version}
                 />
-              )}
-              {canUpdate && (
-                <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={() => setPickerOpen(true)}>
-                  Change
-                </Button>
-              )}
-            </div>
-          ) : builderDraftId ? (
-            <LostComponentNotice
-              action={
-                <Button asChild variant="outline" size="sm" className="self-start bg-white">
-                  <Link to={ROUTES.builderWorkflow(builderDraftId)}>
-                    <PenLine className="mr-1 h-4 w-4" /> Replace in Workflow Builder
-                  </Link>
-                </Button>
-              }
-            >
-              The component of this step was deleted. Replace it on the canvas in the Workflow Builder and save - the
-              workflow can&apos;t be published until then.
-            </LostComponentNotice>
-          ) : canUpdate ? (
-            <Button type="button" variant="outline" disabled={isPending} onClick={() => setPickerOpen(true)}>
-              <Search className="mr-1 h-4 w-4" /> Browse Components
-            </Button>
-          ) : (
-            <p className="text-sm text-slate-500">No component matched.</p>
-          )}
-        </div>
+                {step.component.kind === 'workflow' && (
+                  <Badge variant="outline" title="This step runs a whole workflow">
+                    Nested workflow
+                  </Badge>
+                )}
+                {step.component.status === ComponentStatus.DEPRECATED && (
+                  <StatusBadge
+                    status={step.component.status}
+                    hint={`Keeps working here, but can't be used in new workflows${
+                      step.component.deprecationNote ? ` - ${step.component.deprecationNote}` : ''
+                    }`}
+                  />
+                )}
+                {canUpdate && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isPending}
+                    onClick={() => setPickerOpen(true)}
+                  >
+                    Change
+                  </Button>
+                )}
+              </div>
+            ) : builderDraftId ? (
+              <LostComponentNotice
+                action={
+                  <Button asChild variant="outline" size="sm" className="self-start bg-white">
+                    <Link to={ROUTES.builderWorkflow(builderDraftId)}>
+                      <PenLine className="mr-1 h-4 w-4" /> Replace in Workflow Builder
+                    </Link>
+                  </Button>
+                }
+              >
+                The component of this step was deleted. Replace it on the canvas in the Workflow Builder and save - the
+                workflow can&apos;t be published until then.
+              </LostComponentNotice>
+            ) : canUpdate ? (
+              <Button type="button" variant="outline" disabled={isPending} onClick={() => setPickerOpen(true)}>
+                <Search className="mr-1 h-4 w-4" /> Browse Components
+              </Button>
+            ) : (
+              <p className="text-sm text-slate-500">No component matched.</p>
+            )}
+          </div>
         )}
 
         {canUpdate && (
-          <ComponentPickerDialog open={pickerOpen} onOpenChange={setPickerOpen} value={step.componentId} onSelect={handleChange} />
+          <ComponentPickerDialog
+            open={pickerOpen}
+            onOpenChange={setPickerOpen}
+            value={step.componentId}
+            onSelect={handleChange}
+          />
         )}
 
         {step.componentId && (

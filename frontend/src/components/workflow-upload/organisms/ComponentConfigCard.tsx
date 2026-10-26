@@ -14,12 +14,7 @@ import { DomainMultiSelect } from '@/components/common/DomainMultiSelect';
 import { FormatLabelFields } from '@/components/common/FormatLabelFields';
 import { ComponentOrigin, type WorkflowStepPreviewDto } from '@/api/workflows';
 import { toolTransformer } from '@/api/tools';
-import {
-  ComponentStatus,
-  withFormatLabels,
-  useComponent,
-  useComponentNameAvailability,
-} from '@/api/components';
+import { ComponentStatus, withFormatLabels, useComponent, useComponentNameAvailability } from '@/api/components';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import type { ComponentConfigState, NameConflict } from '../lib/useComponentConfigs';
 
@@ -196,31 +191,27 @@ export function ComponentConfigCard({
                   )}
                 </span>
                 {takenBy.status !== ComponentStatus.DEPRECATED && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    onChange({
-                      mode: 'reuse',
-                      reuseComponentId: takenBy.id,
-                      reuseKind: takenBy.kind,
-                      reuseName: takenBy.name,
-                      reuseVersion: takenBy.version,
-                    })
-                  }
-                >
-                  Reuse it
-                </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      onChange({
+                        mode: 'reuse',
+                        reuseComponentId: takenBy.id,
+                        reuseKind: takenBy.kind,
+                        reuseName: takenBy.name,
+                        reuseVersion: takenBy.version,
+                      })
+                    }
+                  >
+                    Reuse it
+                  </Button>
                 )}
               </div>
             )}
 
-            <DomainMultiSelect
-              value={config.domains}
-              onChange={(domains) => onChange({ domains })}
-              showHints={false}
-            />
+            <DomainMultiSelect value={config.domains} onChange={(domains) => onChange({ domains })} showHints={false} />
 
             <div className="flex flex-col gap-2">
               <Label htmlFor={`component-description-${preview.stepId}`}>Description (optional)</Label>

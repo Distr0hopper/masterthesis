@@ -19,7 +19,5 @@ export function ComponentFavoriteButton({ links, isFavorite, className }: Compon
     toggleFavorite({ link, isFavorite }, { onError: (error) => toast.error(getErrorMessage(error)) });
   };
 
-  return (
-    <FavoriteButton isFavorite={isFavorite} isPending={isPending} onToggle={handleToggle} className={className} />
-  );
+  return <FavoriteButton isFavorite={isFavorite} isPending={isPending} onToggle={handleToggle} className={className} />;
 }

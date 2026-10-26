@@ -104,7 +104,7 @@ describe('toConfigDto - a versioning step', () => {
     });
   });
 
-  it('carries no name or domains - they are the lineage\'s', () => {
+  it("carries no name or domains - they are the lineage's", () => {
     const preview = step({ previous: previous({ cwlChanged: true }) });
     const dto = toConfigDto(preview, initialConfigState(preview));
     expect(dto).not.toHaveProperty('name');
@@ -127,7 +127,9 @@ describe('validateConfigs - a name already taken', () => {
       createdAt: '2026-01-01T00:00:00Z',
       canAddVersion: false,
     };
-    expect(validateConfigs([preview], configs, { a: { takenBy } }).a).toBe('A component named "a" already exists (v3).');
+    expect(validateConfigs([preview], configs, { a: { takenBy } }).a).toBe(
+      'A component named "a" already exists (v3).',
+    );
   });
 
   it("blocks the save even when the holder is someone else's draft the user may not see", () => {

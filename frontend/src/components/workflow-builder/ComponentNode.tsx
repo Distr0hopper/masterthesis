@@ -44,19 +44,13 @@ function PortRow({ parameter, side }: PortRowProps) {
         className={`${HANDLE_BASE} ${isInput ? '!bg-slate-400' : '!bg-jmu-blue-800'}`}
         title={parameter.description ?? parameter.name}
       />
-      <div className="truncate font-mono text-xs font-semibold text-slate-900">
-        {parameter.name}
-      </div>
+      <div className="truncate font-mono text-xs font-semibold text-slate-900">{parameter.name}</div>
       <div
         className={`flex items-center gap-1 text-[11px] text-slate-400 ${isInput ? 'justify-start' : 'justify-end'}`}
       >
         <span className="truncate">{formatPortType(parameter)}</span>
         {isManualFormatLabel(parameter) && (
-          <PenLine
-            size={10}
-            className="shrink-0 text-amber-500"
-            aria-label="Format label entered by hand"
-          >
+          <PenLine size={10} className="shrink-0 text-amber-500" aria-label="Format label entered by hand">
             <title>Format label entered by hand - not verified</title>
           </PenLine>
         )}
@@ -87,9 +81,7 @@ export function ComponentNode({ id, data, selected }: NodeProps<ComponentFlowNod
       : 'border-slate-200';
 
   return (
-    <div
-      className={`relative min-w-[260px] rounded-lg border bg-white shadow-sm transition-shadow ${borderClass}`}
-    >
+    <div className={`relative min-w-[260px] rounded-lg border bg-white shadow-sm transition-shadow ${borderClass}`}>
       <div
         className={`flex items-center justify-between gap-2 rounded-t-lg py-2 pl-3 pr-2 ${
           data.missing ? 'bg-destructive' : 'bg-jmu-blue-800'

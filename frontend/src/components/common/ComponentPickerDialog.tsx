@@ -56,7 +56,12 @@ export function ComponentPickerDialog({ open, onOpenChange, value, onSelect }: C
 
         {mode === 'browse' ? (
           <>
-            <Input placeholder="Search by name..." value={search} onChange={(e) => setSearch(e.target.value)} autoFocus />
+            <Input
+              placeholder="Search by name..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              autoFocus
+            />
 
             <div ref={scrollRef} className="flex flex-col gap-2 overflow-y-auto">
               <button
@@ -98,7 +103,9 @@ export function ComponentPickerDialog({ open, onOpenChange, value, onSelect }: C
                         <DomainBadges domains={component.domains} />
                       </span>
                     </div>
-                    {component.description && <p className="line-clamp-1 text-sm text-slate-500">{component.description}</p>}
+                    {component.description && (
+                      <p className="line-clamp-1 text-sm text-slate-500">{component.description}</p>
+                    )}
                   </button>
 
                   <a
@@ -135,13 +142,7 @@ export function ComponentPickerDialog({ open, onOpenChange, value, onSelect }: C
           </>
         ) : (
           <div className="flex flex-col gap-4 overflow-y-auto">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="w-fit"
-              onClick={() => setMode('browse')}
-            >
+            <Button type="button" variant="ghost" size="sm" className="w-fit" onClick={() => setMode('browse')}>
               <ChevronLeft className="mr-1 h-4 w-4" /> Back to browse
             </Button>
 

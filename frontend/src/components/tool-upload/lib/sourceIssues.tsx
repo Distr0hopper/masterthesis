@@ -20,8 +20,8 @@ export function sourceIssuesOf(preview: PackagePreviewDto | undefined): ReactNod
   if (preview.alreadyPackaged) {
     return [
       <>
-        Already up to date - commit <code className="text-xs">{preview.commitSha.slice(0, 7)}</code> is already
-        packaged as {existingLink}
+        Already up to date - commit <code className="text-xs">{preview.commitSha.slice(0, 7)}</code> is already packaged
+        as {existingLink}
         {existing.status === ComponentStatus.DRAFT ? ', which is still a draft - publish it from its page.' : '.'}
       </>,
     ];

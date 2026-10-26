@@ -109,9 +109,7 @@ describe('parseCanvasState', () => {
   it('normalises restored edges onto the custom edge type', () => {
     // a canvas saved before ComponentEdge existed carries the built-in 'smoothstep',
     // which renders but has no delete button
-    const parsed = parseCanvasState(
-      canvas({ edges: [{ ...edge('a-b', 'a', 'b'), type: 'smoothstep' }] }),
-    )!;
+    const parsed = parseCanvasState(canvas({ edges: [{ ...edge('a-b', 'a', 'b'), type: 'smoothstep' }] }))!;
     expect(parsed.edges[0].type).toBe(COMPONENT_EDGE_TYPE);
   });
 
@@ -134,9 +132,7 @@ describe('parseCanvasState', () => {
   it('drops legacy edges that do not name their ports', () => {
     // saved before per-port handles existed: source/target only. A node has several File
     // outputs, so which one was meant is unknowable - guessing would produce wrong CWL.
-    const parsed = parseCanvasState(
-      canvas({ edges: [{ id: 'a-b', source: 'a', target: 'b' }] }),
-    )!;
+    const parsed = parseCanvasState(canvas({ edges: [{ id: 'a-b', source: 'a', target: 'b' }] }))!;
     expect(parsed.edges).toHaveLength(0);
     expect(parsed.droppedEdgeCount).toBe(1);
   });

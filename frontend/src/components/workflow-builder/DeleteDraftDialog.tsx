@@ -18,9 +18,7 @@ export function DeleteDraftDialog({ draft, open, onOpenChange, onDeleted }: Dele
       { id: draft.id, deleteLinkedWorkflow },
       {
         onSuccess: () => {
-          toast.success(
-            deleteLinkedWorkflow ? 'Workflow and its unpublished versions deleted' : 'Workflow deleted',
-          );
+          toast.success(deleteLinkedWorkflow ? 'Workflow and its unpublished versions deleted' : 'Workflow deleted');
           onOpenChange(false);
           onDeleted?.();
         },
@@ -40,8 +38,8 @@ export function DeleteDraftDialog({ draft, open, onOpenChange, onDeleted }: Dele
           ? {
               label: (
                 <>
-                  Also delete its unpublished versions in <span className="font-medium">My Components</span>.
-                  Published or deprecated versions always stay - others may already use them.
+                  Also delete its unpublished versions in <span className="font-medium">My Components</span>. Published
+                  or deprecated versions always stay - others may already use them.
                 </>
               ),
             }

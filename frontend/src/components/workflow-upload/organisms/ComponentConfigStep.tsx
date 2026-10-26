@@ -31,7 +31,8 @@ export function ComponentConfigStep({
   locked = false,
 }: ComponentConfigStepProps) {
   const [bulkDomains, setBulkDomains] = useState<string[]>([]);
-  const countOf = (mode: ComponentConfigState['mode']) => previews.filter((p) => configs[p.stepId]?.mode === mode).length;
+  const countOf = (mode: ComponentConfigState['mode']) =>
+    previews.filter((p) => configs[p.stepId]?.mode === mode).length;
   const creating = countOf('create');
   const versioning = countOf('version');
 
@@ -58,8 +59,8 @@ export function ComponentConfigStep({
             <p className="text-sm font-medium text-slate-900">Configure components</p>
             <p className="mt-1 text-sm text-slate-500">
               {creating} of {previews.length} step(s) will create a new component
-              {versioning > 0 && `, ${versioning} will add a new version to a tool`}. The rest reuse components already in
-              the repository.
+              {versioning > 0 && `, ${versioning} will add a new version to a tool`}. The rest reuse components already
+              in the repository.
             </p>
           </div>
           <DomainMultiSelect

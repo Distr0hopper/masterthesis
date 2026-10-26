@@ -28,7 +28,9 @@ export const workflowsService = {
     formData.append('file', file);
     if (dto.description) formData.append('description', dto.description);
     formData.append('componentConfigs', JSON.stringify(dto.componentConfigs));
-    return apiClient.post(`${ENDPOINT}/${id}/versions`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return apiClient.post(`${ENDPOINT}/${id}/versions`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
   },
 
   /** parentId: the workflow the upload is to become the next version of - steps then report `previous` */

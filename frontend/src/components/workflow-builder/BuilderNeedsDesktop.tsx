@@ -14,8 +14,8 @@ export function BuilderNeedsDesktop() {
       <Monitor className="h-10 w-10 text-slate-400" />
       <h1 className="text-lg font-semibold text-slate-900">The Workflow Builder needs a larger screen</h1>
       <p className="max-w-sm text-sm">
-        Components are dragged onto a canvas, which doesn't work on a phone. Open this page on a desktop
-        to build workflows.
+        Components are dragged onto a canvas, which doesn't work on a phone. Open this page on a desktop to build
+        workflows.
       </p>
       <Button asChild variant="outline" className="mt-2">
         <Link to={ROUTES.builder}>Back to my workflows</Link>

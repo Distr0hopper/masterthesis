@@ -33,7 +33,7 @@ from app.application.service.components_service import ComponentsService
 from app.application.service.tools_service import ToolsService
 from app.application.unit_of_work import UnitOfWork
 from app.domain.composite import lifecycle
-from app.domain.composite.tree import would_create_cycle
+from app.domain.composite.tree import contains_lineage, would_create_cycle
 from app.domain.models.component import Component, ComponentKind, ComponentSource, ComponentStatus
 from app.domain.models.component_domain import ComponentDomain
 from app.domain.models.component_file import ComponentFile
@@ -444,11 +444,17 @@ class WorkflowsService:
         )
 
     async def _validate_component_configs(
-        self, step_definitions: list[tuple[str, dict]], configs: dict[str, ComponentConfig], actor_id: uuid.UUID
+        self,
+        step_definitions: list[tuple[str, dict]],
+        configs: dict[str, ComponentConfig],
+        actor_id: uuid.UUID,
+        workflow_name: str,
     ) -> None:
         """Validates every step's configuration before any Component is created.
 
-        Reuse configs need a target the actor may bind (see _require_bindable). Create configs get the full
+        Reuse configs need a target the actor may bind (see _require_bindable), and never one
+        that runs the workflow's own lineage - a new version nesting an older one would
+        contain itself. Create configs get the full
         treatment: a domain, a non-blank name, no duplicate name within this upload, and
         no collision with the catalogue (the user is offered the reuse branch instead).
 
@@ -484,6 +490,12 @@ class WorkflowsService:
                     if component is None:
                         raise ComponentNotFoundError(config.reuse_component_id)
                     self._require_bindable(component, actor_id)
+                    # a nested workflow, like a step rebound later (_require_acyclic) - but the
+                    # new workflow isn't saved yet, so its lineage is checked by name
+                    if component.is_workflow:
+                        await self.components_service.load_tree(component)
+                        if contains_lineage(component, workflow_name):
+                            raise WorkflowCycleError(workflow_name, component.name)
                 continue
 
             if config.name is None or not config.name.strip():
@@ -614,7 +626,9 @@ class WorkflowsService:
             raise UnconfiguredWorkflowStepError(unconfigured)
 
         configurable_steps = [(sid, d) for sid, d in step_definitions if sid not in inline_only]
-        await self._validate_component_configs(configurable_steps, component_configs, created_by_id)
+        await self._validate_component_configs(
+            configurable_steps, component_configs, created_by_id, name
+        )
 
         extracted_by_step_id = {c.step_id: c for c in extract_inline_components(upload.cwl_content)}
 

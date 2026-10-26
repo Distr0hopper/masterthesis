@@ -259,3 +259,26 @@ async def test_the_preview_never_names_someone_elses_draft_as_a_name_conflict(
     assert conflict(await client.post("/workflows/parse", files=files, headers=bearer(owner)))["version"] == 1
     # its owner sees their own draft
     assert conflict(await client.post("/workflows/parse", files=files, headers=bearer(author)))["version"] == 2
+
+
+
+async def test_a_new_workflow_version_cannot_nest_its_own_lineage(
+    client: httpx.AsyncClient, sessions: SessionFactory
+) -> None:
+    from app.domain.models.component import ComponentStatus
+    from tests.db_factories import workflow
+
+    owner = user()
+    v1 = workflow("track-pipeline", owner, status=ComponentStatus.DRAFT)
+    await save(sessions, owner, v1)
+
+    response = await client.post(
+        f"/workflows/{v1.id}/versions",
+        data=form(componentConfigs=[{"stepId": "step_clean", "reuseComponentId": str(v1.id)}]),
+        files={"file": ("pipeline.zip", archive({"pipeline.cwl": PIPELINE, "clean-tracks.cwl": TOOL_CWL}))},
+        headers=bearer(owner),
+    )
+
+    # v2 running v1 would make the lineage contain itself
+    assert response.status_code == 409, response.text
+    assert len((await client.get(f"/components/{v1.id}/versions", headers=bearer(owner))).json()) == 1

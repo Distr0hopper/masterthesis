@@ -188,7 +188,10 @@ async def test_the_owner_labels_a_port_without_a_format(client: httpx.AsyncClien
     )
     tool_id = created.json()["id"]
     path = f"/tools/{tool_id}/commands"
-    labels = {"command": "UPDATE_FORMAT_LABELS", "formatLabels": [{"name": "tracks", "direction": "input", "label": "RDS"}]}
+    labels = {
+        "command": "UPDATE_FORMAT_LABELS",
+        "formatLabels": [{"name": "tracks", "direction": "input", "label": "RDS"}],
+    }
 
     assert (await client.post(path, json=labels, headers=bearer(stranger))).status_code == 404
     assert (await client.post(path, json={"command": "UPDATE_FORMAT_LABELS"}, headers=bearer(owner))).status_code == 400
@@ -247,7 +250,9 @@ async def create_uploaded_workflow(client: httpx.AsyncClient, headers: dict) -> 
         data={
             "name": "track-pipeline",
             "domains": "animal_behavior",
-            "componentConfigs": json.dumps([{"stepId": "step_clean", "name": "clean-tracks", "domains": ["animal_behavior"]}]),
+            "componentConfigs": json.dumps(
+                [{"stepId": "step_clean", "name": "clean-tracks", "domains": ["animal_behavior"]}]
+            ),
         },
         files={"file": ("pipeline.cwl", PIPELINE.encode())},
         headers=headers,
@@ -287,7 +292,9 @@ async def test_an_uploaded_workflow_version_continues_the_lineage(
     async def add_version(headers: dict) -> httpx.Response:
         return await client.post(
             f"/workflows/{v1['id']}/versions",
-            data={"componentConfigs": json.dumps([{"stepId": "step_clean", "reuseComponentId": step["component"]["id"]}])},
+            data={
+                "componentConfigs": json.dumps([{"stepId": "step_clean", "reuseComponentId": step["component"]["id"]}])
+            },
             files={"file": ("pipeline.cwl", PIPELINE.encode())},
             headers=headers,
         )
@@ -300,7 +307,9 @@ async def test_an_uploaded_workflow_version_continues_the_lineage(
     assert response.json()["steps"][0]["component"]["id"] == step["component"]["id"]
 
 
-async def test_a_builder_workflow_takes_no_uploaded_version(client: httpx.AsyncClient, sessions: SessionFactory) -> None:
+async def test_a_builder_workflow_takes_no_uploaded_version(
+    client: httpx.AsyncClient, sessions: SessionFactory
+) -> None:
     from app.domain.models.workflow_draft import WorkflowDraft
 
     owner = user()
@@ -353,7 +362,9 @@ async def test_the_owner_rebinds_and_confirms_a_draft_workflows_step(
     cleared = await client.patch(path, json={"componentId": None}, headers=bearer(owner))
     assert (cleared.json()["component"], cleared.json()["matchStatus"]) == (None, StepMatchStatus.UNMATCHED.value)
     # nothing bound, nothing to confirm
-    assert (await client.post(f"{path}/commands", json={"command": "CONFIRM"}, headers=bearer(owner))).status_code == 400
+    assert (
+        await client.post(f"{path}/commands", json={"command": "CONFIRM"}, headers=bearer(owner))
+    ).status_code == 400
 
 
 async def test_a_step_cannot_make_its_workflow_contain_itself(
@@ -365,7 +376,9 @@ async def test_a_step_cannot_make_its_workflow_contain_itself(
     await save(sessions, owner, leaf, flow)
     [step] = flow.workflow.steps  # type: ignore[union-attr]
 
-    response = await client.patch(f"/workflows/steps/{step.id}", json={"componentId": str(flow.id)}, headers=bearer(owner))
+    response = await client.patch(
+        f"/workflows/steps/{step.id}", json={"componentId": str(flow.id)}, headers=bearer(owner)
+    )
     assert response.status_code == 409
 
 

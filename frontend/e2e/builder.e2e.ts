@@ -18,20 +18,29 @@ async function settled(page: Page) {
   const viewport = page.locator('.react-flow__viewport');
   let previous = '';
   await expect
-    .poll(async () => {
-      const current = (await viewport.getAttribute('style')) ?? '';
-      const still = current === previous;
-      previous = current;
-      return still;
-    }, { intervals: [150] })
+    .poll(
+      async () => {
+        const current = (await viewport.getAttribute('style')) ?? '';
+        const still = current === previous;
+        previous = current;
+        return still;
+      },
+      { intervals: [150] },
+    )
     .toBe(true);
 }
 
 /** wires `output` of one node to `input` of another, by mouse - as a user draws an edge */
 async function connect(page: Page, from: string, output: string, to: string, input: string) {
   await settled(page);
-  const source = page.locator('.react-flow__node').filter({ hasText: from }).locator(`.react-flow__handle[data-handleid="${output}"]`);
-  const target = page.locator('.react-flow__node').filter({ hasText: to }).locator(`.react-flow__handle[data-handleid="${input}"]`);
+  const source = page
+    .locator('.react-flow__node')
+    .filter({ hasText: from })
+    .locator(`.react-flow__handle[data-handleid="${output}"]`);
+  const target = page
+    .locator('.react-flow__node')
+    .filter({ hasText: to })
+    .locator(`.react-flow__handle[data-handleid="${input}"]`);
   const a = (await source.boundingBox())!;
   const b = (await target.boundingBox())!;
   await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);

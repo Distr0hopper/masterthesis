@@ -10,7 +10,9 @@ export default function ToolUploadPage() {
   return (
     <div>
       <h1 className="text-2xl font-semibold text-slate-900">Upload Tool</h1>
-      <p className="mt-1 text-slate-500">Package a CWL CommandLineTool manually or from a MoveApps GitHub repository.</p>
+      <p className="mt-1 text-slate-500">
+        Package a CWL CommandLineTool manually or from a MoveApps GitHub repository.
+      </p>
 
       <Tabs defaultValue="manual" className="mt-6">
         <TabsList className={TABS_LIST_CLASSNAME}>

@@ -34,15 +34,15 @@ class ConflictingAuxiliaryFileError(Exception):
 
 
 class ConflictingStepFileError(Exception):
-    """Two different step documents of one workflow tree claim the same file name - e.g. a
-    nested workflow running another version of a tool its parent also runs. Every `run:`
-    reference resolves in one flat archive, which cannot hold both."""
+    """Two steps of one workflow run different documents under the same `run:` file name.
+    Each nested workflow gets a folder of its own, so this only happens within one
+    pipeline - its `run:` lines resolve next to it, where only one of them fits."""
 
     def __init__(self, path: str) -> None:
         self.path = path
         super().__init__(
             f"Two different step documents of this workflow are both named '{path}' - the archive cannot hold "
-            "both (does a nested workflow use another version of a tool this workflow uses too?)"
+            "both (do two steps of one pipeline run different versions of the same component?)"
         )
 
 
@@ -52,9 +52,7 @@ class MissingImportedFileError(Exception):
 
     def __init__(self, paths: list[str]) -> None:
         self.paths = paths
-        super().__init__(
-            f"Imported file(s) not found in archive: {', '.join(paths)} - add them and try again"
-        )
+        super().__init__(f"Imported file(s) not found in archive: {', '.join(paths)} - add them and try again")
 
 
 class WorkflowHasUnpublishedComponentsError(Exception):
@@ -93,6 +91,17 @@ class NestedWorkflowsNotReadyError(Exception):
         super().__init__(
             f"Nested workflow(s) {', '.join(names)} still have unconfirmed steps - confirm them before "
             "publishing this workflow"
+        )
+
+
+class LineageNameLockedError(Exception):
+    """A lineage's name is fixed once a version of it went public - others saw, nested or
+    cited it under that name."""
+
+    def __init__(self, name: str, new_name: str) -> None:
+        super().__init__(
+            f"'{name}' cannot be renamed to '{new_name}' - a version of it is public, so its name is fixed. "
+            "Keep the name, or start a new workflow under the new one"
         )
 
 
@@ -143,13 +152,14 @@ class InvalidExtractedComponentNameError(Exception):
 
 class DuplicateExtractedComponentNameError(Exception):
     def __init__(self, name: str) -> None:
-        super().__init__(f"Multiple extracted components would be named '{name}' - names must be unique within one upload")
+        super().__init__(
+            f"Multiple extracted components would be named '{name}' - names must be unique within one upload"
+        )
 
 
 class ExtractedComponentNameCollisionError(Exception):
     def __init__(self, name: str) -> None:
         super().__init__(f"A component named '{name}' already exists - rename it before creating this workflow")
-
 
 
 class InlineStepNotBindableError(Exception):
@@ -166,6 +176,5 @@ class WorkflowRunsDeprecatedComponentsError(Exception):
     def __init__(self, components: list[str]) -> None:
         self.components = components
         super().__init__(
-            f"Runs deprecated component(s) {', '.join(components)} - replace them with newer versions "
-            "before publishing"
+            f"Runs deprecated component(s) {', '.join(components)} - replace them with newer versions before publishing"
         )

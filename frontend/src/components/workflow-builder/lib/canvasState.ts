@@ -34,11 +34,7 @@ function isValidNode(value: unknown): value is ComponentFlowNode {
   if (!isRecord(position) || typeof position.x !== 'number' || typeof position.y !== 'number') return false;
   if (!isRecord(data)) return false;
 
-  return (
-    typeof data.componentId === 'string' &&
-    typeof data.label === 'string' &&
-    Array.isArray(data.parameters)
-  );
+  return typeof data.componentId === 'string' && typeof data.label === 'string' && Array.isArray(data.parameters);
 }
 
 /**

@@ -48,7 +48,11 @@ export function ManualUploadWizard({ onSuccess, parent }: ManualUploadWizardProp
   const parseMutation = useParseTool();
   const uploadMutation = useUploadTool();
   const addVersionMutation = useAddManualVersion();
-  const { isPending: isCreating, error: createError, reset: resetCreate } = parent ? addVersionMutation : uploadMutation;
+  const {
+    isPending: isCreating,
+    error: createError,
+    reset: resetCreate,
+  } = parent ? addVersionMutation : uploadMutation;
   const wizard = useUploadWizard();
   const { form, prefill } = useUploadMetadataForm(parent && { name: parent.name, domains: parent.domains });
 

@@ -67,7 +67,9 @@ class IllegalStatusTransitionError(ValueError):
     def __init__(self, component: Component, target: ComponentStatus) -> None:
         self.component = component
         self.target = target
-        allowed = sorted(s.value for s in COMPONENT_TRANSITIONS.get(ComponentStatus(component.status), ()) if s != component.status)
+        allowed = sorted(
+            s.value for s in COMPONENT_TRANSITIONS.get(ComponentStatus(component.status), ()) if s != component.status
+        )
         super().__init__(
             f"'{component.name}' v{component.version} is {ComponentStatus(component.status).value} and cannot "
             f"become {target.value} - it can only become {' or '.join(allowed) or 'nothing else'}"
@@ -170,11 +172,7 @@ def superseded_by(newest: Component, versions: Iterable[Component]) -> list[Comp
     """The versions of `newest`'s lineage that publishing it supersedes: the older ones still
     published. They are deprecated rather than left listed, so a later unpublish of `newest`
     doesn't silently put an old version back on offer."""
-    return [
-        v
-        for v in versions
-        if v.name == newest.name and v.version < newest.version and v.status in LISTED_STATUSES
-    ]
+    return [v for v in versions if v.name == newest.name and v.version < newest.version and v.status in LISTED_STATUSES]
 
 
 def mark_superseded(older: Iterable[Component], newest: Component) -> None:
@@ -284,6 +282,16 @@ def retract_impact(
         foreign=[a for a in public if a.created_by_id != actor_id],
         own_locked=[a for a in published if not within_unpublish_window(a, now, window)],
     )
+
+
+# --- names -----------------------------------------------------------------------------
+
+
+def name_locked(versions: Iterable[Component]) -> bool:
+    """Whether a lineage's name is fixed: once any version is public, others saw, nested or
+    cited it under that name - renaming would change a public version without a new one.
+    A version unpublished within its window counts as never published, so it unlocks."""
+    return any(is_public(v) for v in versions)
 
 
 # --- steps -----------------------------------------------------------------------------

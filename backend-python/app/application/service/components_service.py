@@ -8,9 +8,11 @@ from fastapi import Depends
 from app.application.commands.commands import ComponentCommand, ComponentCommandType
 from app.application.commands.registry import (
     CommandSpec,
+    is_deprecatable,
     is_logged_in,
     is_owner,
-    is_not_superseded,
+    is_publishable,
+    is_undeprecatable,
     unpublish_window,
     within_unpublish_window_now,
     is_readable_by,
@@ -40,8 +42,14 @@ from app.application.exception.workflow_exceptions import (
 )
 from app.application.unit_of_work import UnitOfWork
 from app.domain.composite import lifecycle
-from app.domain.composite.tree import ConflictingTreeFileError, auxiliary_files, step_files
-from app.domain.models.component import MAX_DESCRIPTION_LENGTH, Component, ComponentKind, ComponentSource, ComponentStatus
+from app.domain.composite.tree import ArchiveLayout, ConflictingTreeFileError
+from app.domain.models.component import (
+    MAX_DESCRIPTION_LENGTH,
+    Component,
+    ComponentKind,
+    ComponentSource,
+    ComponentStatus,
+)
 from app.domain.models.component_domain import ComponentDomain
 from app.domain.models.parameter import Parameter
 from app.domain.models.user import User
@@ -50,6 +58,7 @@ from app.domain.repository.components_repository import ComponentListFilter
 from app.infrastructure.cwl.canvas_graph import canvas_component_ids
 from app.infrastructure.cwl.cwl_parser import extract_parameters, extract_schema_urls, inject_description
 from app.infrastructure.cwl.workflow_generator import assemble_cwl_zip
+from app.infrastructure.cwl.workflow_parser import retarget_steps
 from app.infrastructure.db.unit_of_work import SqlUnitOfWork
 from app.infrastructure.format_service.format_service_client import FormatServiceClient
 from app.infrastructure.format_service.ontology import resolve_ontology_url
@@ -129,6 +138,14 @@ def _owner_name(component: Component) -> str:
         return "a former user"
     # same rule as the frontend's getCreatorDisplay, so the 409 names people like the dialog
     return f"{owner.first_name} {owner.last_name}" if owner.first_name and owner.last_name else owner.email
+
+
+@dataclass(frozen=True)
+class Ports:
+    """A document's ports, format labels resolved - see ComponentsService.read_ports."""
+
+    parameters: list[Parameter]
+    ontology_url: str | None
 
 
 @dataclass(frozen=True)
@@ -329,11 +346,21 @@ class ComponentsService:
             if parameter.format:
                 parameter.format_label = labels.get(parameter.format)
 
-    async def assign_ports(self, component: Component, context: str) -> None:
-        """Parse `component`'s ports and ontology from its CWL and resolve their format labels."""
-        component.parameters = self.parse_ports(component.cwl_content, context, component.source)
-        component.ontology_url = self.ontology_url_for(component.cwl_content)
-        await self.resolve_format_labels(component.ontology_url, component.parameters)
+    async def read_ports(self, cwl_content: str, context: str, source: ComponentSource) -> Ports:
+        """A document's ports and ontology, their format labels resolved. Asks the format
+        service, so a use case calls it before opening its unit of work - a transaction
+        must never wait on HTTP. Then assign_ports, inside it."""
+        parameters = self.parse_ports(cwl_content, context, source)
+        ontology_url = self.ontology_url_for(cwl_content)
+        await self.resolve_format_labels(ontology_url, parameters)
+        return Ports(parameters=parameters, ontology_url=ontology_url)
+
+    @staticmethod
+    def assign_ports(component: Component, ports: Ports) -> None:
+        """Give `component` the ports read_ports read from its CWL - one component per read,
+        since the parameters become its rows."""
+        component.parameters = ports.parameters
+        component.ontology_url = ports.ontology_url
 
     @staticmethod
     def truncate_description(description: str | None) -> str | None:
@@ -688,8 +715,8 @@ class ComponentsService:
 
     async def get_download(self, component: Component) -> Download:
         """A tool downloads as its .cwl document; a workflow as a zip of its pipeline plus
-        every step document of its tree - nested workflows and their tools included - and
-        every file any of them imports."""
+        every step document of its tree and every file any of them imports - each nested
+        workflow in a folder of its own (see ArchiveLayout)."""
         if component.is_tool:
             return Download(
                 filename=f"{component.name}-v{component.version}.cwl",
@@ -698,19 +725,27 @@ class ComponentsService:
             )
 
         await self.load_tree(component)
-        # same archive layout and naming as the builder's "Export CWL" (assemble_cwl_zip).
-        # Step files keep their stored run_reference - that is what each pipeline's `run:`
-        # lines point at, so they cannot be renamed here.
+        # same archive layout and naming as the builder's "Export CWL" (assemble_cwl_zip)
         try:
-            files = step_files(component)
+            layout = ArchiveLayout.of(component)
         except ConflictingTreeFileError as err:
-            raise ConflictingStepFileError(err.path) from err
-        try:
-            extras = auxiliary_files(component)
-        except ConflictingTreeFileError as err:
-            raise ConflictingAuxiliaryFileError(err.path) from err
-        filename, content = assemble_cwl_zip(component.name, component.cwl_content, files, extras)
+            raise (ConflictingAuxiliaryFileError if err.imported else ConflictingStepFileError)(err.path) from err
+        filename, content = assemble_cwl_zip(
+            component.name,
+            retarget_steps(component.cwl_content, layout.retargets.get("", {})),
+            self.laid_out_documents(layout),
+            sorted(layout.imported.items()),
+        )
         return Download(filename=filename, content=content, media_type="application/zip")
+
+    @staticmethod
+    def laid_out_documents(layout: ArchiveLayout) -> list[tuple[str, str]]:
+        """(path, CWL) of every document below the root of `layout`, sorted - each nested
+        workflow's steps pointed into its folder. Shared with the builder's export."""
+        return [
+            (path, retarget_steps(component.cwl_content, layout.retargets.get(path, {})))
+            for path, component in sorted(layout.documents.items())
+        ]
 
 
 #: Every command a component understands, whatever its kind - see app.application.commands.registry
@@ -724,7 +759,7 @@ COMPONENT_COMMANDS: dict[ComponentCommandType, CommandSpec[ComponentsService, Co
     ComponentCommandType.PUBLISH: CommandSpec(
         rel="publish",
         allowed=is_owner,
-        available=is_not_superseded,
+        available=is_publishable,
         run=lambda s, c, cmd, user: s.publish(c, user, cmd.publish_components),
     ),
     ComponentCommandType.UNPUBLISH: CommandSpec(
@@ -740,12 +775,15 @@ COMPONENT_COMMANDS: dict[ComponentCommandType, CommandSpec[ComponentsService, Co
         rel="updateDomain", allowed=is_owner, run=lambda s, c, cmd, user: s.update_domains(c, cmd.domains)
     ),
     ComponentCommandType.DEPRECATE: CommandSpec(
-        rel="deprecate", allowed=is_owner, run=lambda s, c, cmd, user: s.deprecate(c, cmd.deprecation_note)
+        rel="deprecate",
+        allowed=is_owner,
+        available=is_deprecatable,
+        run=lambda s, c, cmd, user: s.deprecate(c, cmd.deprecation_note),
     ),
     ComponentCommandType.UNDEPRECATE: CommandSpec(
         rel="undeprecate",
         allowed=is_owner,
-        available=is_not_superseded,
+        available=is_undeprecatable,
         run=lambda s, c, cmd, user: s.undeprecate(c),
     ),
 }

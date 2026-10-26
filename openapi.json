@@ -4143,6 +4143,11 @@
           },
           "status": {
             "$ref": "#/components/schemas/ComponentStatus"
+          },
+          "nameLocked": {
+            "type": "boolean",
+            "title": "Namelocked",
+            "default": false
           }
         },
         "type": "object",

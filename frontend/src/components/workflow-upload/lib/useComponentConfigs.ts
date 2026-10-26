@@ -30,8 +30,15 @@ export interface ComponentConfigState {
   reuseVersion: number | null;
 }
 
-/** The component a step's name currently collides with, as last reported by a card. */
-export type NameConflicts = Record<string, ExistingComponentDto | null>;
+/**
+ * A step's name collision, as last reported by a card. `takenBy` is null when the name is
+ * held by a component the user may not see (someone else's draft) - still taken.
+ */
+export interface NameConflict {
+  takenBy: ExistingComponentDto | null;
+}
+
+export type NameConflicts = Record<string, NameConflict | null>;
 
 /**
  * Uploading a new workflow version: start each step from what it ran before - its tool's
@@ -142,6 +149,58 @@ function defaultState(preview: WorkflowStepPreviewDto): ComponentConfigState {
 }
 
 /**
+ * Why each step can't be saved yet, by step id - every step must resolve to either an
+ * existing component or a fully-specified new one; the backend rejects anything less.
+ * `previews` are the ones still needing a decision (see activePreviews).
+ */
+export function validateConfigs(
+  previews: WorkflowStepPreviewDto[],
+  configs: Record<string, ComponentConfigState>,
+  nameConflicts: NameConflicts,
+): Record<string, string> {
+  const result: Record<string, string> = {};
+  const nameCounts = new Map<string, number>();
+  for (const preview of previews) {
+    const config = configs[preview.stepId];
+    if (!config || config.mode !== 'create') continue;
+    const name = config.name.trim();
+    if (name) nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
+  }
+
+  for (const preview of previews) {
+    const config = configs[preview.stepId];
+    if (!config) {
+      result[preview.stepId] = 'This step is not configured yet.';
+      continue;
+    }
+    if (config.mode === 'reuse') {
+      if (!config.reuseComponentId) result[preview.stepId] = 'Pick a component to reuse.';
+      continue;
+    }
+    if (config.mode === 'version') {
+      if (isNestedWorkflow(preview) || !preview.previous?.canAddVersion) {
+        result[preview.stepId] = 'This step has no tool to add a version to.';
+      }
+      continue;
+    }
+    const name = config.name.trim();
+    if (!name) {
+      result[preview.stepId] = 'Name is required.';
+    } else if ((nameCounts.get(name) ?? 0) > 1) {
+      result[preview.stepId] = 'Another step in this upload already uses this name.';
+    } else if (nameConflicts[preview.stepId]) {
+      const { takenBy } = nameConflicts[preview.stepId]!;
+      result[preview.stepId] = takenBy
+        ? `A component named "${takenBy.name}" already exists (v${takenBy.version}).`
+        : 'This name is already taken — choose a different name.';
+    } else if (config.domains.length === 0) {
+      result[preview.stepId] = 'At least one domain is required.';
+    }
+  }
+  return result;
+}
+
+/**
  * Per-step configuration for a parsed workflow upload, plus the validation that gates
  * saving. Every step must resolve to either an existing component or a fully-specified
  * new one before the workflow can be created - the backend rejects anything less.
@@ -171,52 +230,17 @@ export function useComponentConfigs(previews: WorkflowStepPreviewDto[]) {
     );
   }, []);
 
-  const setNameConflict = useCallback((stepId: string, existing: ExistingComponentDto | null) => {
-    setNameConflicts((prev) => (prev[stepId] === existing ? prev : { ...prev, [stepId]: existing }));
+  const setNameConflict = useCallback((stepId: string, conflict: NameConflict | null) => {
+    setNameConflicts((prev) => {
+      const current = prev[stepId] ?? null;
+      const unchanged =
+        current === null ? conflict === null : conflict !== null && current.takenBy === conflict.takenBy;
+      return unchanged ? prev : { ...prev, [stepId]: conflict };
+    });
   }, []);
 
   const active = useMemo(() => activePreviews(previews, configs), [previews, configs]);
-
-  const errors = useMemo(() => {
-    const result: Record<string, string> = {};
-    const nameCounts = new Map<string, number>();
-    for (const preview of active) {
-      const config = configs[preview.stepId];
-      if (!config || config.mode !== 'create') continue;
-      const name = config.name.trim();
-      if (name) nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
-    }
-
-    for (const preview of active) {
-      const config = configs[preview.stepId];
-      if (!config) {
-        result[preview.stepId] = 'This step is not configured yet.';
-        continue;
-      }
-      if (config.mode === 'reuse') {
-        if (!config.reuseComponentId) result[preview.stepId] = 'Pick a component to reuse.';
-        continue;
-      }
-      if (config.mode === 'version') {
-        if (isNestedWorkflow(preview) || !preview.previous?.canAddVersion) {
-          result[preview.stepId] = 'This step has no tool to add a version to.';
-        }
-        continue;
-      }
-      const name = config.name.trim();
-      if (!name) {
-        result[preview.stepId] = 'Name is required.';
-      } else if ((nameCounts.get(name) ?? 0) > 1) {
-        result[preview.stepId] = 'Another step in this upload already uses this name.';
-      } else if (nameConflicts[preview.stepId]) {
-        const existing = nameConflicts[preview.stepId]!;
-        result[preview.stepId] = `A component named "${existing.name}" already exists (v${existing.version}).`;
-      } else if (config.domains.length === 0) {
-        result[preview.stepId] = 'At least one domain is required.';
-      }
-    }
-    return result;
-  }, [active, configs, nameConflicts]);
+  const errors = useMemo(() => validateConfigs(active, configs, nameConflicts), [active, configs, nameConflicts]);
 
   const isComplete = active.length > 0 && Object.keys(errors).length === 0;
 

@@ -161,7 +161,7 @@ class CompatibilityService:
 
     async def _answer(self, pairs: set[FormatPair]) -> dict[FormatPair, bool]:
         """The format service's definite answers for `pairs` - unanswerable ones are absent,
-        which the rules read as unverified. """
+        which the rules read as unverified."""
 
         answers: dict[FormatPair, bool] = {}
         # sequential: the format service caches a parsed ontology only once its first

@@ -22,7 +22,6 @@ interface ComponentCardProps {
 
 /** One card for either kind - only the kind snippet, a workflow's step count and the builder link differ. */
 export function ComponentCard({ component, backTo, showBuilderLink = false, actions }: ComponentCardProps) {
-
   // only on an editing surface (My Components), not the browse list
   const builderDraftId = showBuilderLink ? editableBuilderDraftId(component) : null;
 
@@ -65,8 +64,7 @@ export function ComponentCard({ component, backTo, showBuilderLink = false, acti
         <div className="mt-3 flex items-center justify-between border-t pt-3 text-sm text-slate-500">
           <span>
             {component.authorDisplay}
-            {component.kind === 'workflow' &&
-              ` · ${component.stepCount} step${component.stepCount === 1 ? '' : 's'}`}
+            {component.kind === 'workflow' && ` · ${component.stepCount} step${component.stepCount === 1 ? '' : 's'}`}
           </span>
           <span>{component.createdAtDisplay}</span>
         </div>

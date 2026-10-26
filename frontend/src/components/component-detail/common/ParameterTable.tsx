@@ -1,12 +1,5 @@
 import { Badge } from '@/components/ui/badge.tsx';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table.tsx';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.tsx';
 import {
   UNRESOLVED_FORMAT_HINT,
   isManualFormatLabel,

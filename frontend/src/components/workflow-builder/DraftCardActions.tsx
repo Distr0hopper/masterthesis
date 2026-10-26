@@ -17,7 +17,12 @@ export function DraftCardActions({ draft }: DraftCardActionsProps) {
   return (
     <>
       {draft.linkedWorkflow && (
-        <Button asChild variant="outline" size="sm" title="Its page in My Components - publish it, set its details, see its versions">
+        <Button
+          asChild
+          variant="outline"
+          size="sm"
+          title="Its page in My Components - publish it, set its details, see its versions"
+        >
           <Link
             to={componentDetailRoute(ComponentKind.WORKFLOW, draft.linkedWorkflow.id)}
             state={{ from: ROUTES.builder }}
@@ -26,12 +31,7 @@ export function DraftCardActions({ draft }: DraftCardActionsProps) {
           </Link>
         </Button>
       )}
-      <Button
-        variant="destructive"
-        size="sm"
-        className="ml-auto"
-        onClick={() => setDeleteDialogOpen(true)}
-      >
+      <Button variant="destructive" size="sm" className="ml-auto" onClick={() => setDeleteDialogOpen(true)}>
         <Trash2 className="mr-1 h-4 w-4" /> Delete
       </Button>
 

@@ -101,8 +101,7 @@ function draftChildren(model: ComponentDetailDisplayModel): ComponentSummaryDto[
   return model.steps
     .map((step) => step.component)
     .filter(
-      (component): component is ComponentSummaryDto =>
-        component !== null && component.status === ComponentStatus.DRAFT,
+      (component): component is ComponentSummaryDto => component !== null && component.status === ComponentStatus.DRAFT,
     );
 }
 
@@ -159,15 +158,15 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
     model.steps.every(
       (step) => step.matchStatus === StepMatchStatus.CONFIRMED || step.matchStatus === StepMatchStatus.INLINE,
     );
-  const canPublish = hasPublishLink(model._links) && model.status === ComponentStatus.DRAFT;
+  const canPublish = hasPublishLink(model._links);
   const { data: publishImpact, isLoading: isLoadingPublishImpact } = usePublishImpact(
     getLink(model._links, 'publishImpact'),
     canPublish && publishDialogOpen,
   );
   const supersedes = publishImpact?.supersedes ?? [];
-  const canUnpublish = hasUnpublishLink(model._links) && model.status === ComponentStatus.PUBLISHED;
-  const canDeprecate = hasDeprecateLink(model._links) && model.status === ComponentStatus.PUBLISHED;
-  const canUndeprecate = hasUndeprecateLink(model._links) && model.status === ComponentStatus.DEPRECATED;
+  const canUnpublish = hasUnpublishLink(model._links);
+  const canDeprecate = hasDeprecateLink(model._links);
+  const canUndeprecate = hasUndeprecateLink(model._links);
   const deprecated = deprecatedChildren(model);
 
   const drafts = draftChildren(model);
@@ -183,7 +182,9 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
             publishComponents && drafts.length > 0
               ? `${model.kindDisplay} published, along with the draft components it runs`
               : `${model.kindDisplay} published`;
-          const deprecatedLabels = supersedes.map((s) => (s.name === model.name ? `v${s.version}` : `${s.name} v${s.version}`));
+          const deprecatedLabels = supersedes.map((s) =>
+            s.name === model.name ? `v${s.version}` : `${s.name} v${s.version}`,
+          );
           toast.success(
             deprecatedLabels.length > 0 ? `${published} - ${deprecatedLabels.join(', ')} deprecated` : published,
           );
@@ -244,7 +245,10 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
       )}
 
       {model.status === ComponentStatus.DEPRECATED && (
-        <div role="status" className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div
+          role="status"
+          className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+        >
           <p className="font-medium">
             This version is deprecated{model.deprecationNote ? `: ${model.deprecationNote}` : '.'}
           </p>
@@ -283,7 +287,7 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
                     version={model.version}
                     versionCount={versionCount}
                     backTo={backTo}
-                      />
+                  />
                 ) : (
                   <span className="text-sm text-slate-400">v{model.version}</span>
                 )}
@@ -296,7 +300,9 @@ export function ComponentHeader({ model, backTo, backLabel, onDeleted }: Compone
               </div>
             </div>
 
-            {canFavorite(model._links) && <ComponentFavoriteButton links={model._links!} isFavorite={model.isFavorite} />}
+            {canFavorite(model._links) && (
+              <ComponentFavoriteButton links={model._links!} isFavorite={model.isFavorite} />
+            )}
           </div>
 
           {model.description && <p className="text-slate-600">{model.description}</p>}

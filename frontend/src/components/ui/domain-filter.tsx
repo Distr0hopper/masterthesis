@@ -44,9 +44,7 @@ export function DomainFilter({
   'aria-label': ariaLabel,
 }: DomainFilterProps) {
   const toggle = (domainId: string) => {
-    onValueChange(
-      value.includes(domainId) ? value.filter((d) => d !== domainId) : [...value, domainId],
-    );
+    onValueChange(value.includes(domainId) ? value.filter((d) => d !== domainId) : [...value, domainId]);
   };
 
   return (

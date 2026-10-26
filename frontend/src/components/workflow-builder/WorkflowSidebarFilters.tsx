@@ -58,11 +58,7 @@ export function WorkflowSidebarFilters({
           })}
         </TabsList>
       </Tabs>
-      <Input
-        placeholder="Search by name..."
-        value={search}
-        onChange={(e) => onSearchChange(e.target.value)}
-      />
+      <Input placeholder="Search by name..." value={search} onChange={(e) => onSearchChange(e.target.value)} />
 
       <DomainFilter
         aria-label="Filter by domain"
@@ -73,10 +69,7 @@ export function WorkflowSidebarFilters({
       />
 
       {showFavoritesToggle && (
-        <label
-          htmlFor="builderFavoritesOnly"
-          className="flex items-center gap-2 text-sm text-slate-700"
-        >
+        <label htmlFor="builderFavoritesOnly" className="flex items-center gap-2 text-sm text-slate-700">
           <input
             id="builderFavoritesOnly"
             type="checkbox"

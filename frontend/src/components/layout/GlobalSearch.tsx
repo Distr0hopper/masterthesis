@@ -107,7 +107,12 @@ export function GlobalSearch({ size = 'compact', autoFocus, enableShortcut, onCl
     key: `c-${c.id}`,
     to: ROUTES.toolDetail(c.id),
     content: (
-      <ResultLine icon={<ToolIcon className="h-4 w-4" />} title={c.name} meta={`v${c.version}`} detail={c.description} />
+      <ResultLine
+        icon={<ToolIcon className="h-4 w-4" />}
+        title={c.name}
+        meta={`v${c.version}`}
+        detail={c.description}
+      />
     ),
   }));
   const workflowEntries: Entry[] = workflows.items.map((w) => ({
@@ -134,7 +139,11 @@ export function GlobalSearch({ size = 'compact', autoFocus, enableShortcut, onCl
 
   const groups = [
     { title: 'Tools', entries: toolEntries, all: showAll('tools', tools.total, toolsListUrl, 'c-all') },
-    { title: 'Workflows', entries: workflowEntries, all: showAll('workflows', workflows.total, workflowsListUrl, 'w-all') },
+    {
+      title: 'Workflows',
+      entries: workflowEntries,
+      all: showAll('workflows', workflows.total, workflowsListUrl, 'w-all'),
+    },
   ].filter((group) => group.entries.length > 0);
   const flat = groups.flatMap((group) => [...group.entries, group.all]);
 
@@ -232,9 +241,7 @@ export function GlobalSearch({ size = 'compact', autoFocus, enableShortcut, onCl
           {!isReady && groups.length === 0 ? (
             <p className="px-3 py-2 text-sm text-slate-500">Searching...</p>
           ) : noResults ? (
-            <p className="px-3 py-2 text-sm text-slate-500">
-              No components or workflows match &ldquo;{search}&rdquo;.
-            </p>
+            <p className="px-3 py-2 text-sm text-slate-500">No components or workflows match &ldquo;{search}&rdquo;.</p>
           ) : (
             groups.map((group) => (
               <div key={group.title} role="group" aria-label={group.title} className="py-1">

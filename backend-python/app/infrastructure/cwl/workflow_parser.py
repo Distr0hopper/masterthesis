@@ -70,9 +70,7 @@ def find_root_workflow(files: dict[str, str]) -> ArchiveRoot:
     if not workflows:
         raise ValueError("No CWL file with class: Workflow found in the archive")
 
-    referenced = {
-        resolve_run_reference(run, name, files) for name in workflows for run in _string_runs(files[name])
-    }
+    referenced = {resolve_run_reference(run, name, files) for name in workflows for run in _string_runs(files[name])}
     roots = [name for name in workflows if name not in referenced]
     if not roots:
         raise ValueError(f"The workflows in the archive all run each other ({', '.join(workflows)}); none is the root")
@@ -354,6 +352,17 @@ def externalize_inline_steps(cwl_content: str, run_references: dict[str, str]) -
     mutating `definition["run"]` here mutates `doc` directly - no need to rebuild
     `steps:`.
     """
+    return _set_runs(cwl_content, run_references)
+
+
+def retarget_steps(cwl_content: str, run_references: dict[str, str]) -> str:
+    """The document with these steps' `run:` (step_id -> new path) changed - for an
+    archive's copy of a stored pipeline (see composite.tree.ArchiveLayout). Without any,
+    the text comes back byte for byte, never re-serialised."""
+    return _set_runs(cwl_content, run_references) if run_references else cwl_content
+
+
+def _set_runs(cwl_content: str, run_references: dict[str, str]) -> str:
     doc: Any = load_cwl(cwl_content)
     for step_id, definition in normalize_steps(doc.get("steps")):
         if step_id in run_references:

@@ -24,9 +24,7 @@ export function ParameterList({ title, parameters }: ParameterListProps) {
                 {isUnresolvedFormatLabel(parameter) && ', name unavailable'})
               </span>
             )}
-            {parameter.defaultValue !== null && (
-              <span className="text-slate-400"> = {parameter.defaultValue}</span>
-            )}
+            {parameter.defaultValue !== null && <span className="text-slate-400"> = {parameter.defaultValue}</span>}
           </div>
         ))}
       </div>

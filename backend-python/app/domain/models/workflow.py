@@ -19,9 +19,7 @@ class Workflow(SQLModel, table=True):
 
     __tablename__ = "workflows"
 
-    component_id: uuid.UUID = Field(
-        sa_column=Column(ForeignKey("components.id", ondelete="CASCADE"), primary_key=True)
-    )
+    component_id: uuid.UUID = Field(sa_column=Column(ForeignKey("components.id", ondelete="CASCADE"), primary_key=True))
     # the builder draft this was published from, so the UI can offer "edit in builder".
     # Every version synced from one draft carries it. ON DELETE SET NULL, not CASCADE:
     # deleting the draft must not delete the published workflow - it just stops being

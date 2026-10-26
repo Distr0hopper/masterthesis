@@ -11,15 +11,15 @@ import MyComponentsPage from '@/pages/MyComponentsPage';
 import WorkflowUploadPage from '@/pages/WorkflowUploadPage';
 import WorkflowNewVersionPage from '@/pages/WorkflowNewVersionPage';
 import LoginPage from '@/pages/LoginPage';
-import HomePage from "@/pages/HomePage.tsx";
-import AboutPage from "@/pages/AboutPage.tsx";
-import WorkflowBuilderPage from "@/pages/WorkflowBuilderPage.tsx";
-import WorkflowBuilderOverviewPage from "@/pages/WorkflowBuilderOverviewPage.tsx";
-import ProfilePage from "@/pages/ProfilePage.tsx";
-import ProtectedRoute from "@/pages/ProtectedRoutes.tsx";
-import { Toaster } from "@/components/ui/sonner.tsx";
-import { SessionKeeper } from "@/api/auth/SessionKeeper";
-import { ROUTES } from "@/lib/routes";
+import HomePage from '@/pages/HomePage.tsx';
+import AboutPage from '@/pages/AboutPage.tsx';
+import WorkflowBuilderPage from '@/pages/WorkflowBuilderPage.tsx';
+import WorkflowBuilderOverviewPage from '@/pages/WorkflowBuilderOverviewPage.tsx';
+import ProfilePage from '@/pages/ProfilePage.tsx';
+import ProtectedRoute from '@/pages/ProtectedRoutes.tsx';
+import { Toaster } from '@/components/ui/sonner.tsx';
+import { SessionKeeper } from '@/api/auth/SessionKeeper';
+import { ROUTES } from '@/lib/routes';
 
 const queryClient = new QueryClient();
 
@@ -45,17 +45,65 @@ const router = createBrowserRouter(
       <Route element={<ContainerLayout />}>
         <Route path={ROUTES.home} element={<HomePage />} />
         <Route path={ROUTES.about} element={<AboutPage />} />
-        <Route path={ROUTES.profile} element={<ProtectedRoute> <ProfilePage /> </ProtectedRoute>} />
+        <Route
+          path={ROUTES.profile}
+          element={
+            <ProtectedRoute>
+              {' '}
+              <ProfilePage />{' '}
+            </ProtectedRoute>
+          }
+        />
 
         {/* one browse list and one My Components list for both kinds; the other pages are parameterised by kind */}
         <Route path={ROUTES.browse} element={<ComponentsPage />} />
-        <Route path={ROUTES.toolUpload} element={<ProtectedRoute> <ToolUploadPage /> </ProtectedRoute>} />
+        <Route
+          path={ROUTES.toolUpload}
+          element={
+            <ProtectedRoute>
+              {' '}
+              <ToolUploadPage />{' '}
+            </ProtectedRoute>
+          }
+        />
         <Route path={ROUTES.toolDetail(':id')} element={<ComponentDetailPage key="tool" kind="tool" />} />
-        <Route path={ROUTES.toolNewVersion(':id')} element={<ProtectedRoute> <ToolNewVersionPage /> </ProtectedRoute>} />
-        <Route path={ROUTES.workflowUpload} element={<ProtectedRoute> <WorkflowUploadPage /> </ProtectedRoute>} />
+        <Route
+          path={ROUTES.toolNewVersion(':id')}
+          element={
+            <ProtectedRoute>
+              {' '}
+              <ToolNewVersionPage />{' '}
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path={ROUTES.workflowUpload}
+          element={
+            <ProtectedRoute>
+              {' '}
+              <WorkflowUploadPage />{' '}
+            </ProtectedRoute>
+          }
+        />
         <Route path={ROUTES.workflowDetail(':id')} element={<ComponentDetailPage key="workflow" kind="workflow" />} />
-        <Route path={ROUTES.workflowNewVersion(':id')} element={<ProtectedRoute> <WorkflowNewVersionPage /> </ProtectedRoute>} />
-        <Route path={ROUTES.myComponents} element={<ProtectedRoute> <MyComponentsPage /> </ProtectedRoute>} />
+        <Route
+          path={ROUTES.workflowNewVersion(':id')}
+          element={
+            <ProtectedRoute>
+              {' '}
+              <WorkflowNewVersionPage />{' '}
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path={ROUTES.myComponents}
+          element={
+            <ProtectedRoute>
+              {' '}
+              <MyComponentsPage />{' '}
+            </ProtectedRoute>
+          }
+        />
 
         <Route path={ROUTES.login} element={<LoginPage />} />
         <Route path={ROUTES.builder} element={<WorkflowBuilderOverviewPage />} />

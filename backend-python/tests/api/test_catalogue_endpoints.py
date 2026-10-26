@@ -131,7 +131,9 @@ async def test_stats_count_published_lineages_and_their_contributors(
     assert response.json() == {"toolsPublished": 2, "workflowsPublished": 1, "contributors": 2}
 
 
-async def test_the_latest_additions_are_only_published_ones(client: httpx.AsyncClient, sessions: SessionFactory) -> None:
+async def test_the_latest_additions_are_only_published_ones(
+    client: httpx.AsyncClient, sessions: SessionFactory
+) -> None:
     owner = user()
     await save(sessions, owner, tool("public", owner), tool("draft", owner, ComponentStatus.DRAFT))
 

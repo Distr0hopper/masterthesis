@@ -61,12 +61,14 @@ export function DeprecateComponentDialog({ component, open, onOpenChange }: Depr
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {isDeprecated ? `Edit the deprecation note of ${component.name}` : `Deprecate ${component.name} v${component.version}?`}
+            {isDeprecated
+              ? `Edit the deprecation note of ${component.name}`
+              : `Deprecate ${component.name} v${component.version}?`}
           </DialogTitle>
           <DialogDescription>
             It stays readable and keeps working in every workflow that already runs it, but it is no longer listed in
-            the catalogue or offered in the Workflow Builder, and no new workflow can use it. You can undeprecate it
-            at any time.
+            the catalogue or offered in the Workflow Builder, and no new workflow can use it. You can undeprecate it at
+            any time.
           </DialogDescription>
         </DialogHeader>
 

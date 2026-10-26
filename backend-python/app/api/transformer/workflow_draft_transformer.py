@@ -10,19 +10,26 @@ from app.domain.models.workflow_draft import WorkflowDraft
 
 class WorkflowDraftTransformer:
     @staticmethod
-    def to_linked_workflow(workflow: Component | None) -> LinkedWorkflowDto | None:
+    def to_linked_workflow(workflow: Component | None, locked_names: set[str]) -> LinkedWorkflowDto | None:
         if workflow is None:
             return None
-        return LinkedWorkflowDto(id=workflow.id, version=workflow.version, status=ComponentStatus(workflow.status))
+        return LinkedWorkflowDto(
+            id=workflow.id,
+            version=workflow.version,
+            status=ComponentStatus(workflow.status),
+            name_locked=workflow.name in locked_names,
+        )
 
     @staticmethod
-    def to_list_item(draft: WorkflowDraft, linked_workflow: Component | None = None) -> WorkflowDraftListItemDto:
+    def to_list_item(
+        draft: WorkflowDraft, linked_workflow: Component | None = None, locked_names: set[str] | None = None
+    ) -> WorkflowDraftListItemDto:
         return WorkflowDraftListItemDto(
             id=draft.id,
             name=draft.name,
             node_count=draft.node_count,
             updated_at=draft.updated_at,
-            linked_workflow=WorkflowDraftTransformer.to_linked_workflow(linked_workflow),
+            linked_workflow=WorkflowDraftTransformer.to_linked_workflow(linked_workflow, locked_names or set()),
         )
 
     @staticmethod
@@ -30,6 +37,7 @@ class WorkflowDraftTransformer:
         draft: WorkflowDraft,
         linked_workflow: Component | None = None,
         missing_component_ids: list[str] | None = None,
+        locked_names: set[str] | None = None,
     ) -> WorkflowDraftDetailDto:
         return WorkflowDraftDetailDto(
             id=draft.id,
@@ -38,7 +46,7 @@ class WorkflowDraftTransformer:
             node_count=draft.node_count,
             updated_at=draft.updated_at,
             created_at=draft.created_at,
-            linked_workflow=WorkflowDraftTransformer.to_linked_workflow(linked_workflow),
+            linked_workflow=WorkflowDraftTransformer.to_linked_workflow(linked_workflow, locked_names or set()),
             missing_component_ids=missing_component_ids or [],
         )
 

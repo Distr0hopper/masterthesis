@@ -76,7 +76,16 @@ export const useSyncDraftToMyComponents = () => {
       // it to the new version - the cached draft (staleTime: Infinity) would miss both
       queryClient.setQueryData<WorkflowDraftDetailDto>(draftKeys.detail(id), (draft) =>
         draft
-          ? { ...draft, linkedWorkflow: { id: synced.workflowId, version: synced.version, status: synced.status } }
+          ? {
+              ...draft,
+              linkedWorkflow: {
+                id: synced.workflowId,
+                version: synced.version,
+                status: synced.status,
+                // a sync never makes a version public - the lock stays what it was
+                nameLocked: draft.linkedWorkflow?.nameLocked ?? false,
+              },
+            }
           : draft,
       );
       queryClient.invalidateQueries({ queryKey: draftKeys.lists() });

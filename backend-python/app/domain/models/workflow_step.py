@@ -45,9 +45,7 @@ class WorkflowStep(SQLModel, table=True):
     )
     # explicit String column: SQLModel would otherwise infer a native Postgres enum type
     # from the Python Enum, which we deliberately avoided (see Component.source / Parameter.direction)
-    match_status: StepMatchStatus = Field(
-        default=StepMatchStatus.UNMATCHED, sa_column=Column(String, nullable=False)
-    )
+    match_status: StepMatchStatus = Field(default=StepMatchStatus.UNMATCHED, sa_column=Column(String, nullable=False))
     # fuzzy-match confidence at suggestion time; retained for display even after confirmation
     match_score: float | None = None
 

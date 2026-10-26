@@ -1,13 +1,7 @@
 import { ExternalLink, Info, PenLine } from 'lucide-react';
 import { isManualFormatLabel, type ParameterDisplayModel } from '@/api/components';
 import { Input } from '@/components/ui/input.tsx';
-import {
-  configParameters,
-  dataInputs,
-  dataOutputs,
-  isBooleanParameter,
-  isNumericParameter,
-} from './lib/portKinds';
+import { configParameters, dataInputs, dataOutputs, isBooleanParameter, isNumericParameter } from './lib/portKinds';
 import { formatNoteFor, formatPortType } from './lib/ports';
 import { componentDetailRoute } from '@/lib/routes';
 import type { ComponentFlowNode } from './types';
@@ -27,14 +21,10 @@ function PortSummary({ title, ports }: { title: string; ports: ParameterDisplayM
       <div className="mt-2 flex flex-col gap-2">
         {ports.map((port) => (
           <div key={port.id} className="rounded-md border border-slate-200 p-2">
-            <div className="break-all font-mono text-xs font-semibold text-slate-900">
-              {port.name}
-            </div>
+            <div className="break-all font-mono text-xs font-semibold text-slate-900">{port.name}</div>
             <div className="text-[11px] text-slate-400">{formatPortType(port)}</div>
             <FormatNote port={port} />
-            {port.description && (
-              <p className="mt-1 text-[11px] leading-snug text-slate-500">{port.description}</p>
-            )}
+            {port.description && <p className="mt-1 text-[11px] leading-snug text-slate-500">{port.description}</p>}
           </div>
         ))}
       </div>
@@ -64,23 +54,19 @@ function FormatNote({ port }: { port: ParameterDisplayModel }) {
 }
 
 export function WorkflowInspector({ node, onParameterChange }: WorkflowInspectorProps) {
-
   const { parameters, parameterValues } = node.data;
   const configs = configParameters(parameters);
 
   // undefined (not "") means unset - the component's own default applies, which is why an
   // emptied field clears the key instead of storing an empty string
-  const commit = (name: string, value: string) =>
-    onParameterChange(node.id, name, value === '' ? undefined : value);
+  const commit = (name: string, value: string) => onParameterChange(node.id, name, value === '' ? undefined : value);
 
   return (
     <aside className="flex w-[300px] shrink-0 flex-col overflow-y-auto border-l border-slate-200 bg-white">
       <div className="flex flex-col gap-2 border-b border-slate-200 p-4">
         <span className="text-xs uppercase tracking-wide text-slate-500">Configure</span>
         <div className="flex items-start justify-between gap-2">
-          <span className="break-all font-mono text-sm font-semibold text-slate-900">
-            {node.data.label}
-          </span>
+          <span className="break-all font-mono text-sm font-semibold text-slate-900">{node.data.label}</span>
           <a
             href={componentDetailRoute(node.data.kind, node.data.componentId)}
             target="_blank"
@@ -109,10 +95,7 @@ export function WorkflowInspector({ node, onParameterChange }: WorkflowInspector
 
                 return (
                   <div key={parameter.id} className="flex flex-col gap-1.5">
-                    <label
-                      htmlFor={inputId}
-                      className="break-all font-mono text-xs font-semibold text-slate-900"
-                    >
+                    <label htmlFor={inputId} className="break-all font-mono text-xs font-semibold text-slate-900">
                       {parameter.name}
                     </label>
                     <span className="text-[11px] text-slate-400">{parameter.cwlType}</span>
@@ -124,14 +107,10 @@ export function WorkflowInspector({ node, onParameterChange }: WorkflowInspector
                           type="checkbox"
                           // falls back to the component's own default while unset
                           checked={(stored ?? parameter.defaultValue ?? 'false') === 'true'}
-                          onChange={(e) =>
-                            onParameterChange(node.id, parameter.name, String(e.target.checked))
-                          }
+                          onChange={(e) => onParameterChange(node.id, parameter.name, String(e.target.checked))}
                           className="h-4 w-4 rounded border-input accent-jmu-blue-800"
                         />
-                        {(stored ?? parameter.defaultValue ?? 'false') === 'true'
-                          ? 'true'
-                          : 'false'}
+                        {(stored ?? parameter.defaultValue ?? 'false') === 'true' ? 'true' : 'false'}
                       </label>
                     ) : (
                       <Input
@@ -147,9 +126,7 @@ export function WorkflowInspector({ node, onParameterChange }: WorkflowInspector
                     )}
 
                     {parameter.description && (
-                      <p className="text-[11px] leading-snug text-slate-500">
-                        {parameter.description}
-                      </p>
+                      <p className="text-[11px] leading-snug text-slate-500">{parameter.description}</p>
                     )}
                   </div>
                 );

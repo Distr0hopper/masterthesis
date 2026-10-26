@@ -1,11 +1,4 @@
-import {
-  BaseEdge,
-  EdgeLabelRenderer,
-  getSmoothStepPath,
-  useReactFlow,
-  type Edge,
-  type EdgeProps,
-} from '@xyflow/react';
+import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, useReactFlow, type Edge, type EdgeProps } from '@xyflow/react';
 import { AlertTriangle, X } from 'lucide-react';
 import type { ComponentEdgeData } from './types';
 

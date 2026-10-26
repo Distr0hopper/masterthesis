@@ -21,7 +21,10 @@ def edge(source: str, target: str) -> dict:
 
 def test_only_unwired_inputs_become_job_entries() -> None:
     doc = build_workflow_document(
-        "Thin and clean", [node("a", "thin"), node("b", "outliers")], [edge("a", "b")], {"thin": THIN, "outliers": OUTLIERS}
+        "Thin and clean",
+        [node("a", "thin"), node("b", "outliers")],
+        [edge("a", "b")],
+        {"thin": THIN, "outliers": OUTLIERS},
     )
     job = yaml.safe_load(generate_workflow_inputs_yaml("Thin and clean", doc))
 
@@ -46,7 +49,9 @@ def test_fully_wired_workflow_yields_an_empty_job() -> None:
 
 def test_header_names_the_matching_workflow_file() -> None:
     doc = build_workflow_document("Thin and clean", [node("a", "thin")], [], {"thin": THIN})
-    assert "cwltool thin-and-clean.cwl thin-and-clean-inputs.yaml" in generate_workflow_inputs_yaml("Thin and clean", doc)
+    assert "cwltool thin-and-clean.cwl thin-and-clean-inputs.yaml" in generate_workflow_inputs_yaml(
+        "Thin and clean", doc
+    )
 
 
 FILTER = PortSpec(
@@ -75,7 +80,10 @@ def test_config_becomes_a_workflow_input_defaulting_to_the_configured_value() ->
     assert doc["inputs"]["step_filter__threshold"] == {"type": "double", "default": 0.9}
     assert doc["steps"]["step_filter"]["in"]["threshold"] == "step_filter__threshold"
     # unconfigured: falls back to the component's own default
-    assert doc["inputs"]["step_filter__mode"] == {"type": {"type": "enum", "symbols": ["fast", "exact"]}, "default": "fast"}
+    assert doc["inputs"]["step_filter__mode"] == {
+        "type": {"type": "enum", "symbols": ["fast", "exact"]},
+        "default": "fast",
+    }
     # no value anywhere: declared without a default, optional or not
     assert doc["inputs"]["step_filter__label"] == {"type": "string?"}
     assert doc["inputs"]["step_filter__seed"] == {"type": "int"}

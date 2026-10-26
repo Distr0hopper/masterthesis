@@ -42,7 +42,10 @@ export function useGlobalSearch(term: string): GlobalSearchResult {
 
   return {
     tools: tools.data
-      ? { items: tools.data.content.filter((c): c is ToolListItemDto => c.kind === 'tool'), total: tools.data.totalElements }
+      ? {
+          items: tools.data.content.filter((c): c is ToolListItemDto => c.kind === 'tool'),
+          total: tools.data.totalElements,
+        }
       : empty,
     workflows: workflows.data
       ? {

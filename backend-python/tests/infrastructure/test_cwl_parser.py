@@ -35,9 +35,7 @@ def test_cwl_version_injection_keeps_umlauts_readable() -> None:
 
 
 def test_inputs_yaml_keeps_umlauts_in_string_defaults() -> None:
-    parameter = Parameter(
-        name="label", cwl_type="string", default_value="Grüße", direction=ParameterDirection.INPUT
-    )
+    parameter = Parameter(name="label", cwl_type="string", default_value="Grüße", direction=ParameterDirection.INPUT)
     inputs = generate_inputs_yaml([parameter], "tool", 1)
     assert "label: Grüße" in inputs
 

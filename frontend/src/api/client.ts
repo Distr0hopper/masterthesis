@@ -62,16 +62,14 @@ async function decodeBlobErrorBody(error: unknown): Promise<void> {
 
 export const apiClient = {
   baseURL: axiosInstance.defaults.baseURL,
-  get: <T>(url: string, config?: AxiosRequestConfig) =>
-    axiosInstance.get<T>(url, config).then((res) => res.data),
+  get: <T>(url: string, config?: AxiosRequestConfig) => axiosInstance.get<T>(url, config).then((res) => res.data),
   post: <T>(url: string, data?: unknown, config?: AxiosRequestConfig) =>
     axiosInstance.post<T>(url, data, config).then((res) => res.data),
   put: <T>(url: string, data?: unknown, config?: AxiosRequestConfig) =>
     axiosInstance.put<T>(url, data, config).then((res) => res.data),
   patch: <T>(url: string, data?: unknown, config?: AxiosRequestConfig) =>
     axiosInstance.patch<T>(url, data, config).then((res) => res.data),
-  delete: <T>(url: string, config?: AxiosRequestConfig) =>
-    axiosInstance.delete<T>(url, config).then((res) => res.data),
+  delete: <T>(url: string, config?: AxiosRequestConfig) => axiosInstance.delete<T>(url, config).then((res) => res.data),
   // follows a HATEOAS link from an API response instead of a hand-built URL - the link
   // carries both the target and the HTTP method, so callers no longer duplicate either
   request: <T>(link: HateoasLink, data?: unknown, config?: AxiosRequestConfig): Promise<T> => {

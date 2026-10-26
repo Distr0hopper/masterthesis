@@ -19,6 +19,9 @@ class LinkedWorkflowDto(CamelModel):
     id: uuid.UUID
     version: int
     status: ComponentStatus
+    # a version of its lineage is public, so the name is fixed - renaming the canvas would
+    # be refused on Save
+    name_locked: bool = False
 
 
 class WorkflowDraftListItemDto(CamelModel):
@@ -55,7 +58,6 @@ class WorkflowDraftWriteRequestDto(CamelModel):
 
 
 class SyncedWorkflowDto(CamelModel):
-
     workflow_id: uuid.UUID
     name: str
     step_count: int

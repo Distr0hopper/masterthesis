@@ -16,7 +16,10 @@ export default function ToolNewVersionPage() {
   const { data: head, isLoading, error } = useLineageHead(id);
 
   const back = (
-    <Link to={ROUTES.toolDetail(id)} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900">
+    <Link
+      to={ROUTES.toolDetail(id)}
+      className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900"
+    >
       <ChevronLeft className="h-4 w-4" /> Back to the tool
     </Link>
   );

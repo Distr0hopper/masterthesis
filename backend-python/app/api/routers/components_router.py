@@ -384,7 +384,5 @@ async def remove(
         raise ForbiddenException("Insufficient permission to delete this component")
 
     kind = ComponentKind(component.kind).value
-    deleted_draft = await components_service.remove(
-        component, current_user.id, delete_linked_draft, unpublish_parents
-    )
+    deleted_draft = await components_service.remove(component, current_user.id, delete_linked_draft, unpublish_parents)
     logger.info(f"Deleted {kind} {component_id}{' and its builder draft' if deleted_draft else ''}")

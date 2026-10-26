@@ -28,7 +28,11 @@ export function MyComponentCardActions({ component }: MyComponentCardActionsProp
         onOpenChange={setDeleteDialogOpen}
         onDeprecateInstead={() => setDeprecateDialogOpen(true)}
       />
-      <DeprecateComponentDialog component={component} open={deprecateDialogOpen} onOpenChange={setDeprecateDialogOpen} />
+      <DeprecateComponentDialog
+        component={component}
+        open={deprecateDialogOpen}
+        onOpenChange={setDeprecateDialogOpen}
+      />
     </>
   );
 }

@@ -44,7 +44,10 @@ async def _to_detail(draft: WorkflowDraft, service: WorkflowDraftService) -> Wor
     linked to and which of its components are gone - the builder reads both off it."""
     linked = await service.linked_workflows({draft.id})
     return WorkflowDraftTransformer.to_detail(
-        draft, linked.get(draft.id), missing_component_ids=await service.missing_component_ids(draft)
+        draft,
+        linked.get(draft.id),
+        missing_component_ids=await service.missing_component_ids(draft),
+        locked_names=await service.locked_names(linked.values()),
     )
 
 
@@ -55,7 +58,8 @@ async def list_my_drafts(
 ) -> list[WorkflowDraftListItemDto]:
     drafts = await service.list_my_drafts(current_user.id)
     linked = await service.linked_workflows({d.id for d in drafts})
-    return [WorkflowDraftTransformer.to_list_item(d, linked.get(d.id)) for d in drafts]
+    locked = await service.locked_names(linked.values())
+    return [WorkflowDraftTransformer.to_list_item(d, linked.get(d.id), locked) for d in drafts]
 
 
 @router.post(
@@ -130,10 +134,7 @@ async def delete_draft(
         raise ForbiddenException("Insufficient permission to delete this workflow draft")
 
     await service.delete_draft(draft, delete_linked_workflow)
-    logger.info(
-        f"Deleted workflow draft {draft_id}"
-        f"{' and its linked workflow' if delete_linked_workflow else ''}"
-    )
+    logger.info(f"Deleted workflow draft {draft_id}{' and its linked workflow' if delete_linked_workflow else ''}")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

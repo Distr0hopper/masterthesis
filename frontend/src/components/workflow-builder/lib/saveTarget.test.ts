@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ComponentStatus } from '@/api/components';
 import { saveTarget } from './saveTarget';
 
-const linked = (version: number, status: ComponentStatus) => ({ id: 'w', version, status });
+const linked = (version: number, status: ComponentStatus) => ({ id: 'w', version, status, nameLocked: false });
 
 describe('what Save says it will do', () => {
   it('is a plain Save while nothing or a draft is in My Components - it is overwritten in place', () => {

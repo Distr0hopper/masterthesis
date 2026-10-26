@@ -84,7 +84,11 @@ export async function publishedTool(page: Page, name: string): Promise<{ id: str
     multipart: {
       name,
       domains: 'animal_behavior',
-      cwlFile: { name: `${name}.cwl`, mimeType: 'application/octet-stream', buffer: Buffer.from(TOOL_CWL(`${name}.R`)) },
+      cwlFile: {
+        name: `${name}.cwl`,
+        mimeType: 'application/octet-stream',
+        buffer: Buffer.from(TOOL_CWL(`${name}.R`)),
+      },
     },
   });
   expect(created.status(), await created.text()).toBe(201);

@@ -72,7 +72,7 @@ export default function AboutPage() {
       <p className="mt-3 text-slate-600">
         Chair of Computer Science II · Julius-Maximilians-Universität Würzburg ·{' '}
         <a href="mailto:lorenz.gruber@uni-wuerzburg.de" className="text-jmu-blue-800 hover:underline">
-            lorenz.gruber@uni-wuerzburg.de
+          lorenz.gruber@uni-wuerzburg.de
         </a>
       </p>
     </div>

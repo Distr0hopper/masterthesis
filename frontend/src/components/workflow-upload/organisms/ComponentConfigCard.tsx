@@ -14,22 +14,16 @@ import { DomainMultiSelect } from '@/components/common/DomainMultiSelect';
 import { FormatLabelFields } from '@/components/common/FormatLabelFields';
 import { ComponentOrigin, type WorkflowStepPreviewDto } from '@/api/workflows';
 import { toolTransformer } from '@/api/tools';
-import {
-  ComponentStatus,
-  withFormatLabels,
-  useComponent,
-  useComponentNameAvailability,
-  type ExistingComponentDto,
-} from '@/api/components';
+import { ComponentStatus, withFormatLabels, useComponent, useComponentNameAvailability } from '@/api/components';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
-import { isNestedWorkflow, type ComponentConfigState } from '../lib/useComponentConfigs';
+import { isNestedWorkflow, type ComponentConfigState, type NameConflict } from '../lib/useComponentConfigs';
 
 interface ComponentConfigCardProps {
   preview: WorkflowStepPreviewDto;
   config: ComponentConfigState;
   error?: string;
   onChange: (patch: Partial<ComponentConfigState>) => void;
-  onNameConflictChange: (existing: ExistingComponentDto | null) => void;
+  onNameConflictChange: (conflict: NameConflict | null) => void;
 }
 
 export function ComponentConfigCard({
@@ -47,11 +41,13 @@ export function ComponentConfigCard({
   // the picked component isn't in the parse response, so its details are fetched for the label
   const { data: reused } = useComponent(config.reuseComponentId ?? '');
 
-  const taken = config.mode === 'create' && availability?.available === false ? availability.existing : null;
+  // taken even when the holder isn't shown - someone else's draft keeps its name, but not its details
+  const taken = config.mode === 'create' && availability?.available === false;
+  const takenBy = taken ? (availability?.existing ?? null) : null;
 
   useEffect(() => {
-    onNameConflictChange(taken);
-  }, [taken, onNameConflictChange]);
+    onNameConflictChange(taken ? { takenBy } : null);
+  }, [taken, takenBy, onNameConflictChange]);
 
   useEffect(() => {
     if (reused) onChange({ reuseKind: reused.kind, reuseName: reused.name, reuseVersion: reused.version });
@@ -119,8 +115,13 @@ export function ComponentConfigCard({
 
         {otherUses.length > 0 && (
           <p className="text-sm text-slate-500">
-            Also runs in {otherUses.map((path) => <span key={path} className="mr-1 font-mono">{path}</span>)}- one
-            component for all of them.
+            Also runs in{' '}
+            {otherUses.map((path) => (
+              <span key={path} className="mr-1 font-mono">
+                {path}
+              </span>
+            ))}
+            - one component for all of them.
           </p>
         )}
 
@@ -183,42 +184,49 @@ export function ComponentConfigCard({
               />
             </div>
 
-            {taken && (
+            {taken && !takenBy && (
+              <div className="flex items-center gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <span>This name is already taken — choose a different name.</span>
+              </div>
+            )}
+            {takenBy && (
               <div className="flex flex-wrap items-center gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 <span className="flex flex-wrap items-center gap-1">
                   This name is already taken by
-                  <ComponentLink componentId={taken.id} kind={taken.kind} name={taken.name} version={taken.version} />
-                  {taken.status === ComponentStatus.DEPRECATED && (
+                  <ComponentLink
+                    componentId={takenBy.id}
+                    kind={takenBy.kind}
+                    name={takenBy.name}
+                    version={takenBy.version}
+                  />
+                  {takenBy.status === ComponentStatus.DEPRECATED && (
                     <span>- deprecated, so a new workflow can't reuse it. Choose another name.</span>
                   )}
                 </span>
-                {taken.status !== ComponentStatus.DEPRECATED && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    onChange({
-                      mode: 'reuse',
-                      reuseComponentId: taken.id,
-                      reuseKind: taken.kind,
-                      reuseName: taken.name,
-                      reuseVersion: taken.version,
-                    })
-                  }
-                >
-                  Reuse it
-                </Button>
+                {takenBy.status !== ComponentStatus.DEPRECATED && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      onChange({
+                        mode: 'reuse',
+                        reuseComponentId: takenBy.id,
+                        reuseKind: takenBy.kind,
+                        reuseName: takenBy.name,
+                        reuseVersion: takenBy.version,
+                      })
+                    }
+                  >
+                    Reuse it
+                  </Button>
                 )}
               </div>
             )}
 
-            <DomainMultiSelect
-              value={config.domains}
-              onChange={(domains) => onChange({ domains })}
-              showHints={false}
-            />
+            <DomainMultiSelect value={config.domains} onChange={(domains) => onChange({ domains })} showHints={false} />
 
             <div className="flex flex-col gap-2">
               <Label htmlFor={`component-description-${preview.stepId}`}>Description (optional)</Label>

@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { ArrowUpRight, ChevronDown, ChevronLeft, Download, FileArchive, FileText, Pencil } from 'lucide-react';
+import { ArrowUpRight, ChevronDown, ChevronLeft, Download, FileArchive, FileText, Lock, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button.tsx';
 import { Input } from '@/components/ui/input.tsx';
 import {
@@ -50,6 +50,9 @@ export function WorkflowTopBar({
   const isExportingAny = isExporting || isExportingInputs;
   // the default is a placeholder, not a name - export refuses it too (canvasValidation)
   const isUnnamed = !workflowName.trim() || workflowName.trim() === DEFAULT_WORKFLOW_NAME;
+  // a public version was seen, nested or cited under this name - the backend refuses a rename
+  const nameLocked = linkedWorkflow?.nameLocked ?? false;
+  const NameIcon = nameLocked ? Lock : Pencil;
 
   return (
     <div className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white px-4">
@@ -73,14 +76,18 @@ export function WorkflowTopBar({
               placeholder="Name your workflow"
               value={isUnnamed ? '' : workflowName}
               onChange={(e) => onWorkflowNameChange(e.target.value)}
+              readOnly={nameLocked}
+              title={nameLocked ? 'A version of this workflow is public, so its name is fixed.' : undefined}
               className={cn(
                 'h-8 pr-8 font-mono font-semibold shadow-none focus-visible:ring-1 focus-visible:ring-offset-0',
                 isUnnamed
                   ? 'border-dashed border-slate-400 placeholder:font-sans placeholder:font-normal placeholder:text-slate-500'
-                  : 'border-transparent group-hover:border-slate-300',
+                  : nameLocked
+                    ? 'cursor-default border-transparent'
+                    : 'border-transparent group-hover:border-slate-300',
               )}
             />
-            <Pencil className="pointer-events-none absolute right-2.5 h-3.5 w-3.5 text-slate-400" aria-hidden />
+            <NameIcon className="pointer-events-none absolute right-2.5 h-3.5 w-3.5 text-slate-400" aria-hidden />
           </label>
           <div className="flex min-w-0 items-center gap-2 px-3 text-xs text-slate-500">
             {linkedWorkflow && (

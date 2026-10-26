@@ -15,7 +15,7 @@ from app.domain.models.component import ComponentStatus
 from app.domain.models.parameter import ParameterDirection
 from app.domain.models.workflow_draft import WorkflowDraft
 from tests.conftest import SessionFactory
-from tests.db_factories import bearer, port, save, tool, user
+from tests.db_factories import bearer, port, save, tool, user, workflow
 
 pytestmark = pytest.mark.anyio
 
@@ -122,6 +122,36 @@ async def test_a_canvas_exports_as_a_runnable_archive(client: httpx.AsyncClient,
     inputs = await client.get(f"/workflow-drafts/{draft.id}/export/inputs", headers=bearer(owner))
     assert inputs.status_code == 200
     assert inputs.headers["content-type"].startswith("application/yaml")
+
+
+async def test_a_canvas_running_a_workflow_exports_its_whole_tree(
+    client: httpx.AsyncClient, sessions: SessionFactory
+) -> None:
+    owner = user()
+    source, leaf = pipeline_tools(owner)
+    # an uploaded workflow keeps its archive's layout: it runs its tool from a subfolder
+    inner = workflow("inner", owner, leaf)
+    inner.workflow.steps[0].run_reference = "cwl/clean-tracks.cwl"  # type: ignore[union-attr]
+    inner.parameters = [port("in", ParameterDirection.INPUT), port("out", ParameterDirection.OUTPUT)]
+    draft = WorkflowDraft(name="Outer", canvas_state=canvas(source, inner), created_by_id=owner.id)
+    await save(sessions, owner, source, leaf, inner, draft)
+
+    response = await client.get(f"/workflow-drafts/{draft.id}/export", headers=bearer(owner))
+
+    assert response.status_code == 200, response.text
+    archive = zipfile.ZipFile(io.BytesIO(response.content))
+    assert sorted(archive.namelist()) == ["cwl/clean-tracks.cwl", "inner.cwl", "outer.cwl", "read-tracks.cwl"]
+    pipeline = yaml.safe_load(archive.read("outer.cwl"))
+    assert {"class": "SubworkflowFeatureRequirement"} in pipeline["requirements"]
+    assert [s["run"] for s in pipeline["steps"].values()] == ["read-tracks.cwl", "inner.cwl"]
+
+    synced = await client.post(f"/workflow-drafts/{draft.id}/sync", headers=bearer(owner))
+    assert synced.status_code == 201, synced.text
+    saved = (await client.get(f"/components/{synced.json()['workflowId']}", headers=bearer(owner))).json()
+    assert [(s["component"]["name"], s["component"]["kind"]) for s in saved["steps"]] == [
+        ("read-tracks", "tool"),
+        ("inner", "workflow"),
+    ]
 
 
 @pytest.mark.parametrize(

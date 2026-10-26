@@ -102,3 +102,34 @@ test('an unnamed canvas is not exported', async ({ page }) => {
   await expect(dialog).toContainText(/name/i);
   await expect(dialog.getByRole('button', { name: 'Export anyway' })).toHaveCount(0);
 });
+
+test('a saved workflow runs as a nested step on another canvas - but never on its own', async ({ page }) => {
+  await signUp(page);
+  const stamp = Date.now();
+  const tool = await publishedTool(page, `inner-tool-${stamp}`);
+  const innerName = `Inner pipeline ${stamp}`;
+
+  await page.goto('/builder/new');
+  await dropOnCanvas(page, tool.name, 300, 200);
+  await page.getByLabel('Workflow name').fill(innerName);
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByText('Saved - v1 in My Components is up to date.')).toBeVisible();
+
+  // its own palette leaves it out - a workflow cannot contain itself
+  await page.getByPlaceholder('Search by name...').fill(innerName);
+  await expect(page.getByText('No components match these filters.')).toBeVisible();
+
+  // another canvas offers it - narrowed to workflows, the tool is gone from the palette
+  await page.goto('/builder/new');
+  const palette = page.locator('aside');
+  await palette.getByRole('tab', { name: 'Workflows' }).click();
+  await page.getByPlaceholder('Search by name...').fill(tool.name);
+  await expect(page.getByText('No components match these filters.')).toBeVisible();
+  await palette.getByRole('tab', { name: 'All' }).click();
+
+  // and it lands as a nested workflow node
+  await dropOnCanvas(page, innerName, 300, 200);
+  await expect(
+    page.locator('.react-flow__node').filter({ hasText: innerName }).getByLabel('Nested workflow'),
+  ).toBeVisible();
+});

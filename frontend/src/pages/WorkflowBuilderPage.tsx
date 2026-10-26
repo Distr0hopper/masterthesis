@@ -415,7 +415,7 @@ function WorkflowBuilder() {
           linkedWorkflow={draft?.linkedWorkflow ?? null}
         />
         <div className="flex min-h-0 flex-1">
-          <WorkflowSidebar rankAgainst={rankAgainst} />
+          <WorkflowSidebar rankAgainst={rankAgainst} nestableIn={draft?.linkedWorkflow?.id} />
           {isError ? (
             <div className="flex flex-1 items-center justify-center text-slate-500">
               This workflow could not be loaded.

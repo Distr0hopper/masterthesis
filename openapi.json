@@ -422,6 +422,23 @@
             }
           },
           {
+            "name": "nestableIn",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Nestablein"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,

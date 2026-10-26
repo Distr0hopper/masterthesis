@@ -1,8 +1,15 @@
 import { Input } from '@/components/ui/input.tsx';
 import { DomainFilter } from '@/components/ui/domain-filter.tsx';
-import type { DomainDto } from '@/api/components';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import type { ComponentKind, DomainDto } from '@/api/components';
+import { KIND_COPY, KIND_ICONS, KINDS, parseKind } from '@/lib/componentKinds';
+
+const ALL = 'all';
 
 interface WorkflowSidebarFiltersProps {
+  /** undefined lists both kinds */
+  kind: ComponentKind | undefined;
+  onKindChange: (value: ComponentKind | undefined) => void;
   search: string;
   selectedDomains: string[];
   favoritesOnly: boolean;
@@ -15,11 +22,13 @@ interface WorkflowSidebarFiltersProps {
 }
 
 /**
- * Filter header for the {@link WorkflowSidebar} palette. Same three controls as the
- * Tools page's ListFilters, but stacked for the narrow rail and label-less - the section
- * header does the labelling here.
+ * Filter header for the {@link WorkflowSidebar} palette. Same controls as the Browse
+ * page - the kind tabs and ListFilters - but stacked for the narrow rail and label-less;
+ * the section header does the labelling here.
  */
 export function WorkflowSidebarFilters({
+  kind,
+  onKindChange,
   search,
   selectedDomains,
   favoritesOnly,
@@ -31,7 +40,24 @@ export function WorkflowSidebarFilters({
 }: WorkflowSidebarFiltersProps) {
   return (
     <div className="flex flex-col gap-3 border-b border-slate-200 p-4">
-      <span className="text-xs uppercase tracking-wide text-slate-500">Tools</span>
+      <span className="text-xs uppercase tracking-wide text-slate-500">Components</span>
+      {/* a filter, not tabbed content - as on the Browse page */}
+      <Tabs value={kind ?? ALL} onValueChange={(value) => onKindChange(parseKind(value))}>
+        <TabsList className="w-full">
+          <TabsTrigger value={ALL} className="flex-1">
+            All
+          </TabsTrigger>
+          {KINDS.map((k) => {
+            const Icon = KIND_ICONS[k];
+            return (
+              <TabsTrigger key={k} value={k} className="flex-1 gap-1.5">
+                <Icon className="h-4 w-4" />
+                {KIND_COPY[k].plural}
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
+      </Tabs>
       <Input
         placeholder="Search by name..."
         value={search}

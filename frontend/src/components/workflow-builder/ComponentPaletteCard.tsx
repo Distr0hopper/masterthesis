@@ -1,5 +1,6 @@
-import { ExternalLink, Star } from 'lucide-react';
+import { ExternalLink, Star, Workflow } from 'lucide-react';
 import {
+  ComponentKind,
   ComponentStatus,
   type ComponentDisplayModel,
 } from '@/api/components';
@@ -87,6 +88,13 @@ export function ComponentPaletteCard({ component }: ComponentPaletteCardProps) {
         >
           <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
           <span className="truncate">Possibly compatible with {match.componentName}</span>
+        </span>
+      )}
+
+      {component.kind === ComponentKind.WORKFLOW && (
+        <span className="flex items-center gap-1 text-xs text-slate-500">
+          <Workflow className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          Workflow - runs as a nested step
         </span>
       )}
 

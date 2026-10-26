@@ -237,6 +237,17 @@ def externalize_inline_steps(cwl_content: str, run_references: dict[str, str]) -
     mutating `definition["run"]` here mutates `doc` directly - no need to rebuild
     `steps:`.
     """
+    return _set_runs(cwl_content, run_references)
+
+
+def retarget_steps(cwl_content: str, run_references: dict[str, str]) -> str:
+    """The document with these steps' `run:` (step_id -> new path) changed - for an
+    archive's copy of a stored pipeline (see composite.tree.ArchiveLayout). Without any,
+    the text comes back byte for byte, never re-serialised."""
+    return _set_runs(cwl_content, run_references) if run_references else cwl_content
+
+
+def _set_runs(cwl_content: str, run_references: dict[str, str]) -> str:
     doc: Any = load_cwl(cwl_content)
     for step_id, definition in normalize_steps(doc.get("steps")):
         if step_id in run_references:

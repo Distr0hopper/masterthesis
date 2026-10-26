@@ -126,13 +126,13 @@ def assemble_cwl_zip(
       - archive:   ``{slug}.zip``
       - main doc:  ``{slug}.cwl`` (``{slug}-workflow.cwl`` if a step file already claims
                    that name)
-      - step docs: written under the names the caller passes. The builder passes
-                   ``cwl_filename_for(component_name)``; the download passes each step's
-                   stored ``run_reference`` (it has to - that is what the pipeline's
-                   ``run:`` lines point at).
-      - extras:    ``$import``/``$include`` targets, written at their stored *paths* (e.g.
-                   ``types/spatial.yml``) rather than flattened, so the import in the CWL
-                   still resolves. Empty for the builder, which generates no imports.
+      - step docs: written at the paths the caller passes - both lay a tree out the same
+                   way (composite.tree.ArchiveLayout): a step's document next to the
+                   pipeline running it, each nested workflow in a folder of its own
+                   (``inner/inner.cwl``, its steps beside it).
+      - extras:    ``$import``/``$include`` targets, written at their *paths* next to the
+                   document importing them (e.g. ``types/spatial.yml``) rather than
+                   flattened, so the import in the CWL still resolves.
 
     Returns ``(archive_filename, zip_bytes)``.
     """

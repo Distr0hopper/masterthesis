@@ -42,7 +42,7 @@ from app.application.exception.workflow_exceptions import (
 )
 from app.application.unit_of_work import UnitOfWork
 from app.domain.composite import lifecycle
-from app.domain.composite.tree import ConflictingTreeFileError, auxiliary_files, step_files
+from app.domain.composite.tree import ArchiveLayout, ConflictingTreeFileError
 from app.domain.models.component import (
     MAX_DESCRIPTION_LENGTH,
     Component,
@@ -58,6 +58,7 @@ from app.domain.repository.components_repository import ComponentListFilter
 from app.infrastructure.cwl.canvas_graph import canvas_component_ids
 from app.infrastructure.cwl.cwl_parser import extract_parameters, extract_schema_urls, inject_description
 from app.infrastructure.cwl.workflow_generator import assemble_cwl_zip
+from app.infrastructure.cwl.workflow_parser import retarget_steps
 from app.infrastructure.db.unit_of_work import SqlUnitOfWork
 from app.infrastructure.format_service.format_service_client import FormatServiceClient
 from app.infrastructure.format_service.ontology import resolve_ontology_url
@@ -684,8 +685,8 @@ class ComponentsService:
 
     async def get_download(self, component: Component) -> Download:
         """A tool downloads as its .cwl document; a workflow as a zip of its pipeline plus
-        every step document of its tree - nested workflows and their tools included - and
-        every file any of them imports."""
+        every step document of its tree and every file any of them imports - each nested
+        workflow in a folder of its own (see ArchiveLayout)."""
         if component.is_tool:
             return Download(
                 filename=f"{component.name}-v{component.version}.cwl",
@@ -694,19 +695,27 @@ class ComponentsService:
             )
 
         await self.load_tree(component)
-        # same archive layout and naming as the builder's "Export CWL" (assemble_cwl_zip).
-        # Step files keep their stored run_reference - that is what each pipeline's `run:`
-        # lines point at, so they cannot be renamed here.
+        # same archive layout and naming as the builder's "Export CWL" (assemble_cwl_zip)
         try:
-            files = step_files(component)
+            layout = ArchiveLayout.of(component)
         except ConflictingTreeFileError as err:
-            raise ConflictingStepFileError(err.path) from err
-        try:
-            extras = auxiliary_files(component)
-        except ConflictingTreeFileError as err:
-            raise ConflictingAuxiliaryFileError(err.path) from err
-        filename, content = assemble_cwl_zip(component.name, component.cwl_content, files, extras)
+            raise (ConflictingAuxiliaryFileError if err.imported else ConflictingStepFileError)(err.path) from err
+        filename, content = assemble_cwl_zip(
+            component.name,
+            retarget_steps(component.cwl_content, layout.retargets.get("", {})),
+            self.laid_out_documents(layout),
+            sorted(layout.imported.items()),
+        )
         return Download(filename=filename, content=content, media_type="application/zip")
+
+    @staticmethod
+    def laid_out_documents(layout: ArchiveLayout) -> list[tuple[str, str]]:
+        """(path, CWL) of every document below the root of `layout`, sorted - each nested
+        workflow's steps pointed into its folder. Shared with the builder's export."""
+        return [
+            (path, retarget_steps(component.cwl_content, layout.retargets.get(path, {})))
+            for path, component in sorted(layout.documents.items())
+        ]
 
 
 #: Every command a component understands, whatever its kind - see app.application.commands.registry

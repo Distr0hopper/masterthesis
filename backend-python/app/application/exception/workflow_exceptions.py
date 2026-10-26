@@ -34,15 +34,15 @@ class ConflictingAuxiliaryFileError(Exception):
 
 
 class ConflictingStepFileError(Exception):
-    """Two different step documents of one workflow tree claim the same file name - e.g. a
-    nested workflow running another version of a tool its parent also runs. Every `run:`
-    reference resolves in one flat archive, which cannot hold both."""
+    """Two steps of one workflow run different documents under the same `run:` file name.
+    Each nested workflow gets a folder of its own, so this only happens within one
+    pipeline - its `run:` lines resolve next to it, where only one of them fits."""
 
     def __init__(self, path: str) -> None:
         self.path = path
         super().__init__(
             f"Two different step documents of this workflow are both named '{path}' - the archive cannot hold "
-            "both (does a nested workflow use another version of a tool this workflow uses too?)"
+            "both (do two steps of one pipeline run different versions of the same component?)"
         )
 
 

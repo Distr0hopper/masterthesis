@@ -3,12 +3,11 @@ import uuid
 import pytest
 
 from app.domain.composite.tree import (
+    ArchiveLayout,
     ConflictingTreeFileError,
-    auxiliary_files,
     descendants,
     has_nested_workflows,
     leaf_tools,
-    step_files,
     walk,
     would_create_cycle,
 )
@@ -94,28 +93,54 @@ def test_unrelated_nesting_is_not_a_cycle() -> None:
     assert not would_create_cycle(workflow("outer"), tool("t"))
 
 
-def test_step_files_include_nested_workflows_and_their_steps() -> None:
-    inner = workflow("inner", tool("b"))
+def test_each_nested_workflow_gets_a_folder_of_its_own() -> None:
+    inner = workflow("inner", tool("b"), workflow("deepest", tool("c")))
     outer = workflow("outer", tool("a"), inner)
 
-    assert [name for name, _ in step_files(outer)] == ["a.cwl", "b.cwl", "inner.cwl"]
-    assert dict(step_files(outer))["inner.cwl"] == inner.cwl_content
+    layout = ArchiveLayout.of(outer)
+
+    assert sorted(layout.documents) == [
+        "a.cwl",
+        "inner/b.cwl",
+        "inner/deepest/c.cwl",
+        "inner/deepest/deepest.cwl",
+        "inner/inner.cwl",
+    ]
+    assert layout.documents["inner/inner.cwl"] is inner
+    # only the steps running a nested workflow move - relative to the document running them
+    assert layout.retargets == {"": {"step_1": "inner/inner.cwl"}, "inner/inner.cwl": {"step_1": "deepest/deepest.cwl"}}
 
 
-def test_step_files_reject_two_documents_under_one_name() -> None:
-    outer = workflow("outer", tool("a", cwl="one"), workflow("inner", tool("a", cwl="two")))
-    with pytest.raises(ConflictingTreeFileError):
-        step_files(outer)
+def test_two_versions_of_one_tool_fit_when_a_nested_workflow_runs_the_other() -> None:
+    # what superseding produces: the parent moved on to v2, the nested workflow still runs v1
+    outer = workflow("outer", tool("a", cwl="v2"), workflow("inner", tool("a", cwl="v1")))
+
+    documents = {path: c.cwl_content for path, c in ArchiveLayout.of(outer).documents.items()}
+
+    assert (documents["a.cwl"], documents["inner/a.cwl"]) == ("v2", "v1")
 
 
-def test_auxiliary_files_merge_identical_imports_across_the_tree() -> None:
+def test_a_component_reached_twice_is_written_once() -> None:
+    shared = tool("a")
+    assert sorted(ArchiveLayout.of(workflow("outer", shared, shared)).documents) == ["a.cwl"]
+
+
+def test_one_pipeline_cannot_run_two_documents_under_one_name() -> None:
+    outer = workflow("outer", tool("a", cwl="one"), tool("a", cwl="two"))
+    with pytest.raises(ConflictingTreeFileError) as raised:
+        ArchiveLayout.of(outer)
+    assert (raised.value.path, raised.value.imported) == ("a.cwl", False)
+
+
+def test_imports_sit_next_to_the_document_importing_them() -> None:
     types = {"types/spatial.yml": "x"}
-    outer = workflow("outer", tool("a", files=types), workflow("inner", tool("b", files=types)))
-    assert auxiliary_files(outer) == [("types/spatial.yml", "x")]
+    outer = workflow("outer", tool("a", files=types), tool("b", files=types), workflow("inner", tool("c", files=types)))
+    assert ArchiveLayout.of(outer).imported == {"types/spatial.yml": "x", "inner/types/spatial.yml": "x"}
 
-    outer = workflow("outer", tool("a", files=types), tool("b", files={"types/spatial.yml": "y"}))
-    with pytest.raises(ConflictingTreeFileError):
-        auxiliary_files(outer)
+    clashing = workflow("outer", tool("a", files=types), tool("b", files={"types/spatial.yml": "y"}))
+    with pytest.raises(ConflictingTreeFileError) as raised:
+        ArchiveLayout.of(clashing)
+    assert raised.value.imported
 
 
 def test_nested_workflows_are_detected() -> None:

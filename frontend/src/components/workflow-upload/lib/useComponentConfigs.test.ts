@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ComponentStatus, ParameterDirection, type PreviewParameterDto } from '@/api/components';
 import { ComponentOrigin, type PreviousStepComponentDto, type WorkflowStepPreviewDto } from '@/api/workflows';
-import { initialConfigState, toConfigDto } from './useComponentConfigs';
+import { initialConfigState, toConfigDto, validateConfigs } from './useComponentConfigs';
 
 function filePort(name: string, direction: ParameterDirection): PreviewParameterDto {
   return {
@@ -109,5 +109,34 @@ describe('toConfigDto - a versioning step', () => {
     const dto = toConfigDto(preview, initialConfigState(preview));
     expect(dto).not.toHaveProperty('name');
     expect(dto).not.toHaveProperty('domains');
+  });
+});
+
+describe('validateConfigs - a name already taken', () => {
+  const preview = step();
+  const configs = { a: { ...initialConfigState(preview), domains: ['animal_behavior'] } };
+
+  it('names the component holding it when the user may see it', () => {
+    const takenBy = {
+      id: 'b',
+      kind: 'tool' as const,
+      name: 'a',
+      version: 3,
+      domains: [],
+      status: ComponentStatus.PUBLISHED,
+      createdAt: '2026-01-01T00:00:00Z',
+      canAddVersion: false,
+    };
+    expect(validateConfigs([preview], configs, { a: { takenBy } }).a).toBe('A component named "a" already exists (v3).');
+  });
+
+  it("blocks the save even when the holder is someone else's draft the user may not see", () => {
+    expect(validateConfigs([preview], configs, { a: { takenBy: null } }).a).toBe(
+      'This name is already taken — choose a different name.',
+    );
+  });
+
+  it('passes a free name', () => {
+    expect(validateConfigs([preview], configs, { a: null })).toEqual({});
   });
 });

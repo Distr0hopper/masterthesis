@@ -3,8 +3,7 @@ import { Card, CardContent } from '@/components/ui/card.tsx';
 import { DomainMultiSelect } from '@/components/common/DomainMultiSelect';
 import { UploadMetadataFields } from '@/components/common/UploadMetadataFields';
 import type { WorkflowStepPreviewDto, ParseWorkflowResponseDto } from '@/api/workflows';
-import type { ExistingComponentDto } from '@/api/components';
-import type { ComponentConfigState } from '../lib/useComponentConfigs';
+import type { ComponentConfigState, NameConflict } from '../lib/useComponentConfigs';
 import { ComponentConfigCard } from './ComponentConfigCard';
 import { ParsedWorkflowOverview } from './ParsedWorkflowOverview';
 
@@ -16,7 +15,7 @@ interface ComponentConfigStepProps {
   errors: Record<string, string>;
   onChange: (stepId: string, patch: Partial<ComponentConfigState>) => void;
   onApplyDomainsToAll: (domains: string[]) => void;
-  onNameConflictChange: (stepId: string, existing: ExistingComponentDto | null) => void;
+  onNameConflictChange: (stepId: string, conflict: NameConflict | null) => void;
   locked?: boolean;
 }
 
@@ -84,7 +83,7 @@ export function ComponentConfigStep({
             config={config}
             error={errors[preview.stepId]}
             onChange={(patch) => onChange(preview.stepId, patch)}
-            onNameConflictChange={(existing) => onNameConflictChange(preview.stepId, existing)}
+            onNameConflictChange={(conflict) => onNameConflictChange(preview.stepId, conflict)}
           />
         );
       })}

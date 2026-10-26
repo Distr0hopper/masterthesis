@@ -345,8 +345,10 @@ class WorkflowsService:
                 origin, run_reference = COMPONENT_ORIGIN_INLINE, None
                 suggested_name = inline.suggested_name
 
-            existing = await self.uow.components.find_latest_by_name(suggested_name)
-            parameters = self._safe_extract_parameters(cwl_content)
+            existing = self._newest_visible(
+                await self.uow.components.find_versions_by_name(suggested_name), actor_id
+            )
+            parameters =self._safe_extract_parameters(cwl_content)
             ontology_url = self.components_service.ontology_url_for(cwl_content)
             await self.components_service.resolve_format_labels(ontology_url, parameters)
             previews.append(
@@ -370,6 +372,13 @@ class WorkflowsService:
                 )
             )
         return previews
+
+    @staticmethod
+    def _newest_visible(versions: list[Component], actor_id: uuid.UUID | None) -> Component | None:
+        """The newest of `versions` the actor may read - someone else's draft is private, so
+        a name conflict never reveals it (the name is still taken; the save says so)."""
+        visible = [v for v in versions if lifecycle.is_public(v) or (actor_id is not None and v.created_by_id == actor_id)]
+        return max(visible, key=lambda v: v.version, default=None)
 
     @staticmethod
     def _previous_step_component(

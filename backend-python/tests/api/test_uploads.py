@@ -221,3 +221,41 @@ async def test_a_workflow_step_cannot_reuse_someone_elses_draft(
     # like any id it may not read - 404, as if the draft did not exist
     assert response.status_code == 404, response.text
     assert (await client.get("/components/mine", headers=bearer(owner))).json()["unpublished"]["content"] == []
+
+
+INLINE_PIPELINE = """\
+cwlVersion: v1.2
+class: Workflow
+inputs: {}
+outputs: {}
+steps:
+  clean-tracks:
+    run:
+      class: CommandLineTool
+      baseCommand: echo
+      inputs: {}
+      outputs: {}
+    in: {}
+    out: []
+"""
+
+
+async def test_the_preview_never_names_someone_elses_draft_as_a_name_conflict(
+    client: httpx.AsyncClient, sessions: SessionFactory
+) -> None:
+    from app.domain.models.component import ComponentStatus
+
+    owner, author = user(), user()
+    published = tool("clean-tracks", author, version=1)
+    secret = tool("clean-tracks", author, ComponentStatus.DRAFT, version=2)
+    await save(sessions, owner, author, published, secret)
+
+    def conflict(response: httpx.Response) -> dict | None:
+        assert response.status_code == 200, response.text
+        return response.json()["componentPreviews"][0]["nameConflict"]
+
+    files = {"file": ("pipeline.cwl", INLINE_PIPELINE.encode())}
+    # the newest version the caller may read - the public v1, never the private v2 above it
+    assert conflict(await client.post("/workflows/parse", files=files, headers=bearer(owner)))["version"] == 1
+    # its owner sees their own draft
+    assert conflict(await client.post("/workflows/parse", files=files, headers=bearer(author)))["version"] == 2

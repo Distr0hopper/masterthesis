@@ -92,7 +92,7 @@ async def create(
     _require_size(content)
 
     logger.info(f"Creating tool '{dto.name}' for user {current_user.id}")
-    tool = ToolTransformer.from_create_dto(dto, content.decode("utf-8"), current_user.id)
+    tool = ToolTransformer.from_create_dto(dto, ToolsService.decode_upload(content), current_user.id)
     created = await tools_service.create_manual(
         tool, format_labels=ParameterTransformer.to_format_labels(dto.format_labels)
     )
@@ -221,7 +221,7 @@ async def add_version(
     content = await dto.cwl_file.read()
     _require_size(content)
 
-    draft = ToolTransformer.from_add_version_dto(parent, dto, content.decode("utf-8"))
+    draft = ToolTransformer.from_add_version_dto(parent, dto, ToolsService.decode_upload(content))
     tool = await tools_service.add_uploaded_version(
         draft, format_labels=ParameterTransformer.to_format_labels(dto.format_labels)
     )

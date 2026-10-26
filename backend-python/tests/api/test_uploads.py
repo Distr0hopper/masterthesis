@@ -107,6 +107,20 @@ async def test_bad_tool_uploads_are_refused(client: httpx.AsyncClient, sessions:
     assert (await create_tool(client, bearer(owner), cwl=too_big, name="big")).status_code == 400
 
 
+    not_text = await client.post(
+        "/tools",
+        data={"name": "binary", "domains": "animal_behavior"},
+        files={"cwlFile": ("tool.cwl", b"\xff\xfe\x00binary")},
+        headers=bearer(owner),
+    )
+    assert not_text.status_code == 400, not_text.text
+    taken = (await client.get("/components/mine", headers=bearer(owner))).json()["published"]["content"][0]
+    new_version = await client.post(
+        f"/tools/{taken['id']}/versions", files={"cwlFile": ("tool.cwl", b"\xff\xfe")}, headers=bearer(owner)
+    )
+    assert new_version.status_code == 400, new_version.text
+
+
 def archive(files: dict[str, str]) -> bytes:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as zf:

@@ -119,11 +119,16 @@ class ToolsService:
         The preview is what gets saved: create_manual reads the document through the same
         read_tool_details.
         """
+        return await self.read_tool_details(self.decode_upload(content), "Uploaded", ComponentSource.MANUAL_UPLOAD)
+
+    @staticmethod
+    def decode_upload(content: bytes) -> str:
+        """An uploaded .cwl as text - shared by the preview and the saves, so a binary file
+        is the same 400 everywhere."""
         try:
-            cwl_content = content.decode("utf-8")
+            return content.decode("utf-8")
         except UnicodeDecodeError as err:
             raise InvalidCwlError("Uploaded", "File is not valid UTF-8 text") from err
-        return await self.read_tool_details(cwl_content, "Uploaded", ComponentSource.MANUAL_UPLOAD)
 
     async def preview_package(self, repo_url: str) -> PackagePreview:
         """Package a GitHub repo without persisting it, so the generated tool can be

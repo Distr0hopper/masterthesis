@@ -18,12 +18,7 @@ interface CanvasValidationDialogProps {
   onProceed: () => void;
 }
 
-export function CanvasValidationDialog({
-  open,
-  onOpenChange,
-  errors,
-  onProceed,
-}: CanvasValidationDialogProps) {
+export function CanvasValidationDialog({ open, onOpenChange, errors, onProceed }: CanvasValidationDialogProps) {
   const blocking = errors.filter(isBlocking);
   const warnings = errors.filter((error) => !isBlocking(error));
   const canProceed = blocking.length === 0;
@@ -32,9 +27,7 @@ export function CanvasValidationDialog({
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>
-            {canProceed ? 'Export this workflow?' : 'Cannot export workflow'}
-          </AlertDialogTitle>
+          <AlertDialogTitle>{canProceed ? 'Export this workflow?' : 'Cannot export workflow'}</AlertDialogTitle>
           <AlertDialogDescription>
             {canProceed
               ? 'The workflow is valid, but check the following before you export:'

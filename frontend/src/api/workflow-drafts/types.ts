@@ -5,6 +5,8 @@ export interface LinkedWorkflowDto {
   id: string;
   version: number;
   status: ComponentStatus;
+  /** a version of its lineage is public, so the name is fixed - a renamed canvas would be refused on Save */
+  nameLocked: boolean;
 }
 
 export interface WorkflowDraftListItemDto {

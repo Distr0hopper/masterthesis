@@ -101,12 +101,15 @@ export function WorkflowUploadWizard({ parent }: WorkflowUploadWizardProps) {
   };
 
   const readFile = (selected: File) => {
-    parseMutation.mutate({ file: selected, parentId: parent?.id }, {
-      onSuccess: (response) => {
-        applyParsed(response);
-        if (blockersOf(response).length === 0) wizard.goTo(2);
+    parseMutation.mutate(
+      { file: selected, parentId: parent?.id },
+      {
+        onSuccess: (response) => {
+          applyParsed(response);
+          if (blockersOf(response).length === 0) wizard.goTo(2);
+        },
       },
-    });
+    );
   };
 
   const handleFile = (selected: File | null) => {

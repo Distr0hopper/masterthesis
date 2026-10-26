@@ -65,8 +65,7 @@ export function ParsedWorkflowOverview({ parsed }: ParsedWorkflowOverviewProps) 
         <div className="flex flex-col gap-1">
           <p className="text-sm font-medium text-slate-900">Imported files</p>
           <p className="text-xs text-slate-500">
-            Type definitions the CWL pulls in. They are kept with the workflow and included in every
-            download.
+            Type definitions the CWL pulls in. They are kept with the workflow and included in every download.
           </p>
           <ul className="mt-1 divide-y rounded-md border border-input">
             {parsed.auxiliaryFiles.map((path) => (

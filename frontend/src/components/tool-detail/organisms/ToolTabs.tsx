@@ -58,7 +58,11 @@ export function ToolTabs({ model, isPreview = false }: ToolTabsProps) {
         <Tabs defaultValue="overview">
           <TabsList className={TABS_LIST_CLASSNAME}>
             {tabs.map(({ value, label, icon: Icon, badge }) => (
-              <TabsTrigger key={value} value={value} className={cn(TAB_TRIGGER_CLASSNAME, badge !== undefined && 'gap-2')}>
+              <TabsTrigger
+                key={value}
+                value={value}
+                className={cn(TAB_TRIGGER_CLASSNAME, badge !== undefined && 'gap-2')}
+              >
                 <Icon className="h-4 w-4" /> {label}
                 {badge !== undefined && <Badge variant="secondary">{badge}</Badge>}
               </TabsTrigger>
@@ -73,9 +77,7 @@ export function ToolTabs({ model, isPreview = false }: ToolTabsProps) {
             <CodeBlock
               title={`${model.name}.cwl`}
               content={model.cwlContent}
-              {...(isPreview
-                ? { downloadFilename: `${model.name}.cwl` }
-                : { onDownload: handleCwlDownload })}
+              {...(isPreview ? { downloadFilename: `${model.name}.cwl` } : { onDownload: handleCwlDownload })}
             />
           </TabsContent>
 

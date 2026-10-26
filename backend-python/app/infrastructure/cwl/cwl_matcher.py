@@ -17,9 +17,7 @@ def normalize_name(value: str) -> str:
     return normalized
 
 
-def best_match(
-    run_reference: str, candidates: list[tuple[uuid.UUID, str]]
-) -> tuple[uuid.UUID, str, float] | None:
+def best_match(run_reference: str, candidates: list[tuple[uuid.UUID, str]]) -> tuple[uuid.UUID, str, float] | None:
     """candidates: (component_id, component_name) pairs, typically the latest version per
     lineage of every existing Component. Returns (component_id, component_name, score) for
     the highest-scoring candidate at or above MATCH_THRESHOLD, or None if none qualify."""

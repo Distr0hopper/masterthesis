@@ -12,7 +12,7 @@ from datetime import UTC, datetime, timedelta
 
 from app.config import get_settings
 from app.domain.composite import lifecycle
-from app.domain.models.component import Component
+from app.domain.models.component import Component, ComponentStatus
 from app.domain.models.user import User
 
 #: who may run a command on a component - the viewer is None when anonymous. Refused: 403
@@ -62,6 +62,22 @@ def is_not_superseded(component: Component) -> bool:
     """For the commands that make a version PUBLISHED - not while a newer version of the
     lineage is published (see lifecycle.newer_published)."""
     return not component.is_superseded
+
+
+def is_publishable(component: Component) -> bool:
+    """For publish - a draft, and no newer version of its lineage published."""
+    return lifecycle.is_draft(component) and is_not_superseded(component)
+
+
+def is_deprecatable(component: Component) -> bool:
+    """For deprecate - a published version. Deprecating again only replaces the note, which
+    the command accepts, but it is not offered as an action of its own."""
+    return component.status == ComponentStatus.PUBLISHED
+
+
+def is_undeprecatable(component: Component) -> bool:
+    """For undeprecate - a deprecated version no newer published one has superseded."""
+    return lifecycle.is_deprecated(component) and is_not_superseded(component)
 
 
 def is_readable_by(user: User | None, component: Component) -> bool:

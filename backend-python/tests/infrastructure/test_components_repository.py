@@ -64,7 +64,9 @@ async def test_drafts_are_listed_only_for_their_owner(sessions: SessionFactory) 
 async def test_kind_creator_and_exclusion_filters(sessions: SessionFactory) -> None:
     owner, stranger = user(), user()
     leaf = tool("leaf", owner)
-    await save(sessions, owner, stranger, leaf, workflow("flow", owner, leaf), tool("foreign", stranger), tool("orphan", None))
+    await save(
+        sessions, owner, stranger, leaf, workflow("flow", owner, leaf), tool("foreign", stranger), tool("orphan", None)
+    )
 
     assert (await page(sessions, ComponentListFilter(kind=ComponentKind.WORKFLOW)))[0] == [("flow", 1)]
     assert (await page(sessions, ComponentListFilter(created_by=owner.id)))[0] == [("flow", 1), ("leaf", 1)]
@@ -183,6 +185,25 @@ async def test_renaming_a_lineage_renames_every_version_and_its_favorites(sessio
         assert [c.version for c in await repository.find_versions_by_name("new")] == [1, 2]
         assert await repository.find_versions_by_name("old") == []
         assert (await page(sessions, ComponentListFilter(favorited_by=owner.id)))[0] == [("new", 2)]
+
+
+async def test_names_with_a_status_are_found_per_lineage(sessions: SessionFactory) -> None:
+    from app.domain.composite.lifecycle import PUBLIC_STATUSES
+
+    owner = user()
+    await save(
+        sessions,
+        owner,
+        tool("public-v1", owner),
+        tool("public-v1", owner, ComponentStatus.DRAFT, version=2),
+        tool("deprecated", owner, ComponentStatus.DEPRECATED),
+        tool("drafts-only", owner, ComponentStatus.DRAFT),
+    )
+
+    async with sessions() as session:
+        names = ["public-v1", "deprecated", "drafts-only", "unknown"]
+        found = await ComponentsRepository(session).find_names_with_status(names, PUBLIC_STATUSES)
+    assert found == {"public-v1", "deprecated"}
 
 
 async def test_stats_count_lineages_and_contributors_of_listed_components(sessions: SessionFactory) -> None:

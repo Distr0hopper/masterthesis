@@ -186,8 +186,8 @@ export function ConfirmPublishDialog({
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
             <span>
               You can unpublish {hasDrafts ? 'it' : `v${component.version}`} within{' '}
-              {windowInWords(unpublishWindowSeconds)}. After that it stays public for good - others may already use
-              or cite it - and can only be deprecated, not removed.
+              {windowInWords(unpublishWindowSeconds)}. After that it stays public for good - others may already use or
+              cite it - and can only be deprecated, not removed.
             </span>
           </div>
         )}

@@ -71,7 +71,11 @@ export default function MyComponentsPage() {
       </p>
 
       {/* a filter, not tabbed content - the sections below follow the URL's ?kind= */}
-      <Tabs value={kind ?? ALL} onValueChange={(value) => setFilter('kind', value === ALL ? '' : value)} className="mt-6">
+      <Tabs
+        value={kind ?? ALL}
+        onValueChange={(value) => setFilter('kind', value === ALL ? '' : value)}
+        className="mt-6"
+      >
         <TabsList>
           <TabsTrigger value={ALL}>All</TabsTrigger>
           {KINDS.map((k) => {

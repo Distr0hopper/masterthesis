@@ -21,6 +21,7 @@ from app.application.exception.workflow_exceptions import (
     InvalidWorkflowArchiveError,
     InlineStepNotBindableError,
     InvalidWorkflowCwlError,
+    LineageNameLockedError,
     MissingImportedFileError,
     PublishedWorkflowStepsLockedError,
     StepsEditedInBuilderError,
@@ -29,11 +30,11 @@ from app.application.exception.workflow_exceptions import (
     WorkflowStepNotFoundError,
     WorkflowStepNotMatchedError,
 )
-from app.application.service.components_service import ComponentsService
+from app.application.service.components_service import ComponentsService, Ports
 from app.application.service.tools_service import ToolsService
 from app.application.unit_of_work import UnitOfWork
 from app.domain.composite import lifecycle
-from app.domain.composite.tree import would_create_cycle
+from app.domain.composite.tree import contains_lineage, would_create_cycle
 from app.domain.models.component import Component, ComponentKind, ComponentSource, ComponentStatus
 from app.domain.models.component_domain import ComponentDomain
 from app.domain.models.component_file import ComponentFile
@@ -345,7 +346,7 @@ class WorkflowsService:
                 origin, run_reference = COMPONENT_ORIGIN_INLINE, None
                 suggested_name = inline.suggested_name
 
-            existing = await self.uow.components.find_latest_by_name(suggested_name)
+            existing = self._newest_visible(await self.uow.components.find_versions_by_name(suggested_name), actor_id)
             parameters = self._safe_extract_parameters(cwl_content)
             ontology_url = self.components_service.ontology_url_for(cwl_content)
             await self.components_service.resolve_format_labels(ontology_url, parameters)
@@ -370,6 +371,15 @@ class WorkflowsService:
                 )
             )
         return previews
+
+    @staticmethod
+    def _newest_visible(versions: list[Component], actor_id: uuid.UUID | None) -> Component | None:
+        """The newest of `versions` the actor may read - someone else's draft is private, so
+        a name conflict never reveals it (the name is still taken; the save says so)."""
+        visible = [
+            v for v in versions if lifecycle.is_public(v) or (actor_id is not None and v.created_by_id == actor_id)
+        ]
+        return max(visible, key=lambda v: v.version, default=None)
 
     @staticmethod
     def _previous_step_component(
@@ -430,16 +440,20 @@ class WorkflowsService:
             cwl_content = content.decode("utf-8")
         except UnicodeDecodeError as err:
             raise InvalidWorkflowCwlError("File is not valid UTF-8 text") from err
-        return WorkflowUploadContent(
-            is_zip=False, cwl_content=cwl_content, pipeline_filename=filename, files=None
-        )
+        return WorkflowUploadContent(is_zip=False, cwl_content=cwl_content, pipeline_filename=filename, files=None)
 
     async def _validate_component_configs(
-        self, step_definitions: list[tuple[str, dict]], configs: dict[str, ComponentConfig], actor_id: uuid.UUID
+        self,
+        step_definitions: list[tuple[str, dict]],
+        configs: dict[str, ComponentConfig],
+        actor_id: uuid.UUID,
+        workflow_name: str,
     ) -> None:
         """Validates every step's configuration before any Component is created.
 
-        Reuse configs need a target the actor may bind (see _require_bindable). Create configs get the full
+        Reuse configs need a target the actor may bind (see _require_bindable), and never one
+        that runs the workflow's own lineage - a new version nesting an older one would
+        contain itself. Create configs get the full
         treatment: a domain, a non-blank name, no duplicate name within this upload, and
         no collision with the catalogue (the user is offered the reuse branch instead).
 
@@ -475,6 +489,12 @@ class WorkflowsService:
                     if component is None:
                         raise ComponentNotFoundError(config.reuse_component_id)
                     self._require_bindable(component, actor_id)
+                    # a nested workflow, like a step rebound later (_require_acyclic) - but the
+                    # new workflow isn't saved yet, so its lineage is checked by name
+                    if component.is_workflow:
+                        await self.components_service.load_tree(component)
+                        if contains_lineage(component, workflow_name):
+                            raise WorkflowCycleError(workflow_name, component.name)
                 continue
 
             if config.name is None or not config.name.strip():
@@ -577,9 +597,7 @@ class WorkflowsService:
         if upload.available_files is not None:
             missing = sorted(ref for ref in set(overview.external_refs) if ref not in upload.available_files)
             if missing:
-                raise InvalidWorkflowArchiveError(
-                    f"Referenced step file(s) not found in archive: {', '.join(missing)}"
-                )
+                raise InvalidWorkflowArchiveError(f"Referenced step file(s) not found in archive: {', '.join(missing)}")
 
         # a bare .cwl has no archive to resolve against, so any import is unsatisfiable
         pipeline_imports = collect_import_targets(upload.cwl_content)
@@ -605,7 +623,7 @@ class WorkflowsService:
             raise UnconfiguredWorkflowStepError(unconfigured)
 
         configurable_steps = [(sid, d) for sid, d in step_definitions if sid not in inline_only]
-        await self._validate_component_configs(configurable_steps, component_configs, created_by_id)
+        await self._validate_component_configs(configurable_steps, component_configs, created_by_id, name)
 
         extracted_by_step_id = {c.step_id: c for c in extract_inline_components(upload.cwl_content)}
 
@@ -717,6 +735,11 @@ class WorkflowsService:
             pending_components.append((step, component, config.format_labels, target is not None))
             steps.append(step)
 
+        # read before the transaction opens - both ask the format service for port labels
+        for _step, component, _labels, _is_next_version in pending_components:
+            await self.tools_service.prepare(component, "Uploaded")
+        ports = await self.components_service.read_ports(pipeline_content, "Workflow", ComponentSource.MANUAL_UPLOAD)
+
         async with self.uow:
             for step, component, format_labels, is_next_version in pending_components:
                 created = (
@@ -735,6 +758,7 @@ class WorkflowsService:
                 pipeline_content=pipeline_content,
                 steps=steps,
                 source=ComponentSource.MANUAL_UPLOAD,
+                ports=ports,
                 files=self._files_for(pipeline_content, auxiliary),
                 version=version,
             )
@@ -744,6 +768,7 @@ class WorkflowsService:
     async def upsert_from_draft(
         self,
         pipeline_content: str,
+        ports: Ports,
         bindings: list[StepBinding],
         name: str,
         draft_id: uuid.UUID,
@@ -758,7 +783,8 @@ class WorkflowsService:
         caller owns it; anything else falls through to a fresh one.
 
         Runs inside the caller's unit of work and returns the workflow unreloaded - reload
-        it after the commit.
+        it after the commit. `ports` are the pipeline's, read before that unit opened (see
+        ComponentsService.read_ports).
         """
         steps = [
             WorkflowStep(
@@ -784,11 +810,15 @@ class WorkflowsService:
                 pipeline_content=pipeline_content,
                 steps=steps,
                 source=ComponentSource.WORKFLOW_BUILDER,
+                ports=ports,
                 draft_id=draft_id,
             )
 
         if latest.name != name:
-            # the name is the lineage key, so a renamed canvas renames every version
+            if lifecycle.name_locked(await self.uow.components.find_versions_by_name(latest.name)):
+                raise LineageNameLockedError(latest.name, name)
+            # the name is the lineage key, so a renamed canvas renames every version - only
+            # while all of them are drafts
             await self.components_service.require_name_available(name, exclude_id=latest.id)
             await self.uow.components.rename_lineage(latest.name, name)
             # the bulk UPDATE bypassed the identity map - repopulate what it changed
@@ -801,7 +831,7 @@ class WorkflowsService:
             # cascade="all, delete-orphan" on Workflow.steps / Component.parameters deletes
             # the replaced rows
             latest.workflow.steps = steps
-            await self.components_service.assign_ports(latest, "Workflow")
+            self.components_service.assign_ports(latest, ports)
             return await self.uow.components.add(latest)
 
         versions = await self.uow.components.find_versions_by_name(latest.name)
@@ -813,6 +843,7 @@ class WorkflowsService:
             pipeline_content=pipeline_content,
             steps=steps,
             source=ComponentSource.WORKFLOW_BUILDER,
+            ports=ports,
             draft_id=draft_id,
             version=versions[-1].version + 1,
         )
@@ -826,6 +857,7 @@ class WorkflowsService:
         pipeline_content: str,
         steps: list[WorkflowStep],
         source: ComponentSource,
+        ports: Ports,
         files: list[ComponentFile] | None = None,
         draft_id: uuid.UUID | None = None,
         version: int = 1,
@@ -843,7 +875,7 @@ class WorkflowsService:
             workflow=Workflow(steps=steps, draft_id=draft_id),
         )
         # a workflow's ports are its own inputs/outputs - what a parent sees when nesting it
-        await self.components_service.assign_ports(workflow, "Workflow")
+        self.components_service.assign_ports(workflow, ports)
         return await self.uow.components.add(workflow)
 
     async def _require_acyclic(self, parent: Component, child_ids: list[uuid.UUID]) -> None:
@@ -932,6 +964,10 @@ class WorkflowsService:
             await self.uow.commit()
         return step
 
+    #: how much an uploaded archive may unpack to - the upload limit only caps the packed
+    #: bytes, and a few KB of zip can unpack to gigabytes
+    MAX_UNPACKED_SIZE = 50 * 1024 * 1024
+
     #: plausible $import/$include targets - all text, so an unrelated binary in the archive
     #: never has to be decoded just to be ignored
     _AUX_EXTENSIONS = (".yml", ".yaml", ".json")
@@ -963,6 +999,8 @@ class WorkflowsService:
 
         A single wrapper folder (what Finder adds when you zip a directory) is stripped,
         so `SpatialClustering/types/spatial.yml` still resolves as `types/spatial.yml`.
+
+        Only ever runs after _extract_zip_files, which bounds what the archive unpacks to.
         """
         try:
             with zipfile.ZipFile(BytesIO(zip_bytes)) as zf:
@@ -1012,9 +1050,7 @@ class WorkflowsService:
         matches = [path for path in files if path.rsplit("/", 1)[-1] == base]
         return matches[0] if len(matches) == 1 else None
 
-    def _resolve_imports(
-        self, documents: list[str], aux_files: dict[str, str]
-    ) -> tuple[dict[str, str], list[str]]:
+    def _resolve_imports(self, documents: list[str], aux_files: dict[str, str]) -> tuple[dict[str, str], list[str]]:
         """({path: content} to preserve, sorted paths that could not be found).
 
         Follows imports transitively - an imported types file may import another - and
@@ -1042,6 +1078,13 @@ class WorkflowsService:
     def _extract_zip_files(self, zip_bytes: bytes) -> dict[str, str]:
         try:
             with zipfile.ZipFile(BytesIO(zip_bytes)) as zf:
+                # before anything is read: a member never yields more than its declared size,
+                # so the declared sizes bound what unpacking can cost
+                unpacked = sum(info.file_size for info in zf.infolist())
+                if unpacked > self.MAX_UNPACKED_SIZE:
+                    raise InvalidWorkflowArchiveError(
+                        f"Archive unpacks to {unpacked} bytes - at most {self.MAX_UNPACKED_SIZE} are allowed"
+                    )
                 bad_file = zf.testzip()
                 if bad_file is not None:
                     raise InvalidWorkflowArchiveError(f"Corrupt file in archive: {bad_file}")

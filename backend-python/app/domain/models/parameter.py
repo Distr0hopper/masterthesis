@@ -39,4 +39,6 @@ class Parameter(SQLModel, table=True):
     )
 
     # lazy="selectin": see the matching note on Component - required for AsyncSession safety
-    component: Optional["Component"] = Relationship(back_populates="parameters", sa_relationship_kwargs={"lazy": "selectin"})
+    component: Optional["Component"] = Relationship(
+        back_populates="parameters", sa_relationship_kwargs={"lazy": "selectin"}
+    )

@@ -57,16 +57,12 @@ class ComponentsRepository:
         if filter.domains:
             matching = {*filter.domains, DOMAIN_AGNOSTIC}
             query = query.where(
-                Component.id.in_(
-                    select(ComponentDomain.component_id).where(ComponentDomain.domain.in_(matching))
-                )
+                Component.id.in_(select(ComponentDomain.component_id).where(ComponentDomain.domain.in_(matching)))
             )
         if filter.statuses is not None:
             listed = Component.status.in_(filter.statuses)
             if filter.drafts_of is not None:
-                own_draft = and_(
-                    Component.status == ComponentStatus.DRAFT, Component.created_by_id == filter.drafts_of
-                )
+                own_draft = and_(Component.status == ComponentStatus.DRAFT, Component.created_by_id == filter.drafts_of)
                 listed = or_(listed, own_draft)
             query = query.where(listed)
         if filter.created_by is not None:
@@ -91,7 +87,9 @@ class ComponentsRepository:
         self, statuses: frozenset[ComponentStatus] | None = None, kind: ComponentKind | None = None
     ) -> list[Component]:
         """The latest version of every lineage."""
-        query = self._apply_filters(select(Component).distinct(Component.name), ComponentListFilter(statuses=statuses, kind=kind))
+        query = self._apply_filters(
+            select(Component).distinct(Component.name), ComponentListFilter(statuses=statuses, kind=kind)
+        )
         query = query.order_by(Component.name, Component.version.desc())
         result = await self.db.exec(query)
         return list(result.all())
@@ -138,6 +136,14 @@ class ComponentsRepository:
         )
         result = await self.db.exec(query)
         return list(result.all())
+
+    async def find_names_with_status(self, names: list[str], statuses: frozenset[ComponentStatus]) -> set[str]:
+        """Those of these lineages with at least one version in one of `statuses` - one query
+        for a whole list of rows."""
+        if not names:
+            return set()
+        query = select(Component.name).where(Component.name.in_(names), Component.status.in_(statuses)).distinct()
+        return set((await self.db.exec(query)).all())
 
     async def find_by_ids(self, ids: list[uuid.UUID]) -> list[Component]:
         if not ids:

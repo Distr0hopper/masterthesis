@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import axios, { AxiosError, type Axios, type AxiosAdapter, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios';
+import axios, {
+  AxiosError,
+  type Axios,
+  type AxiosAdapter,
+  type AxiosResponse,
+  type InternalAxiosRequestConfig,
+} from 'axios';
 
 // what the browser would provide - the store persists to localStorage, the interceptor
 // reads and sets window.location

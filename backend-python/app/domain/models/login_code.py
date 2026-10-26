@@ -19,6 +19,4 @@ class LoginCode(SQLModel, table=True):
     code_hash: str
     expires_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
     attempts: int = Field(default=0)
-    created_at: datetime = Field(
-        sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    )
+    created_at: datetime = Field(sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False))

@@ -74,9 +74,10 @@ class ToolsService:
     format ports. Everything shared with workflows is ComponentsService's.
 
     The writing methods a router calls are use cases, each opening the unit of work and
-    committing once. create_tool is not: it runs inside the caller's unit of work, so
-    WorkflowsService.create_from_upload can create its new tools in the same transaction
-    as the workflow."""
+    committing once - after reading the CWL (prepare), which asks the format service and
+    so stays outside the transaction. create_tool is not a use case: it runs inside the
+    caller's unit of work, so WorkflowsService.create_from_upload can create its new tools
+    in the same transaction as the workflow."""
 
     def __init__(
         self,
@@ -119,11 +120,16 @@ class ToolsService:
         The preview is what gets saved: create_manual reads the document through the same
         read_tool_details.
         """
+        return await self.read_tool_details(self.decode_upload(content), "Uploaded", ComponentSource.MANUAL_UPLOAD)
+
+    @staticmethod
+    def decode_upload(content: bytes) -> str:
+        """An uploaded .cwl as text - shared by the preview and the saves, so a binary file
+        is the same 400 everywhere."""
         try:
-            cwl_content = content.decode("utf-8")
+            return content.decode("utf-8")
         except UnicodeDecodeError as err:
             raise InvalidCwlError("Uploaded", "File is not valid UTF-8 text") from err
-        return await self.read_tool_details(cwl_content, "Uploaded", ComponentSource.MANUAL_UPLOAD)
 
     async def preview_package(self, repo_url: str) -> PackagePreview:
         """Package a GitHub repo without persisting it, so the generated tool can be
@@ -154,7 +160,9 @@ class ToolsService:
             commit_sha=result.commit_sha,
             author=result.author,
             existing=latest,
-            already_packaged=latest is not None and bool(result.commit_sha) and latest.repo_commit_sha == result.commit_sha,
+            already_packaged=latest is not None
+            and bool(result.commit_sha)
+            and latest.repo_commit_sha == result.commit_sha,
         )
 
     async def read_tool_details(
@@ -196,8 +204,12 @@ class ToolsService:
             )
         return cwl_type
 
-    async def _prepare(self, tool: Component, context: str) -> None:
-        """Everything derived from a tool's CWL, filled in on `tool` before it is saved."""
+    async def prepare(self, tool: Component, context: str) -> None:
+        """Everything derived from a tool's CWL, filled in on `tool` before it is saved.
+
+        Asks the format service for the port labels, so a use case calls it before opening
+        its unit of work - a transaction must never wait on HTTP. The saving methods
+        (create_tool, _add_version) then run inside it."""
         details = await self.read_tool_details(tool.cwl_content, context, tool.source, description=tool.description)
         tool.kind = ComponentKind.TOOL
         tool.parameters = details.parameters
@@ -209,26 +221,30 @@ class ToolsService:
             docker_pull_reference=details.docker_pull_reference,
         )
 
+    @staticmethod
+    def _require_prepared(tool: Component) -> None:
+        if tool.tool is None:
+            raise RuntimeError("tool saved without ToolsService.prepare - its ports and container were never read")
+
     async def create_manual(
         self,
         tool: Component,
         context: str = "Uploaded",
         format_labels: list[ManualFormatLabel] | None = None,
     ) -> Component:
+        await self.prepare(tool, context)
         async with self.uow:
-            await self.create_tool(tool, context, format_labels)
+            await self.create_tool(tool, format_labels)
             await self.uow.commit()
         return await self.components_service.reload(tool)
 
-    async def create_tool(
-        self,
-        tool: Component,
-        context: str = "Uploaded",
-        format_labels: list[ManualFormatLabel] | None = None,
-    ) -> Component:
-        """create_manual without the transaction - runs inside the caller's unit of work."""
-        await self.components_service.require_name_available(tool.name, "add a new version instead of creating a new component")
-        await self._prepare(tool, context)
+    async def create_tool(self, tool: Component, format_labels: list[ManualFormatLabel] | None = None) -> Component:
+        """create_manual without the transaction - runs inside the caller's unit of work, on
+        a tool the caller prepared before opening it."""
+        self._require_prepared(tool)
+        await self.components_service.require_name_available(
+            tool.name, "add a new version instead of creating a new component"
+        )
         self._apply_manual_format_labels(tool, format_labels or [])
         return await self.uow.components.add(tool)
 
@@ -245,8 +261,8 @@ class ToolsService:
         self, tool: Component, format_labels: list[ManualFormatLabel] | None = None
     ) -> Component:
         """add_uploaded_version without the transaction - runs inside the caller's unit of
-        work, like create_tool. The workflow upload uses it for a step that becomes the next
-        version of one of the actor's tools."""
+        work, like create_tool, on a prepared tool. The workflow upload uses it for a step
+        that becomes the next version of one of the actor's tools."""
         if tool.is_packaged:
             raise PackagedToolCannotTakeUploadError(tool.name)
         return await self._add_version(tool, format_labels)
@@ -254,19 +270,20 @@ class ToolsService:
     async def add_manual_version(
         self, tool: Component, format_labels: list[ManualFormatLabel] | None = None
     ) -> Component:
+        versions = await self.uow.components.find_versions_by_name(tool.name)
+        await self.prepare(tool, f"v{versions[-1].version + 1 if versions else 1}")
         async with self.uow:
             await self._add_version(tool, format_labels)
             await self.uow.commit()
         return await self.components_service.reload(tool)
 
     async def _add_version(self, tool: Component, format_labels: list[ManualFormatLabel] | None = None) -> Component:
+        self._require_prepared(tool)
         versions = await self.uow.components.find_versions_by_name(tool.name)
         if versions and not versions[-1].is_tool:
             raise ComponentKindMismatchError(tool.name, ComponentKind(versions[-1].kind).value)
-        next_version = versions[-1].version + 1 if versions else 1
-
-        tool.version = next_version
-        await self._prepare(tool, f"v{next_version}")
+        # numbered inside the transaction, from what it reads - not from what prepare saw
+        tool.version = versions[-1].version + 1 if versions else 1
         if versions:
             # hand labels live outside the CWL, so a new version (e.g. a MoveApps repo
             # re-packaged from GitHub) would otherwise silently lose them
@@ -332,9 +349,7 @@ class ToolsService:
         return await self.add_manual_version(tool, format_labels)
 
     @staticmethod
-    def _next_packaged_version(
-        head: Component, result: PackagingResult, description_override: str | None
-    ) -> Component:
+    def _next_packaged_version(head: Component, result: PackagingResult, description_override: str | None) -> Component:
         """The next version of a packaged lineage, from its newest version `head` - the
         lineage's current truth for who made it, where it lives and which domains it serves -
         and what packaging the repo returned. add_manual_version numbers it and carries the

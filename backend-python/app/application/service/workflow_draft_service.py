@@ -1,5 +1,6 @@
 import logging
 import uuid
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Annotated, Any
 
@@ -13,8 +14,8 @@ from app.application.service.components_service import ComponentsService
 from app.application.service.workflows_service import StepBinding, WorkflowsService
 from app.application.unit_of_work import UnitOfWork
 from app.domain.composite import lifecycle
-from app.domain.composite.tree import ConflictingTreeFileError, auxiliary_files, step_files
-from app.domain.models.component import Component
+from app.domain.composite.tree import ArchiveLayout, ConflictingTreeFileError
+from app.domain.models.component import Component, ComponentSource
 from app.domain.models.parameter import ParameterDirection
 from app.domain.models.workflow_draft import WorkflowDraft
 from app.infrastructure.cwl.canvas_graph import (
@@ -82,6 +83,12 @@ class WorkflowDraftService:
     async def linked_workflows(self, draft_ids: set[uuid.UUID]) -> dict[uuid.UUID, Component]:
         """{draft_id: newest workflow version} for the drafts synced to a My Components entry."""
         return await self.workflows_service.linked_workflows(draft_ids)
+
+    async def locked_names(self, workflows: Iterable[Component]) -> set[str]:
+        """The lineages among `workflows` whose name is fixed - see lifecycle.name_locked: a
+        version of them is public, so the builder must not offer to rename the canvas."""
+        names = sorted({w.name for w in workflows})
+        return await self.uow.components.find_names_with_status(names, lifecycle.PUBLIC_STATUSES)
 
     async def get_draft(self, draft_id: uuid.UUID) -> WorkflowDraft:
         """Fetch one draft - who may open it is the router's check (WorkflowDraftPermissionValidator)."""
@@ -176,9 +183,7 @@ class WorkflowDraftService:
         """
         components, missing = await self._resolve_components(draft, component_ids)
         if missing:
-            raise ExportValidationError(
-                f"{len(missing)} component(s) on the canvas no longer exist in the repository"
-            )
+            raise ExportValidationError(f"{len(missing)} component(s) on the canvas no longer exist in the repository")
         return components
 
     @staticmethod
@@ -205,31 +210,32 @@ class WorkflowDraftService:
         """Generate the main Workflow CWL plus one file per step, zipped.
 
         A node running a workflow brings its whole tree along - the nested pipeline, the
-        step documents below it and anything they import - since its own `run:` lines
-        resolve next to it in the archive.
+        step documents below it and anything they import - in a folder of its own, where
+        its `run:` lines resolve (see ArchiveLayout).
 
         Returns (filename, zip_bytes). Raises ExportValidationError for anything that
         makes the canvas unexportable.
         """
         generated = await self._build_workflow_document(draft)
-        files: dict[str, str] = {}
-        extras: dict[str, str] = {}
+        step_ids = assign_step_ids(generated.ordered_nodes, generated.ports)
+        # the archive's copy of the document: a node running a workflow points into its folder
+        steps = {step_id: dict(step) for step_id, step in generated.document["steps"].items()}
+        layout = ArchiveLayout()
         try:
-            for cid, spec in generated.ports.items():
-                component = generated.components[cid]
-                documents = [(cwl_filename_for(spec.name), component.cwl_content), *step_files(component)]
-                for name, content in documents:
-                    if files.setdefault(name, content) != content:
-                        raise ConflictingTreeFileError(name)
-                for path, content in auxiliary_files(component):
-                    if extras.setdefault(path, content) != content:
-                        raise ConflictingTreeFileError(path)
+            for node in generated.ordered_nodes:
+                cid = node_component_id(node)
+                step = steps[step_ids[node["id"]]]
+                step["run"] = layout.place(generated.components[cid], step["run"], "")
         except ConflictingTreeFileError as err:
             raise ExportValidationError(
                 f"Two different documents on the canvas need the file name '{err.path}' - rename one of them"
             ) from err
+        files = self.components_service.laid_out_documents(layout)
         filename, zip_bytes = assemble_cwl_zip(
-            draft.name, render_workflow_cwl(generated.document), sorted(files.items()), sorted(extras.items())
+            draft.name,
+            render_workflow_cwl({**generated.document, "steps": steps}),
+            files,
+            sorted(layout.imported.items()),
         )
         logger.info(f"Generated archive for draft {draft.id}: {len(files)} step file(s)")
         return filename, zip_bytes
@@ -305,9 +311,13 @@ class WorkflowDraftService:
             for node in generated.ordered_nodes
         ]
 
+        pipeline_content = render_workflow_cwl(generated.document)
+        # before the transaction opens - it asks the format service for port labels
+        ports = await self.components_service.read_ports(pipeline_content, "Workflow", ComponentSource.WORKFLOW_BUILDER)
         async with self.uow:
             workflow = await self.workflows_service.upsert_from_draft(
-                pipeline_content=render_workflow_cwl(generated.document),
+                pipeline_content=pipeline_content,
+                ports=ports,
                 bindings=bindings,
                 name=draft.name,
                 # the link the UI follows back into the builder, and the key this upsert is on

@@ -53,7 +53,9 @@ def form(**fields: object) -> dict[str, str]:
     return {k: json.dumps(v) if isinstance(v, list | dict) else str(v) for k, v in fields.items()}
 
 
-async def create_tool(client: httpx.AsyncClient, headers: dict, cwl: str = TOOL_CWL, **fields: object) -> httpx.Response:
+async def create_tool(
+    client: httpx.AsyncClient, headers: dict, cwl: str = TOOL_CWL, **fields: object
+) -> httpx.Response:
     data = {"name": "clean-tracks", "domains": "animal_behavior", **fields}
     return await client.post("/tools", data=data, files={"cwlFile": ("tool.cwl", cwl.encode())}, headers=headers)
 
@@ -86,7 +88,9 @@ async def test_the_preview_of_a_tool_saves_nothing(client: httpx.AsyncClient, se
     owner = user()
     await save(sessions, owner)
 
-    response = await client.post("/tools/parse", files={"cwlFile": ("tool.cwl", TOOL_CWL.encode())}, headers=bearer(owner))
+    response = await client.post(
+        "/tools/parse", files={"cwlFile": ("tool.cwl", TOOL_CWL.encode())}, headers=bearer(owner)
+    )
 
     assert response.status_code == 200
     assert (await client.get("/components/mine", headers=bearer(owner))).json()["unpublished"]["content"] == []
@@ -105,6 +109,19 @@ async def test_bad_tool_uploads_are_refused(client: httpx.AsyncClient, sessions:
     assert no_file.status_code == 422
     too_big = TOOL_CWL + "#" * (11 * 1024 * 1024)
     assert (await create_tool(client, bearer(owner), cwl=too_big, name="big")).status_code == 400
+
+    not_text = await client.post(
+        "/tools",
+        data={"name": "binary", "domains": "animal_behavior"},
+        files={"cwlFile": ("tool.cwl", b"\xff\xfe\x00binary")},
+        headers=bearer(owner),
+    )
+    assert not_text.status_code == 400, not_text.text
+    taken = (await client.get("/components/mine", headers=bearer(owner))).json()["published"]["content"][0]
+    new_version = await client.post(
+        f"/tools/{taken['id']}/versions", files={"cwlFile": ("tool.cwl", b"\xff\xfe")}, headers=bearer(owner)
+    )
+    assert new_version.status_code == 400, new_version.text
 
 
 def archive(files: dict[str, str]) -> bytes:
@@ -221,3 +238,87 @@ async def test_a_workflow_step_cannot_reuse_someone_elses_draft(
     # like any id it may not read - 404, as if the draft did not exist
     assert response.status_code == 404, response.text
     assert (await client.get("/components/mine", headers=bearer(owner))).json()["unpublished"]["content"] == []
+
+
+INLINE_PIPELINE = """\
+cwlVersion: v1.2
+class: Workflow
+inputs: {}
+outputs: {}
+steps:
+  clean-tracks:
+    run:
+      class: CommandLineTool
+      baseCommand: echo
+      inputs: {}
+      outputs: {}
+    in: {}
+    out: []
+"""
+
+
+async def test_the_preview_never_names_someone_elses_draft_as_a_name_conflict(
+    client: httpx.AsyncClient, sessions: SessionFactory
+) -> None:
+    from app.domain.models.component import ComponentStatus
+
+    owner, author = user(), user()
+    published = tool("clean-tracks", author, version=1)
+    secret = tool("clean-tracks", author, ComponentStatus.DRAFT, version=2)
+    await save(sessions, owner, author, published, secret)
+
+    def conflict(response: httpx.Response) -> dict | None:
+        assert response.status_code == 200, response.text
+        return response.json()["componentPreviews"][0]["nameConflict"]
+
+    files = {"file": ("pipeline.cwl", INLINE_PIPELINE.encode())}
+    # the newest version the caller may read - the public v1, never the private v2 above it
+    assert conflict(await client.post("/workflows/parse", files=files, headers=bearer(owner)))["version"] == 1
+    # its owner sees their own draft
+    assert conflict(await client.post("/workflows/parse", files=files, headers=bearer(author)))["version"] == 2
+
+
+async def test_a_new_workflow_version_cannot_nest_its_own_lineage(
+    client: httpx.AsyncClient, sessions: SessionFactory
+) -> None:
+    from app.domain.models.component import ComponentStatus
+    from tests.db_factories import workflow
+
+    owner = user()
+    v1 = workflow("track-pipeline", owner, status=ComponentStatus.DRAFT)
+    await save(sessions, owner, v1)
+
+    response = await client.post(
+        f"/workflows/{v1.id}/versions",
+        data=form(componentConfigs=[{"stepId": "step_clean", "reuseComponentId": str(v1.id)}]),
+        files={"file": ("pipeline.zip", archive({"pipeline.cwl": PIPELINE, "clean-tracks.cwl": TOOL_CWL}))},
+        headers=bearer(owner),
+    )
+
+    # v2 running v1 would make the lineage contain itself
+    assert response.status_code == 409, response.text
+    assert len((await client.get(f"/components/{v1.id}/versions", headers=bearer(owner))).json()) == 1
+
+
+async def test_an_archive_unpacking_to_more_than_the_limit_is_refused(
+    client: httpx.AsyncClient, sessions: SessionFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.application.service.workflows_service import WorkflowsService
+
+    owner = user()
+    await save(sessions, owner)
+    monkeypatch.setattr(WorkflowsService, "MAX_UNPACKED_SIZE", 64 * 1024)
+    # a few hundred bytes packed, far more unpacked - a zip bomb in miniature
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("pipeline.cwl", PIPELINE)
+        zf.writestr("clean-tracks.cwl", TOOL_CWL + "#" * (128 * 1024))
+    bomb = buffer.getvalue()
+    assert len(bomb) < 4 * 1024
+    config = [{"stepId": "step_clean", "name": "clean-tracks", "domains": ["animal_behavior"]}]
+
+    preview = await client.post("/workflows/parse", files={"file": ("pipeline.zip", bomb)}, headers=bearer(owner))
+    created = await create_workflow(client, bearer(owner), bomb, config)
+
+    assert preview.status_code == 400 and "unpacks to" in preview.json()["detail"]
+    assert created.status_code == 400

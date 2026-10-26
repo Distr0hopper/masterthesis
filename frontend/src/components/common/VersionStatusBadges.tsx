@@ -18,9 +18,7 @@ export function VersionStatusBadges({ version, isLatest }: VersionStatusBadgesPr
         </Badge>
       )}
       {/* "Latest" says it's the published one - a status badge only for the others */}
-      {version.status !== ComponentStatus.PUBLISHED && (
-        <StatusBadge status={version.status} />
-      )}
+      {version.status !== ComponentStatus.PUBLISHED && <StatusBadge status={version.status} />}
     </>
   );
 }

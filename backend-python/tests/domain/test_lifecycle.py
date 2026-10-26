@@ -47,7 +47,12 @@ UNMATCHED, SUGGESTED, CONFIRMED, INLINE = (
 
 def tool(name: str, status: ComponentStatus = PUBLISHED, owner: uuid.UUID = ME) -> Component:
     component = Component(
-        id=uuid.uuid4(), kind=ComponentKind.TOOL, name=name, cwl_content="", status=status, created_by_id=owner,
+        id=uuid.uuid4(),
+        kind=ComponentKind.TOOL,
+        name=name,
+        cwl_content="",
+        status=status,
+        created_by_id=owner,
         first_published_at=None if status == DRAFT else NOW,
     )
     component.tool = Tool()
@@ -62,7 +67,12 @@ def workflow(
     step_status: StepMatchStatus = CONFIRMED,
 ) -> Component:
     component = Component(
-        id=uuid.uuid4(), kind=ComponentKind.WORKFLOW, name=name, cwl_content="", status=status, created_by_id=owner,
+        id=uuid.uuid4(),
+        kind=ComponentKind.WORKFLOW,
+        name=name,
+        cwl_content="",
+        status=status,
+        created_by_id=owner,
         first_published_at=None if status == DRAFT else NOW,
     )
     component.workflow = Workflow(

@@ -36,9 +36,9 @@ export function FormatLabelFields({ parameters, value, onChange, idPrefix }: For
         <Info className="mt-0.5 h-4 w-4 shrink-0" />
         <span>
           {ports.length === 1 ? 'This File port has' : `These ${ports.length} File ports have`} no ontology format, so
-          the workflow builder cannot check what they fit - connections to them show as unverified. You can add a
-          format label by hand (e.g. <strong>RDS</strong>) so the port shows which file it expects. Labels are for
-          display only and are not verified.
+          the workflow builder cannot check what they fit - connections to them show as unverified. You can add a format
+          label by hand (e.g. <strong>RDS</strong>) so the port shows which file it expects. Labels are for display only
+          and are not verified.
         </span>
       </div>
 

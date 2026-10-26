@@ -53,7 +53,11 @@ export default function ComponentsPage() {
       <p className="mt-1 text-slate-500">Reusable CWL tools and the workflows composed of them.</p>
 
       {/* a filter, not tabbed content - the one list below follows the URL's ?kind= */}
-      <Tabs value={kind ?? ALL} onValueChange={(value) => setFilter('kind', value === ALL ? '' : value)} className="mt-6">
+      <Tabs
+        value={kind ?? ALL}
+        onValueChange={(value) => setFilter('kind', value === ALL ? '' : value)}
+        className="mt-6"
+      >
         <TabsList>
           <TabsTrigger value={ALL}>All</TabsTrigger>
           {KINDS.map((k) => {

@@ -144,7 +144,12 @@ async def test_someone_elses_draft_is_an_unknown_component(
 
 
 async def test_too_many_connections_are_refused(client: httpx.AsyncClient, formats: FakeFormatService) -> None:
-    some = {"sourceComponentId": str(uuid.uuid4()), "sourcePort": "o", "targetComponentId": str(uuid.uuid4()), "targetPort": "i"}
+    some = {
+        "sourceComponentId": str(uuid.uuid4()),
+        "sourcePort": "o",
+        "targetComponentId": str(uuid.uuid4()),
+        "targetPort": "i",
+    }
     response = await client.post("/compatibility", json={"connections": [some] * 10_000})
     assert response.status_code == 422
 

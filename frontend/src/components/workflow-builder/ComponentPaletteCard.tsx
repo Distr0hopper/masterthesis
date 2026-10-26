@@ -1,8 +1,5 @@
 import { ExternalLink, Star } from 'lucide-react';
-import {
-  ComponentStatus,
-  type ComponentDisplayModel,
-} from '@/api/components';
+import { ComponentStatus, type ComponentDisplayModel } from '@/api/components';
 import { cn } from '@/lib/utils';
 import { componentDetailRoute } from '@/lib/routes';
 import { NO_DATA_INPUTS_SCORE } from './lib/portKinds';
@@ -52,10 +49,7 @@ export function ComponentPaletteCard({ component }: ComponentPaletteCardProps) {
         <div className="flex shrink-0 items-center gap-1">
           {/* makes the favourites-first ordering legible, rather than looking arbitrary */}
           {component.isFavorite && (
-            <Star
-              className="mt-0.5 h-3.5 w-3.5 fill-amber-400 text-amber-400"
-              aria-label="Favorite"
-            />
+            <Star className="mt-0.5 h-3.5 w-3.5 fill-amber-400 text-amber-400" aria-label="Favorite" />
           )}
           <a
             href={componentDetailRoute(component.kind, component.id)}

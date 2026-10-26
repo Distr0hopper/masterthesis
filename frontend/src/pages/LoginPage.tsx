@@ -2,13 +2,15 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card.tsx';
 import {
-    authTransformer,
-    type RequestOtpFormData,
-    requestOtpFormSchema,
-    type VerifyOtpFormData,
-    verifyOtpFormSchema,
-    useRequestOtp,
-    useVerifyOtp, type RequestOtpResponseDto, type RequestOtpDto,
+  authTransformer,
+  type RequestOtpFormData,
+  requestOtpFormSchema,
+  type VerifyOtpFormData,
+  verifyOtpFormSchema,
+  useRequestOtp,
+  useVerifyOtp,
+  type RequestOtpResponseDto,
+  type RequestOtpDto,
 } from '@/api/auth';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -44,7 +46,9 @@ function EmailStep({ onRequested }: { onRequested: (email: string, cooldownSecon
 
   return (
     <form className="flex flex-col gap-4" onSubmit={handleSubmit(onSubmit)} noValidate>
-      {errors.root && <p className="rounded-md bg-error px-3 py-2 text-sm text-error-foreground">{errors.root.message}</p>}
+      {errors.root && (
+        <p className="rounded-md bg-error px-3 py-2 text-sm text-error-foreground">{errors.root.message}</p>
+      )}
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="email">Email</Label>
@@ -120,11 +124,18 @@ function CodeStep({
 
   return (
     <form className="flex flex-col gap-4" onSubmit={handleSubmit(onSubmit)} noValidate>
-      {errors.root && <p className="rounded-md bg-error px-3 py-2 text-sm text-error-foreground">{errors.root.message}</p>}
+      {errors.root && (
+        <p className="rounded-md bg-error px-3 py-2 text-sm text-error-foreground">{errors.root.message}</p>
+      )}
 
       <p className="text-sm text-slate-500">
         Code sent to <span className="font-medium text-slate-900">{email}</span>.{' '}
-        <Button type="button" variant="link" onClick={onChangeEmail} className="h-auto p-0 font-semibold text-jmu-blue-800">
+        <Button
+          type="button"
+          variant="link"
+          onClick={onChangeEmail}
+          className="h-auto p-0 font-semibold text-jmu-blue-800"
+        >
           Change email
         </Button>
       </p>
@@ -177,7 +188,11 @@ export default function LoginPage() {
       <Card className="mt-6 w-full shadow-lg">
         <CardContent className="pt-6">
           {requested === null ? (
-            <EmailStep onRequested={(email: string, cooldownSeconds: number) => { setRequested({email: email, cooldownSeconds: cooldownSeconds})}} />
+            <EmailStep
+              onRequested={(email: string, cooldownSeconds: number) => {
+                setRequested({ email: email, cooldownSeconds: cooldownSeconds });
+              }}
+            />
           ) : (
             <CodeStep
               email={requested.email}

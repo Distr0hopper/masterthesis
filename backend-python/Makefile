@@ -1,4 +1,4 @@
-.PHONY: run migrate install openapi test
+.PHONY: run migrate install openapi test format format-check
 
 run:
 	uv run uvicorn app.main:app --reload --port 8000
@@ -15,3 +15,9 @@ openapi:
 
 test:
 	uv run pytest
+
+format:
+	uv run ruff format .
+
+format-check:
+	uv run ruff format --check .

@@ -56,7 +56,9 @@ async def test_someone_elses_canvas_is_404_on_every_route(client: httpx.AsyncCli
     ):
         response = await client.request(method, route, json=json, headers=bearer(stranger))
         # the same answer as for an id nobody has - nothing tells the two apart
-        unknown = await client.request(method, route.replace(str(draft.id), str(uuid.uuid4())), json=json, headers=bearer(stranger))
+        unknown = await client.request(
+            method, route.replace(str(draft.id), str(uuid.uuid4())), json=json, headers=bearer(stranger)
+        )
         assert response.status_code == unknown.status_code == 404, f"{method} {route}"
         assert (await client.request(method, route, json=json)).status_code == 401, f"{method} {route}"
 
@@ -95,7 +97,9 @@ def canvas(*components: object, wired: bool = True) -> str:
 
 def pipeline_tools(owner: object) -> tuple[object, object]:
     source = tool("read-tracks", owner, ports=(port("out", ParameterDirection.OUTPUT),))
-    sink = tool("clean-tracks", owner, ports=(port("in", ParameterDirection.INPUT), port("cleaned", ParameterDirection.OUTPUT)))
+    sink = tool(
+        "clean-tracks", owner, ports=(port("in", ParameterDirection.INPUT), port("cleaned", ParameterDirection.OUTPUT))
+    )
     return source, sink
 
 
@@ -177,6 +181,37 @@ async def test_syncing_saves_one_draft_workflow_and_resyncs_it_in_place(
     assert [s["component"]["id"] for s in workflow["steps"]] == [str(source.id), str(sink.id)]
     mine = (await client.get("/components/mine", params={"kind": "workflow"}, headers=bearer(owner))).json()
     assert [w["name"] for w in mine["unpublished"]["content"]] == ["Track pipeline"]
+
+
+async def test_a_published_workflow_keeps_its_name_when_the_canvas_is_renamed(
+    client: httpx.AsyncClient, sessions: SessionFactory
+) -> None:
+    owner = user()
+    source, sink = pipeline_tools(owner)
+    draft = WorkflowDraft(name="Track pipeline", canvas_state=canvas(source, sink), created_by_id=owner.id)
+    await save(sessions, owner, source, sink, draft)
+    path = f"/workflow-drafts/{draft.id}"
+
+    synced = (await client.post(f"{path}/sync", headers=bearer(owner))).json()
+    assert (await client.get(path, headers=bearer(owner))).json()["linkedWorkflow"]["nameLocked"] is False
+    workflow_id = synced["workflowId"]
+    await client.post(
+        f"/components/{workflow_id}/commands",
+        json={"command": "UPDATE_DOMAIN", "domains": ["animal_behavior"]},
+        headers=bearer(owner),
+    )
+    published = await client.post(
+        f"/components/{workflow_id}/commands", json={"command": "PUBLISH"}, headers=bearer(owner)
+    )
+    assert published.status_code == 200, published.text
+    assert (await client.get(path, headers=bearer(owner))).json()["linkedWorkflow"]["nameLocked"] is True
+
+    body = {"name": "Renamed pipeline", "canvasState": draft.canvas_state, "nodeCount": 2}
+    assert (await client.put(path, json=body, headers=bearer(owner))).status_code == 200
+    refused = await client.post(f"{path}/sync", headers=bearer(owner))
+
+    assert refused.status_code == 409, refused.text
+    assert (await client.get(f"/components/{workflow_id}", headers=bearer(owner))).json()["name"] == "Track pipeline"
 
 
 async def test_someone_elses_draft_on_a_canvas_counts_as_missing(

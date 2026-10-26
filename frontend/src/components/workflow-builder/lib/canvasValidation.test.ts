@@ -41,7 +41,12 @@ describe('validateCanvas', () => {
   });
 
   it('flags a node whose component was deleted, as a blocking error naming it', () => {
-    const errors = validateCanvas([node('a', 'thin-data'), node('b', 'kept')], [edge('a', 'b')], 'wf', new Set(['c-a']));
+    const errors = validateCanvas(
+      [node('a', 'thin-data'), node('b', 'kept')],
+      [edge('a', 'b')],
+      'wf',
+      new Set(['c-a']),
+    );
     const missing = errors.filter((e) => e.type === 'missing_component');
     expect(missing).toHaveLength(1);
     expect(missing[0]).toMatchObject({ nodeId: 'a' });
@@ -97,10 +102,7 @@ describe('validateCanvas', () => {
 
   it('matches an input by its own handle, not just by node', () => {
     // two File inputs, only one wired - the other must still be reported
-    const nodes = [
-      node('a', 'first', [fileOut()]),
-      node('b', 'second', [fileIn('input_rds'), fileIn('reference')]),
-    ];
+    const nodes = [node('a', 'first', [fileOut()]), node('b', 'second', [fileIn('input_rds'), fileIn('reference')])];
     const errors = validateCanvas(nodes, [edge('a', 'b', 'input_rds')], 'my-workflow');
     const warnings = errors.filter((e) => e.type === 'unconnected_input');
     expect(warnings).toHaveLength(1);

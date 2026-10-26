@@ -1,13 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useBlocker, useNavigate, useParams } from 'react-router-dom';
-import {
-  ReactFlowProvider,
-  addEdge,
-  useEdgesState,
-  useNodesState,
-  type Connection,
-  type Edge,
-} from '@xyflow/react';
+import { ReactFlowProvider, addEdge, useEdgesState, useNodesState, type Connection, type Edge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
@@ -32,10 +25,7 @@ import {
   parseCanvasState,
   serializeCanvasState,
 } from '@/components/workflow-builder/lib/canvasState';
-import {
-  validateCanvas,
-  type ValidationError,
-} from '@/components/workflow-builder/lib/canvasValidation';
+import { validateCanvas, type ValidationError } from '@/components/workflow-builder/lib/canvasValidation';
 import { downloadBlob } from '@/lib/download';
 import { useMediaQuery } from '@/lib/useMediaQuery';
 import {
@@ -126,7 +116,9 @@ function WorkflowBuilder() {
     () =>
       missingComponentIds.size === 0
         ? nodes
-        : nodes.map((n) => (missingComponentIds.has(n.data.componentId) ? { ...n, data: { ...n.data, missing: true } } : n)),
+        : nodes.map((n) =>
+            missingComponentIds.has(n.data.componentId) ? { ...n, data: { ...n.data, missing: true } } : n,
+          ),
     [nodes, missingComponentIds],
   );
 
@@ -225,10 +217,7 @@ function WorkflowBuilder() {
     [edges, toConnectionDto, edgeChecks],
   );
 
-  const onAddNode = useCallback(
-    (node: ComponentFlowNode) => setNodes((prev) => [...prev, node]),
-    [setNodes],
-  );
+  const onAddNode = useCallback((node: ComponentFlowNode) => setNodes((prev) => [...prev, node]), [setNodes]);
 
   const selectedNode = useMemo(() => displayNodes.find((n) => n.selected) ?? null, [displayNodes]);
 
@@ -421,9 +410,7 @@ function WorkflowBuilder() {
               This workflow could not be loaded.
             </div>
           ) : isLoading || !restored ? (
-            <div className="flex flex-1 items-center justify-center text-slate-500">
-              Loading workflow...
-            </div>
+            <div className="flex flex-1 items-center justify-center text-slate-500">Loading workflow...</div>
           ) : (
             <div className="flex min-w-0 flex-1 flex-col">
               <CanvasNotices
@@ -445,9 +432,7 @@ function WorkflowBuilder() {
               </div>
             </div>
           )}
-          {selectedNode && (
-            <WorkflowInspector node={selectedNode} onParameterChange={onParameterChange} />
-          )}
+          {selectedNode && <WorkflowInspector node={selectedNode} onParameterChange={onParameterChange} />}
         </div>
       </div>
 

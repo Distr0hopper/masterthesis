@@ -47,9 +47,9 @@ export default function WorkflowNewVersionPage() {
       <h1 className="mt-4 text-2xl font-semibold text-slate-900">New version of {head.name}</h1>
       {fromUpload && (
         <p className="mt-1 text-slate-500">
-          Upload the changed workflow - this creates version {head.version + 1}. Each step starts from what it ran in
-          v{head.version}; a step whose tool changed can become that tool&apos;s next version. Everything new starts as
-          a draft, only visible to you until you publish it.
+          Upload the changed workflow - this creates version {head.version + 1}. Each step starts from what it ran in v
+          {head.version}; a step whose tool changed can become that tool&apos;s next version. Everything new starts as a
+          draft, only visible to you until you publish it.
         </p>
       )}
 

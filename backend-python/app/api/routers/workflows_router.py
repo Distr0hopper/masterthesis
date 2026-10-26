@@ -238,11 +238,17 @@ async def update_step(
     "/steps/{step_id}/commands",
     response_model=WorkflowStepDto,
     responses={
-        status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse, "description": "Step has no matched component to confirm"},
+        status.HTTP_400_BAD_REQUEST: {
+            "model": ErrorResponse,
+            "description": "Step has no matched component to confirm",
+        },
         status.HTTP_401_UNAUTHORIZED: {"model": ErrorResponse, "description": "Missing or invalid credentials"},
         status.HTTP_403_FORBIDDEN: {"model": ErrorResponse, "description": "Insufficient permission for this command"},
         status.HTTP_404_NOT_FOUND: {"model": ErrorResponse, "description": "Step not found"},
-        status.HTTP_409_CONFLICT: {"model": ErrorResponse, "description": "The workflow is public - its steps only change in a new version"},
+        status.HTTP_409_CONFLICT: {
+            "model": ErrorResponse,
+            "description": "The workflow is public - its steps only change in a new version",
+        },
         status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErrorResponse, "description": "Unknown command"},
     },
 )

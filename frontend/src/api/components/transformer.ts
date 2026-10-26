@@ -29,7 +29,6 @@ export const STATUS_LABELS: Record<ComponentStatus, string> = {
   [ComponentStatus.DEPRECATED]: 'Deprecated',
 };
 
-
 export const KIND_LABELS: Record<ComponentKind, string> = {
   tool: 'Tool',
   workflow: 'Workflow',
@@ -161,7 +160,9 @@ export function toDisplayModelBase(dto: ComponentListItemBaseDto): ComponentDisp
 }
 
 /** The detail fields shared by both kinds. */
-export function toDetailFields(dto: ComponentDetailBaseDto): ComponentDetailFields & { parameters: ParameterDisplayModel[] } {
+export function toDetailFields(
+  dto: ComponentDetailBaseDto,
+): ComponentDetailFields & { parameters: ParameterDisplayModel[] } {
   const updatedAt = new Date(dto.updatedAt);
   const parameters = dto.parameters.map(toParameterDisplayModel);
   return {

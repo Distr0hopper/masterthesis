@@ -65,7 +65,9 @@ class FakePackagingClient:
         )
 
 
-def service(*components: Component, packaging: FakePackagingClient | None = None) -> tuple[ToolsService, FakeRepository]:
+def service(
+    *components: Component, packaging: FakePackagingClient | None = None
+) -> tuple[ToolsService, FakeRepository]:
     repository = FakeRepository(*components)
     uow = FakeUnitOfWork(components=repository)
     components_service = ComponentsService(uow, None)  # type: ignore[arg-type]
@@ -193,7 +195,9 @@ def test_an_uploaded_version_applies_its_reviewed_labels_over_the_carried_over_o
     cwl = LABELLED_CWL
     v1 = Component(id=uuid.uuid4(), kind=ComponentKind.TOOL, name="m", cwl_content=cwl, created_by_id=OWNER)
     tools_service, _ = service()
-    asyncio.run(tools_service.create_manual(v1, format_labels=[ManualFormatLabel("data", ParameterDirection.INPUT, "CSV")]))
+    asyncio.run(
+        tools_service.create_manual(v1, format_labels=[ManualFormatLabel("data", ParameterDirection.INPUT, "CSV")])
+    )
 
     v2 = asyncio.run(
         tools_service.add_uploaded_version(

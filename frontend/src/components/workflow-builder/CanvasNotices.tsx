@@ -51,7 +51,9 @@ export function CanvasNotices({ missingLabels, unreadable, dropped, onDismissDro
       {dropped && (
         <p className="flex items-start gap-2 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">
           <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-          <span className="flex-1">Some components or connections could not be restored - they may have been removed.</span>
+          <span className="flex-1">
+            Some components or connections could not be restored - they may have been removed.
+          </span>
           <button
             type="button"
             onClick={onDismissDropped}

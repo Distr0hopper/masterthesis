@@ -20,6 +20,9 @@ class UnitOfWork(Protocol):
     Boundaries are strict: entering a unit that is already open raises, so one use case
     never silently calls another one's commit. Helpers that write on behalf of an entry
     point simply run inside the caller's unit. Reads need no unit.
+
+    Nothing inside a unit waits on HTTP: what needs another service (format labels) is
+    fetched before it opens, so its locks are held for the database's work alone.
     """
 
     components: ComponentsRepository

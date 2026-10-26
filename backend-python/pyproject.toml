@@ -33,8 +33,14 @@ package = false
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
+    "ruff>=0.17.2",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
+# applied migrations are history - never rewritten, not even their formatting
+extend-exclude = ["alembic/versions"]

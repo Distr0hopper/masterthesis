@@ -92,7 +92,9 @@ export function EditComponentDialog({ component, open, onOpenChange }: EditCompo
         </DialogHeader>
 
         <form className="flex flex-col gap-4" onSubmit={handleSubmit(onSubmit)} noValidate>
-          {errors.root && <p className="rounded-md bg-error px-3 py-2 text-sm text-error-foreground">{errors.root.message}</p>}
+          {errors.root && (
+            <p className="rounded-md bg-error px-3 py-2 text-sm text-error-foreground">{errors.root.message}</p>
+          )}
 
           <Controller
             control={control}

@@ -33,7 +33,12 @@ interface UnpublishComponentDialogProps {
  * the user's own become drafts along with it. The server enforces the same rule; its 409
  * only shows up if a parent was published between opening this dialog and confirming.
  */
-export function UnpublishComponentDialog({ model, open, onOpenChange, onDeprecateInstead }: UnpublishComponentDialogProps) {
+export function UnpublishComponentDialog({
+  model,
+  open,
+  onOpenChange,
+  onDeprecateInstead,
+}: UnpublishComponentDialogProps) {
   const { mutate: unpublish, isPending } = useUnpublishComponent();
   const { data: impact, isLoading } = useComponentImpact(getLink(model._links, 'impact'), open);
 

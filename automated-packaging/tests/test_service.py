@@ -67,13 +67,13 @@ def test_missing_repo_is_422(client, monkeypatch):
     assert "not found" in response.json()["detail"]
 
 
-def test_missing_appspec_settings_is_422(client, monkeypatch):
-    monkeypatch.setattr(GitHubClient, "fetch_repo", _raise(ValueError("appspec.json has no 'settings' key")))
+def test_an_appspec_that_is_no_json_object_is_422(client, monkeypatch):
+    monkeypatch.setattr(GitHubClient, "fetch_repo", _raise(ValueError("appspec.json is not a JSON object")))
 
     response = client.post("/api/v1/package", json={"repoUrl": REPO_URL})
 
     assert response.status_code == 422
-    assert "settings" in response.json()["detail"]
+    assert "JSON object" in response.json()["detail"]
 
 
 def test_rate_limit_is_502(client, monkeypatch):

@@ -71,9 +71,10 @@ class GitHubClient:
         appspec_file = self._fetch_file(owner, repo, "appspec.json", commit_sha)
         appspec = json.loads(appspec_file.content)
 
-        if "settings" not in appspec:
+        # an app without settings may leave the key out; package_repo reads it with a default
+        if not isinstance(appspec, dict):
             raise ValueError(
-                f"appspec.json in {owner}/{repo} has no 'settings' key. "
+                f"appspec.json in {owner}/{repo} is not a JSON object. "
                 "Is this a valid MoveApps R app repository?"
             )
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import yaml
@@ -67,10 +68,17 @@ def generate_dockerfile_content(wrapper_image: str, raw_base_url: str, r_package
     lines = [f"FROM --platform=linux/amd64 {wrapper_image}", ""]
     if r_packages:
         pkg_vec = ", ".join(f'"{p}"' for p in r_packages)
+        # No repos argument: the wrapper image (rocker) pins a dated P3M snapshot with Linux
+        # binaries, so packages install fast and in fixed versions. install.packages() only
+        # warns when a package fails, so the build checks again and fails with the names.
         install_cmd = (
-            f"RUN R -e 'pkgs <- c({pkg_vec}); "
-            "missing <- pkgs[!sapply(pkgs, requireNamespace, quietly=TRUE)]; "
-            "if (length(missing)) install.packages(missing, repos=\"https://cloud.r-project.org\")'"
+            f"RUN R -e 'options(timeout = 600); pkgs <- c({pkg_vec}); "
+            "installed <- function() sapply(pkgs, requireNamespace, quietly = TRUE); "
+            "missing <- pkgs[!installed()]; "
+            "if (length(missing)) install.packages(missing); "
+            "missing <- pkgs[!installed()]; "
+            "if (length(missing)) { message(\"R packages could not be installed: \", "
+            "paste(missing, collapse = \", \")); quit(status = 1) }'"
         )
         lines += [install_cmd, ""]
     lines += [
@@ -91,8 +99,10 @@ def _build_js_entry(settings: list[dict]) -> _LiteralStr:
     if not settings:
         pairs = "    // no parameters"
     else:
+        # quoted key and bracket access: an appspec id is no JS identifier in general,
+        # "loc.err" or "auxiliary-file-a" would be a syntax error as inputs.loc.err
         pairs = ",\n".join(
-            f"    {s['id']}: inputs.{s['id']}" for s in settings
+            f"    {json.dumps(s['id'])}: inputs[{json.dumps(s['id'])}]" for s in settings
         )
     js = f"${{\n  return JSON.stringify({{\n{pairs}\n  }});\n}}"
     return _LiteralStr(js)

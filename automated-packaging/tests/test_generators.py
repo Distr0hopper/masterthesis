@@ -69,7 +69,7 @@ def test_the_app_configuration_hands_every_setting_to_the_r_function() -> None:
     [listing] = cwl()["requirements"]["InitialWorkDirRequirement"]["listing"]
     assert listing["entryname"] == "app-configuration.json"
     for setting in SETTINGS:
-        assert f"{setting['id']}: inputs.{setting['id']}" in listing["entry"]
+        assert f'"{setting["id"]}": inputs["{setting["id"]}"]' in listing["entry"]
 
 
 def test_an_app_without_settings_still_makes_a_valid_tool() -> None:
@@ -77,6 +77,14 @@ def test_an_app_without_settings_still_makes_a_valid_tool() -> None:
     assert list(doc["inputs"]) == ["input_rds"]
     [listing] = doc["requirements"]["InitialWorkDirRequirement"]["listing"]
     assert "JSON.stringify" in listing["entry"]
+
+
+def test_setting_ids_that_are_no_js_identifiers_make_a_valid_expression() -> None:
+    [listing] = cwl([{"id": "loc.err", "type": "DOUBLE"}, {"id": "auxiliary-file-a", "type": "USER_FILE"}])[
+        "requirements"
+    ]["InitialWorkDirRequirement"]["listing"]
+    assert '"loc.err": inputs["loc.err"]' in listing["entry"]
+    assert '"auxiliary-file-a": inputs["auxiliary-file-a"]' in listing["entry"]
 
 
 def test_umlauts_in_a_description_stay_readable() -> None:
@@ -94,6 +102,12 @@ def test_the_dockerfile_installs_only_the_r_packages_the_app_needs() -> None:
 
     with_packages = generate_dockerfile_content("wrapper:1", "https://raw.example/o/r/main", ["sf", "move2"])
     assert 'c("sf", "move2")' in with_packages
+
+
+def test_r_packages_come_from_the_wrapper_images_pinned_repository_and_a_failed_one_fails_the_build() -> None:
+    dockerfile = generate_dockerfile_content("wrapper:1", "https://raw.example/o/r/main", ["ctmm"])
+    assert "repos" not in dockerfile
+    assert "quit(status = 1)" in dockerfile
 
 
 def test_the_job_file_takes_the_appspec_defaults_typed() -> None:

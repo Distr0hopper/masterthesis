@@ -77,12 +77,19 @@ def test_a_missing_readme_or_owner_profile_only_loses_the_extras(github) -> None
     assert (contents.description, contents.author) == ("", "movestore")
 
 
-def test_a_repo_without_appspec_settings_is_no_moveapps_app(github) -> None:
+def test_an_appspec_that_is_no_json_object_is_no_moveapps_app(github) -> None:
     responses, _ = github
-    responses.update(_responses(**{f"{REPO}/contents/appspec.json?ref=abc123": _file(b'{"name": "x"}')}))
+    responses.update(_responses(**{f"{REPO}/contents/appspec.json?ref=abc123": _file(b'["x"]')}))
 
-    with pytest.raises(ValueError, match="no 'settings' key"):
+    with pytest.raises(ValueError, match="not a JSON object"):
         GitHubClient().fetch_repo("movestore", "RemoveOutliers")
+
+
+def test_an_app_without_settings_may_leave_the_key_out(github) -> None:
+    responses, _ = github
+    responses.update(_responses(**{f"{REPO}/contents/appspec.json?ref=abc123": _file(b'{"version": "1.0"}')}))
+
+    assert GitHubClient().fetch_repo("movestore", "RemoveOutliers").appspec == {"version": "1.0"}
 
 
 def test_app_configuration_json_is_not_needed(github) -> None:

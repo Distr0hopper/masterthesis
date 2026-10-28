@@ -26,7 +26,7 @@ The shared wrapper image contains everything that is identical across all apps (
 
 Settings and their defaults come from `appspec.json` only. `app-configuration.json` is optional in a MoveApps repo and is not read: at runtime the CWL writes the app's configuration from the job's inputs. A setting without a `defaultValue` gets no CWL `default`, and `inputs.yaml` leaves it `null` with a comment saying so, instead of a made-up value.
 
-Generated CWL files are portable and reproducible: the base image is public and referenced by a version tag that is never re-pushed (`DEFAULT_WRAPPER_IMAGE` in `packager.py`), and the app files are fetched from the packaged commit SHA, not the branch. A machine with Docker and cwltool needs nothing else. Only the per-app R packages from `appspec.json` are still installed from current CRAN at build time.
+Generated CWL files are portable and reproducible: the base image is public and referenced by a version tag that is never re-pushed (`DEFAULT_WRAPPER_IMAGE` in `packager.py`), and the app files are fetched from the packaged commit SHA, not the branch. A machine with Docker and cwltool needs nothing else. The per-app R packages from `appspec.json` come from the repository the wrapper image pins (rocker's dated P3M snapshot, Linux binaries); if one cannot be installed, the image build fails and names it.
 
 ---
 
@@ -206,6 +206,18 @@ cwltool RemoveOutliers.cwl inputs.yaml
 | `output.rds`  | Processed move2/MoveStack object                   |
 | `error.log`   | R error output (only present if an error occurred) |
 | `artifacts/*` | Any plot or data files written by the app          |
+
+---
+
+## Evaluation against all movestore apps
+
+`evaluation/evaluate_movestore.py` runs every repository of [github.com/movestore](https://github.com/orgs/movestore/repositories) through classify → package → build → run (`cwltool` on `input-files/input1.rds`, every setting at its default) and writes `results.jsonl`, `results.csv`, `summary.md` and per-app logs to `evaluation/output/`. Templates, Shiny apps, Python apps and repositories without an app are counted but not packaged.
+
+```bash
+export GITHUB_TOKEN=ghp_...                     # ~5 API calls per app
+python evaluation/evaluate_movestore.py         # full run, several hours
+python evaluation/evaluate_movestore.py --resume --jobs 2   # continue an interrupted run
+```
 
 ---
 

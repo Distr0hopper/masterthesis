@@ -301,6 +301,8 @@ export interface ComponentListQueryParams extends PageParams<ComponentListItemDt
   rankAgainst?: string[];
   favoritesFirst?: boolean;
   includeMyDrafts?: boolean;
+  /** only what can become a step of this workflow - leaves out its lineage and every one already running it */
+  nestableIn?: string;
 }
 
 export interface MyComponentsQueryParams extends MineQueryParams {

@@ -31,6 +31,7 @@ export const componentsService = {
         rankAgainst: params.rankAgainst?.length ? params.rankAgainst : undefined,
         favoritesFirst: params.favoritesFirst || undefined,
         includeMyDrafts: params.includeMyDrafts || undefined,
+        nestableIn: params.nestableIn || undefined,
         limit: params.limit,
         offset: params.offset,
       },

@@ -29,6 +29,8 @@ class ComponentListFilter:
     statuses: frozenset[ComponentStatus] | None = None
     drafts_of: uuid.UUID | None = None
     favorites_first_for: uuid.UUID | None = None
+    #: lineages left out entirely, every version
+    exclude_names: frozenset[str] = frozenset()
 
 
 #: one level of the composite, eagerly: a workflow's steps, each step's child, and the
@@ -76,6 +78,8 @@ class ComponentsRepository:
                 Favorite,
                 and_(Favorite.component_name == Component.name, Favorite.user_id == filter.favorited_by),
             )
+        if filter.exclude_names:
+            query = query.where(Component.name.notin_(filter.exclude_names))
         if filter.search is not None:
             # a substring match on what was typed - `%` and `_` are characters of a name,
             # not wildcards

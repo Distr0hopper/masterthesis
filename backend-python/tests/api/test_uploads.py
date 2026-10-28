@@ -11,6 +11,7 @@ import pytest
 
 from app.application.exception.component_exceptions import PackagingServiceUnavailableError
 from app.infrastructure.packaging.packaging_service_client import PackagingServiceClient
+from tests.api.test_workflow_archives import unresolved_runs
 from tests.conftest import SessionFactory
 from tests.db_factories import bearer, save, tool, user
 
@@ -165,6 +166,78 @@ async def test_a_workflow_archive_creates_its_new_tools_along(
     assert step["component"]["name"] == "clean-tracks"
     mine = (await client.get("/components/mine", headers=bearer(owner))).json()
     assert sorted(c["name"] for c in mine["unpublished"]["content"]) == ["clean-tracks", "track-pipeline"]
+
+
+NESTED_ROOT = """\
+cwlVersion: v1.2
+class: Workflow
+requirements:
+  - class: SubworkflowFeatureRequirement
+inputs:
+  tracks: File
+outputs:
+  result:
+    type: File
+    outputSource: step_again/cleaned
+steps:
+  step_inner:
+    run: cwl/inner.cwl
+    in: {tracks: tracks}
+    out: [result]
+  step_again:
+    run: cwl/clean-tracks.cwl
+    in: {tracks: step_inner/result}
+    out: [cleaned]
+"""
+
+NESTED_INNER = PIPELINE.replace("step_clean:", "step_inner_clean:").replace("step_clean/", "step_inner_clean/")
+
+
+async def test_a_workflow_archive_creates_its_nested_workflows_along(
+    client: httpx.AsyncClient, sessions: SessionFactory
+) -> None:
+    owner = user()
+    await save(sessions, owner)
+    content = archive({"Root.cwl": NESTED_ROOT, "cwl/inner.cwl": NESTED_INNER, "cwl/clean-tracks.cwl": TOOL_CWL})
+
+    preview = await client.post("/workflows/parse", files={"file": ("root.zip", content)}, headers=bearer(owner))
+    assert preview.status_code == 200, preview.text
+    previews = preview.json()["componentPreviews"]
+    assert [(p["stepId"], p["kind"], p["parentStepId"], p["usedBy"]) for p in previews] == [
+        ("step_inner", "workflow", None, ["step_inner"]),
+        ("step_inner/step_inner_clean", "tool", "step_inner", ["step_inner/step_inner_clean", "step_again"]),
+    ]
+
+    configs = [
+        {"stepId": "step_inner", "name": "inner-pipeline", "domains": ["animal_behavior"]},
+        {"stepId": "step_inner/step_inner_clean", "name": "clean-tracks", "domains": ["animal_behavior"]},
+    ]
+    response = await create_workflow(client, bearer(owner), content, configs)
+
+    assert response.status_code == 201, response.text
+    steps = response.json()["steps"]
+    assert [(s["runReference"], s["component"]["name"], s["component"]["kind"]) for s in steps] == [
+        ("cwl/inner.cwl", "inner-pipeline", "workflow"),
+        ("cwl/clean-tracks.cwl", "clean-tracks", "tool"),
+    ]
+    mine = (await client.get("/components/mine", headers=bearer(owner))).json()
+    assert sorted(c["name"] for c in mine["unpublished"]["content"]) == [
+        "clean-tracks",
+        "inner-pipeline",
+        "track-pipeline",
+    ]
+
+    download = await client.get(f"/components/{response.json()['id']}/download", headers=bearer(owner))
+    assert download.status_code == 200, download.text
+    with zipfile.ZipFile(io.BytesIO(download.content)) as zf:
+        # the nested workflow gets a folder of its own where the root runs it, its step beside it
+        assert sorted(zf.namelist()) == [
+            "cwl/clean-tracks.cwl",
+            "cwl/inner/clean-tracks.cwl",
+            "cwl/inner/inner.cwl",
+            "track-pipeline.cwl",
+        ]
+    assert unresolved_runs(download.content) == []
 
 
 async def test_a_workflow_step_can_reuse_a_catalogue_tool(client: httpx.AsyncClient, sessions: SessionFactory) -> None:

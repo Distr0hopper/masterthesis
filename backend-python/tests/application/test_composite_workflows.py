@@ -37,6 +37,7 @@ from app.application.exception.component_exceptions import (
 )
 from app.application.exception.workflow_exceptions import (
     InvalidComponentConfigError,
+    InvalidWorkflowArchiveError,
     InlineStepNotBindableError,
     NestedWorkflowsNotReadyError,
     PublishedWorkflowStepsLockedError,
@@ -58,6 +59,7 @@ from app.domain.models.tool import Tool
 from app.domain.models.workflow import Workflow
 from app.domain.models.workflow_step import StepMatchStatus, WorkflowStep
 from app.domain.composite import lifecycle
+from app.domain.composite.tree import ArchiveLayout
 from app.domain.composite.lifecycle import IllegalStatusTransitionError
 from app.api.link.workflow_step import WorkflowStepLinkBuilder
 from app.domain.models.user import User
@@ -1253,6 +1255,195 @@ def test_a_step_that_ran_a_workflow_or_nothing_before_cannot_be_versioned() -> N
     assert previous["a"] is not None and previous["a"].can_add_version is False
     # b is new in this version - nothing to start from
     assert previous["b"] is None
+
+
+# --- nested workflows in an upload --------------------------------------------------------
+
+NESTED_ROOT = """
+cwlVersion: v1.2
+class: Workflow
+requirements:
+  - class: SubworkflowFeatureRequirement
+inputs:
+  data: File
+outputs:
+  result:
+    type: File
+    outputSource: a_again/out
+steps:
+  inner:
+    run: cwl/inner.cwl
+    in: {data: data}
+    out: [result]
+  a:
+    run: cwl/a.cwl
+    in: {inp: inner/result}
+    out: [out]
+  a_again:
+    run: cwl/a.cwl
+    in: {inp: a/out}
+    out: [out]
+"""
+
+NESTED_INNER = """
+cwlVersion: v1.2
+class: Workflow
+inputs:
+  data: File
+outputs:
+  result:
+    type: File
+    outputSource: b/out
+steps:
+  a:
+    run: a.cwl
+    in: {inp: data}
+    out: [out]
+  glue:
+    run:
+      class: ExpressionTool
+      expression: "$({'out': inputs.inp})"
+      inputs: {inp: File}
+      outputs: {out: File}
+    in: {inp: a/out}
+    out: [out]
+  b:
+    run: b.cwl
+    in: {inp: glue/out}
+    out: [out]
+"""
+
+
+def nested_zip() -> bytes:
+    """Root.cwl runs cwl/inner.cwl, which runs its siblings a.cwl and b.cwl - and the root
+    runs cwl/a.cwl itself too, twice. cwl/orphan.cwl is run by nobody."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as zf:
+        zf.writestr("Root.cwl", NESTED_ROOT)
+        zf.writestr("cwl/inner.cwl", NESTED_INNER)
+        zf.writestr("cwl/orphan.cwl", NESTED_INNER)
+        zf.writestr("cwl/a.cwl", UPLOAD_TOOL)
+        zf.writestr("cwl/b.cwl", CHANGED_TOOL)
+    return buffer.getvalue()
+
+
+def test_the_preview_of_an_archive_with_nested_workflows_lists_each_file_once() -> None:
+    _, workflows_service, _ = services()
+
+    preview = asyncio.run(workflows_service.parse_workflow_upload(nested_zip(), "x.zip"))
+
+    assert preview.workflow_name == "Root"
+    assert preview.unused_workflow_files == ["cwl/orphan.cwl"]
+    assert preview.missing_external_refs == []
+    assert [(p.step_id, p.kind, p.run_reference, p.parent_step_id, p.used_by) for p in preview.component_previews] == [
+        ("inner", ComponentKind.WORKFLOW, "cwl/inner.cwl", None, ["inner"]),
+        ("inner/a", ComponentKind.TOOL, "cwl/a.cwl", "inner", ["inner/a", "a", "a_again"]),
+        ("inner/b", ComponentKind.TOOL, "cwl/b.cwl", "inner", ["inner/b"]),
+    ]
+    assert [p.suggested_name for p in preview.component_previews] == ["inner", "a", "b"]
+
+
+NESTED_CONFIGS = {
+    "inner": ComponentConfig(step_id="inner", name="inner-wf", domains=["other"]),
+    "inner/a": ComponentConfig(step_id="inner/a", name="tool-a", domains=["other"]),
+    "inner/b": ComponentConfig(step_id="inner/b", name="tool-b", domains=["other"]),
+}
+
+
+def test_an_upload_creates_its_nested_workflows_below_it_and_each_file_once() -> None:
+    _, workflows_service, repository = services()
+
+    root = asyncio.run(
+        workflows_service.create_from_upload(nested_zip(), "x.zip", "wf", None, ["other"], NESTED_CONFIGS, OWNER)
+    )
+
+    assert [(s.step_id, s.run_reference, s.component.name) for s in root.steps] == [
+        ("inner", "cwl/inner.cwl", "inner-wf"),
+        ("a", "cwl/a.cwl", "tool-a"),
+        ("a_again", "cwl/a.cwl", "tool-a"),
+    ]
+    inner = root.steps[0].component
+    assert inner.kind == ComponentKind.WORKFLOW and inner.status == ComponentStatus.DRAFT
+    assert [(s.step_id, s.run_reference, s.match_status) for s in inner.steps] == [
+        ("a", "a.cwl", StepMatchStatus.CONFIRMED),
+        ("glue", "(inline ExpressionTool)", StepMatchStatus.INLINE),
+        ("b", "b.cwl", StepMatchStatus.CONFIRMED),
+    ]
+    # one tool-a, run by the root and by the nested workflow alike
+    assert inner.steps[0].component is root.steps[1].component
+    assert sorted(c.name for c in repository.by_id.values()) == ["inner-wf", "tool-a", "tool-b", "wf"]
+    assert {p.name for p in inner.parameters} == {"data", "result"}
+    # the download gives the nested workflow a folder of its own below where the root runs
+    # it, with its steps beside it - only the archive's copy of the root's run: moves there
+    layout = ArchiveLayout.of(root)
+    assert sorted(layout.documents) == ["cwl/a.cwl", "cwl/inner/a.cwl", "cwl/inner/b.cwl", "cwl/inner/inner.cwl"]
+    assert layout.retargets == {"": {"inner": "cwl/inner/inner.cwl"}}
+    assert workflows_service.uow.commits == 1  # type: ignore[attr-defined]
+
+
+def test_a_nested_workflow_reusing_an_existing_one_brings_its_steps_along() -> None:
+    x = tool("x")
+    existing = workflow("existing-inner", x, status=ComponentStatus.PUBLISHED)
+    _, workflows_service, repository = services(existing, x)
+    # inner/b only runs inside the reused workflow - nothing to configure; inner/a still
+    # runs at the top level, so it still needs a decision
+    configs = {
+        "inner": ComponentConfig(step_id="inner", reuse_component_id=existing.id),
+        "inner/a": ComponentConfig(step_id="inner/a", name="tool-a", domains=["other"]),
+    }
+
+    root = asyncio.run(
+        workflows_service.create_from_upload(nested_zip(), "x.zip", "wf", None, ["other"], configs, OWNER)
+    )
+
+    assert [s.component.name for s in root.steps] == ["existing-inner", "tool-a", "tool-a"]
+    assert sorted(c.name for c in repository.by_id.values()) == ["existing-inner", "tool-a", "wf", "x"]
+
+
+@pytest.mark.parametrize("problem", ["unconfigured", "new version", "named like the workflow", "cycle"])
+def test_a_nested_workflow_is_configured_like_any_step(problem: str) -> None:
+    _, workflows_service, _ = services()
+    configs = dict(NESTED_CONFIGS)
+    name = "wf"
+    if problem == "unconfigured":
+        del configs["inner/b"]
+    if problem == "new version":
+        configs["inner"] = ComponentConfig(step_id="inner", new_version_of_id=uuid.uuid4())
+    if problem == "named like the workflow":
+        configs["inner"] = ComponentConfig(step_id="inner", name=name, domains=["other"])
+    if problem == "cycle":
+        # uploading wf v2 that reuses a workflow which already runs wf
+        v1 = workflow("wf", tool("x"), status=ComponentStatus.PUBLISHED)
+        runs_wf = workflow("runs-wf", v1, status=ComponentStatus.PUBLISHED)
+        _, workflows_service, _ = services(v1, runs_wf)
+        configs["inner"] = ComponentConfig(step_id="inner", reuse_component_id=runs_wf.id)
+
+    with pytest.raises(Exception) as raised:
+        asyncio.run(
+            workflows_service.create_from_upload(nested_zip(), "x.zip", name, None, ["other"], configs, OWNER)
+            if problem != "cycle"
+            else workflows_service.add_version_from_upload(v1, nested_zip(), "x.zip", None, configs, OWNER)
+        )
+    expected = {
+        "unconfigured": "UnconfiguredWorkflowStepError",
+        "new version": "InvalidComponentConfigError",
+        "named like the workflow": "DuplicateExtractedComponentNameError",
+        "cycle": "WorkflowCycleError",
+    }[problem]
+    assert type(raised.value).__name__ == expected
+    assert workflows_service.uow.commits == 0  # type: ignore[attr-defined]
+
+
+def test_an_archive_whose_workflows_run_each_other_is_refused() -> None:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as zf:
+        zf.writestr("Root.cwl", NESTED_ROOT)
+        zf.writestr("cwl/inner.cwl", NESTED_INNER.replace("run: b.cwl", "run: inner.cwl"))
+        zf.writestr("cwl/a.cwl", UPLOAD_TOOL)
+    _, workflows_service, _ = services()
+
+    with pytest.raises(InvalidWorkflowArchiveError, match="cycle"):
+        asyncio.run(workflows_service.parse_workflow_upload(buffer.getvalue(), "x.zip"))
 
 
 # --- the polymorphic DTO ----------------------------------------------------------------

@@ -50,9 +50,17 @@ async def list_components(
     rank_against: Annotated[list[uuid.UUID] | None, Query(alias="rankAgainst")] = None,
     favorites_first: Annotated[bool, Query(alias="favoritesFirst")] = False,
     include_my_drafts: Annotated[bool, Query(alias="includeMyDrafts")] = False,
+    #: only what can become a step of this workflow: leaves out its own lineage and every
+    #: one that already runs it - the builder palette of a canvas saved as that workflow
+    nestable_in: Annotated[uuid.UUID | None, Query(alias="nestableIn")] = None,
 ) -> PaginatedResponseDtoV1[ComponentListItemDto]:
     if favorites_only and current_user is None:
         raise FavoritesRequireAuthError()
+
+    exclude_names: frozenset[str] = frozenset()
+    if nestable_in is not None:
+        workflow = await components_service.get_visible_component(nestable_in, current_user, ComponentKind.WORKFLOW)
+        exclude_names = await components_service.lineages_containing(workflow)
 
     exclude_created_by = current_user.id if exclude_mine and current_user is not None else None
     favorited_by = current_user.id if favorites_only and current_user is not None else None
@@ -65,6 +73,7 @@ async def list_components(
         search=search,
         favorites_first_for=current_user.id if favorites_first and current_user is not None else None,
         drafts_of=current_user.id if include_my_drafts and current_user is not None else None,
+        exclude_names=exclude_names,
     )
     favorited_names = await components_service.favorited_names(current_user)
 

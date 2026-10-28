@@ -1,6 +1,7 @@
 import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react';
-import { AlertTriangle, ExternalLink, Info, PenLine, Trash2 } from 'lucide-react';
+import { AlertTriangle, ExternalLink, Info, PenLine, Trash2, Workflow } from 'lucide-react';
 import {
+  ComponentKind,
   UNRESOLVED_FORMAT_HINT,
   isManualFormatLabel,
   isUnresolvedFormatLabel,
@@ -87,7 +88,14 @@ export function ComponentNode({ id, data, selected }: NodeProps<ComponentFlowNod
           data.missing ? 'bg-destructive' : 'bg-jmu-blue-800'
         }`}
       >
-        <span className="break-all font-mono text-sm font-semibold text-white">{data.label}</span>
+        <span className="flex items-center gap-1.5 break-all font-mono text-sm font-semibold text-white">
+          {data.kind === ComponentKind.WORKFLOW && (
+            <Workflow size={14} className="shrink-0 text-white/70" aria-label="Nested workflow">
+              <title>Nested workflow</title>
+            </Workflow>
+          )}
+          {data.label}
+        </span>
         <div className="flex shrink-0 items-center">
           {/* a deleted component has no detail page left to open */}
           {!data.missing && (

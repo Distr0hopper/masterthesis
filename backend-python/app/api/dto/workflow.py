@@ -65,7 +65,8 @@ class ComponentConfigDto(CamelModel):
 
     Exactly one branch: reuse_component_id binds the step to an existing catalogue
     component, new_version_of_id adds the step's CWL as the next version of one of the
-    caller's tools, or name+domain create a new tool from it.
+    caller's tools, or name+domain create a new component from it - a tool, or a nested
+    workflow from the archive. A step below a nested workflow that is reused needs no entry.
     """
 
     step_id: str
@@ -156,13 +157,23 @@ class PreviousStepComponentDto(CamelModel):
 
 
 class WorkflowStepPreviewDto(ToolPreviewDto):
-    """One workflow step rendered as the tool it would become, so the user can review and
-    configure it before the workflow is saved."""
+    """One workflow step rendered as the component it would become, so the user can review
+    and configure it before the workflow is saved. An archive file is one preview however
+    many steps run it."""
 
+    #: the config key: the step's path from the top - `inner/generate_graph` for a step of
+    #: the nested workflow run by step `inner`; the plain step id at the top level
     step_id: str
+    #: a tool, or a nested workflow from the archive - whose own steps follow it, with
+    #: parent_step_id pointing back at it
+    kind: ComponentKind = ComponentKind.TOOL
+    #: the nested workflow whose step first runs it - null at the top level
+    parent_step_id: str | None = None
+    #: the paths of every step running it, step_id first
+    used_by: list[str] = Field(default_factory=list)
     #: "inline" (an inline CommandLineTool) or "archive" (a .cwl file from the uploaded zip)
     origin: str
-    #: the `run:` filename, archive origin only
+    #: the archive path of the file, archive origin only
     run_reference: str | None
     suggested_name: str
     #: an existing component that already holds suggested_name - the user must rename or reuse
@@ -183,7 +194,8 @@ class ParseWorkflowResponseDto(CamelModel):
     #: the workflow document's own doc: field, if any
     description: str | None
     step_count: int
-    #: one per resolvable step, inline and archive alike. Steps listed in
+    #: one per component the upload needs a decision for, in tree order: inline tools,
+    #: archive files and nested workflows (followed by their own steps). Steps listed in
     #: inline_only_steps or missing_external_refs have no preview.
     component_previews: list[WorkflowStepPreviewDto]
     #: steps whose run: is a plain filename, e.g. "thindata-bytime.cwl"
@@ -200,6 +212,8 @@ class ParseWorkflowResponseDto(CamelModel):
     auxiliary_files: list[str]
     #: referenced but absent from the archive - blocks the save, like missing_external_refs
     missing_imports: list[str]
+    #: workflow files in the archive the root never runs, at any depth - left out of the upload
+    unused_workflow_files: list[str] = Field(default_factory=list)
 
 
 class UpdateWorkflowStepRequestDto(CamelModel):

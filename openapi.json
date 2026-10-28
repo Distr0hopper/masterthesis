@@ -422,6 +422,23 @@
             }
           },
           {
+            "name": "nestableIn",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Nestablein"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -3433,7 +3450,7 @@
           "stepId"
         ],
         "title": "ComponentConfigDto",
-        "description": "The user's decision for one previewed step, keyed by WorkflowStepPreviewDto.step_id.\n\nExactly one branch: reuse_component_id binds the step to an existing catalogue\ncomponent, new_version_of_id adds the step's CWL as the next version of one of the\ncaller's tools, or name+domain create a new tool from it."
+        "description": "The user's decision for one previewed step, keyed by WorkflowStepPreviewDto.step_id.\n\nExactly one branch: reuse_component_id binds the step to an existing catalogue\ncomponent, new_version_of_id adds the step's CWL as the next version of one of the\ncaller's tools, or name+domain create a new component from it - a tool, or a nested\nworkflow from the archive. A step below a nested workflow that is reused needs no entry."
       },
       "ComponentCreatorDto": {
         "properties": {
@@ -4678,6 +4695,13 @@
             },
             "type": "array",
             "title": "Missingimports"
+          },
+          "unusedWorkflowFiles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unusedworkflowfiles"
           }
         },
         "type": "object",
@@ -6509,6 +6533,28 @@
             "type": "string",
             "title": "Stepid"
           },
+          "kind": {
+            "$ref": "#/components/schemas/ComponentKind",
+            "default": "tool"
+          },
+          "parentStepId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parentstepid"
+          },
+          "usedBy": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Usedby"
+          },
           "origin": {
             "type": "string",
             "title": "Origin"
@@ -6576,7 +6622,7 @@
           "suggestedMatch"
         ],
         "title": "WorkflowStepPreviewDto",
-        "description": "One workflow step rendered as the tool it would become, so the user can review and\nconfigure it before the workflow is saved."
+        "description": "One workflow step rendered as the component it would become, so the user can review\nand configure it before the workflow is saved. An archive file is one preview however\nmany steps run it."
       }
     },
     "securitySchemes": {

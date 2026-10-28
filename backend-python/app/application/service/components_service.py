@@ -213,6 +213,18 @@ class ComponentsService:
         filter = replace(filter, statuses=lifecycle.LISTED_STATUSES, created_by=None)
         return await self.uow.components.find_all_filtered(filter)
 
+    async def lineages_containing(self, workflow: Component) -> frozenset[str]:
+        """`workflow`'s lineage, and every lineage with a version that runs one of its
+        versions at any depth - none of them can become a step of it, or the workflow would
+        contain itself (see tree.would_create_cycle, which compares lineages too).
+
+        Whole lineages, so a list never falls back to an older version that happens not to
+        run it."""
+        names = {workflow.name}
+        for version in await self.uow.components.find_versions_by_name(workflow.name):
+            names.update(ancestor.name for ancestor in await self.uow.components.find_ancestors(version.id))
+        return frozenset(names)
+
     async def get_latest_components(self, limit: int, kind: ComponentKind | None = None) -> list[Component]:
         components = await self.uow.components.find_all(lifecycle.LISTED_STATUSES, kind)
         return sorted(components, key=lambda c: c.created_at, reverse=True)[:limit]

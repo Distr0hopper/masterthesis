@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, FileCode, History, Package, Search } from 'lucide-react';
+import { AlertTriangle, FileCode, History, Package, Search, Workflow } from 'lucide-react';
 import { Badge } from '@/components/ui/badge.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { Card, CardContent } from '@/components/ui/card.tsx';
@@ -16,7 +16,7 @@ import { ComponentOrigin, type WorkflowStepPreviewDto } from '@/api/workflows';
 import { toolTransformer } from '@/api/tools';
 import { ComponentStatus, withFormatLabels, useComponent, useComponentNameAvailability } from '@/api/components';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
-import type { ComponentConfigState, NameConflict } from '../lib/useComponentConfigs';
+import { isNestedWorkflow, type ComponentConfigState, type NameConflict } from '../lib/useComponentConfigs';
 
 interface ComponentConfigCardProps {
   preview: WorkflowStepPreviewDto;
@@ -67,7 +67,9 @@ export function ComponentConfigCard({
       description: config.description,
     },
   );
-  const OriginIcon = preview.origin === ComponentOrigin.INLINE ? FileCode : Package;
+  const nested = isNestedWorkflow(preview);
+  const OriginIcon = nested ? Workflow : preview.origin === ComponentOrigin.INLINE ? FileCode : Package;
+  const otherUses = (preview.usedBy ?? []).filter((path) => path !== preview.stepId);
 
   return (
     <Card className={error ? 'border-error-foreground/40' : undefined}>
@@ -79,6 +81,7 @@ export function ComponentConfigCard({
             <Badge variant="secondary">
               {preview.origin === ComponentOrigin.INLINE ? 'inline tool' : preview.runReference}
             </Badge>
+            {nested && <span className="text-sm text-slate-500">nested workflow</span>}
           </div>
           <div className="flex gap-1 rounded-md border border-input p-0.5">
             <Button
@@ -109,6 +112,18 @@ export function ComponentConfigCard({
             )}
           </div>
         </div>
+
+        {otherUses.length > 0 && (
+          <p className="text-sm text-slate-500">
+            Also runs in{' '}
+            {otherUses.map((path) => (
+              <span key={path} className="mr-1 font-mono">
+                {path}
+              </span>
+            ))}
+            - one component for all of them.
+          </p>
+        )}
 
         {previous && (
           <div className="flex flex-col gap-1 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600">
@@ -224,12 +239,14 @@ export function ComponentConfigCard({
               />
             </div>
 
-            <FormatLabelFields
-              parameters={preview.parameters}
-              value={config.formatLabels}
-              onChange={(formatLabels) => onChange({ formatLabels })}
-              idPrefix={preview.stepId}
-            />
+            {!nested && (
+              <FormatLabelFields
+                parameters={preview.parameters}
+                value={config.formatLabels}
+                onChange={(formatLabels) => onChange({ formatLabels })}
+                idPrefix={preview.stepId}
+              />
+            )}
           </>
         ) : (
           <div className="flex flex-col gap-2">
@@ -250,7 +267,8 @@ export function ComponentConfigCard({
               </Button>
             </div>
             <p className="text-sm text-slate-500">
-              This step will link to the existing component. Nothing new is created from its CWL.
+              This step will link to the existing component. Nothing new is created from its CWL
+              {nested && ' - and the steps of this nested workflow come along with it'}.
             </p>
             <ComponentPickerDialog
               open={pickerOpen}

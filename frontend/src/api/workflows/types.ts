@@ -71,7 +71,8 @@ export interface WorkflowStepCommandExecuteRequest {
  * The user's decision for one previewed step, keyed by WorkflowStepPreviewDto.stepId.
  * Exactly one branch: reuseComponentId binds the step to an existing component,
  * newVersionOfId adds its CWL as the next version of one of your tools, or name+domains
- * create a new tool from it.
+ * create a new tool - or nested workflow - from it. A step below a reused nested workflow
+ * needs no entry.
  */
 export interface ComponentConfigDto {
   stepId: string;
@@ -133,9 +134,22 @@ export interface AddWorkflowVersionDto {
   componentConfigs: ComponentConfigDto[];
 }
 
+/**
+ * One component the upload needs a decision for - an archive file is one preview however
+ * many steps run it. A nested workflow from the archive is followed by its own steps, which
+ * point back at it through parentStepId.
+ */
 export interface WorkflowStepPreviewDto extends ToolPreviewDto {
+  /** the config key: the step's path from the top (`inner/generate_graph`), the plain step id at the top level */
   stepId: string;
+  /** a tool, or a nested workflow from the archive */
+  kind?: ComponentKind;
+  /** the nested workflow whose step first runs it - null at the top level */
+  parentStepId?: string | null;
+  /** the paths of every step running it, stepId first */
+  usedBy?: string[];
   origin: ComponentOrigin;
+  /** the archive path of the file, archive origin only */
   runReference: string | null;
   suggestedName: string;
   nameConflict: StepComponentMatchDto | null;
@@ -156,4 +170,6 @@ export interface ParseWorkflowResponseDto {
   missingExternalRefs: string[];
   auxiliaryFiles: string[];
   missingImports: string[];
+  /** workflow files in the archive the root never runs - left out of the upload */
+  unusedWorkflowFiles?: string[];
 }

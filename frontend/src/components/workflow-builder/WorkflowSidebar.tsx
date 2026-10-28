@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useDomains, useInfiniteComponents } from '@/api/components';
+import { useDomains, useInfiniteComponents, type ComponentKind } from '@/api/components';
 import { useAuthStore } from '@/store/auth.store';
 import { useLoadMoreOnScroll } from '@/lib/useLoadMoreOnScroll';
 import { ComponentPaletteCard } from './ComponentPaletteCard.tsx';
@@ -8,11 +8,17 @@ import { WorkflowSidebarFilters } from './WorkflowSidebarFilters.tsx';
 interface WorkflowSidebarProps {
   /** the component of every canvas node, most recently added first - the backend ranks against these */
   rankAgainst: string[];
+  /**
+   * the workflow this canvas saves as, once it has been saved - the palette then leaves out
+   * that workflow and every one already running it, which would make it contain itself
+   */
+  nestableIn?: string;
 }
 
 const PAGE_SIZE = 20;
 
-export function WorkflowSidebar({ rankAgainst }: WorkflowSidebarProps) {
+export function WorkflowSidebar({ rankAgainst, nestableIn }: WorkflowSidebarProps) {
+  const [kind, setKind] = useState<ComponentKind | undefined>(undefined);
   const [search, setSearch] = useState('');
   const [selectedDomains, setSelectedDomains] = useState<string[]>([]);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
@@ -23,9 +29,9 @@ export function WorkflowSidebar({ rankAgainst }: WorkflowSidebarProps) {
   // the pages arrive in their final order and each item carries its `match`.
   // includeParameters: a dropped card becomes a node, which needs the component's ports.
   const { data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useInfiniteComponents({
-    // tools only for now: the backend already exports and syncs a canvas nesting a
-    // workflow, so offering workflows here is what enables nesting in the builder
-    kind: 'tool',
+    // both kinds unless narrowed: a workflow on the canvas becomes a nested step
+    kind,
+    nestableIn,
     search: term || undefined,
     domain: selectedDomains,
     limit: PAGE_SIZE,
@@ -37,7 +43,7 @@ export function WorkflowSidebar({ rankAgainst }: WorkflowSidebarProps) {
   });
   const { data: domains } = useDomains();
 
-  const hasActiveFilter = Boolean(term) || selectedDomains.length > 0 || favoritesOnly;
+  const hasActiveFilter = Boolean(kind) || Boolean(term) || selectedDomains.length > 0 || favoritesOnly;
 
   const components = data?.items ?? [];
 
@@ -48,6 +54,8 @@ export function WorkflowSidebar({ rankAgainst }: WorkflowSidebarProps) {
   return (
     <aside className="flex w-[280px] shrink-0 flex-col border-r border-slate-200 bg-white">
       <WorkflowSidebarFilters
+        kind={kind}
+        onKindChange={setKind}
         search={search}
         selectedDomains={selectedDomains}
         favoritesOnly={favoritesOnly}
@@ -63,7 +71,7 @@ export function WorkflowSidebar({ rankAgainst }: WorkflowSidebarProps) {
           <p className="text-sm text-slate-500">Loading components...</p>
         ) : components.length === 0 ? (
           <p className="text-sm text-slate-500">
-            {hasActiveFilter ? 'No tools match these filters.' : 'No tools found.'}
+            {hasActiveFilter ? 'No components match these filters.' : 'No components found.'}
           </p>
         ) : (
           <>

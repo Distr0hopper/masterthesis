@@ -44,6 +44,30 @@ async def test_browsing_lists_only_published_lineages(client: httpx.AsyncClient,
     assert await names(own_drafts) == ["draft", "published"]
 
 
+async def test_the_builder_palette_leaves_out_what_would_make_the_workflow_contain_itself(
+    client: httpx.AsyncClient, sessions: SessionFactory
+) -> None:
+    owner, stranger = user(), user()
+    leaf = tool("leaf", owner)
+    canvas_v1 = workflow("canvas", owner, leaf)
+    canvas_v2 = workflow("canvas", owner, leaf, status=ComponentStatus.DRAFT, version=2)
+    # runs an old version of the canvas's workflow - still the same lineage
+    runs_it = workflow("runs-canvas", owner, canvas_v1)
+    runs_it_deeper = workflow("runs-canvas-deeper", owner, runs_it)
+    unrelated = workflow("unrelated", owner, leaf)
+    private = workflow("private", stranger, leaf, status=ComponentStatus.DRAFT)
+    await save(sessions, owner, stranger, leaf, canvas_v1, canvas_v2, runs_it, runs_it_deeper, unrelated, private)
+
+    response = await client.get(
+        "/components", params={"nestableIn": str(canvas_v2.id), "includeMyDrafts": True}, headers=bearer(owner)
+    )
+    assert await names(response) == ["leaf", "unrelated"]
+
+    # someone else's draft workflow is unknown here, as everywhere
+    hidden = await client.get("/components", params={"nestableIn": str(private.id)}, headers=bearer(owner))
+    assert hidden.status_code == 404
+
+
 async def test_favorites_only_needs_a_login(client: httpx.AsyncClient) -> None:
     assert (await client.get("/components", params={"favoritesOnly": True})).status_code == 401
 
